@@ -1,0 +1,81 @@
+{
+  "document_sentiments_columns": [
+    {
+      "column": "id",
+      "type": "uuid"
+    },
+    {
+      "column": "document_id",
+      "type": "uuid"
+    },
+    {
+      "column": "sentiment_label",
+      "type": "character varying"
+    },
+    {
+      "column": "sentiment_score",
+      "type": "double precision"
+    },
+    {
+      "column": "confidence_score",
+      "type": "double precision"
+    },
+    {
+      "column": "source_reliability",
+      "type": "double precision"
+    },
+    {
+      "column": "weighted_sentiment_score",
+      "type": "double precision"
+    },
+    {
+      "column": "created_at",
+      "type": "timestamp with time zone"
+    }
+  ],
+  "entity_sentiments_columns": [
+    {
+      "column": "id",
+      "type": "uuid"
+    },
+    {
+      "column": "document_id",
+      "type": "uuid"
+    },
+    {
+      "column": "entity_id",
+      "type": "uuid"
+    },
+    {
+      "column": "sentiment_label",
+      "type": "character varying"
+    },
+    {
+      "column": "sentiment_score",
+      "type": "double precision"
+    },
+    {
+      "column": "confidence_score",
+      "type": "double precision"
+    },
+    {
+      "column": "created_at",
+      "type": "timestamp with time zone"
+    }
+  ],
+  "explainability_gaps": {
+    "no_matched_keyword_stored": true,
+    "no_context_window_stored": true,
+    "no_model_attention_stored": true,
+    "no_rejection_reason_stored": true,
+    "no_metadata_jsonb_column": true,
+    "source_reliability_hardcoded_to_1.0": true,
+    "explanation": "FinBERT returns only label + score. No intermediate features, no matched keywords, no reason-for-classification are stored. source_reliability is always 1.0 (hardcoded). There is no match_metadata JSONB column equivalent to topic classification."
+  },
+  "context_windowing": {
+    "method": "text.lower().find(entity_name.lower())",
+    "window_chars": 100,
+    "fallback_if_not_found": "text[:200]",
+    "risk": "If entity name appears multiple times, only first occurrence is windowed"
+  }
+}

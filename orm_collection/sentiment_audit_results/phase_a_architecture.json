@@ -1,0 +1,92 @@
+{
+  "model": {
+    "class": "SentimentAnalyzer",
+    "file": "app/services/intelligence/sentiment_analyzer.py",
+    "model_name": "ProsusAI/finbert",
+    "model_version": "1.0",
+    "framework": "transformers.pipeline",
+    "task": "sentiment-analysis",
+    "device_selection": "GPU if cuda available, else CPU (-1)",
+    "fallback": "use_mock=True on load failure (random label + score)"
+  },
+  "labels": [
+    "positive",
+    "neutral",
+    "negative"
+  ],
+  "label_score_mapping": {
+    "positive": 1.0,
+    "neutral": 0.0,
+    "negative": -1.0
+  },
+  "input_format": {
+    "text_truncation": "First 1500 characters of normalized_content",
+    "entity_context_window": "100 chars before and after entity mention index"
+  },
+  "output_format": {
+    "document_level": {
+      "table": "document_sentiments",
+      "columns": [
+        "document_id",
+        "sentiment_label",
+        "sentiment_score",
+        "confidence_score",
+        "source_reliability",
+        "weighted_sentiment_score"
+      ]
+    },
+    "entity_level": {
+      "table": "entity_sentiments",
+      "columns": [
+        "document_id",
+        "entity_id",
+        "sentiment_label",
+        "sentiment_score",
+        "confidence_score"
+      ]
+    },
+    "model_run": {
+      "table": "model_runs",
+      "columns": [
+        "document_id",
+        "model_name",
+        "model_version"
+      ]
+    }
+  },
+  "execution_flow": [
+    "1. Celery task: process_document_intelligence (nlp_queue)",
+    "2. Entity extraction (Phase 1A) - critical, retried on failure",
+    "3. Topic classification (Phase 1B) - stage-isolated, suppressed on failure",
+    "4. Sentiment analysis (Phase 1C) - atomic transaction, NOT retried on failure",
+    "   a. SentimentAnalyzer.process_document(db, document_id)",
+    "   b. analyze_text(normalized_content[:1500]) -> DocumentSentiment",
+    "   c. For each EntityMention -> get_entity_context -> analyze_text -> EntitySentiment",
+    "   d. ModelRun record written",
+    "   e. db.commit()"
+  ],
+  "apis_consuming_sentiment": [
+    "RiskEngine.calculate_document_risk - reads document_sentiments, entity_sentiments",
+    "ReputationEngine.calculate_reputation_score - reads document_sentiments",
+    "NarrativeEngine.calculate_narratives - reads document_sentiments",
+    "TrendDetector._detect_sentiment_trends - reads document_sentiments"
+  ],
+  "downstream_dependencies": {
+    "risk_events": "Depends on document_sentiments and entity_sentiments",
+    "reputation_scores": "Depends on avg(document_sentiments.sentiment_score)",
+    "narratives": "Depends on avg(document_sentiments.sentiment_score) per topic",
+    "trend_events": "Depends on COUNT(document_sentiments) WHERE label='Negative'",
+    "alerts": "Depends on trend_events (Negative Sentiment Surge)"
+  },
+  "live_db_verification": {
+    "document_sentiments": {
+      "row_count": 177
+    },
+    "entity_sentiments": {
+      "row_count": 33
+    },
+    "model_runs": {
+      "row_count": 586
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "client_sentiment_health": {
+    "error": "(psycopg2.errors.UndefinedColumn) column s.client_id does not exist\nLINE 13:             JOIN clients c ON c.id = s.client_id\n                                              ^\n\n[SQL: \n            SELECT\n                c.name as client_name,\n                COUNT(ds.id) as total_sentiments,\n                COUNT(ds.id) FILTER (WHERE ds.sentiment_label = 'Positive') as positive,\n                COUNT(ds.id) FILTER (WHERE ds.sentiment_label = 'Neutral') as neutral,\n                COUNT(ds.id) FILTER (WHERE ds.sentiment_label = 'Negative') as negative,\n                AVG(ds.confidence_score) as avg_confidence,\n                AVG(ds.weighted_sentiment_score) as avg_weighted_score\n            FROM document_sentiments ds\n            JOIN documents d ON d.id = ds.document_id\n            JOIN sources s ON s.id = d.source_id\n            JOIN clients c ON c.id = s.client_id\n            GROUP BY c.name\n            ORDER BY c.name\n        ]\n(Background on this error at: https://sqlalche.me/e/20/f405)"
+  },
+  "reputation_scores": [
+    {
+      "client": "Meta",
+      "score": 54.13,
+      "grade": "D",
+      "sentiment_component": 0.0
+    },
+    {
+      "client": "Tata Motors",
+      "score": 34.6,
+      "grade": "F",
+      "sentiment_component": 37.5
+    },
+    {
+      "client": "Meta",
+      "score": 54.13,
+      "grade": "D",
+      "sentiment_component": 0.0
+    },
+    {
+      "client": "Tesla",
+      "score": 66.4,
+      "grade": "C",
+      "sentiment_component": 55.71
+    },
+    {
+      "client": "Tata Motors",
+      "score": 75.5,
+      "grade": "B",
+      "sentiment_component": 50.0
+    },
+    {
+      "client": "Tesla",
+      "score": 68.44,
+      "grade": "C",
+      "sentiment_component": 60.87
+    }
+  ],
+  "risk_per_client": [
+    {
+      "client": "Meta",
+      "avg_risk": 12.95,
+      "max_risk": 13.74,
+      "count": 4
+    },
+    {
+      "client": "Tata Motors",
+      "avg_risk": 48.97,
+      "max_risk": 67.71,
+      "count": 8
+    },
+    {
+      "client": "Tesla",
+      "avg_risk": 28.3,
+      "max_risk": 55.51,
+      "count": 58
+    }
+  ],
+  "source_reliability_note": {
+    "hardcoded_value": 1.0,
+    "impact": "weighted_sentiment_score = sentiment_score * 1.0 - source quality not factored in",
+    "risk_impact": "Risk engine reads source_reliability from document_sentiments; always 1.0 = no source quality discounting"
+  }
+}

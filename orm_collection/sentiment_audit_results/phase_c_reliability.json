@@ -1,0 +1,39 @@
+{
+  "coverage": {
+    "total_documents": 292,
+    "documents_with_sentiment": 173,
+    "documents_missing_sentiment": 119,
+    "sentiment_coverage_pct": 59.25
+  },
+  "duplicate_sentiments": {
+    "count": 1,
+    "examples": [
+      {
+        "document_id": "05d344a8-08c6-47e0-93c5-c063a33a348e",
+        "count": 5
+      }
+    ]
+  },
+  "entity_sentiment_coverage": {
+    "docs_with_entity_mentions": 45,
+    "docs_with_entity_sentiments": 33,
+    "gap": 12
+  },
+  "transaction_safety": {
+    "model_run_records": 177,
+    "document_sentiment_records": 177,
+    "match": true,
+    "discrepancy": 0
+  },
+  "retry_behavior": {
+    "task_retry_on_failure": false,
+    "reason": "intelligence_tasks.py Phase 1C: on failure -> rollback + log error, no retry/raise",
+    "risk": "CRITICAL - failed sentiment documents silently skipped, never reprocessed"
+  },
+  "failure_isolation": {
+    "topic_failure_blocks_sentiment": false,
+    "sentiment_failure_blocks_risk": true,
+    "sentiment_failure_blocks_reputation": true,
+    "note": "Sentiment failure causes downstream risk/reputation/narrative gaps"
+  }
+}

@@ -1,0 +1,41 @@
+{
+    "functional": {
+        "status": "PASSED"
+    },
+    "e2e": {
+        "status": "PASSED"
+    },
+    "database": {
+        "10k_insert_latency_projected_sec": 2.39577599997574,
+        "single_query_latency_sec": 0.006316999999398831,
+        "status": "PASSED"
+    },
+    "queue": {
+        "status": "PASSED",
+        "throughput_tasks_sec": 450
+    },
+    "matching": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "found_matches": 3,
+        "status": "PASSED"
+    },
+    "failure": {
+        "status": "PASSED"
+    },
+    "resources": {
+        "cpu_avg": 45.2,
+        "ram_avg_mb": 120
+    },
+    "lifecycle": {
+        "status": "PASSED"
+    },
+    "multi_client": {
+        "unique_clients_matched": 1,
+        "status": "FAILED"
+    },
+    "stability": {
+        "memory_growth_mb": 0.0,
+        "status": "PASSED"
+    }
+}

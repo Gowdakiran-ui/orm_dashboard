@@ -1,0 +1,753 @@
+{
+  "phase_a": {
+    "model": {
+      "class": "SentimentAnalyzer",
+      "file": "app/services/intelligence/sentiment_analyzer.py",
+      "model_name": "ProsusAI/finbert",
+      "model_version": "1.0",
+      "framework": "transformers.pipeline",
+      "task": "sentiment-analysis",
+      "device_selection": "GPU if cuda available, else CPU (-1)",
+      "fallback": "use_mock=True on load failure (random label + score)"
+    },
+    "labels": [
+      "positive",
+      "neutral",
+      "negative"
+    ],
+    "label_score_mapping": {
+      "positive": 1.0,
+      "neutral": 0.0,
+      "negative": -1.0
+    },
+    "input_format": {
+      "text_truncation": "First 1500 characters of normalized_content",
+      "entity_context_window": "100 chars before and after entity mention index"
+    },
+    "output_format": {
+      "document_level": {
+        "table": "document_sentiments",
+        "columns": [
+          "document_id",
+          "sentiment_label",
+          "sentiment_score",
+          "confidence_score",
+          "source_reliability",
+          "weighted_sentiment_score"
+        ]
+      },
+      "entity_level": {
+        "table": "entity_sentiments",
+        "columns": [
+          "document_id",
+          "entity_id",
+          "sentiment_label",
+          "sentiment_score",
+          "confidence_score"
+        ]
+      },
+      "model_run": {
+        "table": "model_runs",
+        "columns": [
+          "document_id",
+          "model_name",
+          "model_version"
+        ]
+      }
+    },
+    "execution_flow": [
+      "1. Celery task: process_document_intelligence (nlp_queue)",
+      "2. Entity extraction (Phase 1A) - critical, retried on failure",
+      "3. Topic classification (Phase 1B) - stage-isolated, suppressed on failure",
+      "4. Sentiment analysis (Phase 1C) - atomic transaction, NOT retried on failure",
+      "   a. SentimentAnalyzer.process_document(db, document_id)",
+      "   b. analyze_text(normalized_content[:1500]) -> DocumentSentiment",
+      "   c. For each EntityMention -> get_entity_context -> analyze_text -> EntitySentiment",
+      "   d. ModelRun record written",
+      "   e. db.commit()"
+    ],
+    "apis_consuming_sentiment": [
+      "RiskEngine.calculate_document_risk - reads document_sentiments, entity_sentiments",
+      "ReputationEngine.calculate_reputation_score - reads document_sentiments",
+      "NarrativeEngine.calculate_narratives - reads document_sentiments",
+      "TrendDetector._detect_sentiment_trends - reads document_sentiments"
+    ],
+    "downstream_dependencies": {
+      "risk_events": "Depends on document_sentiments and entity_sentiments",
+      "reputation_scores": "Depends on avg(document_sentiments.sentiment_score)",
+      "narratives": "Depends on avg(document_sentiments.sentiment_score) per topic",
+      "trend_events": "Depends on COUNT(document_sentiments) WHERE label='Negative'",
+      "alerts": "Depends on trend_events (Negative Sentiment Surge)"
+    },
+    "live_db_verification": {
+      "document_sentiments": {
+        "row_count": 177
+      },
+      "entity_sentiments": {
+        "row_count": 33
+      },
+      "model_runs": {
+        "row_count": 586
+      }
+    }
+  },
+  "phase_b": {
+    "table_row_counts": {
+      "document_sentiments": {
+        "exists": true,
+        "row_count": 177
+      },
+      "entity_sentiments": {
+        "exists": true,
+        "row_count": 33
+      },
+      "risk_events": {
+        "exists": true,
+        "row_count": 70
+      },
+      "reputation_scores": {
+        "exists": true,
+        "row_count": 6
+      },
+      "narratives": {
+        "exists": true,
+        "row_count": 46
+      },
+      "trend_events": {
+        "exists": true,
+        "row_count": 83
+      },
+      "alerts": {
+        "exists": true,
+        "row_count": 44
+      },
+      "model_runs": {
+        "exists": true,
+        "row_count": 586
+      }
+    },
+    "risk_coverage": {
+      "documents_with_both_sentiment_and_risk": 45,
+      "total_document_sentiments": 177,
+      "coverage_pct": 25.42
+    },
+    "pipeline_chain_status": {
+      "reputation_scores": 6,
+      "risk_events": 70,
+      "narratives": 46,
+      "note": "All downstream nodes populated means sentiment is flowing"
+    },
+    "model_run_logs": {
+      "finbert_run_count": 177
+    }
+  },
+  "phase_c": {
+    "coverage": {
+      "total_documents": 292,
+      "documents_with_sentiment": 173,
+      "documents_missing_sentiment": 119,
+      "sentiment_coverage_pct": 59.25
+    },
+    "duplicate_sentiments": {
+      "count": 1,
+      "examples": [
+        {
+          "document_id": "05d344a8-08c6-47e0-93c5-c063a33a348e",
+          "count": 5
+        }
+      ]
+    },
+    "entity_sentiment_coverage": {
+      "docs_with_entity_mentions": 45,
+      "docs_with_entity_sentiments": 33,
+      "gap": 12
+    },
+    "transaction_safety": {
+      "model_run_records": 177,
+      "document_sentiment_records": 177,
+      "match": true,
+      "discrepancy": 0
+    },
+    "retry_behavior": {
+      "task_retry_on_failure": false,
+      "reason": "intelligence_tasks.py Phase 1C: on failure -> rollback + log error, no retry/raise",
+      "risk": "CRITICAL - failed sentiment documents silently skipped, never reprocessed"
+    },
+    "failure_isolation": {
+      "topic_failure_blocks_sentiment": false,
+      "sentiment_failure_blocks_risk": true,
+      "sentiment_failure_blocks_reputation": true,
+      "note": "Sentiment failure causes downstream risk/reputation/narrative gaps"
+    }
+  },
+  "phase_d": {
+    "label_distribution_pct": [
+      {
+        "label": "Neutral",
+        "count": 86,
+        "pct": 48.59
+      },
+      {
+        "label": "Negative",
+        "count": 47,
+        "pct": 26.55
+      },
+      {
+        "label": "Positive",
+        "count": 44,
+        "pct": 24.86
+      }
+    ],
+    "confidence_stats": {
+      "min": 0.3971,
+      "max": 0.9872,
+      "avg": 0.8055,
+      "median": 0.8319,
+      "p95": 0.9694
+    },
+    "sentiment_per_client": {
+      "error": "(psycopg2.errors.UndefinedColumn) column s.client_id does not exist\nLINE 6:             JOIN clients c ON c.id = s.client_id\n                                             ^\n\n[SQL: \n            SELECT c.name, ds.sentiment_label, COUNT(*) as cnt\n            FROM document_sentiments ds\n            JOIN documents d ON d.id = ds.document_id\n            JOIN sources s ON s.id = d.source_id\n            JOIN clients c ON c.id = s.client_id\n            GROUP BY c.name, ds.sentiment_label\n            ORDER BY c.name, ds.sentiment_label\n        ]\n(Background on this error at: https://sqlalche.me/e/20/f405)"
+    },
+    "low_confidence_documents": {
+      "threshold": 0.6,
+      "count": 13
+    },
+    "weighted_sentiment_scores": {
+      "avg": -0.0169,
+      "min": -1.0,
+      "max": 1.0
+    },
+    "lowest_confidence_samples": [
+      {
+        "doc_id": "ea158ffe-66b7-4b03-89a8-908858307d78",
+        "title": "Senators Push NHTSA to Investigate Claims of Inflated Tesla Safety Data - Kelley",
+        "label": "Neutral",
+        "confidence": 0.3971
+      },
+      {
+        "doc_id": "24df06d9-990f-4200-9962-805c1784bebf",
+        "title": "This CarPlay change may be the missing link for Tesla support - 9to5Mac",
+        "label": "Negative",
+        "confidence": 0.4892
+      },
+      {
+        "doc_id": "80c15c72-6a80-4961-8f54-292dbeb1dbcd",
+        "title": "Elon Musk Says Tesla Owners Will Soon Be Able To Talk To Grok Like A Chauffeur -",
+        "label": "Neutral",
+        "confidence": 0.4965
+      },
+      {
+        "doc_id": "f58fd253-8e4e-41e9-82d9-c69b2684651a",
+        "title": "Tesla Cybercab Finally Reveals Key Specs\u2014Including 418 Miles Of Range - Motor1.c",
+        "label": "Positive",
+        "confidence": 0.4979
+      },
+      {
+        "doc_id": "a249ab0b-085a-4895-9498-0a04e9eea050",
+        "title": "Tesla Allegedly Showed Cooked Data to Get Full Self-Driving Approved - Futurism",
+        "label": "Neutral",
+        "confidence": 0.4985
+      },
+      {
+        "doc_id": "d5b9b494-1567-4aec-b3b7-355aa24e0feb",
+        "title": "Tesla offers discounted home batteries in New England VPP push - Canary Media",
+        "label": "Neutral",
+        "confidence": 0.5222
+      },
+      {
+        "doc_id": "9cfe5923-c349-471b-9078-a295f07dc83b",
+        "title": "Travis Co. deputies at scene of fatal crash on SH 130 near Tesla Gigafactory - K",
+        "label": "Negative",
+        "confidence": 0.5353
+      },
+      {
+        "doc_id": "7a72ed4a-8c7d-437c-a7f4-a7b200bed088",
+        "title": "SpaceX Will Probably Swallow Tesla \u2013 and Your Portfolio - Bloomberg.com",
+        "label": "Negative",
+        "confidence": 0.5361
+      },
+      {
+        "doc_id": "9a3f9ede-f35d-469b-aa16-dd86fce374c7",
+        "title": "Lucid's $50,000 Cosmos Looks Ready To Fight Tesla Model Y, Rivian R2 - CarBuzz",
+        "label": "Neutral",
+        "confidence": 0.5556
+      },
+      {
+        "doc_id": "31713af2-8e56-45cb-bc9c-93cd73cfcf64",
+        "title": "Observations After Two Weeks with Tesla Hardware 4 & Full Self Driving V14 in My",
+        "label": "Positive",
+        "confidence": 0.5562
+      }
+    ]
+  },
+  "phase_e": {
+    "document_sentiments_columns": [
+      {
+        "column": "id",
+        "type": "uuid"
+      },
+      {
+        "column": "document_id",
+        "type": "uuid"
+      },
+      {
+        "column": "sentiment_label",
+        "type": "character varying"
+      },
+      {
+        "column": "sentiment_score",
+        "type": "double precision"
+      },
+      {
+        "column": "confidence_score",
+        "type": "double precision"
+      },
+      {
+        "column": "source_reliability",
+        "type": "double precision"
+      },
+      {
+        "column": "weighted_sentiment_score",
+        "type": "double precision"
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone"
+      }
+    ],
+    "entity_sentiments_columns": [
+      {
+        "column": "id",
+        "type": "uuid"
+      },
+      {
+        "column": "document_id",
+        "type": "uuid"
+      },
+      {
+        "column": "entity_id",
+        "type": "uuid"
+      },
+      {
+        "column": "sentiment_label",
+        "type": "character varying"
+      },
+      {
+        "column": "sentiment_score",
+        "type": "double precision"
+      },
+      {
+        "column": "confidence_score",
+        "type": "double precision"
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone"
+      }
+    ],
+    "explainability_gaps": {
+      "no_matched_keyword_stored": true,
+      "no_context_window_stored": true,
+      "no_model_attention_stored": true,
+      "no_rejection_reason_stored": true,
+      "no_metadata_jsonb_column": true,
+      "source_reliability_hardcoded_to_1.0": true,
+      "explanation": "FinBERT returns only label + score. No intermediate features, no matched keywords, no reason-for-classification are stored. source_reliability is always 1.0 (hardcoded). There is no match_metadata JSONB column equivalent to topic classification."
+    },
+    "context_windowing": {
+      "method": "text.lower().find(entity_name.lower())",
+      "window_chars": 100,
+      "fallback_if_not_found": "text[:200]",
+      "risk": "If entity name appears multiple times, only first occurrence is windowed"
+    }
+  },
+  "phase_f": {
+    "model_load_time_ms": 15454.7,
+    "inference_latency_ms": {
+      "n": 20,
+      "min": 143.59,
+      "max": 321.2,
+      "avg": 177.88,
+      "median": 160.92,
+      "p95": 321.2,
+      "p99": 321.2
+    },
+    "throughput": {
+      "docs_per_second": 5.62
+    },
+    "full_doc_pipeline_latency_ms": {
+      "n": 5,
+      "avg": 236.46,
+      "max": 347.01
+    }
+  },
+  "phase_g": {
+    "duplicate_document_sentiments": {
+      "count": 1,
+      "details": [
+        {
+          "document_id": "05d344a8-08c6-47e0-93c5-c063a33a348e",
+          "n": 5
+        }
+      ]
+    },
+    "duplicate_entity_sentiments": {
+      "count": 0,
+      "details": []
+    },
+    "constraints": [
+      {
+        "constraint": "document_sentiments_document_id_fkey",
+        "type": "FOREIGN KEY",
+        "column": "document_id"
+      },
+      {
+        "constraint": "document_sentiments_pkey",
+        "type": "PRIMARY KEY",
+        "column": "id"
+      },
+      {
+        "constraint": "entity_sentiments_document_id_fkey",
+        "type": "FOREIGN KEY",
+        "column": "document_id"
+      },
+      {
+        "constraint": "entity_sentiments_entity_id_fkey",
+        "type": "FOREIGN KEY",
+        "column": "entity_id"
+      },
+      {
+        "constraint": "entity_sentiments_pkey",
+        "type": "PRIMARY KEY",
+        "column": "id"
+      }
+    ],
+    "model_sharing": {
+      "global_worker_init": true,
+      "singleton_pattern": "sentiment_analyzer = SentimentAnalyzer(use_mock=False) at module level",
+      "db_session_isolation": "Each task uses its own SessionLocal() - SAFE",
+      "no_upsert_logic": true,
+      "race_condition_risk": "MEDIUM - no unique constraint on document_sentiments(document_id), duplicates possible if task retried"
+    }
+  },
+  "phase_h": {
+    "null_check_document_sentiments": {
+      "null_label": 0,
+      "null_score": 0,
+      "null_confidence": 0,
+      "null_weighted": 0,
+      "null_reliability": 0
+    },
+    "range_check_document_sentiments": {
+      "invalid_confidence_count": 0,
+      "invalid_sentiment_score_count": 0,
+      "invalid_source_reliability_count": 0
+    },
+    "sentiments_on_empty_content": 0,
+    "distinct_labels_found": [
+      "Negative",
+      "Positive",
+      "Neutral"
+    ],
+    "weighted_score_consistency": {
+      "mismatch_count": 0,
+      "note": "weighted_sentiment_score should equal sentiment_score * source_reliability"
+    },
+    "entity_sentiment_distinct_labels": [
+      "Positive",
+      "Negative",
+      "Neutral"
+    ]
+  },
+  "phase_i": {
+    "logging": {
+      "logger_type": "structlog (imported in intelligence_tasks.py)",
+      "sentiment_success_logged": false,
+      "sentiment_failure_logged": true,
+      "log_key_on_failure": "sentiment_analysis_failed_rolling_back",
+      "fields_on_failure": [
+        "document_id",
+        "error"
+      ],
+      "gaps": [
+        "No log emitted on successful sentiment completion",
+        "No correlation_id / batch_id / client_id in sentiment logs",
+        "No latency measurement logged",
+        "No confidence score logged",
+        "No label logged",
+        "No model_name logged in task context"
+      ]
+    },
+    "model_runs_by_model": [
+      {
+        "model_name": "ProsusAI/finbert",
+        "count": 177
+      },
+      {
+        "model_name": "valhalla/distilbart-mnli-12-3",
+        "count": 409
+      }
+    ],
+    "processing_timeline_by_hour": [
+      {
+        "hour": "2026-06-25 21:00:00+05:30",
+        "count": 4
+      },
+      {
+        "hour": "2026-06-25 14:00:00+05:30",
+        "count": 93
+      },
+      {
+        "hour": "2026-06-18 15:00:00+05:30",
+        "count": 80
+      }
+    ],
+    "alert_types": [
+      {
+        "type": "Topic Spike",
+        "count": 25
+      },
+      {
+        "type": "High Risk",
+        "count": 14
+      },
+      {
+        "type": "Mention Spike",
+        "count": 5
+      }
+    ],
+    "observability_gaps": [
+      "No correlation_id linking documents through the full pipeline",
+      "No latency stored per document",
+      "No per-document processing_state for sentiment (unlike entity matching)",
+      "No retry counter or failure reason stored",
+      "No dashboard visibility into sentiment processing health"
+    ]
+  },
+  "phase_j": {
+    "client_sentiment_health": {
+      "error": "(psycopg2.errors.UndefinedColumn) column s.client_id does not exist\nLINE 13:             JOIN clients c ON c.id = s.client_id\n                                              ^\n\n[SQL: \n            SELECT\n                c.name as client_name,\n                COUNT(ds.id) as total_sentiments,\n                COUNT(ds.id) FILTER (WHERE ds.sentiment_label = 'Positive') as positive,\n                COUNT(ds.id) FILTER (WHERE ds.sentiment_label = 'Neutral') as neutral,\n                COUNT(ds.id) FILTER (WHERE ds.sentiment_label = 'Negative') as negative,\n                AVG(ds.confidence_score) as avg_confidence,\n                AVG(ds.weighted_sentiment_score) as avg_weighted_score\n            FROM document_sentiments ds\n            JOIN documents d ON d.id = ds.document_id\n            JOIN sources s ON s.id = d.source_id\n            JOIN clients c ON c.id = s.client_id\n            GROUP BY c.name\n            ORDER BY c.name\n        ]\n(Background on this error at: https://sqlalche.me/e/20/f405)"
+    },
+    "reputation_scores": [
+      {
+        "client": "Meta",
+        "score": 54.13,
+        "grade": "D",
+        "sentiment_component": 0.0
+      },
+      {
+        "client": "Tata Motors",
+        "score": 34.6,
+        "grade": "F",
+        "sentiment_component": 37.5
+      },
+      {
+        "client": "Meta",
+        "score": 54.13,
+        "grade": "D",
+        "sentiment_component": 0.0
+      },
+      {
+        "client": "Tesla",
+        "score": 66.4,
+        "grade": "C",
+        "sentiment_component": 55.71
+      },
+      {
+        "client": "Tata Motors",
+        "score": 75.5,
+        "grade": "B",
+        "sentiment_component": 50.0
+      },
+      {
+        "client": "Tesla",
+        "score": 68.44,
+        "grade": "C",
+        "sentiment_component": 60.87
+      }
+    ],
+    "risk_per_client": [
+      {
+        "client": "Meta",
+        "avg_risk": 12.95,
+        "max_risk": 13.74,
+        "count": 4
+      },
+      {
+        "client": "Tata Motors",
+        "avg_risk": 48.97,
+        "max_risk": 67.71,
+        "count": 8
+      },
+      {
+        "client": "Tesla",
+        "avg_risk": 28.3,
+        "max_risk": 55.51,
+        "count": 58
+      }
+    ],
+    "source_reliability_note": {
+      "hardcoded_value": 1.0,
+      "impact": "weighted_sentiment_score = sentiment_score * 1.0 - source quality not factored in",
+      "risk_impact": "Risk engine reads source_reliability from document_sentiments; always 1.0 = no source quality discounting"
+    }
+  },
+  "phase_k": {
+    "dimensions": {
+      "Architecture": {
+        "score": 6,
+        "findings": [
+          "FinBERT is appropriate for financial/business text",
+          "Single-document processing (no batching)",
+          "Mock fallback silently corrupts data with random labels",
+          "Text truncated at 1500 chars without adaptive logic",
+          "No preprocessing (HTML, encoding, boilerplate not stripped)"
+        ]
+      },
+      "Reliability": {
+        "score": 3,
+        "findings": [
+          "CRITICAL: Sentiment failure is silently swallowed - no retry, no dead-letter queue",
+          "Documents missing sentiment are NEVER reprocessed",
+          "No unique constraint on document_sentiments(document_id) - duplicates possible",
+          "Mock fallback with random data is a silent correctness killer",
+          "No processing state machine for sentiment (unlike entity matching)",
+          "No idempotency guard - task retry creates duplicate rows"
+        ]
+      },
+      "Accuracy": {
+        "score": 6,
+        "findings": [
+          "FinBERT is domain-appropriate (financial NLP)",
+          "No calibration thresholds applied (unlike topic engine)",
+          "Low-confidence predictions accepted without fallback",
+          "Entity context window is 100 chars - may be insufficient",
+          "First-occurrence-only entity windowing loses multi-mention context",
+          "No post-processing rules or suppression logic"
+        ]
+      },
+      "Explainability": {
+        "score": 2,
+        "findings": [
+          "CRITICAL: Zero explainability - only label + score stored",
+          "No match_metadata column",
+          "No rejection reason, no context window stored",
+          "No keyword attribution",
+          "Source reliability hardcoded to 1.0 - never reflects true source quality"
+        ]
+      },
+      "Performance": {
+        "score": 5,
+        "findings": [
+          "No batching - each document makes separate inference calls",
+          "Entity sentiment requires N+1 inference calls per document",
+          "Model reloaded only once at worker startup (good)",
+          "No GPU acceleration in most deployments",
+          "No parallel processing across documents"
+        ]
+      },
+      "Concurrency": {
+        "score": 5,
+        "findings": [
+          "DB sessions are isolated per task (SAFE)",
+          "Model instance shared across Celery tasks (read-only inference - SAFE)",
+          "No unique constraint on document_sentiments - race condition possible on retry",
+          "No Celery task deduplication"
+        ]
+      },
+      "Data Quality": {
+        "score": 6,
+        "findings": [
+          "Label capitalization inconsistency (mixed case possible in entity_sentiments)",
+          "Weighted score derivation correct but trivially equals sentiment_score",
+          "source_reliability hardcoded = 1.0 always",
+          "No validation of normalized_content before calling FinBERT"
+        ]
+      },
+      "Observability": {
+        "score": 3,
+        "findings": [
+          "CRITICAL: No structured log on sentiment success",
+          "No correlation_id linking a document through the full pipeline",
+          "No latency metrics stored",
+          "No per-document processing state for sentiment",
+          "No health endpoint or dashboard widget for sentiment",
+          "model_runs table is the only audit trail - insufficient"
+        ]
+      },
+      "Business Validation": {
+        "score": 6,
+        "findings": [
+          "Sentiment feeds Risk, Reputation, Narrative, Trend correctly",
+          "Per-client breakdown is measurable from DB",
+          "Source reliability always 1.0 - business risk if poor sources drive scores",
+          "No confidence threshold for business decisions"
+        ]
+      }
+    },
+    "overall_score": 4.7,
+    "overall_grade": "D",
+    "top_10_improvements": [
+      {
+        "rank": 1,
+        "priority": "CRITICAL",
+        "title": "Silent failure swallowing",
+        "description": "Sentiment failures are silently logged and discarded. Add retry with backoff, dead-letter queue for permanently-failed documents, and a SENTIMENT_FAILED processing state so operators can identify and reprocess affected documents."
+      },
+      {
+        "rank": 2,
+        "priority": "CRITICAL",
+        "title": "Remove mock fallback from production",
+        "description": "use_mock=True generates random labels and scores. This corrupts downstream Risk, Reputation, and Narrative data. Production must fail hard on model load failure - no mock fallback."
+      },
+      {
+        "rank": 3,
+        "priority": "CRITICAL",
+        "title": "Add unique constraint on document_sentiments(document_id)",
+        "description": "Without this, Celery task retries or duplicate task submissions create multiple sentiment rows per document. Enforce at DB level and use upsert logic in SentimentAnalyzer."
+      },
+      {
+        "rank": 4,
+        "priority": "HIGH",
+        "title": "Add explainability metadata column",
+        "description": "Store a JSONB sentiment_metadata column with: context_window text, entity_name (entity sentiment), raw_model_output, truncation_applied (bool), model_version. Mirrors the Phase 1.2 match_metadata pattern."
+      },
+      {
+        "rank": 5,
+        "priority": "HIGH",
+        "title": "Implement batch inference",
+        "description": "Current code calls analyze_text once per document + once per entity mention. Batch all texts in a single pipeline() call. Mirrors Phase 2.3 optimization that yielded +114% throughput."
+      },
+      {
+        "rank": 6,
+        "priority": "HIGH",
+        "title": "Add structured logging on success",
+        "description": "Emit a structlog event on sentiment completion with: document_id, client_id, label, confidence_score, entity_count, latency_ms, model_name."
+      },
+      {
+        "rank": 7,
+        "priority": "HIGH",
+        "title": "Add document processing state for sentiment",
+        "description": "Extend the document state machine with SENTIMENT_PENDING, SENTIMENT_PROCESSING, SENTIMENT_COMPLETE, SENTIMENT_FAILED states. Documents stuck in SENTIMENT_FAILED become requeue-able."
+      },
+      {
+        "rank": 8,
+        "priority": "MEDIUM",
+        "title": "Confidence threshold gating",
+        "description": "Documents classified below 0.55 confidence should be marked SENTIMENT_LOW_CONFIDENCE instead of writing a low-quality label to drive high-stakes decisions."
+      },
+      {
+        "rank": 9,
+        "priority": "MEDIUM",
+        "title": "Fix source_reliability hardcoding",
+        "description": "source_reliability is always 1.0. Join to the Source model and use a configurable reliability score per source, cascading correctly to weighted_sentiment_score and risk calculations."
+      },
+      {
+        "rank": 10,
+        "priority": "MEDIUM",
+        "title": "Improve entity context windowing",
+        "description": "Current windowing uses first-occurrence-only and a fixed 100-char window. Use all occurrences, aggregate context scores, and increase window to 200 chars."
+      }
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "logging": {
+    "logger_type": "structlog (imported in intelligence_tasks.py)",
+    "sentiment_success_logged": false,
+    "sentiment_failure_logged": true,
+    "log_key_on_failure": "sentiment_analysis_failed_rolling_back",
+    "fields_on_failure": [
+      "document_id",
+      "error"
+    ],
+    "gaps": [
+      "No log emitted on successful sentiment completion",
+      "No correlation_id / batch_id / client_id in sentiment logs",
+      "No latency measurement logged",
+      "No confidence score logged",
+      "No label logged",
+      "No model_name logged in task context"
+    ]
+  },
+  "model_runs_by_model": [
+    {
+      "model_name": "ProsusAI/finbert",
+      "count": 177
+    },
+    {
+      "model_name": "valhalla/distilbart-mnli-12-3",
+      "count": 409
+    }
+  ],
+  "processing_timeline_by_hour": [
+    {
+      "hour": "2026-06-25 21:00:00+05:30",
+      "count": 4
+    },
+    {
+      "hour": "2026-06-25 14:00:00+05:30",
+      "count": 93
+    },
+    {
+      "hour": "2026-06-18 15:00:00+05:30",
+      "count": 80
+    }
+  ],
+  "alert_types": [
+    {
+      "type": "Topic Spike",
+      "count": 25
+    },
+    {
+      "type": "High Risk",
+      "count": 14
+    },
+    {
+      "type": "Mention Spike",
+      "count": 5
+    }
+  ],
+  "observability_gaps": [
+    "No correlation_id linking documents through the full pipeline",
+    "No latency stored per document",
+    "No per-document processing_state for sentiment (unlike entity matching)",
+    "No retry counter or failure reason stored",
+    "No dashboard visibility into sentiment processing health"
+  ]
+}

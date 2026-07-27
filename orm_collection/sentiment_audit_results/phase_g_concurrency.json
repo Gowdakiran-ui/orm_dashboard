@@ -1,0 +1,49 @@
+{
+  "duplicate_document_sentiments": {
+    "count": 1,
+    "details": [
+      {
+        "document_id": "05d344a8-08c6-47e0-93c5-c063a33a348e",
+        "n": 5
+      }
+    ]
+  },
+  "duplicate_entity_sentiments": {
+    "count": 0,
+    "details": []
+  },
+  "constraints": [
+    {
+      "constraint": "document_sentiments_document_id_fkey",
+      "type": "FOREIGN KEY",
+      "column": "document_id"
+    },
+    {
+      "constraint": "document_sentiments_pkey",
+      "type": "PRIMARY KEY",
+      "column": "id"
+    },
+    {
+      "constraint": "entity_sentiments_document_id_fkey",
+      "type": "FOREIGN KEY",
+      "column": "document_id"
+    },
+    {
+      "constraint": "entity_sentiments_entity_id_fkey",
+      "type": "FOREIGN KEY",
+      "column": "entity_id"
+    },
+    {
+      "constraint": "entity_sentiments_pkey",
+      "type": "PRIMARY KEY",
+      "column": "id"
+    }
+  ],
+  "model_sharing": {
+    "global_worker_init": true,
+    "singleton_pattern": "sentiment_analyzer = SentimentAnalyzer(use_mock=False) at module level",
+    "db_session_isolation": "Each task uses its own SessionLocal() - SAFE",
+    "no_upsert_logic": true,
+    "race_condition_risk": "MEDIUM - no unique constraint on document_sentiments(document_id), duplicates possible if task retried"
+  }
+}

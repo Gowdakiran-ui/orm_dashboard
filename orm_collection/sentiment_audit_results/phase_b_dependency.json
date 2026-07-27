@@ -1,0 +1,50 @@
+{
+  "table_row_counts": {
+    "document_sentiments": {
+      "exists": true,
+      "row_count": 177
+    },
+    "entity_sentiments": {
+      "exists": true,
+      "row_count": 33
+    },
+    "risk_events": {
+      "exists": true,
+      "row_count": 70
+    },
+    "reputation_scores": {
+      "exists": true,
+      "row_count": 6
+    },
+    "narratives": {
+      "exists": true,
+      "row_count": 46
+    },
+    "trend_events": {
+      "exists": true,
+      "row_count": 83
+    },
+    "alerts": {
+      "exists": true,
+      "row_count": 44
+    },
+    "model_runs": {
+      "exists": true,
+      "row_count": 586
+    }
+  },
+  "risk_coverage": {
+    "documents_with_both_sentiment_and_risk": 45,
+    "total_document_sentiments": 177,
+    "coverage_pct": 25.42
+  },
+  "pipeline_chain_status": {
+    "reputation_scores": 6,
+    "risk_events": 70,
+    "narratives": 46,
+    "note": "All downstream nodes populated means sentiment is flowing"
+  },
+  "model_run_logs": {
+    "finbert_run_count": 177
+  }
+}

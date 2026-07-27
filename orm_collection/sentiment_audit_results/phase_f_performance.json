@@ -1,0 +1,20 @@
+{
+  "model_load_time_ms": 15454.7,
+  "inference_latency_ms": {
+    "n": 20,
+    "min": 143.59,
+    "max": 321.2,
+    "avg": 177.88,
+    "median": 160.92,
+    "p95": 321.2,
+    "p99": 321.2
+  },
+  "throughput": {
+    "docs_per_second": 5.62
+  },
+  "full_doc_pipeline_latency_ms": {
+    "n": 5,
+    "avg": 236.46,
+    "max": 347.01
+  }
+}

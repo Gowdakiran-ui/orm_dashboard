@@ -1,0 +1,241 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(0.10 0.02 240); /* Dark Navy #0B1120 */
+  --foreground: oklch(0.95 0.01 240); /* Light slate */
+  --card: oklch(0.14 0.03 240); /* Dark Blue #151D30 */
+  --card-foreground: oklch(0.98 0.01 240);
+  --popover: oklch(0.14 0.03 240);
+  --popover-foreground: oklch(0.98 0.01 240);
+  --primary: oklch(0.82 0.14 85); /* Rich Gold #D4AF37 */
+  --primary-foreground: oklch(0.10 0.02 240);
+  --secondary: oklch(0.20 0.04 240); /* Midnight Blue */
+  --secondary-foreground: oklch(0.95 0.01 240);
+  --muted: oklch(0.18 0.03 240);
+  --muted-foreground: oklch(0.70 0.02 240);
+  --accent: oklch(0.20 0.04 240);
+  --accent-foreground: oklch(0.95 0.01 240);
+  --destructive: oklch(0.55 0.22 25);
+  --border: oklch(0.22 0.03 240); /* Slate/blue border */
+  --input: oklch(0.22 0.03 240);
+  --ring: oklch(0.82 0.14 85); /* Gold Ring */
+  --chart-1: oklch(0.82 0.14 85); /* Gold */
+  --chart-2: oklch(0.60 0.15 240); /* Soft Blue */
+  --chart-3: oklch(0.75 0.15 140); /* Emerald */
+  --chart-4: oklch(0.55 0.22 25); /* Red/Orange */
+  --chart-5: oklch(0.40 0.10 240);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.14 0.03 240);
+  --sidebar-foreground: oklch(0.95 0.01 240);
+  --sidebar-primary: oklch(0.82 0.14 85);
+  --sidebar-primary-foreground: oklch(0.10 0.02 240);
+  --sidebar-accent: oklch(0.20 0.04 240);
+  --sidebar-accent-foreground: oklch(0.95 0.01 240);
+  --sidebar-border: oklch(0.22 0.03 240);
+  --sidebar-ring: oklch(0.82 0.14 85);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Utility Classes for Premium Command Center Look */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.glass-panel {
+  background: rgba(6, 11, 24, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(31, 41, 55, 0.4);
+}
+
+.glow-gold {
+  filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.3));
+}
+
+/* ============================================
+   PREMIUM ANIMATION SYSTEM
+   ============================================ */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes shimmerSweep {
+  0%   { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes goldPulse {
+  0%, 100% { box-shadow: 0 0 0px rgba(212,175,55,0); }
+  50%       { box-shadow: 0 0 18px rgba(212,175,55,0.25); }
+}
+
+@keyframes radarRing {
+  0%, 100% { stroke-opacity: 0.3; }
+  50%       { stroke-opacity: 0.7; }
+}
+
+@keyframes pipelineFlow {
+  0%   { stroke-dashoffset: 24; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes enginePulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(212,175,55,0.1); }
+  50%       { border-color: rgba(212,175,55,0.4); }
+}
+
+/* Utility classes */
+.animate-fadeInUp {
+  animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.35s ease-out both;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    #0e1626 0px,
+    #1e293b 400px,
+    #0e1626 800px
+  );
+  background-size: 1000px 100%;
+  animation: shimmerSweep 2s infinite linear;
+}
+
+.animate-goldPulse {
+  animation: goldPulse 3s ease-in-out infinite;
+}
+
+.animate-radarRing {
+  animation: radarRing 2.5s ease-in-out infinite;
+}
+
+.animate-pipelineFlow {
+  stroke-dasharray: 8 4;
+  animation: pipelineFlow 1.5s linear infinite;
+}
+
+.animate-enginePulse {
+  animation: enginePulse 2s ease-in-out infinite;
+}
+
+.animate-countUp {
+  animation: countUp 0.5s ease-out both;
+}
+
+/* Hover elevation effect for cards */
+.card-premium {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-premium:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 20px rgba(212,175,55,0.06);
+}
+
+/* Progress bar animation */
+.progress-bar-animated {
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Pipeline connector line */
+.pipeline-connector {
+  stroke: #1F2937;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+  animation: pipelineFlow 2s linear infinite;
+}
+
+/* Stagger delays for list items */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.30s; }
+
+/* Number tabular alignment */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}

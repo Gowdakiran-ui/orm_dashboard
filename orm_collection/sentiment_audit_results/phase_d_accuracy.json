@@ -1,0 +1,100 @@
+{
+  "label_distribution_pct": [
+    {
+      "label": "Neutral",
+      "count": 86,
+      "pct": 48.59
+    },
+    {
+      "label": "Negative",
+      "count": 47,
+      "pct": 26.55
+    },
+    {
+      "label": "Positive",
+      "count": 44,
+      "pct": 24.86
+    }
+  ],
+  "confidence_stats": {
+    "min": 0.3971,
+    "max": 0.9872,
+    "avg": 0.8055,
+    "median": 0.8319,
+    "p95": 0.9694
+  },
+  "sentiment_per_client": {
+    "error": "(psycopg2.errors.UndefinedColumn) column s.client_id does not exist\nLINE 6:             JOIN clients c ON c.id = s.client_id\n                                             ^\n\n[SQL: \n            SELECT c.name, ds.sentiment_label, COUNT(*) as cnt\n            FROM document_sentiments ds\n            JOIN documents d ON d.id = ds.document_id\n            JOIN sources s ON s.id = d.source_id\n            JOIN clients c ON c.id = s.client_id\n            GROUP BY c.name, ds.sentiment_label\n            ORDER BY c.name, ds.sentiment_label\n        ]\n(Background on this error at: https://sqlalche.me/e/20/f405)"
+  },
+  "low_confidence_documents": {
+    "threshold": 0.6,
+    "count": 13
+  },
+  "weighted_sentiment_scores": {
+    "avg": -0.0169,
+    "min": -1.0,
+    "max": 1.0
+  },
+  "lowest_confidence_samples": [
+    {
+      "doc_id": "ea158ffe-66b7-4b03-89a8-908858307d78",
+      "title": "Senators Push NHTSA to Investigate Claims of Inflated Tesla Safety Data - Kelley",
+      "label": "Neutral",
+      "confidence": 0.3971
+    },
+    {
+      "doc_id": "24df06d9-990f-4200-9962-805c1784bebf",
+      "title": "This CarPlay change may be the missing link for Tesla support - 9to5Mac",
+      "label": "Negative",
+      "confidence": 0.4892
+    },
+    {
+      "doc_id": "80c15c72-6a80-4961-8f54-292dbeb1dbcd",
+      "title": "Elon Musk Says Tesla Owners Will Soon Be Able To Talk To Grok Like A Chauffeur -",
+      "label": "Neutral",
+      "confidence": 0.4965
+    },
+    {
+      "doc_id": "f58fd253-8e4e-41e9-82d9-c69b2684651a",
+      "title": "Tesla Cybercab Finally Reveals Key Specs\u2014Including 418 Miles Of Range - Motor1.c",
+      "label": "Positive",
+      "confidence": 0.4979
+    },
+    {
+      "doc_id": "a249ab0b-085a-4895-9498-0a04e9eea050",
+      "title": "Tesla Allegedly Showed Cooked Data to Get Full Self-Driving Approved - Futurism",
+      "label": "Neutral",
+      "confidence": 0.4985
+    },
+    {
+      "doc_id": "d5b9b494-1567-4aec-b3b7-355aa24e0feb",
+      "title": "Tesla offers discounted home batteries in New England VPP push - Canary Media",
+      "label": "Neutral",
+      "confidence": 0.5222
+    },
+    {
+      "doc_id": "9cfe5923-c349-471b-9078-a295f07dc83b",
+      "title": "Travis Co. deputies at scene of fatal crash on SH 130 near Tesla Gigafactory - K",
+      "label": "Negative",
+      "confidence": 0.5353
+    },
+    {
+      "doc_id": "7a72ed4a-8c7d-437c-a7f4-a7b200bed088",
+      "title": "SpaceX Will Probably Swallow Tesla \u2013 and Your Portfolio - Bloomberg.com",
+      "label": "Negative",
+      "confidence": 0.5361
+    },
+    {
+      "doc_id": "9a3f9ede-f35d-469b-aa16-dd86fce374c7",
+      "title": "Lucid's $50,000 Cosmos Looks Ready To Fight Tesla Model Y, Rivian R2 - CarBuzz",
+      "label": "Neutral",
+      "confidence": 0.5556
+    },
+    {
+      "doc_id": "31713af2-8e56-45cb-bc9c-93cd73cfcf64",
+      "title": "Observations After Two Weeks with Tesla Hardware 4 & Full Self Driving V14 in My",
+      "label": "Positive",
+      "confidence": 0.5562
+    }
+  ]
+}

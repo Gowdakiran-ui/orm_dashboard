@@ -1,0 +1,158 @@
+{
+  "dimensions": {
+    "Architecture": {
+      "score": 6,
+      "findings": [
+        "FinBERT is appropriate for financial/business text",
+        "Single-document processing (no batching)",
+        "Mock fallback silently corrupts data with random labels",
+        "Text truncated at 1500 chars without adaptive logic",
+        "No preprocessing (HTML, encoding, boilerplate not stripped)"
+      ]
+    },
+    "Reliability": {
+      "score": 3,
+      "findings": [
+        "CRITICAL: Sentiment failure is silently swallowed - no retry, no dead-letter queue",
+        "Documents missing sentiment are NEVER reprocessed",
+        "No unique constraint on document_sentiments(document_id) - duplicates possible",
+        "Mock fallback with random data is a silent correctness killer",
+        "No processing state machine for sentiment (unlike entity matching)",
+        "No idempotency guard - task retry creates duplicate rows"
+      ]
+    },
+    "Accuracy": {
+      "score": 6,
+      "findings": [
+        "FinBERT is domain-appropriate (financial NLP)",
+        "No calibration thresholds applied (unlike topic engine)",
+        "Low-confidence predictions accepted without fallback",
+        "Entity context window is 100 chars - may be insufficient",
+        "First-occurrence-only entity windowing loses multi-mention context",
+        "No post-processing rules or suppression logic"
+      ]
+    },
+    "Explainability": {
+      "score": 2,
+      "findings": [
+        "CRITICAL: Zero explainability - only label + score stored",
+        "No match_metadata column",
+        "No rejection reason, no context window stored",
+        "No keyword attribution",
+        "Source reliability hardcoded to 1.0 - never reflects true source quality"
+      ]
+    },
+    "Performance": {
+      "score": 5,
+      "findings": [
+        "No batching - each document makes separate inference calls",
+        "Entity sentiment requires N+1 inference calls per document",
+        "Model reloaded only once at worker startup (good)",
+        "No GPU acceleration in most deployments",
+        "No parallel processing across documents"
+      ]
+    },
+    "Concurrency": {
+      "score": 5,
+      "findings": [
+        "DB sessions are isolated per task (SAFE)",
+        "Model instance shared across Celery tasks (read-only inference - SAFE)",
+        "No unique constraint on document_sentiments - race condition possible on retry",
+        "No Celery task deduplication"
+      ]
+    },
+    "Data Quality": {
+      "score": 6,
+      "findings": [
+        "Label capitalization inconsistency (mixed case possible in entity_sentiments)",
+        "Weighted score derivation correct but trivially equals sentiment_score",
+        "source_reliability hardcoded = 1.0 always",
+        "No validation of normalized_content before calling FinBERT"
+      ]
+    },
+    "Observability": {
+      "score": 3,
+      "findings": [
+        "CRITICAL: No structured log on sentiment success",
+        "No correlation_id linking a document through the full pipeline",
+        "No latency metrics stored",
+        "No per-document processing state for sentiment",
+        "No health endpoint or dashboard widget for sentiment",
+        "model_runs table is the only audit trail - insufficient"
+      ]
+    },
+    "Business Validation": {
+      "score": 6,
+      "findings": [
+        "Sentiment feeds Risk, Reputation, Narrative, Trend correctly",
+        "Per-client breakdown is measurable from DB",
+        "Source reliability always 1.0 - business risk if poor sources drive scores",
+        "No confidence threshold for business decisions"
+      ]
+    }
+  },
+  "overall_score": 4.7,
+  "overall_grade": "D",
+  "top_10_improvements": [
+    {
+      "rank": 1,
+      "priority": "CRITICAL",
+      "title": "Silent failure swallowing",
+      "description": "Sentiment failures are silently logged and discarded. Add retry with backoff, dead-letter queue for permanently-failed documents, and a SENTIMENT_FAILED processing state so operators can identify and reprocess affected documents."
+    },
+    {
+      "rank": 2,
+      "priority": "CRITICAL",
+      "title": "Remove mock fallback from production",
+      "description": "use_mock=True generates random labels and scores. This corrupts downstream Risk, Reputation, and Narrative data. Production must fail hard on model load failure - no mock fallback."
+    },
+    {
+      "rank": 3,
+      "priority": "CRITICAL",
+      "title": "Add unique constraint on document_sentiments(document_id)",
+      "description": "Without this, Celery task retries or duplicate task submissions create multiple sentiment rows per document. Enforce at DB level and use upsert logic in SentimentAnalyzer."
+    },
+    {
+      "rank": 4,
+      "priority": "HIGH",
+      "title": "Add explainability metadata column",
+      "description": "Store a JSONB sentiment_metadata column with: context_window text, entity_name (entity sentiment), raw_model_output, truncation_applied (bool), model_version. Mirrors the Phase 1.2 match_metadata pattern."
+    },
+    {
+      "rank": 5,
+      "priority": "HIGH",
+      "title": "Implement batch inference",
+      "description": "Current code calls analyze_text once per document + once per entity mention. Batch all texts in a single pipeline() call. Mirrors Phase 2.3 optimization that yielded +114% throughput."
+    },
+    {
+      "rank": 6,
+      "priority": "HIGH",
+      "title": "Add structured logging on success",
+      "description": "Emit a structlog event on sentiment completion with: document_id, client_id, label, confidence_score, entity_count, latency_ms, model_name."
+    },
+    {
+      "rank": 7,
+      "priority": "HIGH",
+      "title": "Add document processing state for sentiment",
+      "description": "Extend the document state machine with SENTIMENT_PENDING, SENTIMENT_PROCESSING, SENTIMENT_COMPLETE, SENTIMENT_FAILED states. Documents stuck in SENTIMENT_FAILED become requeue-able."
+    },
+    {
+      "rank": 8,
+      "priority": "MEDIUM",
+      "title": "Confidence threshold gating",
+      "description": "Documents classified below 0.55 confidence should be marked SENTIMENT_LOW_CONFIDENCE instead of writing a low-quality label to drive high-stakes decisions."
+    },
+    {
+      "rank": 9,
+      "priority": "MEDIUM",
+      "title": "Fix source_reliability hardcoding",
+      "description": "source_reliability is always 1.0. Join to the Source model and use a configurable reliability score per source, cascading correctly to weighted_sentiment_score and risk calculations."
+    },
+    {
+      "rank": 10,
+      "priority": "MEDIUM",
+      "title": "Improve entity context windowing",
+      "description": "Current windowing uses first-occurrence-only and a fixed 100-char window. Use all occurrences, aggregate context scores, and increase window to 200 chars."
+    }
+  ]
+}

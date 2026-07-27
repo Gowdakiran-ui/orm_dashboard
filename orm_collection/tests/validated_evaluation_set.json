@@ -1,0 +1,2124 @@
+[
+  {
+    "document_id": "c729f6f0-11e3-47cc-ab8b-270db55bfb8f",
+    "title": "Tesla Owners Are Using Doll Heads To Fool Full Self-Driving - InsideEVs",
+    "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE84Rk5iUDlKb3JiYlpGeF91bmhoMnltekk4UFRSdmo5b2ZxMng2RkxxM09ZWVhDMDE1SnB3VDZwelhaOTRzZm5UOWNnOEhGdnF2Zm96SDJCRVpvZ2NrZ19UZXNSQ0xLRFRUT1BmaG5FNA",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "515a8381-9708-47cf-9c75-24bb7e1e41b5",
+    "title": "Rivian CEO signals self-driving prices, like Tesla\u2019s, will fall - Electrek",
+    "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxQSFVnN1E1LTBEWGYtUWJXMnZSTXRoQW1CNFpfRFAyRHNEcmJ1UnB6UHpEbVN0V2lsMjRydE5vNEdYSEc1VkItZ3g1UzFROTR0RGRpTGFQRzRyN0p5OHlRME44VlA2VWliN1lKZXdsLUVoUlRCUmpaOThtX29qSDJoelJPZw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "809e21fe-f1a7-4532-a485-de015239f0c3",
+    "title": "Musk Swaps 300 Million Tesla Options for Shares He Can Vote - WSJ",
+    "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxPWE5FenJIOEpkRl9UbXBRUWQ3X0J5TG9XcWp1RFgxNGlFNUtUZk1lT1NpWWxXa25ZS09JM2dyb2YyMDYzZ09jUGZhWGxEUmZrVlFWbzVqLW5iMDZKN3M1SDhUbUVhbFFzaWlkWlBnNnNNRFhzYlNYVzJDYmFWWDN6Qm9WSjBKMmdIam0xMG9lR1BuVkdISTM3THJYVm5PMnpmZEc0eE0ySDE1ekEzeC1rYWJPaW9sU2lzZG9vNG5yYmU3aUlfa1VTNmpjS3BGRi1ucmNzV2pXV19CX3JWT21VUGR1WkRvRklLek0yRUJkdE0weVU",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "91bc8a3f-a9eb-463a-9c5f-a6934b598c69",
+    "title": "Toyota Rav4 Plug-in Hybrid vs. Tesla Model Y Basic - CleanTechnica",
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxON1AyVV9hd0thaDdRQklGd3J4ZGY5cGVIRC0xZmFhd24yUTctTlg1ZldUVVpTZ3VQUUVleGFEdkZyeG40aFlvNF9MZjJxbUhLREFSUnAzcXBpSVFlb1hpcHE1VGxsWDNVQXJBZ2QyUklYZlZKT3FFMVE0S2l4MUdSOG1xM2tHRWhPUlFreEtCLXA",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "e26e6710-1c01-428b-8a58-2353e9c76b04",
+    "title": "Does a SpaceX-Tesla merger make sense? - Business Insider",
+    "url": "https://news.google.com/rss/articles/CBMikwFBVV95cUxNMDR4UUhxc0g5RkRYY1NnNnJxUmFqSkxMbXFjUTRvcDZXOHZBNzdpZmVSZmYyLVFDYlRXcF82SllidXNLMHZmNXhoeTNpdENqdkJQQlVuQzZkV1lyUWFSSG02OG1mcWpyQkg5NExob1Q4V1dDNFVFbUVwUUh0Y2N1SmxnTlNZV0tqZTJNcDBYQ2w3cHc",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "9a3f9ede-f35d-469b-aa16-dd86fce374c7",
+    "title": "Lucid's $50,000 Cosmos Looks Ready To Fight Tesla Model Y, Rivian R2 - CarBuzz",
+    "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE9yMnZrakphVjk5ZTVKdDJGa0pjZU95dTlCS0JEQ3hRNkFMd2loalNuMEhfN2JEeUZkRW1na3N5TGJGckYyUjlIQVR0bnNyUmdyUjVqRURaMEtoeS1RWlNyNHRYbk0",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "d0bfaaf1-f2f9-4191-8a38-86bda5ee9b32",
+    "title": "Tested: Tesla FSD Is Evolving Into A De Facto Robotaxi - Forbes",
+    "url": "https://news.google.com/rss/articles/CBMipAFBVV95cUxNWVA0c1M0YjUwSEFmeDRvZWZBUXF6ZEtXb0xWWUNTaDhxcHJCdWNMdWl5RUJVREVYdXZGSTFMazJOR1JNYjVMNWdoblh2R29ONmtVSXdjcldnQXlDTmF5QUczeUJ3MkJmWDBIUTVoczBPbEhjNVNhRGk1VEdaOXd1VDRFVFoyaUdfNS1zRWtmRjBhLUlsWWVsazRjOGhLVUpVVU5hSA",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "05d344a8-08c6-47e0-93c5-c063a33a348e",
+    "title": "Exclusive: Tesla presented misleading \u2018Full Self-Driving\u2019 safety data to European regulators - Reuters",
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxPZ0hBU1N1QmFJWEswYVNlZE1HT0VOd1B0ME5lNFVsOHduTUxWREJpS3FLUHItOHB3aVRDaml3LURlRGY5dlNLV293bEFtMmlmaFh4eTZKSnJJWVZPZ1BQcS1zZDZ2RGpvc1ZjbjJMbnRTY21qZ2RINzhpQ0RvUFdWQWJnenR1aFo2WVNIZnFYcjJGT1dFZTNVdzc1aG9YM0F3R1cwd3BXeVQ2bXREbmM3TFNGcmlqZTlRZ0E",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "490b9570-e52c-4046-8be4-afbdf2592034",
+    "title": "Tested: 2026 Tesla Model Y Performance Takes the Edge Off - Car and Driver",
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxPSjAtWGs5MjFJLWs4YzRIS3Y3ci03amNhajZ0SnNVTnlRMllfRU93WG1GeWZ1NmluekZSWGVOdHlxdEFDNnJrQWNJd3JibWh0b043YWlES0RTanRvWkVuNTFZNFEyVWRpSWZ3ajhBWm93XzJQZjItX2dzNjlhZzBPYm1fdWZnMkFRMUtVdA",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "c67013a9-bfcf-4934-a6ee-97cd1b07b09f",
+    "title": "TCSO responds to fatal crash on SH-130, Tesla Road ramp - KXAN Austin",
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxPRjd0eXd6R2pRNThEM2M5NTMxLWRhV2x6TkJzM2VVMkI1Q3BhREl3WFBuZHFqendxOXdSQVhYYjJuaGVrWXNBa19vQWZWZ2VubXZzbTFYY19nMHdtY1hUczFhSWpFeGg2S3E0ZEpDWE9HVk4zcnJXLTl2dmtxVWxrRHY3YVZoQlZseHhjTFoySmIwZVFwZUNhdkNpZk03VGt2MUHSAacBQVVfeXFMTk1JTTA3NEJXc2xWU185YWtTdzRIZnZqTkI1ZG9GMnFMU2RVdnlqOHgxcDRkTUY2aEZDa0c4ZHhnNG1meGM3SGdxeGFkbUt2WFI2RTJIUngtUHpsSkxSTkZMUDgtUFVKSkVKQ01nWHZ6eW00dEdQLVpueHVHMF81UURMakwtRml0SUFDUUdDVFdnNlhwWkpEaTU0NE93a1RqTVRvR0drMTQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "242fe139-ef7e-4be2-8771-e2919c6aff71",
+    "title": "2026.20.3 Official Tesla Release Notes - Software Updates - Not a Tesla App",
+    "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPUUVBS3UtYW9LMGVCR1ViOU1oVTB2RFNiVlhEZGpaM2FYUjRKN1pBQ2RCM3pmOUhmYy1PV3JsWFVKRVB3a0JyMmtTXzdLaWFJeWdmd1BFblhCTHhidWd1QkJzUWZTY3hpZldsTHpEOUV0WVR6M1gtODR2YjJWaXY2SC1kcw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "9f56ec88-66fa-41d4-bcbd-8bdda1fa1689",
+    "title": "Tesla's Autopark is about to get a lot smarter, Musk claims - Mashable",
+    "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTFBsR1dEOWo2UlRKYVNRcDJaV20zb2ozbmRhSmktZHVtUjMyNllhZXJmU0lYdHlMVmlBOWZKbUQ4Rk9JLVN6c0VSZTNTei1KWlZnZzdVbUdmZUV2X29h",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "31713af2-8e56-45cb-bc9c-93cd73cfcf64",
+    "title": "Observations After Two Weeks with Tesla Hardware 4 & Full Self Driving V14 in My 2026 Tesla Model Y - CleanTechnica",
+    "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxNeXF2ZUhmSXgxVWp4VnVvTXhFaWEtbWFCdllWTDZHLWZGMm9zUldEYldJRUZWX1hORnVyUmFkMHlISk5KWDBqUGotX1NPMG5VRXB6NXlMN0cyaXc0YXFMbnRFeHBRdkFIRTdmQVZ0bldWZEF5aEozam1VZngxUGViVnNvMDM0RGh1NE83eVpxaFhWZFJHd3RwWlozdzNiSFhrV0VYdHM4aTZkNVZVTTJDT1pSdFBHX1Y5SFZ4TmdUelpQdzhkVlpwWmMxYTAxY3dL",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "1e73d6da-21e3-4189-af72-7b6155ace80e",
+    "title": "Exclusive: Tesla's Android App is Getting Live Activities-Style Notifications - Not a Tesla App",
+    "url": "https://news.google.com/rss/articles/CBMiwAFBVV95cUxPX21HTkVxQVFJWF93ZjJ5M0d5eXl3UzN1Mll5RmpWc2VqY1JndXZYanRJUjBSdDg3QjdHQU82ZWg3dmpkLWt2SU50aXZEdnFVQmdmTWV6b3JlM05vT29Tb1pfd2xKSlY3UUtKdzZLVF82TFFwdlVKT0NvRldxVXEwUHM4cEhuN3BaVFY0aEV2SzE5Ul8xR3BabDdDRmpYY01nWmhXQlZYMkRBMDliaHpUOWN5YzZzaC10UVhPYkhpQVk",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "7725111f-eae2-4184-8cc3-764f83cfee88",
+    "title": "Tesla Cybercab specs reveal low weight, big range - Mashable",
+    "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9LVlZkX0lDNjkzX2x0bEdGS1RSTmxXbkUwS3A0Vm9ZMnBRcmNFLW5XLXFHaDUtYkt6VXZjV0Y2ZllkMFFVSUVMNDRYS1V4UjVvbm1ubTdrS0NrQQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "f3cc6011-7b5f-4bd2-b712-bb105398e58d",
+    "title": "Dutch transportation minister defends Tesla FSD approval - Reuters",
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxOZW1taGh3WXFHQnY0cTVORndUYXI1NE1YenpnRG5xaF8wWDRTbTVsSTR0NVpCZ21iTXMySXlSMno3eERZYU5mQjc4Z1BucHFBaFJHRnAwcnlYR21maWwxLXBIYkF3Wl94SmEtSE5BSWJ2ZndaWmdqam9aWnBUUGJQNjJaQWJ1M1F2MXJtd2JCSFNVSm5xYzVkcVZVTWxYMTJqa0xF",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "f62124b8-4a15-448b-8bfb-24a1a8f913ca",
+    "title": "2027 Tesla Model Y - MotorTrend",
+    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE9lTDFpZWdEYTRjSE9icy1kWWxwNGt0ci16SFZtOWRVUU9Cb3VsRmRVUFR0c3FWNXc3b1doOGV6aENPRXZZQ1hNdmt0ZU9wUklCRW9RdVhXMUNpNUdXZkJRUkw1M2NldFk",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "8c451359-9efd-4469-a2da-d149f47074d4",
+    "title": "Tesla Stock Is Down. An Argentina Charger Deal Won\u2019t Help. - Barron's",
+    "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE9BWDhxRWRuWUVGZTJlaE5oUlVGVjRQbVBvZy0xWVpnVkY1cWR4dThGYzRCbXNZbHJZcmtGTkFMN3dxVFFoYUhwRVpGbmRfVTdKU2JHZmhfQ3RoczlhdEJlWVhzS2loXzR5clg5RUR1WndqRmV0OGIzM24tWWM2Nnc",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "46fc8569-0143-4ae7-ae66-7f065791d9ec",
+    "title": "Rivian\u2019s R2 Is Just As Efficient As Tesla\u2019s Model Y, Despite Being Heavier, EPA Docs Reveal - InsideEVs",
+    "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTFBfZVR0Wkl1bnFJOEViSG9kMktaeHlFd21hUHZGMmxFSklab3ZaSVpxRHE1QVd5Ty1sSW5LTzNjS21fMUVGODhDUnpqbzFWZURwRU5OZmlsMGpOWnMyWFdyM2N6OXJLS0p3RUY1TkNqQjcxR3VDN3lSMGw4Vlo0Zw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "f8f2d21d-8782-47d7-995b-64c14b73f1d6",
+    "title": "US couple who bought two Tesla cars and drove 500 miles a week in them left stunned after checking their electricity bills - supercarblondie.com",
+    "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxPS3lhdnJsbXdaX0x1YVllSkpydTJRSzhibXdTMFZyZ05DZGZUa2Z3Y3JHYk1MVnlmZUtPVThPUnl6RXZxSU9SYmxFblhycmtpUFBjejlhT1V1OTNqTHhmWnJGUS1tcTRibUZfR0V0MnlEVW5kUjVRNUtGVXlWMXkzNlZR",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "3767a69e-05c0-402a-a572-2ab7d0be91e1",
+    "title": "Tesla's $25 Billion Capex Plan Is No Longer About Cars. Here's Why Tesla Could Be the Most Undervalued AI and Robotics Stock of 2026. - The Motley Fool",
+    "url": "https://news.google.com/rss/articles/CBMimAFBVV95cUxNcnVlMGp6NWRVRk1DRDZNLWZCaFp5RE50aXc3RjVPczhuUktqNEVsdVJ1QkV2RkZjajFsYk1wbUtCS09zTjlYYnpabFlCV3EwNENsVVBCdXpnUmRONnBLSlBLV242QXAzZUxiVHJKdFJybTVIZVFMcWNZanNwSV81YXd3dEVmLURkUTJtRHpFU0d2ckVfTGZuZw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "437cd1f6-9175-465a-93d4-330c30a01000",
+    "title": "Tesla \u2018Robotaxis\u2019 are not crashing because they are not running - Electrek",
+    "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxNWlhyNEhFZ0VpZkVLNnVyclI3THNzcGljeng3OUpsZzNjSmtjcVcweGtLMVl1bnhQNndrMWZnWF9rSDFscU1rbFl1bmFCUVRXdUZhd1I5QXk0RmtDVTllc0tvRjVzMU1nS3JuMVJyck9wcy1wazV3Sk1JWERYYmUxUU9vc3YzNk0",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "8dcdfdfd-12cc-46fa-aeac-742659c9ce7a",
+    "title": "Watch Can Musk Pull Off a SpaceX-Tesla Merger? - Bloomberg.com",
+    "url": "https://news.google.com/rss/articles/CBMipAFBVV95cUxPTnp4YVpDM3dMS3k0enRYTGZGX1ZNVzUzS2ZMcDVlQ254UVpQal9YOTJJeW9UVGVteFA4eXBPcG9rVWhBUWczM1I2Z3hKT0F6dWpFbDI5eDl3NmNObnNqRWhTNU8zZTBkWUpiTnE1LTg1SFdsWkNPQWdDdTllZnBtVXp2d250WVY0cERsazJCV01PTXNTWmdvUm1CTnJqb3o1N0Vqbg",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "80c15c72-6a80-4961-8f54-292dbeb1dbcd",
+    "title": "Elon Musk Says Tesla Owners Will Soon Be Able To Talk To Grok Like A Chauffeur - Benzinga",
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxNNXNDclNIQmhndzBxbmpxTndvZWRtMWNPM0ZaX0lOWGVoeEJ1Vmtwd1JBMUdrR2xJQkpqV2lselU1QlJmT0xBeXpnZEJIUmVJampEcFpyWkhhS1k0VXZJeHJpOG9xNXJoZ2ZKLVprNG84cUxlMEI4TUI5Y3FpQ3lBRTJTZkNIcmVCRWlIdFBQaGpRbTd4cmZGTGJrR1BQaXotZkhQRlNSTDY5ZDNZQ3BiVWdvcnFuVGpOeW1HNkt5Wnpndi1s",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "0cd7fbfa-7405-47d1-afe3-d80904116880",
+    "title": "Is Tesla, Inc. (TSLA) A Good Stock To Buy Now? - Yahoo Finance",
+    "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxOZzNISXNZSnlvQU9WSjZoLWVjamdyTXlIVTJ4MUhIWHdnZGUxQlRyNFZLM1ZPYTQyM0FZbThpTC1sclYyTkdvaERRX0NRSkNOakVmN3Z2QnY1NmhqY2RLbGFFbDVnZTV6U20wZWkxVVI5emZvVjR1LWZYOG9aMnFjVEcwRUdUbnVFTjVhSlRPUnA0QlRW",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "9461712d-f3d8-4cd2-a9bd-f3a71d98ae0c",
+    "title": "Tesla Cybercab full specs revealed: 3,113 lbs, 219 HP, 48 kWh - Electrek",
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxOeWFROGVvb292N0EwdFFEZURnemh3aFV5VUxCWUlja2lyeGtGRU1kRVE5NGhHSU1DemdIbGRQZkdqNzQxSFluakhVdFQxWU80cEtGSGZEYjcySF9hSURURTJxMWtBWFl4LVJERW5LV3ZnX0JDbHBoZnJfMk14TDZ5RUZlNDVZTFJiZkFvN3FUeEpVZw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "3db29899-ae85-4d67-95d6-d7f1e6ce461e",
+    "title": "Tesla Stock Can\u2019t Escape SpaceX\u2019s Gravity - Barron's",
+    "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE42TnU5UDJQSmxKRk9JUWtSUTdiZ0dKUzB4c1JNYUZEX3ViZDhfb2lRVUtuQko3NVBtaTVGYUFlcmJHdTg5NVM2X0pWdWxWdjljTXFBNFl6OVdNM0NsQl9GckIyeWNpR09Ndk1zRktGajN1VkVBS0hmT09RNA",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "aa202a24-28af-4d9c-9ba3-a069302b0db4",
+    "title": "Tesla Cybercab EPA Specs Detail Weight, Power, Range - Hypebeast",
+    "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxQNVF0X2lZUW5yM1BjVFJObWtPVHF5Z2lZVGp3T1hRTWR2SHlEVHRGWF9QaVRER0RXX0lnbWV0ZEdxV0piNE5PTXRFaEhXWldPZjVMc3FVNXBQWHk4MG1CTi1WU0JPaWlYejQyWThxclA1R3Eya0c3NzBTM0EtQnJvUVN0cEU1dw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "a6ad7861-928d-4e85-810b-953fc1ecf59d",
+    "title": "Ex-Tesla exec builds the home heat pump Tesla gave up for robots - Electrek",
+    "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxQS3NwRXBTNGs4a1RBR1VROEpZYWxDQUY4MUJUcVh4SHlmdGFKUHVsMjg1d29zTEgxMF9mdGZHenJncHBHb0F3dS02WnU0OTZScFpKVUNzMTBXNG5xeGxWQmx3RV9MeFN3RkZ0cW9JcF8xVnlvYjZJcEJkc3loYnc5UzZsTQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "3b495601-7da3-4c96-8de8-55a8a329fd78",
+    "title": "Tesla\u2019s self-driving safeguards fooled by $30 doll heads - Electrek",
+    "url": "https://news.google.com/rss/articles/CBMikwFBVV95cUxQY0tyMUdYWTdqY244b0JmWV9MZUJ5UmpLMVFaVkVBb1VmZTRWRi1OV3Jvb0JXV1h3YlVIU2FqS1ZGTUZBendFM0g5MkRoY1JzRGRvY2d3NEEtY0NzSkdlREp0OE1vcVQtWkU2Qmk2YUlrZF9jRkhYWVpSYWpMLVVRWnIxRDY3ZjVGTW5relVmVFM4dVU",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "24df06d9-990f-4200-9962-805c1784bebf",
+    "title": "This CarPlay change may be the missing link for Tesla support - 9to5Mac",
+    "url": "https://news.google.com/rss/articles/CBMimAFBVV95cUxNTlBwdDUzRkxkbV9nb1NmUktEZ1hTc1FJN3diWW1yUmo5a3Bhc1dyUXIyVlREWHJqc3JVQlhMZDBmZ1JhVkF5UnRJc3JnSHhTNEZBdGVpQ0Z4ZWpscVJkbkxrWlB0X25FOGFlY0hhUmFtRUNQcDVzMmoybWFHbU02OURVX1pCLUlRaXBYVFRBeWhadUlQYzdWOQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "a249ab0b-085a-4895-9498-0a04e9eea050",
+    "title": "Tesla Allegedly Showed Cooked Data to Get Full Self-Driving Approved - Futurism",
+    "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE5IdFhpeHdtN0twQnJsRjlVSEY5LUx1a0VwZlZZX2hpS01EdWxtRFdWV0lzUENERDBVM3BJa0NqR2l0WktqZm1jUVF1dEZYYURpd0xUT0Faa0lUODVqX1V6eUtaS1ZWQjh0M1BydFZwal91VnQ0Ukt0bVdJZkM",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "ea158ffe-66b7-4b03-89a8-908858307d78",
+    "title": "Senators Push NHTSA to Investigate Claims of Inflated Tesla Safety Data - Kelley Blue Book",
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxNN21rUGktSHJkUDJmc1B1WWpPaDRCVElRem1ESVBrRGVBR3p6aEZfazRuQlppM3hFcGJEdDcwSEY1QjFwWDFCT1hkM1BvU1JlQzBFT084ejdOQjlmLWRBYWY1TTlCN0plaF9yMUV5bjJQbXhyQ0xEVkxld1lmMmIyRXdITklwLWE3UFBrS2g4TUItQlNld3d4NXpKT004Y25WcXUw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "a7716d99-b279-439a-ae69-2089f27a7aae",
+    "title": "Elon Musk just upped his Tesla stake further fueling SpaceX merger conversation - Teslarati",
+    "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE9FU3djRk5RXzM3UDFJRS1rR0Vsb05nU0FxenlPUWhNMGo1NTNEd3QwYlpBSTgxU28weVZfWlVHeEM1S1k0aGp2RVROelpwUmJaTWxJdWoxekp3VHR2Nm5YWWxEZmtISllCNFYwdjhubk9IQQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "b7b790ba-5b0f-4d39-b15e-4eb416655124",
+    "title": "Tesla\u2019s Cybercab Weighs 700 Pounds Less Than The Lightest Model 3 - Carscoops",
+    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBSUGpJWldoaXJfaXhLT01aeEpwLUpZMzM4RW85d0RQLXpMb3EwaXlTY19TSEJKek9IdzhPRTdsbXkyQzZIUldqNzBwQV9Ed0lWdWxjd3Nwcm5RWUhfN2FOclJ1T1VER3VjWWIw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "4fac1678-62b4-4e0a-a776-480c1f313c9a",
+    "title": "AMD, Google, Tesla, and Groq turn to Samsung Foundry as TSMC runs out of capacity - TweakTown",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOUjMweTVxQWEwWEk3amltWFVPNXVrZmtDamlqNHlSM3ZGUy1Sdm01ODNEZDh0SS1janhYb09HUEYyTWZYUW91bXFOYnVlbEpRRk92eVNsbHBpRFR5UUpUZTFUNFhRd1VUdjR4akwyWFlKdy03MzdRVjV6M2o0cGYwQlJUUEw1VV9UU28tdFN0dnFqWjhBUW9iVWE0YzhWOEVTX01MVFk1ZWtTdkFMZVNUbXFpdWR1eDlqNk96cHRONlNJLUFGMnc",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "7d59bfec-a15d-49b3-be9d-d7b97c37585d",
+    "title": "Tesla Says FSD Is 10 Times Safer, But Senators Want Proof - Autoblog",
+    "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxPMXF1bWw4RjRaS0pSeDJTTWljcU5Mcm83SE1uUW05bDFmb1M5UURFOVNfMzI4SjRjN3BkeC0xbld5Y2puclVaR05BMmt6TU1BZUdpT0lib3NKR0RtWTJ2elMwc0JwRGZ0dzhyUmJXeW43VE92R0F3Rkl3NHc5NVNreURDUjgyOXJlNlVBZXRfUHpfd2dBbGI2R1UtM2NyU3BMTHFieHJyblFoRUU",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "c6ca061b-0c2e-451f-be27-afb6af55d3ae",
+    "title": "Elon Musk Nears 20% Voting Power In Tesla After Exercising Stock Options - Benzinga",
+    "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxQLW5yenlkLU84aS0xQjk0bzd3RjhNYU9QQmhXX3RJbWNYbWZGMnNPYTVpZE9wV1ZLSGV2VDROd3JBVkpRa0Z4Z1h3eS1kYVo4Zzh5ZWNhOUZkRTFPT0dIS05mMGREaldGQ3Vka2lmaGwwMnZHS1NBWGZ5bXoyOXRfN2lJWEpJcHpoaHloLXdiV3EtMGN5YXdtcXd4d1BncnRta1V6YkJFQ25mcWFyVDVHM2d2dmxVQVh6Nk1YQkFxVDF2Zw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "f58fd253-8e4e-41e9-82d9-c69b2684651a",
+    "title": "Tesla Cybercab Finally Reveals Key Specs\u2014Including 418 Miles Of Range - Motor1.com",
+    "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE5QYnkxWUZVenFBS3pjTTRNdEZocy1OOXRlRXJLaW1OMEJMYjRsMlZaR3BSLXBrOG5jT051MWhSWkFvMFVfTmh0X3NyY3dZSTBtNDFzU1FNNjZSTlk2OTkwU0V0cldyWkFOTTV0eHREV2J5YVctMmc",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "a97047d7-46a9-4d4b-9aeb-79cb57adaa65",
+    "title": "Apple is developing the missing link for Tesla to get CarPlay: report - Teslarati",
+    "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxQb2Rkanh1SHVJTFJNTW1TM0llek5aM1FOX0FkNUp1Z1ZnVGRJU2JhYkdBZjNNRzl5aEZSXy1LaWl6RzhsdExnR2xNVkRVNkpVOExhR08tbVZIMDBqV1NsODh5M21rS09FUE1LUXlydGtYZkltZ0tYa28yT1luX05EcWlGRQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "63581945-e442-4e83-80cb-9656d881d430",
+    "title": "Tesla's AI5 Chip Recently Completed Tape-Out. Here's Why This Could Be the Most Important Development in the Company's Transition From Automaker to AI Giant. - The Motley Fool",
+    "url": "https://news.google.com/rss/articles/CBMilwFBVV95cUxQN1hIaWppT19ubWNqZlFXN0dJYkJXWG1zd3dacWs0QTFlUDZ0elRzeTJNV0FDa29UdEt1dTNlVjBZa3VEcjRfV3RzUWVoMDNQVlRGUlJpV1NfU2xTT2E1bzcwY1ZqMzVCbXgzZXE2X3NfUEhxSmhzbVdXMmZuWWJsaXVoam9yQnRPeGVIRGlEX01qMnJqQi1v",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "7a72ed4a-8c7d-437c-a7f4-a7b200bed088",
+    "title": "SpaceX Will Probably Swallow Tesla \u2013 and Your Portfolio - Bloomberg.com",
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxOTWdXN1JvZUdaY3F1S0cxUFFHQ3VlZENtZTlfS01EdkxidUxSTjBRQWN4dDFvVUYySWhzRHdVR1otX2NuMGRxZDZ3ck1fMndDYklkWlU3cDlJUnppcnBTdjBaVldoNEE3U0ExUDFqbUtBREk3TTc5UzJGMGo5eVJuaGc1RlBJVDRtNHd6bGg5QmFpREhKR2JVZkdUTnpwcU9lZy0zYlM3SjQ4WUYzOGVN",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "0f0a685f-1c0c-4e5d-b49c-f2e60e8d5f99",
+    "title": "Tata Motors wins ETAuto Tech Award 2026 for EV Technology of the Year - ET Auto",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxNbS1maXM0MHU0cUlsd3VsN0xQZ1pUWEpveUU1X2dxTmh3MWtISXI2VjBDY0V4Um1QdWtOdU1OdjV5eERISGNCTnNILU9kSzQ5X0RYX2lYNFVETzB1ZWVwSGswU3l4RWZCMXBGUXVLbTlFblhHM2t2WTNpcjI4aTNlVXJleC1OdmZHZ1padllSUEJYS20xVEtzM1NWRUpvS012TW1lT29pMkczT0hIZ3oyOHA0blR6bVBTVXR2R25BSW9zMUkzQnpiRGkzTzFzR1N6N2l1WF9OY2p1d9IB3wFBVV95cUxPQ0c4dUVLNkIyZ1I4REE3czM1WlNlMHVRczJncU1KS3Zqa2xjY2cyRUpmTkg2NGtEMUw4aHp6Y0x0UUViSkJiUDZJbm96Y21SMFh2UU80TEZOc2lUUGtwUFAyczZ0UnhDb1hMbFBlb1hJZUc4VmhUcnhjWDZSY1VyRlJZNFM5SEZOdmxJV25RZkY5N3k5QVpVZTNfakVueExNQVYybm1pUWtMdEhjMTJYOVZDZW0tMGp3U1VjQkFzZG1ORWo3Z1lNbVJCN3pETGQtUnNxV2NUQ18zckxjeGZB",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "b5082986-c684-48fa-8f0f-d7cbd5ca06ed",
+    "title": "Is Tesla The Only Company Doing Front License Plates Right? - The Autopian",
+    "url": "https://news.google.com/rss/articles/CBMipAFBVV95cUxNNjRvWjFvOUlHN2syY2Q4S3ZsRDhuSzJnWThUOUJqZTNsd3VYUFlaT0dYOGsxQVh5WmFtUzgyd3Y5b2VsNmtjMDJaekdaeFNzRTVkaUVwR3dZS2VhRThYbVNLRmM5UUFFRUllb3RDN25zSG9uOHdWSUt3REg3QXhZVkg5TnRhbDJVSVFVakE1eDRURWhncF9lcTU1RXdtdkJQVnNNTA",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "eeb66439-6b56-4d30-ac1a-7bcc580315e1",
+    "title": "Tesla\u2019s $30K Cybercab Finally Has Official Range And Power Figures - Autoblog",
+    "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE8xWkZxQllSTEtqMHE5QmNxUURxbkF4MW4tZTJMMUtMRG91YXYteWRpbWRfaGJUdG9iRmlQSlFlbThDQWNRZ1JHVmlUakwxOXdHOVlRWHNndlNkRzBQMUlkbjhoN0FvQXBUQWEtRlJYaVU",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "f3f08759-0fb9-436d-a939-e0af98cfe1ee",
+    "title": "Can Tesla Stock Price Reach $500 in 2026? What Investors Should Know - WEEX",
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxNY2hBblJyOVBhSm1FdXluZnJrTU5ldEJ2VnBORGtzd1F5dHdrcFhzNWNlUkEwT202bUtnM0J5ZFZ1WGROaFlfWjV0b0Y3aGlKbGg5TTNjdVd6djV4NjdRbGZjZVFQc1dyX1JHcUFhakRUOTcxd0FISUkyOUhDc1pDV0NtRVlEZHNRb20tTk11cG4xVzNsV29haXBTd3lod0t3S1IwYXZ0aGZyOHlWUXdMY1phYmNlSC1EWXJQNXNQX0dGVFk",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "2260f2fd-3644-4e15-a37d-77fae2951c3a",
+    "title": "Tesla Finally Breaks Its 13-Month Sales Losing Streak in Europe - InsideEVs",
+    "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE0xWWljUFZ3UjRxTk9ZZFZIVTZMczdoUGpkd00tb2dwS0llVGhNaUlmWTlZVFpfaUg4SXFIS2J6a2t2Q2NPVF90aWx5NEptZ0E3VWRnNi1YTmlEbEJjN3cxcWN5bTZhZGZoeDE4RzZmRDY1YkdtZ2c",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "a9e58173-cd22-4a7e-badc-6952ebb3d842",
+    "title": "US senators ask for review of Tesla's 'Full Self-Driving' safety data, citing Reuters report - Reuters",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxQQi1KMExSQzVlM296bk5FUk1TNnRzdGEyVXdpaGlWR0dZZXVpVEhNbk5EbjhQa2NCa1BlTkdfQ1RjUDVEMlVuajUzQnJXa0pZSldwclFuV2RsX0g3cFkyQ2FqQlBHSlpocS1nMTJWQmc4ejhnU3FzSHlhanppWUlfZmdLU242YWV0OGRIV2gtd01wQklQRzFSMlFNR0FvS1BLQTVzcWptMEl3OWlwcmpKLWxPRFNmaTJPQ0dZU3BoTGtQeVN4bUE",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "621c4701-4b3c-4feb-80cf-62b977c5052f",
+    "title": "Grok Coming to Tesla Vehicles to Control How You Drive - BASENOR - Tesla Accessories",
+    "url": "https://news.google.com/rss/articles/CBMikwFBVV95cUxOM3FuajRlMmQyTnN6ekxDSnJKWk5GX1RMeERlTU9icUFiUmlDLUVCdElxZjhyR2VFYVZrak5UTm9kRS1zQ0h6X1lNMGUxOU1yYy1fX0FUVDJtdm1RSlAtNHE4WXJxdThRT2k2bFBsTWpQdGdqQV8wTXFYOWFfZGM1am1vdkd3VGVrdHlTRzc2S0ItWWs",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "cc250bbd-500b-46ad-92c6-271891c8e37f",
+    "title": "After Nvidia And Tesla, Trump Confirms Apple Has Agreed To Build Chips With Intel Amid US Manufacturing P - Benzinga",
+    "url": "https://news.google.com/rss/articles/CBMihgJBVV95cUxOeTZKR25lX3lOOWh4SnFYVzlMVGlVTmpzRnNLc1pUMjdNN2pjSGcxSEpqTU9nU3hmOExGVnowejdONklISy1TM2w2M1VlNThtc0RWVTVkdXVvOE5jY0tVdEpKdFBCYTNDMVlERlN1VlRrdTllMDBCLUdLZzdxUWNMR0o4ZUJtMC1QaUlBZ3Zsb3dqZENRajdsUkZMYWpoY3YzVkpidUoxT0JTWVhmMHBQcXpFRVkxc0VONDRuMEtoRTJqNTZsRUl4SElTbVZnN1ZEMmRzbzBLYl9OZ3JwSUd0aVlTYk9iUlp4QnFiNG9fR2RxLXZrMl90ejA1R2RxcGJHY3JlREln",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "7c1a2600-d99a-4846-82b4-e749914f9ccd",
+    "title": "Tesla's Optimus Could Drive Huge Revenue Upside, Analyst Says - Yahoo Finance",
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxNdm9uSnU1Zk41Z3RBanJmS3prdk5JbGI5NUhVWlE5ekVMdXEtTFN0ZF9QRUlZRHFyZFdVakl1dUR3d00wRTZBTmJ2RHktRXJ6RWh4OF9uSU5BdTFLb21tTFlyWEEzQTFtWU1Pc2tzRTZjeG9SZkVMd0ZCSHl3Snp3ZmFxWFlRSnRlWW5oc3FHS2prbGlhd19sUWNQYi1yZTBMSWc",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "e2397f6f-463d-4dcd-9722-f2998eaf5be5",
+    "title": "Elon Musk\u2019s Next Move May Be a Mega-Merger of SpaceX and Tesla - The New York Times",
+    "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxPT2VlenBYNDlFYnNXTjRFdHJ6dlZOU0NhQ0dFVHdqdEZEU2pWUEZpT3NTeWJKS2tSYUd3YjJaek5YZGxNWnZ6STlUalBjVkFQSVhlYXNlREQtRHRMV0dNZGlUbTNmenktd21JM2hhdXkxVU5QdUNVNGJHU0NtQXpzWGdqTEU",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "960ad41f-7f62-4932-a57d-0b376eb47be9",
+    "title": "\"I Don't Need To Give You Guys Anything\": Tesla Driver With No Plates Goes off on Cop. Deputy Frank Sloup Has Some Advice for Her - Yahoo",
+    "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxQZ1lEMnJ3WjZHZlUzYkFqbmtLZEdvVVJLZmdpVWdrY3NRQkpNR3lRMHlibnZ1Z09FRlB3bEdOWnFGTnltUU82cnRrcnNjOGZOeDdHaVlPVl9Fd3AtR2dDVUdaR3oyRk1IRWRJNEpSLUtaNkVpX1AtcUg4N284Y1ZuVDNuLURLQ2ZNMkVCNzhn",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "9cfe5923-c349-471b-9078-a295f07dc83b",
+    "title": "Travis Co. deputies at scene of fatal crash on SH 130 near Tesla Gigafactory - KEYE",
+    "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxPbHdDRWE1dFFaX21Ydi1nNjA3ei1wS0FIT3JSWV9TcEFKa1JEVG1UOHVjeDV3TzdzeXlJUE1hc1FDU1dtWVhFX0ZObGJ1TWVybGZ0R0N2c2l5NEhpV2NLQlphYWV6bURPVUE3b21sT2tyOWgzM0lDbmtXQ3J4dlpNSjIzcmhTNW9UWnZpY2lCSndmYlRLd2lSYjBXV2x4NV92OGhvZ3U2YUw3UVcy",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "bc5404a0-fa58-46bb-b164-81d3794116b9",
+    "title": "Elon Musk (TSLA) reports 699.6M shares, representing 19.9% of Tesla - Stock Titan",
+    "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxPZGtrZ3dBU2t4X0ttVHJma3hsR0k1eHRmQWEtWnF3ejR0NU9hV0x4UmdRc1lUNlI5NzFuZl9UbGE1a08zNDl6LVdvQXRvOXZHa3JzMVlkczN4VTBoTV9JLXcxaUJUZ1hNdVFyXzNkQVdOdjk0RkZ6TnFhLXYwS05HX0hadTkycTdVSm9yZXpNQlNFN1BfSFlkTFowQ096cjMwZ0dZVEw0NFhXYXhld3kxNjRJMW83cUlTSW9OREdRMUptdw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "c7207d80-4000-4f6d-817a-70fcb64f26bc",
+    "title": "'Godfather' of options sees SpaceX surpassing Nvidia, Tesla as early trades come in - CNBC",
+    "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxPeHR5SWFwSnpjQmV0MVNHSkVzbm5GYkpsOEt4N2NxQmZqV1MxbEdpX282VnFKRXZKWGdZaDlTNEo0RU1DYzhSSlJxZmhONDQ2RWRwb1Y3Tlh5RHgtWDNhNWdyU19WUFYyRkl5cHI1Ml9VS3hpRHJiVVhLRmlxUWk1dl9WaURjQXdWNFhqVEpMVFUydDdHZVBoUmJ4WUlyem9JdTZoTWNEdl84eV9nRXBkdUVsbmo4SndF0gG-AUFVX3lxTFBjcEotUXJjQno3WVhlNmR1blZQTWE2RkIyR184ZzZZeWl5QUNzLW0tZXRnSGJHZnFXbWpHaWNJTFlBMkZjejUzRXNPRzI5ZUhwck4xczhidHJkMzZDLW1HZUlhTnJXTnVONmpvYXdGM1Rja1dSUHNfdm5Jak9FdlVMZXlnSEhhdnc0Z3E0bzZncVI5bFZEWWkwRDB1Mjk4bjFkcU5CRnFfamJUVFpsb1UzTVJsWlpJSEJLcEstTWc",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "4a4cc885-5d31-4a23-a9ab-829b6790c05f",
+    "title": "Electrifying rock opera \u2018Nikola Tesla \u201cLight It Up\u201d\u2019 to premiere at Delmar Hall - St. Louis Magazine",
+    "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxQdUhLRXVMd2Z3MndmYmVLdDUxLXhnYTIxU1FHRE80dFJwdG1WcEpjbmtnSmc1QWp5NV95aGc3MlFsSHRYeEFVTVNDcnNqWEZTT1JrbjRSd3FkaDExRjE4c090Szc1c0tPQS1vMXhGOExHdm00QThzODZkbkZGVmt5dUhtRFVsMFYxQVpxOHB0c1ZsMEdwMGtYVUMyR3ozd1plNFVYNXVMY013TkM1U1l4LXhYOA",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "ba5ee296-a906-499d-a69a-be4f52d46912",
+    "title": "Wipro Partners with Palo Alto Networks to Deliver AI-Powered Cyber Defense - Wipro",
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxOSEpYdGNYZXZtQlNyOFZJaDNxYmtVd1NiTjVSVlNpZng0YU1ObFZpck1TWjdkSU81LW9NTU1ieFZ6T1Bhc3ZCOHJrV0QxMHZxWlZvRTVxNzhub2daNW5UeHdMM3FpTVJBM1NIbkhFWGY0QTlFTk1SOERhVkR4Rm5TM2JSY1JEQzF5UnRlSlBEOXBOdGVpSHRWYnhBUWFYc00wTUNEWjM1LUwtelVLSE51WWlzUXMydVY1eVcxSTkzSnVvOEhq",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "a9be88bf-e32f-4dd5-b283-70d8e6580c35",
+    "title": "Tesla stock price ended at $396.38 on Wednesday, after losing 2.05% - StockInvest.us",
+    "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxPQjdkblV0ZnIwSTNNRkI4VER3OUZwVG15STEyNzZYQnBqTm5LUGRlaDJlSmlsalZNZnk5VTJpT2pNNC1jd0NuUVBGZW40TERmcHlEdFBTd0FNV0t3cXQtb3NaTFZWbER3a0tiS2hKcFVRcWNFTWZlTUFIOGVjNW9IRDU2REdUc2JKMVNnRzAxYV9RNFh6b210TkZMZzJwTnludmhOMTFTLTlwVnc",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "d85760f4-054e-4de2-97fd-b84a2baa3051",
+    "title": "'Owners worry less': Why Tesla is one of the hardest cars to steal - WION",
+    "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxNWXhVSV9IUmJDR3VmOE9iR2gtd09UZG43TU1DUjlnQnpiWk82ZnJaZjFQd2djNGYxRHBmcE1JcGhLcV9yRTlnbDhaYXFxYkw5YWhwT2xYbHN0SGxOVF9HbzZFdDNpbFBhWnlQRTlaR2VkS2xsMk80bl9IX21INWRCemVkcjhqM1J3bUVSdG9PQWtZVW55VEs5blRPUXFxTUk1Q2xweHB4ZWE3all6",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "da74e17b-eaa7-47bb-8656-d1303cd0778a",
+    "title": "Tesla Q2 Delivery Estimate Increased to 420000 Units - Fuel Cells Works",
+    "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxQa0NxdncyVFdRdUFheUl3VENMR2ZxVnNncXFGQ1I0Tm5ZUHN2eFFwY3lld1l3c3Y2RVY0b0xKNUd3SDhpV3ZUZmhxVmhmNmQ3cUF3cGtkMjI0ZC1hMzlQUzlUU2toWUxHdHMyMHRlNEJ3SFBEbVI3NUYwUFBzWUlYTmRua25EVDdoN05ER2dKRXJRbk0wVTlsOUxpWlkyQWsyeFI2LW1vTEl1aC01cHdhNzZiSQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "a0f5d8ab-1fbf-4b91-b491-ddfafedf44ea",
+    "title": "Elon Musk Says Tesla FSD Will Remember 'Parking Preferences' At Home, Office And School Drop-Off In Upcom - Benzinga",
+    "url": "https://news.google.com/rss/articles/CBMiyAFBVV95cUxObGZjazFfcTFkUWZuM3J0ci1TeUVQaDRWOE1hMGVFdWM5Vy1VQ0pHeC16YTNkNkVrWFk2bGEwVFlLdklQNURoN3pBTFhpSzF4RTl3V182QVNkSlo5Q185MElQRm5ISWRxTDR6cUx2SEtsZUpTRXZ4N25ZckdpLVVTZnVTUjF5NUUxaUZ1UHhIUlBGRU93THpubmUtX3RJMkhHdmJJbV9TSVhPaHdXbl9lWHZKbThvU0hnSkxDc18xNFdCTVdVQ2I2NQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "8418434b-bdad-4ff9-af53-ed1f1070f59b",
+    "title": "Dutch road authority says 40,000 Teslas in the Netherlands using 'self-driving' software - Reuters",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOd2NoVzZaX1Ayc3VfTmRaallDZ2VCc1hpR3htYmtsLTJ6S1l4UVVlMW9sOW83VmRyXzRJN3R2N3R3eDhDX2ctNDNQZVFPRzNMUklWbWZDa1NxZ0d4eXhERHB1WC1LU0hWclNBeXRiVnd0SjFjaVd4Rm4teGRKNmhDeXVyU0hGeVdGOHN6Y0JHbVYzNWpqd3cwR0QwaWZiMmNJYXVJY3ctR1BYaEJ5ckhzQVJyUThGMS1SU1JjUWxucExfeXRFbFE",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "86de5f19-7c9c-4e0f-a5b0-04696d273eb5",
+    "title": "Jackson Area FCU Scandal Grows: NCUA Says Branch Manager Received Tesla, Rolex, Honduras Property - CUToday",
+    "url": "https://news.google.com/rss/articles/CBMiywFBVV95cUxQbGRyakpDWG1Wc1g5djV2b0hqVXVFelB5VzNSOTVHb0NLLXdYMWowYUZncGtlckQ5MlBVUmFZLXRLay1uNzJOem1CZjl4UGpOTk5jcFlpMHdMM09vVXF6MmdPZDRZbTItb3pjNkRrdlhsRUFUYXJCdkdOWjZUZUpkVmR5RXBKZlp2RWFOcllDbmxMdkJaWGxFWUhCaGZ1MUxtZnBTaUw2VzByNTZEbXMwck1rOHlXSkZSXzVaUFFpa3lTY1lkUkwwbzFBVQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "7653ae2c-f624-4dc0-865a-ad88716f6c01",
+    "title": "Tesla Full Self-Driving is getting a major parking upgrade, Elon Musk says - Teslarati",
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxPUXd1dzR5UnM3YWVrZU1uYktNOEFBQ1prX3RZRHEtcHlJVldHS1FXY2lJOHJCc3RPM0NuYWE4ckZacVlvMXFYWFJBZ1gtMkNxMHJJUVl1aDhYeXV0VHd3aEpvc2wxd2UyXzBHb3lLZ3FlNmFEVGJ2bzY4NXdrbWVUWkRrUlo2alVPS1pWOXNpSi0",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "f538c4cc-34cf-4180-a8d1-bc93bf97e90b",
+    "title": "SpaceX vs. Tesla Stock: Which Elon Musk Company Is the Better Investment? - Zacks Investment Research",
+    "url": "https://news.google.com/rss/articles/CBMisAFBVV95cUxOcGdjUkVGOEozSHBkMVJYRk9zdjdaMndkZlc1N3k4a3dNQlItR1VUbHB4dzROMDdPUmh4ZmJ2MGhtM1NuWVVKQUJNSnZUektlRmZzYzA3Q0ljTy1qQTBHYzlkRzdNdDIxM05TUlBuYUNqWTZfX3RXNDI5RTRpMjhSeGJJWUpXbHBDRjNjaDJNTFBmSjdvSVJpWTZDdnc3RGxNRkZHNkRHaHJBdlVSM1JCRw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "0f6e5dfa-2015-4c52-bb70-c984d532443e",
+    "title": "I Took My Dodge Charger Daytona To Buc-ee\u2019s Using Tesla Superchargers - MoparInsiders",
+    "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxORkRQU0EwckZUNWNiWjI5RWgzRnVZTlhBMzdNZHdGU09ENHNnNTREMFJ2cnk5X1BkYmtwb2tSLUpteFZTR3laN2NISm5vWVo0UVRZZDRTeG1kQ0NvVVJfemNHVThWVFVfbFhmNmtTb0dUcmdPcFM1SzBVNEw1dnBNLVdVVS1lcGRGSlJBNmMwZklYdk1lcnFuWllGWQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "5a8af60b-4edc-495c-bde9-4b868658d254",
+    "title": "Meta announces new smart glasses starting at $299, as Zuckerberg keeps pushing wearables - CNBC",
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxQNElkSHM0Z1kwS0o5UnAyQUFtSTJ2ZldNc3oxSjNMMmFXVkFTOWNJYi1xOGs1WDBTcXdtUWtSTGZHd1ZQZ21ZUXp6UUw5UnlHRlprVjduSlp6dTUwVWstX2lBZ0RIREl3dVJZcFNENzhoYTJGWEZHMnlmSkRRLVdkdjRwUHZZLWMycE5MdXE1ZTfSAZYBQVVfeXFMTXhIMTRFLW04cnM1Q2NiSG1MRTVpRTZVbFJEQVZVRVVSVlBzR3h0ckxGVGRTTHczTHZvWFktMlE0TW5PamxqSjBaYkNoU0pjaDQyNVNsa29IbEVFeEpSdi1XNlVVNEkyMHI5Tm9id0xqSWZsS184QUJFWGs2VndXNnRLRExBa2pxN0tnODBBVXhJZjItbUZR",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "0c72400d-ba91-452a-8977-e88087450de5",
+    "title": "Meta launches cheaper range of AI smart glasses starting at $299 - Reuters",
+    "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxPcHdqWktPUlFDUEx5WmktWHhqVkxzVlloYUpWYXVzRGlWdlA5RXZfUE1yT1VWbU9pRU84U1BpdUFoUUl2Y3pxX0g0cTlRckdwYXllSVJkNndsYTMyd3RGNWh1RGtSYk4tUUQwcTQtcU5nQkRISU5CMmhSMUJjUkE4cEtnVlRuWXNJSmp5YkJpSHhzWkh4WEtpUzJ2SUpYVDg",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "3909aa35-943d-4e78-851a-f13adef2bb5d",
+    "title": "Axis Capital downgrades Wipro stock rating on acquisition concerns - Investing.com",
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxPeXdPY2ZhVDlHQjU2X2x4NFpaalpQMWU5MDZsLXhzdEp2WUYwWlFDNEVoYjFOWWpnVHdnOXEyaWtNdEhDeHUtWS0ybzRQcUhJbF9qVDcwWU5PY0xCbEx0OXNueUNheFVpY3lfNkMyYzFTbzNaejFHOTBnUDYwUGlqbnA0MWVJSkdhX2ptMW80NEhnY191ck1xWjZZcWhJZmpzY0dTbU9aTHRjMWcxVDBERG4tQ3NCTllpMFBZcDhoQ29mdW5T",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "eecdf413-4bf7-42ea-8dc5-6b1ac18659b0",
+    "title": "Wipro shares in focus on expanding partnership with Palo Alto Networks; key details to know - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOZnVrbzFiak13ckVqU2g5SzV6X3R2QXNTaFdLMXE4THdhRVVvN0oxMVdBbVpDVjdGM2tpZzl4X0dKTTc1eEJia2dWd01INFhUZ01kNHVyUS1ubzQ0NVhwWm9iOFdwZTVQV0paUEhEY3RWazBqTnZlaTVadllGT2pPeUNXSnJjTkVmbVlLRy0xWlI3Q2w5MEY5ZUFxRUE5dEhhYk14MzJfRWlNR1h5U0k3ZlRRUTBRdlRIYkhrODBBaERMdGtiUldvc3pMOFFDdXllZWNiM2NqOWRia0ZVRzVxeHJLSQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "75547335-7f29-4202-b628-f5be213050ba",
+    "title": "HCLTech, Wipro Ratings Slashed By JPMorgan, Says AI Boom Not Translating Into IT Growth Yet - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxQX2xYMXh2UUVuaFRyVy1VT2dUdno1VllNYk9rUnNJajVFNmpTM0pUT2JHb1ZPdVBfSzlXTHkwYWNSczcyRXNEWjdNV0pBN25QZ0d0QmtoZGFnU0EyMnR2N3FWMkdyQ2l0NWk3dVVsSTF3TC15T1N0b1Q0cUNRamhOQ3MyWjdNOW54Rl9OZ0NibFlxOTNTSFZ0Mnp3NEV4MHNjVjJmWGJEUDFWS2RGVmVxdzJmdEVnNy1xS0toTWtZQ2Y4ZEVwTHpFSjhHdWlxMzJsS2JFRTRiUE1pdnBQTHYtM2ZUYjFIMEhSUVpPTlVpX2pYaDDSAfsBQVVfeXFMTi1YMjdrYWp6bXF6Mk1fQWpsbXZPVzQ5WVp6a1lSZjJJUGdHcm1kVUNZaC1yYlFRT1R5cE1ybmlFUUxfYUhrZEQxOGhwTHZVeXlHUUJqdWlhY1psVWZhMmRVV0lGa1RJLUhiMG9aLVpHZjU5Zk9FUHlKYkZ2ejFwZkg3anZtajN0dFdFVm5IbW5wanRJVnhRVm5mQ2cxbFVGOTVReUU4Mm8xUnpkcTZKWDkxVnFJNXQzdUE0aHJCZEd3YkFCYks0STV6dmFpOXdwVXhPTHcyaWtqVk0xNGRyQ09KZHdZTUFOOTJDc0pxeXZDNXFWV0I5eGU3RWM",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "76c58f58-0c42-4a7e-8d9c-cf8a2d44179a",
+    "title": "Axis Capital upgrades eight IT stocks citing these three factors but downgrades Wipro, TechM - CNBC TV18",
+    "url": "https://news.google.com/rss/articles/CBMi6gFBVV95cUxOTXRTOGZlaER4Z0dLQ0U2eWdxWS1XVUxEUWRLSzJiMTQxc2NiczFUdkd4UDZkbjJZb015d0lPTVF6M3NMMWF4NkNiX3VTTDBoVXEtNnhmdW9LZFNTbmdhUFpCVFR2bWlLNDhZNWNGVUIyMUlHU3ZqTkstUm9YM2YwaDBsNEZpTm1xQkRHenlHMjZoT3dQV1pXSW1PNlR2eW9PMkJYb3pKZnJ5LVJlLTlPZUwzNTdPWlVwVmlJZTE5UDhINVJVV0EwdEZSUVBCM24wSWktNlJVN2JKQmVRaUR5V293anZPV1dHOFHSAe8BQVVfeXFMT2FVMk1LMTBoTDdyLTdvYzREbXVKRDJUemRQbGpRUWx4WTZDZ1F3dVU0dEdvcGxYRzlmSmtkdHZhOFJ4R1hQUkFpTkVwRGdHbExiUFVoTGp5cHpSV1lYOFJGMVF3eDFIbm8zOXMwc0Y3cXZHdFFUNFhwVmNBcVBORk9DblEzdjFDbEJfQkZxa21BSl9ucVdKbWFyQzJDNXNSWGNHeElHQnh3aTdLRm90U2VpUndFZzQ0RlN0Sm9jRFV2djJuWkl2bDl2eE04aG1HUDVLT2tnQ1FNWFhNOGZfUHlFa1dlRTNJQnhVTGhFT2M",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "038e1c39-dca9-40de-aa86-d502d1a39af6",
+    "title": "The end of IT's dominance? TCS, Infosys, Wipro lose \u20b98.5 lakh cr in value - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMi4gFBVV95cUxOclkwRUxlbEU3b1NJUTZUS00yVU9nZXpHeGNYUUJfTFo3dXB2ZXBTZ2ZTVE9PLXhHS0JLa2ZmNXI5dHV5RnBkRVE5RlBjS3d0Tkp0dlVvNXhVcmVGRWRyT0ppckx5dzlDSG9GanNvNnU2Zkc0TWRfdHpzc3FNWkZPTDdzWHM1UHdrc2hfX01XSlhnd2lEVG16aWEzejRrbFQ5dUFGX2ItSWxORkt6SGJVUERXcEdLMFlxSEhmak5hN0dRWTBhRjU5V3VCQkFkZWxNQ3hjVGkyZ2xzMUlDLVY0Sl9n0gHnAUFVX3lxTE5iZHdsaVE1em1PUElYWkR5bGhxVWFvbnh5YU5BbC15UFdmQV85RngtWklaZklNWEhxTHpaaGstYVB4V1JZcG5nTkw1Snd5Z2RUNWRBM19fQ2xWenBOblhjWXFRU0s0MzhJU1RqRndBLS1pZ0hBaWs0c0JZd0NmWERXa2dLVnJlUEZaYUdjWWJOX1pLbUlvaEMzbXpNbUtIc0hSc1BTTWNiN3RteEV6Yk1RUGZraGM1QS1icVFLa3V0cDkzTTZHMUI1YjE2bU5PMFRvWlRnaTlIcW9NLWJacVRiR3p4bU8zdw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "fd99b913-f943-43a4-b0e0-d60a26fa9702",
+    "title": "Infosys chairman Nandan Nilekani to company's shareholders: AI will not replace companies like ours, it w - The Times of India",
+    "url": "https://news.google.com/rss/articles/CBMilwJBVV95cUxNdnM3MzhGRXhSR3B2NGxzY0pPQUtxVWo4aEFuNGswREtjVXNUY0o5aF9nb0tvdUNOWm1FLVVycUkxS0dCNVRmZWU5SkRTMnJZUmJhV2pJNzVHZ0NydzlfdGMwVTdpXy1tQXR6R1FXOVIzWWtLUksyNkctbzZTdEY2aHk4V2NKTFAzaHdHMjNLdWh2Y3F0N3Bsakp2WllYbk5BU1FIZ2VacHVKeFJlaFp1ZDM5MGVWLVU4QlNqaWlFNlR0WW00ZW92XzIwRnp0eFZ2UEtmUVIxVWtWcFNwU0E3ZUMxU1piSjhqczNmSnd2aHpPeUhEeWtydFl1ZE92bndNdnRJeVQ3TVg4ZThsRHBVUk5kU0V2UlHSAZwCQVVfeXFMTWw4MkdTRWhZeEpfdW84N0Y3VlY4NXhJRmxPSHRqVmJJaGx5SWxkSEhlMEZIYnVZWlhseTdJVW54V24yakFaU0JYU2tVZVFhdUU2SGQ1aE96eHJ6SHlXVkNtVWM5Ui10d3ZVbVdmMXdLUU5GU0k3X2ZUZWJtM0N5QzNxLXRRY2xYRmhGTWROaFpJZTNtOVp0MHc0cGR6U3g4UnVuemtKZTRzZWhYSl9LNnRyMWRLSFlrNDItbHFQczhpMHJsekRmd0Y5UVFhd2ZUUmRyYnl0SUNEbE00OHFSUWRIUVB4TkI2WHh4bXB3bWFOM0l5bERQaVhTcXFwWXRSUm1PaEhmVTFWQzY1UnhJWjZxb1MxS3JzQnpISDg",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "8eb5b270-640b-4a0d-b64b-8de3216c74a2",
+    "title": "Infosys, Rajesh Exports, TechM, among buzzing stocks as SENSEX jumps over 650 pts, NIFTY rises 1% in noon deals - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi-gFBVV95cUxPQXRxbDhLengxano4YkpNTlJaSFlqdXNUX1FuYzJVOWdlT1JuTG1hUG5pcWlqR3R2d3dJNXpHdVdLeGdkRUJnWU92NDVHLWUtWTJLX2JENzNzYjRSZkt4WUJvSm1OTzVBeHA2Q0pyQTZnZ0tzS0hmSldTemlsT1I2UnN5dVhaNlg0UkJHVURzYVVic1czRWNuakR1NVYyT3VCbVN4NjlTcHJRdkZwZDJsU2lVbGZHZTVSODNCLWFHMGFTdERlelJlTUxPbzZlNndoUU5yejZDUG85SFBEV2FOLWNaWXBmeGJHeG1iUUp2TlZwcHpDazc0NmZn",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "5f4762b5-09ca-4bb5-a498-86d845170d65",
+    "title": "Infosys, ANA's Global CMO Growth Council, and LIONS Unveil the CMO AI Hub - PR Newswire",
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxPS05xM3dsS2ZWTlY4Q0VxQnZmd2RqTmVEOGNXX0VsbjkwdmhFemtjZVZVV2Etekt6bXppS0t4WlRsbjg5eUJKRVduZ0ZYT04zSzRWZjkyejFyajBNeEVKY0ZjV183Qi1sZnNROFQ3LVdpSm9nalRZdzR1N25uTGlKclNHNGpHYXZZMEZ0NDhfNFlycFJya2ZmaGhKZ0dZVzNaSEpqMVdwZ19Cejg2c1Yzc0gzRHh0WU9PVXNsUkxLYlZhOTU5",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "441e3524-76d8-4266-bce0-a3c4f09d8ca0",
+    "title": "Infosys targets $300\u2013400 bn AI-first market by 2030 - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxPMHFNQ1VoNU5zSWI0QUs3elgyTEZKT3JjbmFZX1NaYlQ1a01CZTFHVkZyV012dHNYTWtXZnctVzc1WXhOTDFXQ1AyUVFSVklaMFJ5Zy1CeWt6QVRkWDBYaGthbDNoVmFDRXE5UDhobEcxbHdPZXhTeVNOU05CcGFiMGZyTjhPNkdkQkx6bUJnNGVSLUdEZkdNVEt4N2w5LUp1YUpEcDhmNlowTDhJaTNLY0EyT3llSm5ROVAzYXVMX3luMnAzaDdTYmtfSDZpZzQ0TmU5MFdBbENXaDFfdDduWW1iYklYaWM",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "ce932a7a-c680-4f7b-8303-8edc0ae7d8f6",
+    "title": "Stocks to Watch Today: Infosys, IRFC, Honasa Consumer, Rashi Peripherals, City Union Bank, Delhivery, Clay... - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMiogJBVV95cUxPNVdlNlRDUFl4ZjNfOXJ6RDRwbkQxblY1RGR1QWNJcGQ1RnlySGp2R3RrU1QxcUhUalNnSTFRWktieGh1YlJBT2RfNy1WT01xaFM1Wmw4aElmTnFmOGZJdmpPVGNoWEVNVlhxNUdUNEpnVlhMd1dVc0hpdUZlQTNaOS1GOERoNVZVeVNnMEdjN3RleFBWcUQ2SnpicVdtQ1BxbW9IVTFRMzFwS2o0ZTVJek1MOVNOeFpmcUxlcTRtaEJCN3N4NGNMZUs4SnB5cFFwNS14X2FPY2ZMUm5GZWc2bmQ0QkxaSVV5c1RXWXU2YU5YU3dBMFdNc2kwTEVZUUE3QkV4WmlfenJkUEtqa3ZBR3NOSjR3QmlpWGtBMUIycUt6d9IBpwJBVV95cUxNZm1GZTQ3bTdqUXhOdmtmVmp1UVkxeXlKZ2xfN3RObjBuQVNVa1VJQ0FzUDVQWGNlVjEtYkhSWks5NkdMUjdBenhJcU5YRndZMUtnYnBQb2pKdWtnb1V1azRzOVhaNlpTUlFWM2tTbHVCMjhfOGkwamJnUE1WTnNaQUl1QkVPMktqT3JkeGNBQVRtUEpMZ3hJSXJWZnpkbV92TnNYTDBKUzFMMGtNcXRtVFN2czJVVzdmcGxlSXJjSTN3QUV2MFVYLXp1SGl0Q3lJa3hweC0xMnVJVWFDdEwzU2FEWTVONmRzMlZZOHBYY0RENHFXY3NMRDFlcmp4RVl4MjBGakU4V1ROVGhPbGFXWEQ3cDFLSTFodVZaMUxYaTc3cldoTnJr",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "e0ff6050-e7a2-426d-af0e-fdab59fca0e8",
+    "title": "Can AI replace Infosys? Nandan Nilekani responds - India Today",
+    "url": "https://news.google.com/rss/articles/CBMitAFBVV95cUxPSXdJYjF0SndkUHNEUk56TEVJYXV2Q2IwN1gwa2w0LUFuOUhiM0llQzBUR09qcEdma1gydGNLRkR6TW01NFZXcFdZOXBmOXFZbmQ2RXhLZUVyWVl1M21wbFpGR0gxNUtiYXltUUh1VExPdHFNSHRHYmZVS2NEdmdZZ2VhUTB4UGNlTi1PWWRBeXUxak5wX2dYQ05fdUxlQ0lad0JKSDhRVi1kS3FKNUdzNTVSRDbSAboBQVVfeXFMTTE4dllLa3UyQlNDYVdyZU01a3lnUVpLaHppX0E4OHZ1TGYyaGlfUHpVbUcwYnJTZ1UxYTQ1cjBGSFk1SFUxS1l3Q1ZGZnBNQm5fMy11OGtvVFFMd0Y0ZVRFQ0huWmw4UjJMUDFSTmZ0Z0JrOThhZUdZcTh0TVVxdFowYy1lanlDWTlYSFd4TjV2RWMzRThTQ2hUR2RkZmdSVEVEV1NiUjNhcXFqdkg3S0syZXdPenpnMkJn",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "c858ca6b-806c-4c73-8374-f2eeff20fc95",
+    "title": "Infosys sees AI as growth engine, not a threat, says Nandan Nilekani - Indian Television Dot Com",
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxNRGxXMWtjT3ZFVGtHczlZMFNHOUE4eW1pRHJMZ0t1aUFKb1pENl9UdC10TnZ1WWJGWmQyTVhfUVNtelBxVWpXTXdyVWV6QlllT3VjcmFoN2J3YVN0cEphajZXemwwQnN5V3NkR1drMTJ3Q3ZETERiMENWbjVzUlJOV3pQaUNXQ2FxXzlVMW1xODFrR05OOGstMDJ2bUp1NzdnTlE",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "66fd7a1f-09a1-48d3-a629-5e60deae4788",
+    "title": "Infosys positioned to tap into an AI opportunity worth up to $400 billion by 2030: Nandan Nilekani - The Hindu",
+    "url": "https://news.google.com/rss/articles/CBMi9wFBVV95cUxOVG1MbWpIaE5JSkFWYTBoTURvdFlEMlg1YS01bnlRSGQ4dXYxMjRJOGFSVnVPMGhKT01JdHpyVFRFdTFEZnh5SDRMVTBsZVJLTVR1UXhGRWFGOGdoZC1BZjZJT21PTEdlQXd2LTZZRzRnQ2xUMFN6Snd5SXR4T2g2Y1lLb1pGNGszeEFDR1RnbDQwdEVFa3Z5ZlJnb1VaT1I1X0Y0YU1OUlRIZDlMNGN4V0dVVjNtZFA4Y1BZRFM5UHBfN2ZkMnZaRDRIVERyZThqODVraWF4TUpfNDVNQkV5bjBHRnFDWTg1ODlzSkR4LUhXVWNmdEtZ0gH3AUFVX3lxTE5UbUxtakhoTklKQVZhMGhNRG90WUQyWDVhLTVueVFIZDh1djEyNEk4YVJWdU8waEpPTUl0enJUVEV1MURmeHlINExVMGxlUktNVHVReEZFYUY4Z2hkLUFmNklPbU9MR2VBd3YtNllHNGdDbFQwU3pKd3lJdHhPaDZjWUtvWkY0azN4QUNHVGdsNDB0RUVrdnlmUmdvVVpPUjVfRjRhTU5SVEhkOUw0Y3hXR1VWM21kUDhjUFlEUzlQcF83ZmQydlpENEhURHJlOGo4NWtpYXhNSl80NU1CRXluMEdGcUNZODU4OXNKRHgtSFdVY2Z0S1k",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "26970cdc-d407-4c5d-99ce-88d90fef37a3",
+    "title": "Why Infosys stock is near a six-year low and what could happen next - Business Today",
+    "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxONDl6cGtSOWRtcmVnZkJQU0FiajBpUWlDTGV5ZFdCYVl0WEc0ZHNYQVpJa3RoQ0NSRHBJNmFBTkVpS2NWM1Q3bS10OG9xU2ZYekRnd0d6c295TEQtWVpMNGFYVVJ3UjJhaXhiUXowQlBFVmhqWnJJQVZWM1EzS2NtRlJGNE9Rd2JFTUd5VnFkaFA5dzA2cXJTUUw3UTM5M2JXeUF5a1MxUGpKckZOaEsyTWI0UDFsb0ZwR0UtLVRpMFF2MXdsNm9pRVZ6NXFHSHBl0gHWAUFVX3lxTE5tY0hoVlBJY05ldnVhd3lzSDJ3a21WaHBmQUhUWWtFaW1SZ2JkREZxSUVoWkYxdXRrWF9MeGdxSTVDdFZrTkRSMElPSzNPMU0yazU1NzRHV1cwRGFZQUlXQ0NKdFdNQ1M2TzhYWU1wTF9mM2NzeGVUd3M2WU81cFEyaG1sMHlIX2FyZmg0TjhGQUVLc0lMQldBNk12RmlrNEdLamZTSmQzOFRGSkF0a1dxamM2YjFFcGFFSlN4UVd2djcybWZ3akFOSmNGd3pDTGlMcERqWlE",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "98319f3f-1554-4ad9-9d2b-08af08500a20",
+    "title": "Infosys launches CMO AI Hub with ANA and LIONS - scanx.trade",
+    "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxNMWxxREJHeGs2UXJrUEtSWjVVUkdiQTU2aGVBUUJTeEVydkJYVGJMVXZXNW9kM200cHk1Tmt1czNIN2U3V3RWT01rbFdpZ2JrMFFfZmt3ZFhYTklIT09fMDVab0pILXZFOGdaelhmM0V1M0YxMnYxWUZLRHVDNHlTTHEtNUhaUTNWenY4RFFqODVFRTZDODlrZy12N1FoT3hMTTl3LVJ3",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "5625d231-ca23-4fbd-871c-8a5521f1c0d8",
+    "title": "Key facts: Infosys $1B AI; 90% top-200; FY27 finance & energy growth - TradingView",
+    "url": "https://news.google.com/rss/articles/CBMiwAFBVV95cUxOQ3RhSXRvZUx5VXdaWDNaMGkwOUlFR2JDN0x0X3RveHJIVGlZa3cwRzZlVzZ5UC1zSHNQRUdaRTAwWmFhcmcxN3dtWl8yQVJlNTg3TkVOdThKakFJZXdaMkNMcVFUcVZwUVJ2ZjdQUllzSktJYVdIYzVSc1FOSVZaak1HeG83MmNvRkR0aFVic0lwR21abE1WdzJueUdVRHA4bkFvQ1NyZUtGdGp3WnRkMlNBV2pmbF96RjdLd1k0OFo",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "d00b40de-8c12-4473-bea3-4128239ce602",
+    "title": "Infosys shares rally 2%: Nilekani says AI won't replace firm; Tech Mahindra shares jump over 3%- key points - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxNYk5YcVJMUWdHdENGYkxJYjJPdEQ4eFNlWUVUQ2s3MW9ld1FaMGRNQTJSdVI5eXRzTVBjaTVVYy16cmZUNzk4UGhqcUFhWkZWZlZmSTE5aTdtU2Z1bEE3OWpiQ096Zzg0WnduQlhJbEZPb3VjcFFTcnZyYXB5RHVMcGEzbmtXTlVha3B4WUg4Ri1vbUdIUmFSTTJkR19temJpYXZFS2dVal94VDlVa1RCNW9wOU5peGdPQVdEeG9uaW1FU0VQOW5MTGZOVjJWRzVWc3FFekVZaC1oZw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "b4e6ab22-3783-4ebb-8b24-e808f44742cd",
+    "title": "Infosys charts an AI-powered future with a US$400 billion market in sight - Indian Television Dot Com",
+    "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxQSWxIblAwdkViSnlaYjFPSGtKMWw1cWhDdXI2RHR0X3JzWmIwam5wUk1NYXhGRmpfVnRtS2I4ZTdSUUU0NTVwOW1TSXpTWnBZSTNVdlM2RFNFT2pIaGpJMDh6S05RVFMtS0c3VVNScHA4dUxSbUpSeU5nOW5obGtEaGo3NWZFSlRPZzA4TXRmQ25IbkR2ZmhyQ1YzQkVrMW1jQUhCc2RfWlpQdw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "2e7ca1ad-2d25-4198-9762-15bcd6359cf4",
+    "title": "Nifty IT rises despite JPMorgan warning of AI disruption; Infosys, Tech Mahindra gain, HCLTech and Wipro... - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi_wFBVV95cUxPZWZSamU3RHc4UjluVTRBdjduQ25zOTVMOTNWZ00zeEI2aGxvZGdxbFVxV0tmU2pxNFBuYlJpX3FTTnZxTkhFMmtNbTVzTnlhcjJVME5hS3c4VTkxX0Zab0s0NElsUmMySFZsYTl1c1VwOVdPZGNkYXZrbWhqSGdwMXlyaXJNdE9TczhaODdXdHA1RU93Y2l3Sk5VUnZiMG1DRDVmZ2Vva2dLNUJDdVVhRW0za3F2N2NQRGJZQlhDS0I3Tld0MXp3Y2FONjFtN2hyQXlZOVJyWmdDOFlXbWJwQWY0U2RFbXpWRUFkTUZaQko0NjgtQ3pvUnhJNDZMS1nSAYQCQVVfeXFMTkcxenJva1hCLWpZSktCNGRtTFU5clBJTkV1NnN6dDhkOGhkdXRVZTVNaXl3MU1hcU04azZudjJhTUpIZWdpTGFNanAxX2VuNVVNMGJRTjlCWE0tNklQcjNEU182NEFYTnlaemp2M1JpbkJadmJMUHpUaklRbG1kdXRqRWVQbDVuakFpQk1GNVRmVG5oRkE3QXBEZGJCelBkZDRrU3hPSWtaVmVGZ2w0OExPbGlyZnlaTkE5TmIzT0dlUG1KUGs3bmswOVFxanF4MWE2d2lkX3lHa0tvMkdZeFVUa1FGZzdiQWxWeFdMclV1bGZxTlBvSTg0T1puTlZMOU1mcnQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "806a09c4-967e-42e9-9de8-6a753963ff71",
+    "title": "Infosys targets 400 billion ai first services market by 2030 - Indiatimes",
+    "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxOM2JuNUVKUmdrOHY0QjBScTNtQXBSVGN4cHF3X2RNaXBCbjhqZFQ3MENPRzVjd1loU0JycUVNWjJfczJJdmI2eEJEaTQwbV9EaC1NWjBjY0plVzF5czBmLUVOczBYMC1BTDVuQXZ3anZJSXN6Q1VWV0RCT2RnMmpWWUd3WVlSWFUtOE5BbEJHaGRxZkJkdlNFeWdTUkVBRm9DYUhsTVlIUkxqdHZyZVRWOG9TZTU3WTZwS3l2VkhEc256Qy1tRW5XZVNaTUJDblRFblE",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "1fabc8a3-4d32-4926-85ba-cac2093b6dc5",
+    "title": "Infosys Announces Expanded Collaboration with GlobalFoundries to Accelerate AI-Driven Transformation of IT Operations - PR Newswire",
+    "url": "https://news.google.com/rss/articles/CBMigwJBVV95cUxONXJBMDVFOUdGOXptQlhPY045RGRiWnMtc2JLcEpMOWtMUGRwaXFIZ2VkYTF4NGhTNlZrS2hicVI4VGw3RGIzQjdJcDQ4aXUwUXJ6SVJVWm56NkRNU0JBSzg2TWd1bVdOckNlUWl0azRHUW1pbWd0NEM3UEd6ZDJKdVc4ZjhiTlRFTHFtcVRqcHlvcGVVc3lxd3VUcVJyN2V4anhPZ2tReHljOUpwTTk5dGh6dDRFNGRzMlhaSFN5aXl1dEw5VEFoS3JSXzBvcFFVM25aWjhQb0JyUDdUM1RqWFkzejlJU1lsNzd0OFk4UFh2MC1NVFE2QXY3WklQaGN4WTlj",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "2a6d8986-b183-4011-9a81-fa6ad2293632",
+    "title": "Nilekani says AI to boost, not replace, Infosys services - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxQSTdYRE5UTHMxSnhyYUdXd1BVaDI0V2ZCWHNBaUhYcExXQ1VJdkh0dGpkTDFsaVRDUGRVUXZwV0gxT1pUWS04UFVVTW5TWlRxdlFEVjNtb1F6elA2OUhCTGpmeFBWY0hoNi1MUkJzS1hpdVI5RXJLdDJtUlVqanR1R0lkRlV0dE1Belh6OHczeXRZSHd5TXpsSjlOVUFOTmZKdzc2NmZWbzJqaWVHSElobHRFdmtrRjA2UTA4TFFqT2hMc3pSd3pNM0xfY1RMX0Z0RFdfNHNhZ0RoWGNX",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "f3e49f87-28e9-4d64-9bef-04a3ed414904",
+    "title": "Infosys, TCS, HCLTech And Other IT Stocks Under Pressure On Weak Global Tech Cues - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMiwAFBVV95cUxPamVrS1IxV2dsUmhydlh6bmpJalc5Z1MtSklMejBLVkhWbTFQcEg3dkQ3S2I3RHV1eUNPUHhrRlN2dVFiS2ZZWDEwOTAtNlQ3bjBjOFJxRHZ4Sndad3QtbGtDZS13OVR4VF93TVBEMHQzTE1lUnFPVWJrZVRNeG5nN3VDQU9WNGtMU1BMQ043cmZtbVNudy05ZEhhUkRRdDU2T0U3N3NSTVJQQmJVRjk5T2Q0d1lReWQwbmxCS1laT3jSAcgBQVVfeXFMTXBsTlZrRzhtTG5PSkl5cHhTUzlFMjlWN01IMTJxaHRlT2tLOXVHdmlWd3kyR280TFdUXzN1LW1iZGszVVFBREFVVmEtQ1JmTjNNVTNuOS1VVGhPSndOOWc5cG1CcS1fNnQxYUwwYVBzZ09qY1NTcnpkckxQQXdmNV9uNW84aThwanhMVUxZQlAzNEJsRHNSQXc0M0VfZU5QbHNSMURkN1UyWmRSUE5ET0FPbGJUVDduTXg1TlVPRHBXMHBaT2NXTkk",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "7eac2ab7-4686-4c91-a310-b94f7afdf5bb",
+    "title": "SENSEX rises over 200 points, NIFTY50 above 23,850 led by ICICI Bank, Infosys - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxPY1Fadzg3Rk5YUl9GN3M2ZGtfU3pLUlVudGhZbnAxSlhnMzZrdDFGcFFic2pERHg3V2ZjVm1qcDBNeEFKQlc3aDJwU2htUzFMOGNBSllUd2pWTTVLSUhlMjg3TDJCMy1Fd0ZnQUZkRHJGcmtBWHQ3dlpvQW9xNG91SlNLeXJjV1MzOGpXWnlkVGZubkNFM3U2bkZ5Z3lGTlFadTdFcHA0ZVVieEhmM0o3QkRmc3lsTjI1dmY4Q2xRbWZXUXZaMzZZb3FITW1MN3ZB",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "607e3d6a-9888-4775-af6c-b5146deb265d",
+    "title": "Sensex opens 170 points lower; Nifty tops 24,000; Infosys down 3% - India Today",
+    "url": "https://news.google.com/rss/articles/CBMi1AFBVV95cUxQUDdNUDJ6Zm54MXBOUGh0LUd2aXZVZ0xSZHBBQWdocGN6RHdfdGpETmhHc0pFN1B3OUszZ3dVSk81OG04b01aV1JEcWRLU2h2Vkw1bWZ4TENBWGh2c1d2eXNuS01yU0tfV3BRNWZJY2Y0bkh1dVE3MkpkYTVqWXM4SHhpbWlpN0hHbFZrMHZEOTBvaVVjOWxPdS1PU0k2N0Z0b3BMbmozMTJJdS02ZlNBRmdObnAyd1U4c0w2YkhfVFN3R2V1ajVTXzB6RWJ0OVRiXzFCcNIB2gFBVV95cUxQRHZOMl9UUUF6Qnp1VFVGb2tBUHFvbWZYb2l1Q0RIeWx3OGhTMDh3anFfVlNOa3BqcHJvNkw3VlVUNXZ5bmE2YzNHZUR0TTZucU1SWVNnMXREa2ZJaFUzZ1VOeUZXSXVoSnpiTFJLSkU2eklvVElSTGFyeDNab01Ta0NyaDV1akZZWi15T0llVUM4MjhOQkdrY0U3VkRjS21UeXh3eTVoeUhfUHhKbkc5Vzh6NUFsWlh3eTFxSmZ2cnZDY3BTQWZTWk51RDJQdGdTLUhxYm1mc0ctdw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "6a041b71-9408-4f7d-8ffe-e26d8a38b289",
+    "title": "Infosys sees $400 billion AI services opportunity, plans to maintain fresher hiring - Storyboard18",
+    "url": "https://news.google.com/rss/articles/CBMiwAFBVV95cUxQd0piWHFwY01BbmZ1Q1FfeUdpOFVycUZBTS1LSnJOMEQ5NDNEcUVkaGJaYXJ2VzZVX3VJbjlFYWZtcXpqRFNQUkozSGlRaEcxbWt0NXVfa241Wk83Sk9VVndEX2NKNVdWbHJad1RXY0ZFVXJvNmhOYUY0X2pxRmUwWlhKc0FnNWFYUzZLR1VwM1dyNU9MWC0yNXJ2MTlqTndHR2ZIaTZEQnVaWjRlaHlMcnI2UmFLclZEOVl0cWtUYVrSAcYBQVVfeXFMTjlaUWNjODdlMnp2a0xBQ0h3Q2d4U1ZTTTFFTTYyS1VNVmFHODNjTUZvTk1PakJkTzZEWnhUTFAyRGpWSEM4VlZ4WWktaWdVR3JDZ2JrNTdYSURFd2QwODNJWm9BdlZzUWpPRkVFaU1RNC04TjBjRWdHUTdnSTQzS0U4WGNockg4MW9JUXBNc0I5S0syalNLMlI3TXpQbVNYQWdrajZSZjNHQkNLckx4QnZkU0dma0JPcUZVbWNKc0NUMmtYdDZ3",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "5dd339cb-0d67-4ed4-8454-dc52617bc456",
+    "title": "Where TCS, HCLTech, Infosys, and the rest still win - The Ken",
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxPbmQ3UVZsNWtvMHNGVER1Zm1hODFjMXJWZVJqeEo2VEFCVkk0U2ktWXEtcEVLdFdSajNLUnlKNGpYNWVCQ2tyNDVkT0hJb0ZUdU56dlhZVVUtVC1lRTBYWVI1Uy1TU2I5LUw1LWZ0Q2xKZWdDLUdLQ1p3SWd5blljZTBveUFfbnlVZW1zTElZTFY",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "71c24227-6815-4660-8265-6fcda68032a1",
+    "title": "\u2018AI Will Amplify, Not Replace Us,\u2019 Says Infosys Chairman Nandan Nilekani - Analytics India Magazine",
+    "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxNdy1SRTI3UnEzdUdnb2RVQUVmRWxtd2Jqb2k1VGpnOGg3cTRzVDJYSlhKMjFBVnBhUHExcXo3a01yU1JYWHRGNGlwcUpDMDY2WUV3ZE8xVzVNZzFqUFNxSHVjYW8zazc3Yy13clpnTU9vTmY3MkJsVTVSSGYwUFhvUWh3a2NkRDJTenZvWFY3NnliTEt2TjBPV0hKVnpQZ2ZhTkJuX21OUTdkdw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "2304ce64-4c3a-458c-a34c-9c28f6c7b5d5",
+    "title": "Nilekani shrugs off AI doubts as Infosys eyes massive AI services expansion - Telegraph India",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxPb0FrdkJuTDFOZm1hVVpKOEhXRXZsSkRvQ1Y3TmtuUTQ1RmJPOWRsU2owYVd2alhOcGpuenRwMTN4UE9FWEFYVjRnd3lRdHo1a1pKN1ExcHV2VW5WNDZaT0Q1am1lVUx5NUUwVWt6cEdsQm93TlpGV0YweHJtSWlUbjdtZnhZUkg5bGllZVhIY1FTX2pTN1BLcEh4bWdqMVhHRTlGMUdBVGNqU2ViYUZhSzVpTXFqd0Z2cF8tb2w0LUs2QllCM2pTT3YwMzJQbEZXbFBBcnYxQi1DUdIB2gFBVV95cUxPb0FrdkJuTDFOZm1hVVpKOEhXRXZsSkRvQ1Y3TmtuUTQ1RmJPOWRsU2owYVd2alhOcGpuenRwMTN4UE9FWEFYVjRnd3lRdHo1a1pKN1ExcHV2VW5WNDZaT0Q1am1lVUx5NUUwVWt6cEdsQm93TlpGV0YweHJtSWlUbjdtZnhZUkg5bGllZVhIY1FTX2pTN1BLcEh4bWdqMVhHRTlGMUdBVGNqU2ViYUZhSzVpTXFqd0Z2cF8tb2w0LUs2QllCM2pTT3YwMzJQbEZXbFBBcnYxQi1DUQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "57b95254-aa04-4092-b094-47f3405a447e",
+    "title": "Infosys gains as GlobalFoundries expands AI-led IT services partnership - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxPem5qM2VfWlJmSU9lQWx3M0Q4QmJFVVcyTzAtYU1NT2lmUmpBVV9vdU4yS01VMnZtVmFrc2NlRmd3MF9JZEU5T1g2Q1RkMm9yTVZqRFpKeGQ2YllLQkNwcW9xWWtLdjZ4bVJoRlRiSEdTbzFWd0NwanBpTy1qNVBmWXBsbGZlMTNuU2ZIRE1aUHZQRG9UcWxpbmdqNVBDaEcxTHZoYWdLWVYyeFJFcWdCbng4RE1zZUxKUERJWEV1QUJaUUIyQmp5TTlQcGFNTkxXVWFMUWZwZHVaZjNXNzBreW43d0pINDE10gHuAUFVX3lxTE82a0MxdWQwaTIyMlQ2c0d2SlplOGlveC1UYTRGWW5UaWc3SEdYYnVPMThBeFplQ3ZLdFV1NlJtSnVEVFoxLXlDN3VBc1hYaTBxT2JKbXY0MXU2QV9MbWlrazZLcVhTSE5PQS1waW9oYkxxNzVlUmZXZjBpR0o2WGtHQzVMWG9sVVFMREtQNEdjQ1JnbF9SZURsOGJ4ZGd0NFl0XzRwaEtYRHcxdzMyUDJJOVNabkZPbUhUYWF1cFpQV2dqU1pJWjAtM2hMWV9WbkpVMnJvdW9ua1NJRE5tdC1sVWlFdzlZNGZTWkFOd3c",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "d41555f3-3b30-4fbd-a17f-e66640097244",
+    "title": "Infosys Expands AI-Led IT Collaboration with Semiconductor Giant GlobalFoundries - Analytics India Magazine",
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxQa21HZkw1T2RhTmZpaDJPYUlVREs1YVhFektHVjd5LWw5SDFKa0F1d0Z2WXU4OGRzQjB6b3Q3bmdpckR5RTRHb1IwRTNRT0hENl84SDl2eTVpMzVYU2VQNVdSQkd2LVZFT3R0MGtMa3d4eDN0dTV0ckppa0lDTTZuWndhOHg4cmptRFlDajIySzdiY05fd3V2amNYMDVtQlJuWEJ6NDd4elViR1UtRFZwUkRPaTE2XzhhM2c",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "6141a999-7cdc-42a4-92d2-a5d34985dacf",
+    "title": "Infosys says AI will not replace IT services firms, sees up to $400 billion market by 2030 - The New Indian Express",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxOTHZxMjVTUlkyMjNLU3dHUTNnUFRnUG5XRW5NbWlORng4ZUpsUjhrMVZ5Z1ZISVdJYVdCM0pxRV9ab18yV19xYmZRYzBpVXB1RFZTcHUwT2hVanpmNUpYckZmTzlCNDJ4LVhaRFJZVUI5dmFfYXIyNUgtZldRel9lVzJOM3JiZkljWUFoQnpWZDNPZ0tOYkRibjY4ampxdk45c2NQbm9rS21MZVFldGxIV2FaRmQ1dDdUTEtDS1NBeUJHYmxQM0Z0a182T1NHdm50WDlkWDZjcGsyd9IB5wFBVV95cUxPNnlVWWZ3RW9MV3lsend3NTdscEtETW5BQ0dfREt3UG55NFh2bDlXY1JBV2RkYlp4bk1ubndKUXkwcnNaTGVNWDEzVkxZZDhWTHBZa1hxYS1JYUNfd1ZFYVBtSnZXMTBiWjkwQkV2ZFZoN0xraDBPV1YyWXlDUTNJejJUcjVNMGd5UDQxVUdoVEZyZEFjb3B0RGg5cVV3OXdHZ3pDWkxKT1ozRGt6VmxsSG5aM3NoMUt6clhJeHFiVEZzZU1QWThqRHZzRk1hRURrOHpfYmZQZlhseER0enVneUc0VkNTRTg",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "beb797e7-a8e1-4b68-a888-b281925b5e11",
+    "title": "AI to amplify, not replace Infosys: Nandan Nilekani - Telangana Today",
+    "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxOQktNaFR2QjdnREZMc19ydTQtY2RncHhscmtsY1ZIRktwNUp6RkVpV3VVNmlSTEo4OGJrTU1SWUhGTkdyZ084N0Z2bTFxaUE4Yk5wOGxxeDlLN3JHQU5qcndteVAyMGpqUkFYWjhDNFI5amp3WUhYZ1Rma0gycEt4STVB",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3fd774aa-805f-4021-8d6a-3627e3ae928b",
+    "title": "Infosys AI Growth, Yes Bank Fundraise Among Key Stocks - HDFC Sky",
+    "url": "https://news.google.com/rss/articles/CBMiswJBVV95cUxNekl5anUyc1FFcGVrN0pnZnV5ZGxtMS1nU2Z3aUd6VmJueWlHdXRsWVozd0RSQXVWZHFCTlJSQW9wSGJ2N04xNkQzek16eHNfZnZ5RXdlSnRqRzN1WXJiZWY5QzlfRWNYSHk0SHR6cjcteXU3Ql9mS0tUZl9zcnozOTBuWHF3M29TeWQ5al8tenB2MjJXMmdMckFOZnFGMTRNNUw4R2x1YWxEZVF3VE9jS0std1pRbzZCejBMRk5SMWFHc1pvWEJmVTJkVTRMeUU3WklNbGlJbWNFVWQ3R0ZWRk9GbFpzN0pQWmFhNHBRbzJRMkxwUFVmMUZ4OGgtc0JRbkg0b0d1aUY3NGpYVXEyNDdxMGVkeWQ4OC1hSnhJcS1fUTJNOFJVd25GZ01FVExNWmVV",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "529edd2f-9bba-493f-b9f6-f87d790fc71b",
+    "title": "\u2018AI will not replace a company like ours\u2019: Chairman Nandan Nilekani defends Infosys model - Storyboard18",
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxPMUx1WkRZMlBjdEd1NV9EcU5YdkVXMnh0c2trN1RLRjh0WEhxYlNJYVZObERsb3lPWkV4R3JZNDZXaFVvOE4xTjdZSmhTNjVTbHJUZGl6THlHWTdIUHpMb3VfVTZ6TjljdWJRSVFUQVZvdkZSZ01aWExKNXRmWER6eEZZdkxJc3FvVFJZbE1Xd2poRVpVUjRpMUZacEhIc05WYjZ5ZF9jUlVtaVVmN3QwVmY3SGFkTGZ1ZGV2Nmt1ZERpV2lP0gHKAUFVX3lxTFAtSE5saTRVWE1YeVhVbmd5QngzWXpFdGFSYURnUHZHemFXcGJydHZtZlRXeXBuWm84OUdDUnpZSGVNN3M0cW9RVVlVTHFPbkY2Wk1mMnJZcWpMUkxUUWJZX3YzOEFjLW54N1dhb2V3UHdLNTBEcEtyRjVMX1pFaUZuUzFVTDA4Qzd0cFQzYVQwNWNFZWRvUkFERmdFdDZJSV9BY3psOFctMDdXdVNyUmliTE5jWkhrcFNpTXNtUEhraHBTZGJWZ0xGS1E",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "38578b5f-7bdb-4666-ac3a-716aaefed23e",
+    "title": "Stocks to watch, June 24: YES Bank, Infosys, Wipro, Honasa Consumer, IRFC, Tata Power, steel stocks - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxQbXl4LVQ1eXU0NDMyZ2V1RGo3VXNkZTNCREMtZm5pdFdxVFdCZURMVWR5SnpFMHZ3bUo0VERGX0FNU0VEcHhQbGlTcDBkem5veXRkeUtra2NiN2E1NWluLTRkaUZ1V2xJOFRWdHhyOXR6U3lXdDFTN1ktY0Y0UlE0RHM2VGRFYW4wTU9sd0d5a0JSUHRGeU9aYjliUzh1OTNQeHpZQmtMVGdBYTJvaWxOY0pPcjBSRmpqRm9wSk16SVJKVDBWVnJNdnVUcHRzUElvLTU5MjlKazhLVWZQb0VMSzBCZV8",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "9aeb99f3-bc88-47bc-97cb-7115e349fe99",
+    "title": "IRFC, Infosys, Honasa Consumer, Rashi Peripherals, NLC India among a dozen stocks to be in focus today - BusinessLine",
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQMmxxOXQ3TFVpVjVVdUVOOEZSY3JyNUdXOFJyZ0dkbTR6WHQ3eWZwNHN2SjFrR3hYS1g5S3pqRHNVczJKcjVaazRFc1RvMy1DSmdNVFU3OEU0TzcwZG9UZlFtVTE5djl6ZlMwYUp1M2kzVVlTYUtFN091ZUZxcGphMzdzQ2ZDLWM0RHJKX2h3ZDVVWWhXOWszYlc5VGRPM1JaVE5iWjgtcUFfTFc4T2VCdG5fd2ZoX250dzNDYUE0YlJxc3fSAcoBQVVfeXFMTTRCMjFOc0hjNFVTcnBRa0pEYVI4eDJyM2p5TFJTeXNBSTFSN2VicElmNXFwanB1OUtRdFFBRGk2MUdaalhnMFZLRlhxemEtS2x1S2x6MXFkSENfNXNhZ0hZdWh0ZUNMaEkyLVlQTWxEaHNfMV9CcGlxOWZRMkhjR3pMQzJWZFhxQW00V0RBbXdUcFY0NHc4REdCS1lLWTJxc200aWNnbTMtODhMMVAtLThpMzM5V0g1clpOOHlBbzhrZzBfRC00YVl3QQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "0f757658-779a-4ec0-ac3a-dd9478404009",
+    "title": "Infosys FY26 revenue rises 9.6% to \u20b91,78,650 crore, dividend declared - scanx.trade",
+    "url": "https://news.google.com/rss/articles/CBMiwAFBVV95cUxNMS1DVEhseHpjQk9aU0xfV3MzTzk0emxiTmtobFhLeG1fVlFBb3hvMDhqQmtJWDZWX2F1V1p2T0JJZGJxS3g0YldWNnVxRk1BUGhGMmp3eTJFX2pDNWFCTEczTVRybzdSdUlaWHBXMTVRaWxMazhzX2JMWk1xa0NTQUxybTBjck1FOWhGWVM0UW9VRjJOYmYyWlA2dHJYU1NrWU1VWTc5VXdVX2pVOW9FX0ZzVEFDMGFUM3pSeUQ0b20",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "f26331bc-46c7-4c26-8523-85342fd10132",
+    "title": "Infosys stays silent on CEO succession at AGM - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQZU9xbDE3cnJRU3NDY0tZNmVpRnR0RG4tSlpJUlAyelI5Ung3WWdmZFRVVGRLdGVrMzljZExXZlYwLW1ocUxzZ1BIRGQ2dnBZY050WV9LZXdPb1dBdlpqZlB0ckVlU0pFbDNOVU9XMmNkU045bXduZUVSOGJQMjhQMkh6b2tNRW9ndmVRbVQ1MUllUFdBSmdlZ3NlWkFoNEJsV2tOaUdlaWcyOXNxd2VGR2NvRjhvMERkVUF4ak5FWmtmSUnSAcgBQVVfeXFMTlQ4LXVaOUJwUVFvckZLazcyQ29GNnpFQlY3UlNjQXVfTW5DcjRucU9jSTllNXNvcWRpdGtiUnl1M1lNbzZyX05iWmNjYXlBcnVXdVlvN2FBWWFtbE54Y2Mzekt3YU1ER2RCZzdCV2hRbjJ1UzFhRC0tTlpyWkdhM0FCa1FfMmJrbnRPaDUyWlFnYkhKSTN6MnJvZDRvT2hsVWRZTWk0XzRKV3E0QmtFa2RVM0hxck43cU1kQ2diNXFrX1hvQVBINTc",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "d7087aab-e634-4dbd-990d-6cefb2fac1d7",
+    "title": "Nilekani says AI to amplify Infosys, eyes $400 bn market - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi7AFBVV95cUxNd1FzalkxMjBRaXBwRGZBbFhDWDNCN3AwSUZTWHl5VnAzUmllUmtEZUZvcjQtVjlSZDNEVjBYTW1KN2htYXIzbTFzVm5URnYtb01uNmtnN1RMUlY4TWhsbWZld0R0RXFkX2ZQXzlvbkpGbHQyamJ2cUFTYm0zWk12bDNjc2VST2laUDlLeF9iNEdhbGxtMmxueUs1SkFoZm9qYWxhZWxXUjZkMWM3X19ZR2RuUkJzVEs3dlM0a0tJbjNGbWduTWpHMUxRWW1VQW5fcVJXZ2xfUnFwRWFGZy02Mzg4bjR0VWt3OWc4TQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "a8741052-5771-4418-a147-6073ffa4f96e",
+    "title": "AI to amplify, not replace Infosys, says Nilekani as firm looks to tap $400 bn AI services market by 2030 - Indiatimes",
+    "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxOQlJYMUp2Q0hHZDZSYXB4WEo0ZXYtcy1VdWpvYmY1VzdWMF9vdS1VYkduR2hEbTBTRGx5SWhEMVNpRXozYVMwV1VtcG8wSkYtWWlmaC1aNGtXWUQtVUdaUzN3Y3V4WjFaSFlxc1lKVnd5LU5FWkxaaGEzZzVidkRyNUhHZ05scGd1cFB0clR3UTFRRnpIUENwQXAyRG1nRzVBWWNkNjAzSzJwTDFWMzQ0bzcyMFJlUmFYWlVTR2RQWGpUa3hqQ2FQN1hqQWpqQWo5R21jaldBQXlyUngtV2ZoQlJ1M1R0QTN1eU5JTEFrODhERzd6bWZUNkRnSTJfR25jc21JZGZSZ9IBjAJBVV95cUxOWFRsdjd5UEd5Rlhad2dHcHFicXBSX2d4ZlJLSmVGRTVVM2dYSXY3NlZ2cDBMdXllOU5wMU5HUmtrUUx5enJ6VlBLUEVjV19DZzlfNUo0OXdWeVUxQ04tdVJRVGU5OG52LTRfQXg0UkF0Um5vb1BOUmIyNEV1ejIxT3VIY0JYbWR4NS1NVUhNX1E2SjBuSFVWNFNmZWlkMGNOcTVGd0dienJXUUoxZ2xHZXA5Z1Eza0RNcHRadjdTQTZMSTFKSTYzNnotVjdIZ25uX2ItekROQnFsSzJ4OFJJOWh0OVpQclp4SjdLaHMwajVZOEh5X2Zxc3Z1Z3lMNlpyTi0xeUtkSS11Q1lM",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "f167fa89-e2ce-450e-b40e-8867ccbec1c8",
+    "title": "Persistent Systems - TCS, Infosys, 8 other IT stocks plunge up to 38% in 2026. How many do you own? - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMigwJBVV95cUxQeVVCTHZjekZvYk1uRm5SYUV1ZllSNTFlZURERXFYZk1IN3BpZnJoc0Z2U0RBOEJaVnl2dXlhUTViZEJseGZPUmx5YXBqRURNYjNiSElMYVJZNHFpYTBXUk5FUUZndGxWVXE2b3pkTTZMclpCMUN6MUlsQ1FnOEw0V0xnYjNmaDNGQm1PdlBPS2xzX2h0RkYzZkE0VWt2OFhPbURRZXFKZEhlU0FqdnhZMFhSR2xQZFQza29GNS1sTWtjVGZodEh5NV9uTlZoNUhXb2FVZU55NDdhb3ZPWEtyQUZ5aDNUbm1aenl5ZGdnUXROajVrbzI5NkJfanI3OTJyajk4",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "6e619319-a098-4d92-a013-0ecfd8cc9448",
+    "title": "Buzzing Stocks: IRFC sheds 5% on OFS plans; Infosys, Pine Labs, Rashi Peripherals advance - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxPdDZwWTM3R18zRFFoSjZSaGlKdnduRjR4cDBURld4ZWo5eEd2aFRJa1E5WmJUNlNBS0c4T0lYOE5zTnlTdHE4U2JzNjFXNDh2a1RhZFF4c0VaTXd4WlpZd0pCQ2EtNGlVd0IzeFJ0YnROZ2lURlF4YVI3cGkxaHlxZ1JLNzc1enY1eWJMS1llX2ttM2xZTzNyWFhvTmdZN251WEhwYWF2ZmFPQTdJUHFpY3RQTDNXcnRnRkVpMllzLTNidmRUQkxTMUt4eXpHRWZMeTdtWndPVXdrWHVMd05FM1BPMlFDXzTSAecBQVVfeXFMT3Q2cFkzN0dfM0RRaEo2UmhpSnZ3bkY0eHAwVEZXeGVqOXhHdmhUSWtROVpiVDZTQUtHOE9JWDhOc055U3RxOFNiczYxVzQ4dmtUYWRReHNFWk13eFpaWXdKQkNhLTRpVXdCM3hSdGJ0TmdpVEZReGFSN3BpMWh5cWdSSzc3NXp2NXliTEtZZV9rbTNsWU8zclhYb05nWTdudVhIcGFhdmZhT0E3SVBxaWN0UEwzV3J0Z0ZFaTJZcy0zYnZkVEJMUzFLeHl6R0VmTHk3bVp3T1V3a1h1THdORTNQTzJRQ180",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "13c1a40c-b664-4712-9938-d921878d68d5",
+    "title": "Airtel adds most value over 5 yrs; TCS, Infosys, Wipro shed \u20b98.5 trn: Rpt - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMiywFBVV95cUxQVkhoeUtwS3ZuTFpkNGhScE5USWVpTU1hLXROaENxWnRKMTVRa2JBVmxFWDd4OHJDVkp4cWRUaEhNSFpQSmlGYzJpUDdkS3JTaXIybTV1TENmTm40U215V1kybk5GVEllSGNIZHk5YW15ZE9saTVhQmc5X2FVY25zRGdNMl9hVTRvc3Zvd0RObGNOQmtOdERZbUxTN1dXNlg0SkwwbUd0bm02cm5vS3g2RDlkLUZod1dhcjJNczNwaWFBbG9CNXpSVURCZ9IB0AFBVV95cUxPODhjYTRtN1Q0R2UwY1d5UmtGOE5MT2E3UjVBNmM3SjV5cFJvUmw2VmJfdVE2NFFfd0Z3cDRsODE1Wjc0alV2UzM5ODZXT0Q0cFBXTEw5dVpUUEtMdl9FVjVKLUFfbDZmanl4Rk1fWmh5QjJvV1FEcXNUNFJhbnpyOFFJYm1NeHhxVHc4ZXZGVHpWY1VUUkNObkpXR0FnOXlsM3NjZXhnMlJpUVRLOW1LZTk0V0l6OUpVSlh6UWtDN0RqamVzdGE3S3pRcDdtWnZY",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "758158d2-db65-464f-a789-2a4da4bbccfa",
+    "title": "AI won\u2019t replace Infosys, will amplify it: Nandan Nilekani bets big on $1 bn AI surge - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMi-AFBVV95cUxQcVNpTEtuZWp5OVlDbjNOdDBVSmlibE9OOUIwSHRyWllObTFxd01GZVNtVW0wMFI3eS1lSnNIWmYwbERhbVdOT1B6M28xQ1J0WnFSYW1IRVRNeExiYm5YVlRKZlNYcjBlckgwUnhaNkV6MTN2dktiU2pJZ3FjSGE2ZjcwUlZaUXZNZFZPMXdCLVExN2kxSHQ2anFOdXFIN3MwY0F0UW8tOUZMUlYzUVNUazczRjZSWUVsT0JwNnM5emgzQW1xVllmWGZ3Y0EyZzJzWk1QakhXSGVfQTdnZnJDdEw3Tjg5UV9SdWs5SjNZNXhpMzdzeG14TNIB_gFBVV95cUxOY1p1b2VtaFdQUXd5Nk5CRU5kV19tUzBvclppR2ttTy1XMkxkVHNORXI5WEhyU0xvUnNQeTdJbUhLQjRWb0F5aVJSLWdVNm81Ymx3Tk42N3ZSQjNsOERZMXdwOVJRbFBNWmtld3c4cjd6UDRjNnNhMW9vSEE3NVhpUjBvalQtRjdXZFlITXBISDJJNXJ5bGVuaXVOTWpTeUgzTng3dlJCQ2pkNFN2cmVCOFZaalA3MHdEdFhkbk85NUgxemhueERhUWpRVjVaV2FIZHdmdkNnNWRuaXc0akZpWEpsaVJWSnBTZnk2NFp3TkZTMU8zMmVIZUV6V1lmQQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "bedaf36e-2e1e-4492-a6b2-3efa11f45fdf",
+    "title": "Infosys Clocks About Annualised $1 Billion of AI Services Revenue, Says CEO Salil Parekh - HDFC Sky",
+    "url": "https://news.google.com/rss/articles/CBMisAFBVV95cUxPamdqY01sZHQwZm92Um9lTXBsU2E5WlZGNXZicWVBczZOTWdJVm9YWHdSdEQ1YXpPN0hxWDlZd0YtOW9tamphZmN6WkQ1S3N6cHNnYktFd0xUUk1NQnlObDUtSmdsWFU3U2lPLU12RUx1ZlhGcS1TN0xqZDhob3lVQ0ZMYllZZjMwOTRsZ1RYRjdyQlhJLTlTTExQdE9jWklhaXYzSW92ZG5zaUxQbzdlcA",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "1a3ae074-ccad-43fa-926e-e9568a6408d8",
+    "title": "Infosys sees $300-400 bn AI services opportunity by 2030: Nilekani - BusinessLine",
+    "url": "https://news.google.com/rss/articles/CBMiywFBVV95cUxOdC02VTZOUnNqWm02NFY3dGJwVjNPbWpQOFpleEc5MzFrUXNVWmtZMktVeXdVNkVyeXlEQUtVU3BtX0xSTDJyOVJKcE1YYmJSblU5UXhYWEpkRkJLQzRmYV9QOUkwbUZZUkdTYmplVlBlM09qTlRGNkk5SDNaWGtweFg4MnBGX3B1REstUndJNG1lQ1JvaXVRTHZKNXBBTjhoYi1SdXdBenVLYVg3NFFRQ2k3R2Ntd2JiVW9VVlFMV3RIN2FaeGlpY3ZfUdIB0gFBVV95cUxOVmh4OUc3UVp5NU8zWU9jcEVGRDZLdFhMdy01dWYyRjJmSms5VHF6aGRKME1ueGxLTEw4eVFSUFVLNHBkekRNREhndjlYekxwNkx1SHZXejlheHNnUXRBMEpISVJ6MVF0TGdrczJpRlREbXNQRWRUVzMwcExWZDBNLWxtYnduUDFFVElpM28wWlYzU2tDTDhCcFVOZ2pMa19UVVlZX3lJS191ektzeWxkNktLT0lmSnVyN3BzVUh4RTlhVEhzYk5PclkxMTU3SjhKUWc",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "68971136-272a-48a4-beba-9c6674542930",
+    "title": "'TCS or Infosys might not even shortlist Kunal Shah for a fresher job': Founder highlights flaws in corpor - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMinwJBVV95cUxQb1psUkh4Vm5DSW9hUXEtQzRLRWwzSG9Tb3JlZ3FXRG1KQnpnNVBMVDQxX2xTLXkxTmpoMEJzU05NMVZIRDF4UkI4YTkxYzlCeUxnMVpRcjdfa2Jmbno5LTZLbDBTTTdBVTBZbl8wb1Y5RXZkS3VTbnlCR2FSWTdPVFJ3TkRzUWRaY011WWM2eGVkM0Q3U1dIX2ZaUFRmM0MwTmd3OFlUaWVISm5hS1lHcHNOemNQNkM3Z2dYN1VOX0lUdEd0WFFkRFNIcUQ2NndhX0tGcExUZTVqLXdOVE9Wdjh5c3pPQWw3ZzBWMHlrclQ2NDl3d1FpLWExZFdwWC1PRXBaemhZdHBoMWJESE1DVVptQjEtaFBqUDJRc2d6b9IBpAJBVV95cUxOSVlLZ0FUMEZvdzVkRUV6NHhZeFZPdzE1b3QwMHFMOEpOTnNib3NhZVRhU05mcmphREFhQUJ6SlBjc0pqd1k4bGhLcUZORVRVWHJQcnk3RU42UUVrZDJWRGJoS2pnS0NHWWUyVU51cF9kSXUyRFBDcXpvaHpXN2NDd0ZuNG9KUXo0SVI2Z0IyUlp1UGhiQlBUUEZqVlNFSkI4UThLSVFMbU1Ob3k4dTV3Q2RCbW82VE83VEtWRERjLTNnSEk2bFljUEs3aHB6VW9jVkVVUHVrWG5lb21YdXI4MTlIalFidm5Xdl8xbGwtRGpTWGRZNWFFU0JTWUdkbDRLeG93cFlsSk8xUUxPOExRYjdxeXYyd0hzQjNlcUtaZkJHT19f",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "2405466a-ceac-468d-8990-1625d801de0f",
+    "title": "Infosys Expands AI-Led Collaboration with GlobalFoundries to Transform IT Operations - scanx.trade",
+    "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxNbkpUM2JWRjFLc1QySFlERTVkVFItTnhRcDVCdWZlRDZQS20yQ1lYYUdVTFl0NFY5UjlUVms3MkttYnZoakdSRW5oSWg4TjJPd0xRdWtXSENxNkdiVTVJS29zVXAtZUhpNzZ3QjVMTFFIMHNkZ2NWX3Y5NFNZa1hQRnJWTzhtTWlUa3NoUXZDRmlxLTNKSURJdDlObHA4QmZCMHo1Tkw0Ylp1VDBwbGMxM0dVM0xqN01l",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "fcdd545c-effa-45a3-a0db-fc5e94e2d8c5",
+    "title": "AI will not replace companies like ours, says Nandan Nilekani at Infosys AGM - Fortune India",
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxNU2p5S3g1MnNDQ09tbEJmSnRTTk5yNmYtY1B5MWNXYVZWQ1ZpY2huQk1JVUFCUXZwYzlPRE9SMF9QanVaVHM3Sm8wMFY4ZlY0T05EZkJQcjEzYThRdDBLZ2s0eWNzc0VHOXJHSTR1VzhTVDZteDZkaFZMQS1uQmFNLUdnNVhPMENlU1RnLTBJb0JWOEFCY1hmaUEybjg4YVVmcWczc2U5dXhGWS1XVHRUY2paUFp6VmVQNUNYMkFOa2k5SEHSAdABQVVfeXFMTVAwdVVnZHdxQWhDZzBMVnpRS3lHcGZ1LUN1MkF1SnhBVEE3Z3E3R0dGTmVmU0h3TmhLMkFYaG5EbEVuNHZ4SjRKeFA3ZUtBSGtkYk9oM2tyMm9yZEJiU085cWdoMWg3VGxYU3phN1VzVlFPN0gtODA1UFRjeFBUcGdsN2JtR2I2Y3RCQTI2azhGeVFmNTJ3WjdvYUhQWWFUei1BQ09EV0pKRERBcmp0ZkZlWGNQcDh0Q25HYjdNMFBkWUdWQWFNTHFlemJ5Ql9mZw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3ac93b51-8dd7-4f2a-af18-9c5ee0f2f76f",
+    "title": "Infosys Hires 20,000 Graduates, Crosses 325,000 Employees As AI Business Hits $1 Billion - BW People",
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxPMkNCcnFFeGFLRVJBNmVLT3NvMkhwSG1jeFZIcXF6SXlfc1M2WFpCbzZEOHduYUpnZDVaTFBpZGt3cU5TZ0ZCaktIdVM3UEE5UjRkR0ktcFpWQzdOUVpuVVZXeC1DQ2xDSDlqU1Q3dmtoTXMyWU93OXZualpoaTNDQl82UF83Mk4xS2N2cGltcW5hZTJaTXl6amRLX3BnV2QxX1VweHN4alVDWDVmSG9BWFhyUEtycnU1WkdjT1doRDFFNEk",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "23e66d66-cfbc-4a85-9f06-961c771fce66",
+    "title": "Infosys sees $300-400billion AI opportunity by 2030 - The Times of India",
+    "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxNM1RGdm5OS1NWVkMwbFNBLUNfN0t3QmZMNkd6dW41OHpTa3QwcUxidVBldjQzeHlxdVlEV2paVEFKQ1R5bTNjYjZoaU1LMkEyem9KVzV2MHhrYUtJM0ExMWdtTVBUZnIzMHpacjFNR3VHMnY4dXBhREJoZXFIVGpYRFpHM1I3cV8tb082bm93S0tCOENxWGFKN1lwRXhNbjZTaUJjc1M0RUFMRXBBZlNnZUxJSlZyTGUtUWZ1NzFqLUtCSHlxNU85N0NITTE0bUFwTlHSAdcBQVVfeXFMT28yck45UmtjaXJJT1NMdzZhV2tncldpTG01Ni1pWk9WS3NONFYyeHBVQVU3M3NmTF92eWUxYkxGNVNLeVVla0lWNEZwZ0w0S2tvS0psVU9jblJMckdUT1NSYjllNnFqUEp1Q2dwYnlrV1FSaFdubjdpMkNnck5VV204Y1lQWHI1S3BLeEJMell4dDA1ZC13c216M2dPU0lwQkZnS2JpWFFMQ0NJel91WkwxZ3c4N3Bfb0pHZ2xOOFpYUER6NTFVTlZOT2UtdTY4aXBodVRKZzA",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "6137b596-556d-4bbf-9081-f61d0ea0462c",
+    "title": "Stocks to Watch for June 24: Infosys, IRFC, Honasa Consumer, Delhivery and more - CNBC TV18 - LinkedIn",
+    "url": "https://news.google.com/rss/articles/CBMitgFBVV95cUxQRGhJMUxfcFlUcjZIeFBEakpjUUhJZGw4R19GYlZ3S2RPaEpSU2EyNXlrdTUyYmotQVRTVXVLRWE2cWdEY2RQMGZHLXUwRi1JWTlTMVdZd1Q2a3pfUDZfMFdrRjRsdENaQ1doN21fTXpHU3dfNW5HSHBUazAzOFp4bmdfTzV6UmFNUlp6aWpZMWlNYlZFUkpIQ3RTOExyY2xaTGpwQ0gzandBdUdZUFFXUzZDZHZfQQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "f61cb76e-e08c-4b93-a494-e862fd3abc19",
+    "title": "Infosys, TCS to Wipro - IT stocks fall up to 3% amid global tech stocks selloff - Mint",
+    "url": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxNZVZNa0lrRnV6MFVJaW1sMS1nN2I1eG4xbGxfOXI5R3AxdjQ1S2tSX3dFb2M1cWo4X3FVODBxd1lwZGtnRUdSSkVXVVpfSFRTZ25QRDBiUlVXWTZuX2dzaGtBLUxRanFYSmFtZnJPc1lsWjNrVjltcUgxZ2VTXy1LSDJFbmtlNWhmb3BDak1GaUZZa24tcGc0NU9YS0xvUE9pWGlrLTZKWDlkTjVadkE3Q3YtVkNxNlIzaHVwSm5HRFB0RjhkejlFVEZVQ0RZemdWSW96c001RHdhcGRqdFHSAeMBQVVfeXFMTVF1MzBuX3U5Yktqem5HeUgwcVZQbWU2OWt3TDN2Y2VSUHVFVjh3aW9CRFFQRW43OXdJa1Nvb1E5V3hQOTA3OTUwcDVudzdTZmNKN0xrMUxlVEJDU3hpdXoyenl2N285NGxpWXptMWhsLThIeDVTX25XU0FRbDRfQ3VGQzJic0trS1NicERydlNTb1RqSTFZRW5GcUthYTQyLXdDaXljSHA4Z0l6cS04amZhZUxsdjMyRFNWaUJQc245ejdPZmd2NHQ4ejlrVk00V1d1Qkw3MWFMQjltVXBYQURrR1E",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "7145a4c9-7494-4e1a-876d-a050ae259fa2",
+    "title": "Infosys Targets $400 Bn AI Opportunity by 2030 Amid Strong AI Demand - outlookbusiness.com",
+    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxQZm11cGFSWDlqUjhHM1F1Q3pmQldoNTZxaGI4NGlYX2x6TllvOE1vNExVM3V1QThiTFFHRzc4QVFUSDhGeE14QnJVNnJrNzVvSEt2d25YaXhLXzVoTWV4ZmtfZnBEQlJZWk9VSV9XUkwzYXRyV3ExNU5sckNpTVV5REcwN1dtV2hrd0k5bHk2V0lzeWNodExIeXJCMVc4b2VYTlFRdXV4SEVMZ011aGfSAbsBQVVfeXFMTmI3RzQ4UDY5MmcwN3lQYWowSGZKZUZqX1I4dVAzSUhxQ3lEaEpHVnpCX2xxNjFRRlh1cW1kUEtZNTFtbTluMmI4OEprWGpHb3dHMnJ0bkdCSUZ0RFZoUUNyTENpX3FDQWJJTDluT3RKUFlXU2xXR0VEZXZWQ2tIekp2U1lTeVRENERPYlNjU2ZfcmVIZTVzaV9OaWp6YjU0eUJNR2ZIRTJTSkV1cHRDZXpZYWkxcDJDVl9law",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "6c27868c-7d0b-45ce-81a8-c88be9717510",
+    "title": "Shareholders quiz Infosys on AI hit as stock nears six-year low - Mint",
+    "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPRWhyeU9UczRDbG9uaUt3X1NJQ011eEdKaVRfWE1XeVJBaXdmSThpMTZLcUxlNXJ1cnFFQWpaZjA4Qm9RN2JkZFh1eVFzWkl4bHNoLU9iWEVZQm1RSHU2RHVjU01uN3lhVzA5X05CNEp2QmFKZWt5MmV3TmtOUGVwQXZucDdudWRZZXR1eUFxdHM4UzJubC0xRk1GUDdRaEdSZ3BBYUlSN3ZTZWJ2a1BaWFRIY9IBuAFBVV95cUxORmQteUR0WWs4cEgySkdBQ0VlUWM1djNnZ3g3a2pLNjA4OUVoOTVZOFBVanB0WGl1MzBVOGV1QmlJVHdPTHZUaEJuWHN1Rm1lbTJFQ0YybDBRLWdaU0VJc0g4T1ZfZXFNU2dsRW52bnF3NTNvTDBjMDlIU0pZY2lDMXNQMjRiSkRjNEltYk1ucGhHZ2ZBeEZzdkFxb0JsclhINWF1SVp6YmRmYy1BZ0tBcllWOWZhTDg1",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "af6cc0a1-5e81-4bee-9963-163b89ad1a2c",
+    "title": "Infosys expands GlobalFoundries deal for managed IT services - IT Brief Australia",
+    "url": "https://news.google.com/rss/articles/CBMikwFBVV95cUxOcFQ1dWlQcFVId1V1WVN3Qlk2azQzalVDVk1CMVJGOVJqVHJ6UURNZTJEUXU2S1FlVElseEtKSFBLNUFDRDJWWEN3aTlUZ2JBRC1lZ1pXYjRuZVRVdjhQejJ4dWlTUGpKLVJSbmNKeWY2ci1iSERrRlhUTDlNS1J2cnBJd1EzVkJRSWpCR05IQ1FuRkk",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "e56e1260-2cb7-4db3-a6f6-48ebcf327d4c",
+    "title": "Top stocks in news: Infosys, IRFC, YES Bank, Vedanta, Honasa, Bajaj Auto, City Union, SIS - Business Today",
+    "url": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxNVDdzVjVjVmlDVVBUb3ZKZGl1OWY4X3hROGRjNDdyOGtpaE1mLUExeHdxTTVjZkxFSFJINjNWNG1sZ2FOVVplaVZUSUNxRWpUM2dKRWpPcjlXMDJEdlFIczB3VWV1VG12T1lDNnkxQTM2MldtRHk3Tm9OckZkT2VmMmtINEFzSEdoZHVhNUxlSnhaTjFvdUNlZmkwbEpGVTFRcV8xeUU5TWRaenpHYWRpNXFySkZOaEVaLV9HQk9zZXprc2VDb1d6RXhZQWtZckZ0N09Vc0R2dFFoQ1c1V04tNGZ0a9IB6AFBVV95cUxPcnVKNWFuQjRqX2NoODl0Y3hqVEVMSnZwVGp4LW1uRnRUbXB6ZFcwamZfcHNJX1VUUmJvMkN2MEQ3NzFiZWFWUmdwVkpQRDJyY0F0TlBXdTM3MDRiV0Z6b2tVUV9YTWlaUmhZMTdHMVVnUzgwX0FHXzU3VjRBN1lROFBXczN2OUthM1hDNzdSbFE2SGMyZ3NMUlZxUllQbVNjSEFrRExyRmZHS3NHTWt1cjN3OUtRSHdJLTA3RDRrLVYtUzhPUl9ncUtPUkZGXzM0T3JnRjBWQy1DZXJFWkFLTld6SGs4aEs3",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "f00af3d4-c909-4653-b0ee-5a2413d8fcbb",
+    "title": "Why Infosys took the biggest hit after Accenture's warning - India Today",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxQT0VrektJNlc0T1haTkJpdERJWFkzekkyYW9UazdKZ0xyOXpkT2FaTUdIQzBlakhGNnBMOWx0U0lLUUZUU21SbjZEUUpzaGtaVEZsMjRjTzdzTGVUU0xJdjNKWFduM2NxcnBWa1BUN3Q3TzlfblVDb20xMm5ORENWVjJodklzRVdTSGZ1MTFOM0R5R2RNMU9oMFcxcHhBeEFlcmY5NlJBS2xDMTZmOUZ4SlktWDBzSnVEMmVNUnhoVDlBVUpZck56b2s0dHExSDk3TTBtLTh5RVo1Z9IB3wFBVV95cUxPZEk4S3E0bWpwOW1QQl8xUXhMZG1XaG0yWTNjeXFVT0toZHFjX1l6Y25aNl9NRXZPLUwzQ1NncFU2UlRaNmhoNUNqa1FvUHk0TnFWcVhDTzFkdVBibkstbDlxY25XcEVZM1hPMDJwRUdMQWNGZTk0c18xSzY5QmVBT1R6MFhKUXVwMGdCNXdNMHlVYUVndG1GczdGUE9zZUpFQmNZUGtyX2hlcnBxZFA3enpXMzViVFhydkVnVVVFRHFFRlN6WHJGbGlMcWgweHNjQkpQNndqNjZNT3NHZEtN",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3f8b6c44-2f26-401a-8f6f-b2a8e1c0698b",
+    "title": "Stock Alert: Infosys, NLC India, Yes Bank, IRFC, Honasa Consumer - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMi2AFBVV95cUxNd1dnX2tvcVphaWtnTVJwSXpmLW1GeEMyNHB6MmNCSlNhbVZCTDBPVFRRSzNVQy15WTM1TC1WVHF2V1R3N3pSMmJjNWxoQmFoRTJ5bUd6TFhoWkNSS015Umt3UnIxWFc1UzJZYmNfSWNZdjJCVmx3VjRtY2Noc0NXOW5Tdk9tZ2U5QVBHMmVyR1ZGODNlbkp6ekk4Vm1vWUVIbGlNX1BHRnhuQS11RmRNSXA2djJEV09ZRmtmWkVGSmxfVmJSa2ZPdVo1T0Y2UkhaWC05WjhwTFPSAd4BQVVfeXFMT1FianBEYUplWGJDeW4xcHpjdm1pSUZYeW5IWVBlSnhDQTIwWldmZllEZHJac1NZczgxRlQ4LWtyV0VySHE0eVJyMng4b291a1VqNGhNX3NLQWJ5YzhIZUtGOGJnZ0xrNTZsNFdNS20zZUxaRm5FWkNBQXN1QjhNaDduSzEydzdmY09YVk1TRjNzQ19lbFJ6YkszbllKck9rdU9jQ0ZNbUtjZEFtaWZwTFZ6NWw2UXhwekNBNzkweGc5ei1tSkVrTDdsaVRmQW51RVJtUDhadTc4YzB2VjJR",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "bc7b6b1a-88c8-48c7-8aa4-6e9ce23e52c0",
+    "title": "Nandan Nilekani At Infosys AGM: AI Is Not Our Threat. It Is Our Biggest Opportunity. - The420.in",
+    "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNUUtJTFV2Nmpzb0N0dkIzXzI3VzlLakFiUWU3Qlp4SFpFWG92MkF3X2xMZ0tyRUkxcnpEM3M3MmR6SGVyb19tTHdGLWtxZ3Nqb2QwNnMtdVltc1RfTDJaYnZ5VjJRVmRHU2hlYUJBb1cwRHFxZzBYclZIYnF2X1ZMNWN2aEZNZHdf",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "e21bfa3c-3b4a-443f-a2a0-e238d9f8817c",
+    "title": "AI will not replace companies like ours, says Infosys Chairman Nilekani at AGM - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxPdzB4VV9YXzhWMzh4cFJwbVdBLVIwQlh4M1lEbkFpaHNOM3ItRW5WLXlKb2l5VXdIRzZMVDU4Z0RlTXNGTF9QWkhrUkdTQU1WOFRxLWNWeFZkZ3ZuQ1d1MW1uano3SkNla0hQSGp4LXBteF9DVXg5WGtUQk5KV3VWUDJoRkNJTG1LQVRFRUZLSnNuZjNrM3NmRzR4RS1NenE2TzZuVVVwTVVqNnVIbDB5WlRXa0RNWDdJR3pldF9uQ3JLWC0wclNGaG8yNlZqLVlaeWxtcjFnNEFuc0ZwMFlOdWxHV2x6X2_SAewBQVVfeXFMTy14ZmJGcHZhQW43WkVpTUhBaWg1Y0N0S0VJTU9PMjJVMjBRbW5GQTFxUVh1UnpxSHVIdFJkTzhGQ3NtcE1yY2J6XzBjeHR2VUY2c0doWUJSRG5ibFh1YnhFRTQ0dEkxSDNQdEMtZ3FkUGFrajZqcF9VTGNsTGNvMTZBT3hMTTVoOHR6Zk9TcEV3VS1iOGxhU0RiTXFCMTRCaEpqeGFhbGxocHdRVDBrS05VV1RweWxDV3dmYmMxUFhzdXRDSnlpNURKXzJBU2JfcHAxc1JjdW1KSHJ4b1NPSjZ3R1lUeXZqVmJweWg",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "139c2ce6-a4c3-4f90-bbed-b41d893da4f8",
+    "title": "Infosys shares tumble over 8%, hit 52-week low as Accenture's guidance cut rattles investors - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxNaXh3dlc0M1ZKNDBxRzNNeVNaZEFCZUg5a1ZBM05OSXFySXNha2h1ZWZMem5ZaWtGSTFUVkxSR0U5Y2JJR3BEb1pPYXhiRUszYW5PQ181LXpVX0NTVHJ6bGFZalpWNFRJem5kVjhEV2dlTFVRNDRRSEdBejJMdzdZcTJEN0ZWS3l2d2Y4WFpoVWZfRHZHcnAtWlN3MV9hMW1vV1R6R2ZJLVo1RUhkU3RMV0VYMUhoLTMzaU0wcDdYM0lzc0czZ2lIVG5jRjIzMWwyMlVVUXRBcTMxUFE4WE4yblRuMA",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "bc63c328-cfe5-4573-ae4d-0a8378b5dfa4",
+    "title": "Stocks to Watch today: IRFC, Yes Bank, Ola, NLC India, Bajaj Auto, Infosys - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxQdG1SSnV1eU9JcGdBMG9EUWwtTmJXYWx3V1JmV3JQZWNJbV9iSW9DYWNFYzlCUjVud05aOVhCZEtqMm1Pb01FdFhfNE1uLTBRbUo4cHlaVF90cWh4WmlVaGZ4WlNTR0ZJWXhlOEJUUXBqWVZwano4c1VYLVpqRGxjdllWLU44MEVvLUM1eGNoeTh0bkw5dXI1aWFlQkdfUXNZcHNNdDVraUdrcW44aDFfTXd4ZmZoSW1zbE5TY2szYUxRaUI1d3FCeTYySm9tXzM50gHWAUFVX3lxTE9ZRTJYbkNvS2JiZzV2eHVoWjdWbHV1RlNlc0JJWk1nU1F2a2J6S3p6aWQtZmRZbE1KZ2xRYmJNZkZTSUJtLS1od2lGTG5aOFNBLV9jQUloWlVCVVBCYjNDVlo2bWM5VVR6WEVuUGZqWnRtdHFrS3U5V2NJWnNNWTFKaS1vaDYzOG9vU2gwTlh1NFBWWVlwRDZWSzNrZWwteXlEVWxKNGFzZlJOVnozbzZ6OC1xeUd2YmNGXzFYeDdOWlRhU2xnS2txUEMzUmgxV2FfUTU0Q3c",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "5aa6a2b9-2d25-405c-82ca-21b3036be546",
+    "title": "Tata Avinya ICE Model In the Works - Hybrid or Petrol? - CarLelo",
+    "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxPcFA5UXZOd2xkSUV0TngwWTV2eXdVbEktR3Z4Mk82cTdKRzlBRWM0RHBDOVRaeWxveWNXeFI0cERuaWU3b1NNdEg4LVBsUE9abi1lcFBwZnRpQ0dGTnR5Y09wVzE4N1lQWFZlMk05SkVfcVIzTmZ0RklUeGU3OUlRNWlKT0R6NDA",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "198e63b9-7e8f-46fd-a37a-3a2cb281b6d7",
+    "title": "When Narayana Murthy stunned Madhavan with a tricky question in front of his wife - The Indian Express",
+    "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxPcElndzlnR25sSEhaRGtZTERUYmFRMWRTODRMYmpnYllwQWZWbVliRXBjU2liR2dROVlhLW91TXEtVnd1ci14N2I5UFAyd3YyLW8xRFRNUjZodm1MNWpfR25qTGZUcEVJcG1WQm51dUExdk1jUVhIbTladkFMUm0zaEJNc1llSjJPS0VNQmlEUktBeXVGaGp1aHoxUUtvQzRLclhEZzNzVEtIZGIxRl9vaDNtNjRvWVJUQ0lTUUR1NTFTOFYzMldyeDllb0hpQmtmbS00U1UzOU1KNzhaQ0xNOWpaeS1Ed9IB7AFBVV95cUxQa0VEQTVmd3ZNV1hRY2loaVkyN0JRcUstenNoM1ZhSkg2b0gwVnJKTWZEN2FUek14aDlsc2w0bHdJa0RVeHRYcUMweFozMEFtZDBWcElWS3g1Z2t3MFA0V1pxQWl5QWM0bm1vUm16OTNINnhKMkpQZDlRdVIxeXJHeDRNMFY0c0dBRVpkdV91UDBKSS1QcW56anBXYThkOUMxaW9vZHVaU2lxWGtKZmlWU2tnUFJKYl9hRDJwWFBBeFFMWmUtN3hrRzVDLUJEYTFkMnJDLVhTS25feE5CLXFKRTNoR3V5MGNQOW9VUQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "63c24a98-6262-494e-9623-b91a03809974",
+    "title": "Infosys, TCS, HCLTech Among IT Stocks To Watch As Wall Street Tech Selloff Deepens - News18",
+    "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxQeVhZaUlhbkZmNGROYWljaTBrR3JSRnJ5VFoxNW9odzhaSUdmY0VBUG5SbDloaGtSVUxnUzhvMWNvWEdwY2dYeU5OYnczc0RLNjFkWVpjSXlqSUJJSnRCZTRUQlZHV0xmM0I5Y1RremFqNEFETEczY1V6dVAtT2Q5TTNFbzA2d0pHZDk3aFZZakFvTnNCM040TUMyUmZBWmE1OWd3OHhnR0JGRDRwc01tbDZ1SmhRTVJ1cXprZjh5MDVRT3V3cE5QVkNaenZEOUdqZmpKVGVRUmlDTUHSAdsBQVVfeXFMUHlYWWlJYW5GZjRkTmFpY2kwa0dyUkZyeVRaMTVvaHc4WklHZmNFQVBuUmw5aGhrUlVMZ1M4bzFjb1hHcGNnWHlOTmJ3M3NESzYxZFlaY0l5aklCSUp0QmU0VEJWR1dMZjNCOWNUa3phajRBRExHM2NVenVQLU9kOU0zRW8wNndKR2Q5N2hWWWpBb05zQjNONE1DMlJmQVphNTlndzh4Z0dCRkQ0cHNNbWw2dUpoUU1SdXF6a2Y4eTA1UU91d3BOUFZDWnp2RDlHamZqSlRlUVJpQ01B",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "5d401b29-0d13-4ffc-8b4b-da66c88a8f1d",
+    "title": "IHH Healthcare, Infosys team up on a multi-country, AI-powered ERP boost - Frontier Enterprise",
+    "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxPQlVlbUU3NnhJeVNOVjV6UXdLQ2hOdktsb0JPdVdxX1lVV2JkSnc3RUdJMnlsVDM4N0ZPYXd2V2s2QU83aGxzd2I5ZFRMSnFvY0xvcy1rUW1DbnhBRHRlS0hZeGRXQUg5MUNyellyclNNQkVJalBWR3lnOVZmZS1FODBVblpWR3AtTU0tTGpNTExmdGJNWlJELXZEWWRMdDEteDZxNkNoMEhxM3c",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "0202428f-5736-400e-9013-a8a94bf59547",
+    "title": "Infosys shares in focus following 45th AGM; IT firm keen to tap $400 billion opportunity, says Nilekani - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi8AFBVV95cUxPR1JhRTZIRlpDeEt6Z2pLanVoWnZ3Zk9kSlJmaXlSUjRuUndZdmRFRlNTRjNxMkFqMWg3SF9JUE8yM09IdGpOQWgzTlc0dDR5SXBzcWNzRUhFdlp4WjNJdURQOHhHLWdGYVV3b2NuRUVfdFpfakw2Z0tPTnh1X21YTDRKLUtCWUtQMV9COVIySTYyS2VLUUVtYnZ3RWRNa0ZWaXlZQ01fWUNZNWd3Q1k5OGdHNkN2YmpDSjRuSDhNMVlwNlo3VjFKV09qT21hRDlocTQ4YWc0LXUyNHZHRUQ2YU5DaWx4bTBnSno5SzlSX2w",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "c40893f2-b607-44b5-a1d0-e78d93462b6f",
+    "title": "Infosys expands multi-year deal with GlobalFoundries for AI-led IT operations - CNBC TV18 - LinkedIn",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxQS203eDZFY2pydV9Dc1R6VWJMdFRBY0gwQjAxb21ScVdOdlBiNkY5UFBHVjRXNVlhVFFkYmE5NGtUcGZqOGt5LVlCOHNXLVh5c1hVRW05WnJ4UkdxYzZiSlJ1Q1VjdjNWR202eTFsR29mYVN4ZVlNRFZXTmNoT0Q3bUhpa2NCeEhQU1RFdGNWMlh6NUNKYVRwTk9rVUdldlFFV2JzVjVwYVZLSFB0X1hheDUwRjBEUFJwWTIzYUlCSGc4MnZ3UlE",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "616a6d6d-6b4f-4996-bfe2-63a24ea341f0",
+    "title": "Tata Altroz Could Finally Get a Turbo CNG Engine - CarLelo",
+    "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPcXJUanhxRGIwUjI5MXBQYnZySzlEYWI2UHVZUlkzdGpGQ09GYVppd1JCZmVBUHdlem83WXhLemdLZkZhdENSSER2NDk3dEdWSERBQXkwdVJ2aGtRcThUa3hUY21RSGVjdmJFRTVNRFBKT2stT3kwbjlpR0YzN01vMGE3RQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "d64554f1-6ca2-465f-91c1-60fd9d60ba43",
+    "title": "Infosys, Wipro ADRs crash up to 10% overnight; IT stocks set for weak start after Accenture\u2019s guidance... - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi_AFBVV95cUxQRUEweDhRamVaSlFCbVF6b09qOU5NMk1vWGNJaDN1cDVRbTJ6bVJyRjNJbmJvWVpDbGFUNy1XOUYyY3E1dmVFNGVjMnd6dDlHa1pySE5uOURtMC1ZVE5Xd3ozUnd0WVhhU3JpM0gyaEhNamdPTlJZb1doTTdTRGExcmVYNnIzcVFEeW0wUkNTWTdKcTRjdU5rLWMyRXprTTRYbnZYdVB1UEhxYlVBcnlPTWNyM1FUMzBVWmpxVFAwLXBrQ3hfVzBXalppV1cyRGtrWDZhUFlUbWNUSUxGc3J2RTRTelRwYV9ERHB6aVk4RE56SXJEUFBhaG43RXnSAYICQVVfeXFMUFBndmJkeTNvTDVWcFRvTjZPS1B1VjN3SFhmMmhuNXhBd0RDSXh5aUh6Q0pGbDBlQVk1V054MXZsYV9nbUdxcU0zVnNnWndzcmhKOVdnQk5Eek4xRHc3OW5Pb0pYVmJOLUhrRVRYUFZuc1VxZTVNODlXNUtlVnpmT2YzaThHVHdZbU9hcVhaYVRXZXpFbDJibHZyRjMzTDRCVzJTeFRpOVpDUEM5YURlY2k5RFYyTDFBa3hJQk95aXBtQUsxSEZRQWZfQmJwcnhBYk5BWV9nT0RCcTFoNjFwQVNDWWJ5eUhkbnlfUW9iM1FNZE1Kd1A1Z0I3LTNHSXhzUlhR",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "8999fefe-a878-46e5-816a-fa442e01078c",
+    "title": "Infosys bags three large deals worth $325 mn, including Volvo Cars deal - The Times of India",
+    "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxNdk44bTV3R3FCYkN4aHZvRXpqSWF5TU16WGtoVVNSRGU5aU93WlRBNHFiSGoyTGFpZ0hFOG1kaU9udjRsWFJFWUpMaUtMX25YZ2lrNXV2ZjFjU0MxYWxtVkpNYjNhekRVNjEwaHBFRHhVZTEzaE1fdGNHM0o4MnhyU01yTG1ybGt3Y3VzbTJhcGt5em1nYUgtY0xEVXdFQ1A2b1BNNXcwVHdiVmhsa2NXZUp6R1dfdUdBWkNBN2hiaU1jVGNYWkhrUkVaakNxLUFBQkRCRk1PdV9hYzB1aE1TaS1RQjVGamvSAewBQVVfeXFMT2lVZmQxWVVaMGhkWkM3MS1VZVRXR2FaeHBoTnR2Q2VzSXZzSzFPbGlHbnlnalVTM0U2TENNa1ZEOU9CMFpqRURLdnN6V3BMZXlvMEREdnNiN3VHRXFxdFkyVk8zbUp2VmU3N19hczdBR1AwY3VCMUdIbGpoM0JaZzhldjQ0UC1TWUZhbFBDbEx6dURRWFJvbXN4dlFJZ2ZTeElWYjc0VDdxTHR3eEl5dWp6ZGhMU1RwYk1qR01vQnVHcTZ5YjBwNkZVa1BrT3lidkFTc2VTMGw4ZTlROVFuLW9ocmFRcm03QkI2bWc",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "9c65bf44-6bea-404f-873c-7d7bc92889e2",
+    "title": "AI era requires fresh learning and new mental models: Infosys Chairman Nandan Nilekani - Deccan Herald",
+    "url": "https://news.google.com/rss/articles/CBMi2AFBVV95cUxPd1RiMjNZVUdhUnFNU0h1TDJpWGllNFBPU09sSWFMaHFqMnU0MFVEMFZ1RkRWX0NidjFjS3M0ajctQ1BaODhXb2ltd3lYSXZqN2twM2lzZzF0NlZLMEtSc05WT1ViZmU0MW5WNFJrTzR4YWYySi0tVDRFWVphcnJDbUNZajhSa2h3dGVGYmVkWDVoYktSMHY0OGxpODY3WGY4N2l1a1lSaUpBUnVfZl85bGVnNjNGREF6RU5OV04xUE5ncmMzSXBFc19nckQ2OHMyTzhFeklVMlI",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "96a5d1f5-d313-4e60-b3a0-02eb5fe75932",
+    "title": "Infosys\u2019 Salil Parekh topped IT CEO pay in FY26; here\u2019s what the big chiefs made - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxOaUxkNUdzTGR2ZWZiN1dOV3h4STJEV3FwMHMxaGJKdURvM0x0aUxaVnhxcFJuVkRxQUU2Z3RmdHhPNE16OTctT01WZ3FxSEhqbllfN1JOVVRPMEs4TVAya2hkVVVQTVZhdVJRZkY2bFhVdDVVazdVcHVKZXo0Tm1DU3hVYURwV054S0I4MTk3ZEh4MndadWx5VjN4WkhnbmhxcXlBMWh2SXp5cmx0MURheUFVelZkY2Z2SnVHVzY3SFZLSFd1SnR0TWhQV2lYMlpWM0JuVXdTLTFkdHF6YXREX2tYNkwtUTRl0gHuAUFVX3lxTE9WTHRzc0lQLUIwdGRMRGlQMlRrbUgyWEx3ZVZDVnZUMkEwQk9yLWtMMFlJUkExWDMtVDJrSVRLV2ptY1BtYVNDQl9odWg4UkR2cWpTZ2xGeUpXbk1VTTd0THh6cjYzQlByWVo1YzRVMVBiVkZiUDkwRmpiVkx0dDdiVjlOaG1lN0g1Y2xoclNNN1h1T3BRM3B1QkNxWWFGcWszbmZqS3BTZE5GZk5fQS05dGpGbFVicEMwbHpLYTRtLUV3WUFzZmN4bXl2V1JFNjIxcHpJRlNXUk91RzlIMGRNZjdsZWxYYVhOcExFTGc",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "cae56fd1-fd3b-411d-a126-31558cde40d2",
+    "title": "Infosys, Tech Mahindra, TCS Under Pressure: IT Stocks Crash To Three-Year Low After Accenture Sell-Off - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxOaWFBenNfUG5sUktRVXlKaHJ1dnJVVDgzS3BqbnJMLWJsaEJWb2FpcDNPSFBGeHRyYnhCaWhQYUZXdzBnZGw1LWVpU1ZraGt0R1ZPT2dCTFl6Vnp4VTFaMmZXYUFMNkdhUXYwdUtrQlZrRVpPQWQwTndybzVtcUh1Mk5UeFRmeVFRVXUxelJDSDlkRXBKX1oxT2s1aTRzdGJWZ3oxQ3BMSUFKdUJSV0JxSmo0eWtHSGNWU2U4SWdhNG5ManZHRFhBVnREcUFNQzA5dWhQMkxTWdIB3wFBVV95cUxPNDJ5MUZ3dkJkS2ZMVmZVX3JweVFNd0dWclRZM21KX2Mtb3VtZWtnbHo5eE8wYkpJSGJxQ3o4U3UyS1V6OWVNSW5nMWF4VTVjQTVWOTB1OWhkZXE2R3FvWHpNT0NhQTBHWG9WUmxSRXhzVzF0dWt3R3FEMHlKaTB0NTA0bWc3YXBiM3NRN3F3QmFMRVluUUgwb09lcjBxNWpXelp2UGc0czdCOXZ3WDUtd09MOFRrWlNqbUdUZlpjU1hrd1FyZmJtRkJ6c2RHRHdUMWRKZ21rRVBrZksyaWJF",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3f24bc18-6870-41c5-922c-dd41056afeba",
+    "title": "Nandan Nilekani On How AI Will Amplify IT Firms - Rediff",
+    "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxPR2tkQXlWMjJCVlFVejVsUFV0eldDNmxiQjlLYnphWmRFZmtXMHdkaVhEOVVlSmVIYWNEa2FCWk5IWHB3dm5NVTdrLW5TdmJYLTlEd1l2WDZzaF9JaHJyUElfYnZEZnRldnl3bWxleXV4czdxZTdpeWs4R1FFb2lTTWtwYjNVZGlEVGFZZ0lzVENKYUdnRjVTU3hxZF9hSVRBSTR6X0xLOEdEQdIBrAFBVV95cUxQLTlVZ0dQcFZaSWRjdklHdjRuTmJHSVdHWDcyaWVHb1lFWHFMYk5CNVhTLVVrbjlSYnhRQVBBVnFQdmR2dklqSHctbUdoaGk1V2o2STBON3BuaDRJWnJ5dzd1WlRuVWpQRk56bGxuMDVjd3F5MlVoUFlUcW5neEwtZFE1dUFDb2VFUTI5S0w0ZEd6NGp3MFA1T0k5dmYyZVl4ZDZUb0ZkVng3RXdp",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "b231adcf-7e40-4e08-a279-0523094f6d9a",
+    "title": "IT stocks sink: Nifty IT tumbles 6% as Infosys, TCS, HCL Tech slump after Accenture cuts guidance - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxQbER1d1hGMUhpUGNqdEtqYnF0azRRbFpDaXBMX2tSeERKMmlnS2h5NWp3Yk01a3RrcWVpdnJ1QUZOakF1dmRXSGduUlBMSHdKN2RDeFFNcXRuSnUwU0hJYkpaY2ZEdVpjeE5TSzk0UTFRTXVWdS1oV0E3TXp1WVV3X0o2TTRQbXRad1hpbTdMUTNicnlKQ19YQ09NX3N0eUNZVHYzN2V4Y0t2VmVZa2F1aFVwUGFIX0NzY1FJb29LMzdXYUlHYnRyem5mdVBHMjFRaXo3bDN6V1hwMWxW",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "0ed04ff5-21d8-44e4-b81a-7d5a0bb868dc",
+    "title": "Infosys ADRs crash over 8%, Wipro falls 6% after Accenture cuts annual revenue forecast - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxPX0VlYnliX0JieDYzRVk5WEZTNHMtT1B4aXQ0WkV0cXVneXJQWEoweWNJdDBSLUZlRTJtbDloQTRNT3pRM3lzZklsSmxzZUJWU2VNZXJCd0lGc0JMYmswLTIzT1pud1pCaHdvVmliVU5jRmR0bWxwUXk1bFpjSzctOW1NT1RhT19MMEplVVhCYXZ1R1hSajlPZnIybmxaSXg5Z1ZpUHhXemNZemNWZUJEcUhvc1o5NHhjaU9wSTQ5Rl9sQ0xERnY5NHVPSVZNaGJLQ0E0NEhZZXVOS1JfdVRaeGdDcEtrbmRXSks5NnJOMVE0bTTSAfgBQVVfeXFMUFNlZk43SmdER2Z5N1RmdC12U0xzT1Y1cnEyWjdMYXM1QTBXeFEzS1ZjRm9RcUF5by1SQzVOYnlvV2hUQjZyX3J2S0ZfU293N1MtNGxJc2RCaHpQalZzcEVfa19BQlRlWWtILUtBRHJoZGRYWnlZT1psbWt3dzVKYzBFaFFYbGVWaFBkekFNUTgtWVRzTkd0dHdZdWJXUzkxTENZd0xEWFVWd21QWGRHRkYxNG9nRVJ5VnFFYlc1a1phdXpnWThCdEV4LUlRd2ZQU0tDSjdJU3lvRmRObWtwd0lFZDdoeTh1eWx3ZnZQWDBEWGVjRmJaRDI",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "ce28914b-8b75-48c1-9fbc-de146a29a406",
+    "title": "Infosys, TCS and Wipro scale Microsoft 365 Copilot to over 300,000 employees - Microsoft Source",
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxOOG4zc2VVWGtUTllEdVFnd1BLVm9aRFlkM3EtU2dWQ2hMcTdqYUtIREFvdnZ1b2tTdEQxbkI0NmVfNmptNmEtanZqUmRkYTd3bGxRMkYyVHZmMjdkMzBRRGRqX2RGVUwxbmw2cGd1Q0NFMks3cWFqM0hiZXNiWTVlQXN5bW9YcXcwN2pBeUlLeG5uTFNiR19KUjVjWGVPanNDZlpvNnNSNWVwdGJMeHgyTWJVSGlucUlsUHZvdXQyRXQtRVE",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "ac3f11e3-d5c0-4924-8b5c-0efe0064dd0a",
+    "title": "AKTU Infosys Internship 2026 Announced: Free 4-Week Training Program for B.Tech Students - PW",
+    "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE9aTzNyLVJBVHZQcm9NQVhSN3pidDVra19vM2JCMzdiMjRmRlJzZ0E1ZFJWN2c4aFU3YllrbWFUM2JwLVd4eFRoZ2NIeWZXN19kUDVKWU5SUGtEWmJiQkI3OHJYdTVXOGZsaEZlZkpnZXhDT0hnQXlFVg",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "33221e1d-cc43-461a-ab97-cebe66d317cd",
+    "title": "Why IT stocks crashed today: Nifty IT, Infosys, TCS, Wipro slump as Accenture drags - BusinessLine",
+    "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxNWmg2RHFZYzBqTzVIbWl6SHR3aHdPdjBlVUtXN1VUdkV1M3NvR3pTNVlWYV96Ql9uNnNwNm91X1hxN3pUb0tLVHJQMDlHMzdUdGtzVXR6RFRwUUdVLWdjR01WREZzZlczNFJVeWItX3pOWUZ3R29fU0xHZ2R3TTNfSE1KM3FYX1ZzSWNNVmh6a2czN1B3LWRfNEZfNWdBSmRlRDV6YWNSdnFobmdPX3JkdXI4NDRDd2lNcGlJdHRfdVZJZEw2ZUlkM29zeFhNZFBoVldydHh5OENBOUdpNTBlMTgxTlZ5QdIB7AFBVV95cUxOMFZqaEYxQmxWQTZIWURGQTVsMS1kd0Y2UDVJY3NUY1QtMy13aU9CTDBVMzZBUHMzU0toakhwUW9LUnp4VmZJZ05kSmpla1BOazVnWWU3NkpsR3FfQXhoQ01UdmJRbXJpUENoeGFIWlVKYXZJNmQ5dEJtOVBNNUZaRzYxdlJfOHFZUkY2cDdJQmRRWnlpTnF5aWk0Sk5ZWkFyX01oWUFMRXB1TEJ6MUZ4S2s1c01zUGN6dFNnckYxYlByN3VzZlZoRlBGdUduVm84dm9aUV9KbzNQUXJZRUhzcUVyTE9sZ1RSamZ0WQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3a5ee8b5-0f5b-43f9-a4ec-bf3e11f0fbad",
+    "title": "AI will amplify, not replace companies that adapt fast: Nandan Nilekani - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMi0gJBVV95cUxPZzNpMkhlb3cwMEU3N251SmY2RERsYTZuYkpTdnZrc29sc2VGY0R6SzBuQnVWUi1LcDRMdzZlV2E3MlVZeUcxQ3JDT085ekZWTjdEMUpyM2ktTEJtcVVHNEp1SEhwRTJmS09EdDh4aFc0N3hsMF9TWnlSc1BaVGhHSDctVmRVYzRUQVB1R1d2bzdFRHcwdDE2STBJcHNKLTBQXzRZUnM0X1lqaGZtUjJ5d2oyWWlCak11NEZYeTJWN3BqY0ZMV0tOUTV6bEdHSWkwVjlBN0xJZ3BoUlFHdThWVlp2MngyOS1NZnR4SVAzVGlhT1NMY2VOd3k1dGxON3F0LUEycDF1cTFraVlTREl0MUQ0clQwN0dNcV9NMzI3Vmd4SXY0bzRDUTlpMHNDVDg4X2xHcDJuZmxmaHpJZWpoWHZVcGNhbURqeEp2SkxHMDB0QdIB7gFBVV95cUxOcVBpU01nZm1wSUdQdWl2ZnFVUl9DYmNQd2dRSWs3M2pqZ2U4Z3lXakdzOVJ5bVBIWTZ3RVVFTkpCazhzLW9oMUZNY05lMVdkSDNacXowSzN6eW5yWG9MdkVlbkVOWVBCOEVxMUcwUHROTzdRSnNkNDhmZEZaM05RSWZkbTZGeDloamNnS2VNN3FxU0R1cG0yN1pRRmI0b3JwVTRxbEVBNXBNNXNhMDlLLVhIMGNpM1VMLWJNbE1FbEpWU1hsV3NBaWNNQkJOdzk1T3hjckhubC1WWFRYNnAyMmdVWEQtZjgyT1VMbXBB",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "e92e46eb-2314-4ef3-ac1d-4b03ca0e5afb",
+    "title": "Infosys Says AI Won't Replace It, But Admits Need For Fresh Learnings, New Mental Models - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMiygFBVV95cUxOX0xUeklYSjBVelVxdTVBYWFtWmpDaWZvOGJNNWw3WGFxQzl6TEhsbnlNLU9EclQ5UXpBWjdKcF9MRFVFY1pwcFB2Y0tsa242Q29KTjFNcFlHOGZBaV9UQzF5NUpoSUxBelBlTVpEdzZSM2VEOUN1Ulc3T2laeDRPeGkwellXQVRqUTcxVTdHWGlLUlhsTzZJdURUVWJPWGpLRjUyS25GNWR5WmlGdFQwUWNMeU5BeHlYVDhPdWx6QnY1RVRqbGRyWmNB0gHSAUFVX3lxTE91NUc0cG1QMnRtVEpaVzFwX0hoMUFzd3BJUDdmZ1RlZDFONG8yRVRTSEpTZF8wb3BQYVIzaTAxSkZSem5FMkNXZVlDeHFBMzQxRy1RMlRVSWNRMG9iMndIYU5tX0FDejMwUVpKdEh4WmVZZUJoVXNUOERZQ3hWb0tlTmFPMS11dGVzUDgyRy10MTEzU0pDd1BrMzd6WUUxMDVkYkZwX3JZSGlEcUZaY1U5UTVfdy1jWlJtR2d4T1AyaS1vWUFITkR6cEdUOGoyQktPdw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "94854517-9403-43dd-a90a-a85e2895faaa",
+    "title": "Infosys Expands Collaboration With GlobalFoundries To Accelerate AI-Driven Transformation Of IT Operations - TradingView",
+    "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxPa3RaT2VFaVlYc1llS0RkTTdGajlPNlJFTTU5a05GVjhWR1FLUlNQNG1SWk5SVERhVVJmX2cwRC1SQUhwc3NrZjhsbFAzNXg5OXZUNWNuQmpEb1lMTDRYQ3pmejY0RTB3U1pIbVJZNEljVk9panVMYml5a3pKNTE5RHBtelNhemFrcDBNZFBUZmUwZ25yUUlZV2t3cWkxVTlrOW9CdWp3Wm5UTzBaT3dZWmZ1Q21FS0tpSDdpX1NLbFBKdEZEUlBsdm5xblZZb2FnU1VEN0JDdUN4c09KVndLbDZEVExSXzVFWE5iYTc5QjgtUWRueDFTSFVNSF80TUtEcXpWX01USQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "00b958d3-a932-43cb-8523-be4dbd6e1a2f",
+    "title": "Nifty IT slumps 6%, Infosys, TCS stocks crash up to 8% as Accenture guidance cut sparks sell-off - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi8gFBVV95cUxNUEVaOUdmWlUtdWZVbUFqSjZvSkoyQjNDWnhLZGVIaW16alZOUk8xaHFwMHNWSGZJYzR0LXhQSmRTTlYyZWZKNV9kNGxVaGMzcGZCVXlpaUZuSjA4S3c3SVAtYWdTUV8ybDFHTVNjdkJCTTZfMF8wZkxib0FSZV9HSlY4azZnX3VZLURKOXp2ajNBR0o2ZWpxaVp6SWlIQjlpVHlpNnhDa2FiTFhIQklkOTVfaTREN1gzeHc1V3FQLTFRNU5uRjFyYjNoYnJDR0syNk9pSlFqNGVFQ01CTF9CSDVSVTNham1uWTFwSVZoZjJnZ9IB9wFBVV95cUxNRC1xT3pJTzVJV1NIdHZGMWhSTnprZlJPdC1nN0V2c05YZDR4WUZ4Y0dTMm5lQ3VfNHVIWFJfMVdiNmR5aEJIemFOZy01b19sUjl3Yzd4djBqbTA1RUMxZzQyZjc2b21Dd1NHczI2RkVDS0JVNnBmR0EtWWlLWElMdWJzdUxPZDNhX3B3cllMVThaRndoc1JkcGF1S0J1cTVMNmFkVmYzamh4a1VBU2NxMEFBNzJHeWxqYUFRQUNHemE4amY1SWhOMzl4alpxVGZoanJ4RzdMNkJHakJXc25vcEt1M3RHZjR5eFVna2tUN08yS2VMV3g4",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "cbbad6c5-5ac9-4733-af1b-d972924b5ed1",
+    "title": "Infosys expands multi-year deal with GlobalFoundries for AI-led IT operations - CNBC TV18",
+    "url": "https://news.google.com/rss/articles/CBMi2AFBVV95cUxPSkxBT1hfc3NzbHZYODZlZkt2TmpBeFA4NG45UmlzaHdId1g5djB1bkdSaWdrSFZvbDJLUXVNVm5JaW1NQlhlaERMU2ktTEVMaFp6TGxwUFpqN1MtQzItMjJNdFZzamQwcXZvR3Bqa3o2QjgwT0lkZUZTN2dZRi1NZWlBX1ZNdG4xUGozdXpnX29kT20xOGotaUVBYk01eklPWHh0Sm4tM2JDSXk3b0p5YnFTc2tKU0RvelByMTJ1V1ZGTmZqV3pnQmNyYkFLU05HbF9pZDZnOVPSAd4BQVVfeXFMTllmaEpVemhLR0oxc1Y0NDFleDBrMEdqSFdaWXhXY3JuMUNWMnJ0ZS1Ienk0bEtIM1Q3eHN6SFFYVjF5RjVGR2ZoOVI2LTg2blBZUWx0dXFQZ205VE5LanFOcG9EZUhhNUVaTzVteU1LQmtTYnBtLW5CVW5tal84QXNvV1hzRWU1N0U1eWFqZWY3eGY1YjFVZ2ZOVThDQzNxVkxiY2xIWWd5LTlCTkVjUnNDZ0gzbk14OVU5TmQyeVJYNS1qYzZ3X2FmZ2ZVREtkUkFMcjNra0l0M2lmSml3",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "49bde399-7ae9-439c-88a1-e80907470fb2",
+    "title": "Accenture warning sends Infosys, TCS and HCLTech tumbling. Here's why - India Today",
+    "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPSEk1V2tvalgzTEwwb3QtZFl3SGtJZFpUMmxiTUNRSWZqc0tfWU9JakQ4SHd0WFkxMGVDY255bGRrdUZxbE94REVCbDNfWkNxQXVzMUpYQ0ZlXzN0eXJXcklHYjJ3VEU4LWYxcklCRk96dDRHd192WlpMVVFOOExLN2lFcU55dHl5U1dUUm8zNV9mQ1YyVUdBNGxFWWw0eFF3SkY2N3pRU2M1YWhSWUtFekNjZGtfNzFGaUo5RUI1WS1JVXB5MHBDcURDcWRJczc5dHQ5akVUQUpOMUHSAeABQVVfeXFMTU5YVDR0dFZVVVd6YXVxQTJpcHFTR1VtaHU0U3A5S0VfZ1RMZnVOdmRhS3NUVVVsMWtSUmJYRXM2MWJ6dE9BRVJiX3B0VnVnNElPT0diVC1HWC1YWnVzTnpxeUJxa1FPc3VoWmdtLURTWnpBdVZqa3gyM25iQmUzYlZzY1R1ZFpZREFFVEZIRVhfQ19IZTR4X3pmbENycmNBQ2MtTjAwNzVBcE5GajMwbEtVSGVZUGtrR3I1ajhXNzdmV0dXNEV5djBmQ2cyTGNaUEZJOElFQ2I1bkJVOVJTbjA",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "8d6f2d5b-f4bb-4db3-9d2c-3b5d6d662e90",
+    "title": "Infosys eyes $300-400 bn AI-first services opportunity by 2030: Nilekani - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMi1gFBVV95cUxPVHZpTjJqY0syQkM2cVZaOTlpT1k4T0VFdFY0SENJZ2Jkaks4TEN3Vy15bnYyNHIxNTdBMTlfTDM2MmdLYmtMUHNWTk9QMnBmdHNvVFBrLXZ2RzhyVnEzZTloS3FRV09INXJTbXl0ZF9WaGtDY0dsTkpTNGoyM253ZFRHTmppM0ZWOThfZGhRUjRoUWNRV3dfOTBneFNVQ05kNEF2WFNuclItS3JkSlo1Ukt0VVhMdVVOSk5IU2xpaHFfZkZUUWJTS1FHRUZ3bUktamN1bkFB0gHbAUFVX3lxTE1ZLTRpTlRVSmp3bWp1QmZiWnBrS1dNS09XemlRVUhvNTBqal93Uml2S2NsclYybXdmSktYZXYwdEk3UWJxdEgycmJVUVFOcUFtSE9EZmpyeW9JSDJ0bGVvaUMzeTd6bURpSkdvN1ZReEtsYmdsVDNBZnQyXzE0MjkzZUZWVHNrQzZUb2VTVFlmdDJ3LWdqdGdIYXIzU3VqNjZxUmRhX21hRHd0TUtkanowRFJ0ZG15ZVY1MTR2Z1ZhOGFGaks3em1ZWHVVOTVZeW51R1dKRHJLVjdJWQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "8d1700b3-a766-42e5-ae5e-3e8d92bc550e",
+    "title": "Infosys And 2 Indian Founder Led Stocks With Strong Return On Equity - simplywall.st",
+    "url": "https://news.google.com/rss/articles/CBMiygFBVV95cUxNYmxyaS1oeVROWXlWbnhZbUVXWVlBUkRpd3EyNXpGZnNBTFlKTWJpc1RPMGkyeTJtZjMySjRjb1BIQnBTYlVUZ0hBdGxHV1N4WGxPcldIcllEdVhsdm1GQjJXeUJjWWtLRmlRcS1MLTh2R2hjcTQ3VlU1NHd3NFRGTHY5dUprQUFQcWluVHZFWGJabTY1Tk5fb0JwOC16dHZ2dnlJZ1NfYmxqU3ZtM1ZWelFVekdIc3dZLWU2Ym1qOG9ZVXZmNG5uTFV30gHPAUFVX3lxTE5rcnZzdmRrbjVxak1zdlNzTURQaFdHRUpkU1JzcXAtWFR0SHNhUHJxTUJGZVJPV1VLclhCUmFpWnZ2aXpfRzUtNE1SNzkzY3NCa1ZyUTFQYlVVQ2dncjF6RS1zZU1STEppN0FxVFFnc2xRYmlYTk1yckZTVzJxaUtHcDktenY2WGlyVzFGQ0dEQmlWTWdZVks1dzZWMzFhT3ZHd0dlUlQxT24wY0Q2TlZQWmNydTJFYlQtcEtSbHNGcEcyQUFoUzJkYTZpekZHcw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "f3b40ba2-b544-4661-aa3e-6cf186361689",
+    "title": "Infosys Hirings: 20,000 Freshers Added In A Year Amid AI Bets - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxQWEhqbjdqcE1FLWQyRElKMzRhZmg2azRWT3RVb1Q5UFBZN1dGZjUySEk4aGM0T3IwX2xkcjU2cTdRWjY2Qk5BZnZHLW1pd0dtbHBaQUpvcVI5T21heHBQRVJjVDJJX0hpdlJmN0NsWFM4UEZQRFpuYk02X3J1Z2hNR1FnS3lNeTBiZnEwcXJ6dE01ZVFSdVZzYWdOOG9ldzRHUFZmSW9XcTbSAbABQVVfeXFMTTRERTVQa1lfZHhhNEZDZFJwMWZJcjNIV01jdnZWRWx5T250UXE5QkhkOVpHU1o5emdsNE50ZDkwdExXUzJIRG1zZV9pUm9ma251dHR3TWM3cU1mazBBQ2llWGRvRE5rTlk0OGRSMXlkMlNqZkUyU0ZGVzFTRWtlWDkyZDE0N0V5dHFZazBJb3lhS2dyaGsyMzhUZWNTeldGVktWVW1YR3FTRm5zVE1uUGk",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "811027a5-a025-46cb-abd4-5be27c7f0296",
+    "title": "Sensex ends 893 points lower, Nifty below 24,000; Infosys falls 3% - India Today",
+    "url": "https://news.google.com/rss/articles/CBMi1AFBVV95cUxOeWxSTTNWNi1vYng1bnZkdk5NUW1GMFRaV2ZCOEJiTDAxZUoxRU1TazByUWxZUU4zZURUOTRqZm8xaFNxVnBWa1h3YjVxaU5RXzJVQnBrS3dmM05CVmNzTlFUSFdWcWN0dWpRa2U5aTZMWW4yUUg0R2JMQ3pxLUR6Ry1TVDQ2ZGppUEJ1S2RoVG53ekctYjdXbmJJVEZtVTE1aWc3dzRjZzNCUzhrWnp6X1VhWTdrSUNXUTd2NWVXWG03Z2ctNllUWnVkOVZHUk9UNzJZMNIB2gFBVV95cUxQUnR2bGtha0s4S1NFZVpJN2VRU00xMm5MdkUtSV9KWS11NVItSGhXMllEVTgzS2gzcUowQ1l2cjVxVUIyZFhicXRPRDJvUDdUak5zRjUtcjBLWFpxRF9nbjlTRndPQ3NzNEFjMkJkc0E2b2dNcmdzOXRnNWpMV2tHOUpJVjRrNEd4V2tES1g1cTdXYmVvNmNsTVFQdjhQbWxGUnkxZ1RxdWRSQThoUW0wTWZpbHhBNmc0NXlwUXBkUzdvcHlHTDJ6S1FBczcyVFVoNWFOalpZbnk5Zw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "63a395fd-4d6b-4574-ac0d-d28238d972ee",
+    "title": "IT index falls 2% amid AI worries; TCS, Wipro, Infosys lead losses - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOLU9oQkVwSVM4X050S0RJcEhZV21CaTJhWDJLNlFTX0pna01BTVppaVpYWS1PR1diSS10cm44S1FGdG1XTENzS0Z6SW85VE0yQ0JFTlN5Yks5a1pDcGQwaFJicktZdVZSdlhGdHFQLWktUkdYTzhMc2JIRVZycmhqLWQ4V1p5Qk1Fd01GVzBnUXhIVGZobGFnYWRieEdlVHdJRk5xLWgxVndlOHExVnQxSW4xMzI2MnJTZ2RLWC1BMGlwYW5kU0HSAcsBQVVfeXFMTWlQbGFVRU1mMXktcU1TTjl2ak82XzRZUzlJTnBkeFltZXZuTGMxTWpSaGxGallERm1fbXhNaldwYzhod25jRTl5WkZra0xzUUtndHpWUkVRM3ZQSl9zMFd5SVJGYnVuV2tUcEdveWN6eGMyVnBjdjZkc0d2UUpmOVZ3TFpObGR6LTB3WDNab0dBUE9PR3Z3VE43U1Mzd3cxMGsweS1rOFhqMDhFRDJnbk5rbm82SUR5U2Y1OEszQ2lyMS1YV0pJY2ZTS28",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "54a69bc9-86ff-4df0-8ecd-21a5a0322af6",
+    "title": "Infosys, ANA's Global CMO Growth Council, and LIONS Unveil the CMO AI Hub \u2013 Company Announcement - Financial Times",
+    "url": "https://news.google.com/rss/articles/CBMimAFBVV95cUxPaGVBT3Zybng5dkppSlh1NkY2d0ZJa0ZGb0tHc2V1bTY2M0RNeERKdW9CYUl0Z2pVcGJkd0hrSjAxNl9hWHBhVkt4Q21EWWk0LTdaeTJXRlIzeXJNcy1mZDdVUUxEUktfOGIwVF9EclNpZWRkS1dGMkd2MEw5czI5RFRXMk9MRi1VR0hzcFRTOVgwYktwU0VUSw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "6c79acda-923e-4e84-9dcb-bd0d1bedf49d",
+    "title": "Nifty IT declines 2% on weak global tech cues; Infosys, TCS, Coforge among top losers - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxNZ2g2NnBTb3pkTmx0amhlSHFiOHltXzMxZ0t4TGRMNlY2bnhGVDRGUkFFYjhaWmZja3NrWk55bWZTSlR6c28yVkxOSTNyckFRN0lEVzl5NzVQMTFzVlFaUXp3QnlKMHV2MEFBSC1kZTdCUFo0Y0RncGhtSWl3ZWlobVcxSWNvZVVDX2tHcWplaDBTWFVRaVlTekx3TXk5MVFoQk1nRGY2bFdzSlcwdnhpaGwxUW9jc1lTZVFMSTMzR1NaYl9fYnUxckM0Y2tONFptT1B2YVFtQQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "ceb774e3-0c6d-400c-ab71-97533c89a820",
+    "title": "Accenture Q3 results impact: Infosys ADR trades 4.5% lower in pre-market trading - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPMEdOcjhuTXI4bVlnOXpSN2V6YVJnNjRPRXdIVUw0a3RZMW1fSnRDYWlNb2tQMVd5WF9jY3g0N1F2SHJ0RlpFNl8xcWlyd3FDRzFDakZnaEhvQ0p4SUpaTDF4R1JVbjBTM3pud0dPS3U4TWI4SUlxTDdrTWx0eE95d0o5TEUyZzVIN2I3WVZQOFdfY1BkcVJlSGs4eUlvSE5sdVhzQm1ncUxsc3E0VllDT2NBRURFSExkcjJsb1R0OXpvdUVIaGNZd3huUnphb0YxWVpxdkNWa3R5cFnSAeABQVVfeXFMUEptVXZrUGk5RDZTU1lmQmVqRlNXSHNRYXhTbUNQNHpkTFBfSnN3R003RHBRbUhwRm1XdlFEOUgzeE9aV3lBTTZWU3hEX2pfLTh6ZzItZEViTzFYcDBqMGtTV1dxOXNrV1hDRmUzNm5JUXZKTlNXRUx4X1cyUkMySDFGbVVweWdzRjhDRDN2OU5SVzAzWFVGczVNRUdJZ1B4aTRrbUtYcTQxTGY2UzRlS19aMjZtbzloWlZTY1dYaGhXcWRXMlNVREpPYS1LeEE4RWx5VmZkSlZjSExIM29LSVI",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3c73ce70-b118-4bbf-898e-3922754e3bf9",
+    "title": "Stocks to Watch for June 24: Infosys, IRFC, Honasa Consumer, Delhivery and more - CNBC TV18",
+    "url": "https://news.google.com/rss/articles/CBMiygFBVV95cUxPOGJ0XzRtbGd5Z24yeC1sajZMQkFkbzNDZEVXcjRiWlNPM1cxYS04N1Z1VHZtbFN3NWdtWURRM2VtY01QekRHcnVHTkY4blUxcnJQaEhkTzBVMzZUYUhORWg1RnpreFI2R2h0TDd2RU5oY0gtNFZ1VXRsMWxrVlVjdFVyU2liZGNnLUZRcG15Uk9xaFhFRlIzRWhheDVqNm9mNDlmeFdMWkdMSzIzWHlGMkIxSXJHakJ4TmUzOS1iTWh3T2dFMnRxcllR0gHPAUFVX3lxTFAtTTdiTDVxNTdHNWJpSXpNYnlYRzdZNHZlcWcyalExa2JnanluRTZpeUVpTE54Y3NRYWFBUFc4ZHByWjRLNEp6SF83cDl6TngzYVNTSGZCd05uRXZMaV9Hb1dreXpHMF8waG5JVHlWbTBpcGN1akxodTN1bXJhbVhxMERvLUllZG9oaXYzQWdhRmdwYUVnejhEeEJ3a1U4Z29kN2JyZ0gxUElhbE9pOUVmNTVEdG5weVY1el9Ed3JHVFg1TzNLamtSNFNkQ2l0QQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "9ad0a209-cddf-4c7d-9087-e03932383e7e",
+    "title": "Accenture's weak outlook rattles Indian IT; Infosys, Wipro ADRs tumble - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxNdzdaQURiSXN1MnJob1BaYXZUV3NyN042ZXNuQWp0V3lJNmxrQWtYZ2hCUnNsUHJiNk9aazBZSmo4R3hscFB0aXNYbmRNeTRUZ1cxQlZVZ0dVVjdlUWxyeHFGQ3UtemhoeWRoM01YOF9vNjZ6M05Hd3doSjNiM3JoVGpsZVZ3LUx5YnVlRnVBWVZCM185aHBwUVNFNmpvakJ5QlFVYTRqYjdVOHhuR0loS251UFVjVjJQMkRKVHRWNk90bFJ2QXZJOHJkOU1SVFVNQm43Y3ZaONIB3AFBVV95cUxPb04yX2VlVTN6WWVwb081ei1XWDZqM3RrQVo2Z29MRWE3T3U5bzhFU3dwZy1QYjRmZG1uV2MtS1RqS1JTT3RkMHc3REdWWVhuUTI1U2xZWlprNXZpN2Zac0tRZ2Q0cDdhYzVvaWFsZ0o3VnROT0NscHBnWW9FcWdUcDUxVlR0QVcwYkwwWk5YakZOZVhaTVRoSTBsOVZHR3VMOVhNWVhHaFcyY0ZsVjRyZkwzOVhON1ZET2JwdHktOEVRQlB0dkJ5c0xKOVhOM2hMRnZweFBpLUh0QkZo",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "2c7a5ffd-1068-4d74-87d3-7086d7c76327",
+    "title": "Infosys AGM: 'AI won't replace firms like ours', says Nandan Nilekani - CNBC TV18",
+    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxOb3BUU2RwYTVBUFlPaFpzbEIwZGlPM09XdkxKM2ExZzJWQUM1eVVscUprcDFFUGxwc1o2VHRQX1llTjRyVDRWN1MtZmROZ05pWVdQQmZlTWNsYTZHR0VvLTdWS290NXlHVHcwdGthMkhwMmZCU1FxZlgyNERDVU5YM1FuNGVrMUl5YnhqZk55TFJiUDJMVUxUNWUzTWRxNjhTbDRoLThJVzJ1T2o0Y0HSAbMBQVVfeXFMUEF5NnpRQnNtU2QxYjNqa3BROEppemRIdkpPOHphVGNuVmpySm4yamhvV0s0dDRLM2JkSWJicm9lQTRpNF96R0RleHdlNmgxS183SDZ5dGlia1FXcW9ibzlzbDJoQW9adndGeXA3VTAzUTR5eC1tZ2R2a0pYX2lmNmhhdHlNMnZmR0lMRkVmeFNhTHB1bTA4eXAwdU0zZjd0UGlkdVVRS3pnUExtc1hVV3RxVU0",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3a4fd803-44ef-450f-97d5-7c7645333df6",
+    "title": "Infosys Announces Expanded Collaboration With Globalfoundries - TradingView",
+    "url": "https://news.google.com/rss/articles/CBMiywFBVV95cUxQX3FwdHNGUTYyeTJtM3ZPSTkyZWNoeDlGN2ZrTUpvQ054dm55M2pFa2dRMWZlSHpVbGwxaHJ3dU9UZlVQN2dWcTFvTUNocWhKbkV0VjhXRXphcFFmMDg4Q3JHQzN0cDd4ZWNLWERIbTFQeWdzZlVPZFJLdnV5ekxFTzBFcGlKY2lYMllVT3l1cGphQ3FyRG1qZmt0dUt2cXk0VnVtMC1JMkcxZjJkUkw1VzFjbkZNOTdoaHc1ZjlseUxRaXgxRWZfaE9qSQ",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "f6d37408-bdc8-43fe-b88e-c9f67c1ce1c7",
+    "title": "Infosys (NSE:INFY) stock drags down Nifty IT, drives about 40% of index\u2019s recent drop - TechStock\u00b2",
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxNMTc5Ty1oX0JtbUlxLUpOWG5JaG9PVC1qY3g0d3BBU2NVWHNnT3RHc0ZJaVZ1WkNEZkppRFphUnNpM0tSTE1BdjF3VkxMcklBWThiZFgzTXJTTmxMTFBDN3FlUmFzM194VXVGLVBvSXN5S1NmOWNQcjJTTkRaSjAwTV9GNFRLenBneVFjbWhQemJNTmZCMWE0UHlHci1sZ2tHOFE",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "92b44940-8922-4620-bbfc-e03470966d44",
+    "title": "Infosys shares fall over 8% as US-listed ADR tanks overnight on Accenture earnings miss - CNBC TV18",
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxNaEhscEYxT0JKRlhtMVJ4VnZzbHpleUxlYlRUd25rdzl3SmtRTFVoVWxIc0EyVHF6SXJNZU5PMjcxaHo1Z0ktekI5bFdzbV9RVUROYm5EdUk5ajZpWmJqX1k3VFAzWVg5RjNyT2FWX2FuUjlhVnFTT3dmOWNkQ3FTMGRPOUpJV3AyTHFaQUVzVkFlcHFTSWtGVTNhNTJQUHB6X1FRZXM1QzQtU2R2QUFVYi1MZVBXSDg2Ukt1N1Z5LVRHY3BZ0gHKAUFVX3lxTE1DU1l1TERJUm1vbFAwTHNOd3ZrRnVQWTV0NGVYS1diSkFyZnhzQnRQMVlUbVZSTzVNU1d0M2JrNm5EZG1vRzF3VmFqMjc2bzBfMl9zTGpsMmJBd1AySDNNa0daQ003anpIaGtQSkVwbzFwNEE4aUNfTlJnODdwei1YdGluOV9GazlROGV1dHdHeHR0TFhFNWpSamVYM2FqS2ZaY3NsdXhIUTRQQlRiUGg0cE5nZFFPaVNWUDJzeDgyUDhKYjNIS0F3bUE",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "1fedfcd8-a481-4f5a-9407-bb7dd96dd746",
+    "title": "Why is Infosys ADR stock sliding today? By Investing.com - Investing.com India",
+    "url": "https://news.google.com/rss/articles/CBMioAFBVV95cUxNbS1VZWhtdjNUZDlPV0ExSmxJc3hCNlRYNENZLXM3SkNraWFxWU1ZU1ZWOERTdWMwLXdpbXBNdnpxWUpaUUxLWG5uSHgzTXhRR2VJRjZ5VDlQUEVTYkRJV2M1YzY2RTRTV1Z5bmpRMm1waVZQRWtVS3MtQzAxQm9yQUZHVWt0NVNMN2k4TkFYamVfbGphUlk1X3NHX2h1OENu",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "2e7ccbc5-fd05-455e-bbb9-a4abf221ce42",
+    "title": "Infosys reported front-runner for Sri Lanka e-NIC tender, raising sovereignty concerns - Biometric Update",
+    "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxNQTc1dldrNUFXcWRobUtfUFhiRzdVX1NBRjBJNlBVTFBoU0d3d2E0YjFGaWl1TmM2cUJBbXc4Xzc3X2d4RU1WTlhPcHE0RWRPVlRFbGpZRXl6SExnTWI0UXAzRXkwczdhTEhzYTlXSUxEYktYbVUtXzVUc2U0NndZdUxnWl9MdmowYTFxUng4b0tjZFNtUmJ2ejFJSDh5SGd0TVUzcElhMk1HQ3I0bms5S0ZGWE13OUZJRXpPV0ViX05hZw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "7f5e0135-bb84-4c0c-ba27-2e9dd441cd66",
+    "title": "Top gainers and losers, June 23: Infosys, Wipro, TCS fall over 3%, Cipla jumps 1%; check full list - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOem14SW5UaW01amE5MFVEcGtGVHNFMkZod0pTSlZYeHduOTBRY180OXFCaVZodzlMVHpXTWZMR3drc1d4ZEZsc21yeEZ5N1BjNzNVTWt2Qzg4dU9kYXBUbUNkTTlBWWl4QldkdGl0WHI1d24tUzZ1YUhaSVVNMFJDYkF0RzFPVXFZa01ZWDNMcWlpeHpTYnR0RGtteWFBaWRtaW1XVDlsLUhnRnNuR3RfRWw2Z01Gdm1kaVhtN2JSUjhZbEdEelVYRVJ4dFpoTTJLYkhBV0ZqS0xOaUt5WVNhSWFYYw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "3cfc85b4-884a-4f9b-959b-e572cab4706a",
+    "title": "Tata to add six New ICE nameplates by FY2031 - CarWale",
+    "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE9YNDBZdGJLOUUyQy16cVltcnEwdTBETkZicUQ4R0x3ejhJdmU4SEViLVVRa0poalB0elBIcmNxRjRQdE04cG1TYmRncnpXQWlCVE1WeHNfVXN3a0RJUlhSY0NwbXhzZmtzbkxWOHJ5T3ozZjFhQ0ZDR0x6TXFXWTg",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "1be8873f-5c87-409f-bc64-ebfdf99b84e0",
+    "title": "Nagaland Signs Memorandum of Agreement with Tata Motors for Procurement of 43 Buses to Boost Public Transport - News On AIR",
+    "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxORFctbktLNzd3bVdmYUJodWZlODY0dTJ4WFRYbkhEcnI3SHlReFBhZE4yQzlsWnVsRXJSczdHYnpmNmZBOUZpQ196RjZyUHFBMnhVb283NUJlZlB6QUVGajlvLUVyaWw1YjJscVZmYmcxWFlNYVA2NTY1M1JzWmNXNkkxWjN1eVFjbE51YVI3bW1jeEVYX2pubEFKcDRFNXdMb2xVSV9ya3lZWVlkcE9hVFpnTWYzLTROM2E0RUpCbTcxVUcyWFQ4NTdyVEdqc09C",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "c90f4e90-440f-4ee8-b1c6-ed6418c93cba",
+    "title": "Tata Motors to expand portfolio from 9 to 15 models by FY2031 - Autocar India",
+    "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxOZ1Y0aU1CVU5NYVRUck0xYWdIQmc0Z1Ztd1RVOGxQY3A2bjl1SE1ScU0tbTVqbHcwS2ZoWENKbjQ1dVJNelFhR1FwRnVaR2ZheXR4cE1ZaU45amdpU0c5bER5dDFmODZYbFVXcFZnUThSXzdKYjkza2dqMDlKUWF6N1ZOdWRVZFNZLTdQdWJQZVlSR1RERE1kZ1NDeTJ4QS1CV2VQOGxPQ0RJUdIBrwFBVV95cUxNMzNBaEZwY0ZfS0tkVDdXYnpELURRdjFYSTZ4Vzd2WklROVQySHBiVmp5ai1HOUtodnNSWVFNUW5VbnNkdlktRXNCNU84ZlM3WGdtZTd2YzhSYVR5cTFWVmlCSjBjU3RCYjZseDRQRjU0bnl3UkYyZkUwNGlia25oOWs3MnB2ejcwSngzaFJPM1YyMk9UMHotbktYY0RYZkZRb00yRGpmYzU1WjlfRDA4",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "80879314-d940-42b8-80c4-0868b264c1a1",
+    "title": "Tata Motors to Launch Six All-New Nameplates - 20+ Launches by FY2031 - CarLelo",
+    "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTFBTbUU4cjZyc1FCdkYyXzU5Vm9iaUQ5anl5dUNmVlBWdENoSFF3UDUwRER1YXF2R0tDZFlUazVXWHFEZHZvTWJIQ1pNeTgtNFZlVDVmRF9KRXMzSlRjdDVtazQ3akZ2UktlUjdUSmgxdGI0Y1FvekNhM20tUE5Ydw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "da282417-4240-405d-8b8c-abb5660565ee",
+    "title": "Waaree Energies, Trent, TechM, Tata Motors PV: MOFSL shares target prices - Business Today",
+    "url": "https://news.google.com/rss/articles/CBMi0wFBVV95cUxOTjZTd3hLU1dfWFItVzdlLVRWRW1WdzRFR0pGTnNudjRIMXM4cnI0d3I5bVNqclNtYWpyMWpxT0Nwc1pEQnJ1UEROWGx1M1B1TkdXT0NmS0JMenV0aWhEZ1ZKSFYzd1kybVJKbWFkQ1dzeUNMZDJZZ0FsMllYVlFDbmVxM0dXRlVYRjgzYlgxNTdPcFh6azl6VUFzNE9CXzMxWkRzUFBzMHFVd3kzb3NCcGNwWnB0Qmc4a3hQUU44UHk0cHoyV2N2Z2NicW1wbzlZVHBn0gHYAUFVX3lxTE1DRnZYM2VHUEFUVnQtb3UyWGh2N3oySDBlcnJ2X2FFN0xfMHdfYW5NTjVXcFlQQzlDbGRaeTk2Q1JHdEdiYWkxbnJzX2dsZ040QXFIM2xfTVE5MjRvSW5HQ0k2WVFxdE9pZGNsalpMdUFVTXNZOThOMTFZeDdoVzBSb3JzcFNZZXJSdzc1UWlDdS1FZ3MybWVSTVM4NldIZVFLWkM0SWZ1Yzl3Y1FKZjBaTHhVWDV6Tk9BMmM4cWpKaUhtcDFjVEtzZGRxVFYyVGxjeUI5MkVfSA",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "2683473d-429c-4af6-9ef9-8c0e0a2b26c5",
+    "title": "Tata Motors, Mahindra grab top two spots in ICCT's Global Automaker Ranking 2025 for EV energy efficiency - ET Auto",
+    "url": "https://news.google.com/rss/articles/CBMi9wFBVV95cUxNLU5TM2QxVm1RNmJpRXBKeHliMk04YjV1LXlzSVgyYmNrTWwwUXJWRHNIUjdBOVgzQkdnM0lESjBBSy1sMDNsR2xyTVNBVVQwWE9XVHRKa1QzVVNLcU5sUU5RT1lzV0J6UTVIS2Mtdjh5Q1k0elVxVTNpQVRPa1R2aVRON0JWcmlNMDZwMnJodmdwYU9KdFduOTRzdXRtUUU3UE95UjhPZXROZ25sN0trYmExbFYwZWFmbjVZUmJ2QWRwaUpIa1poQXp3cUttZFVaX1AycnVuSEt5UnVJR3JObm05ZlluQkJ0VHh6QzZYeVpNUTBMemRZ0gH8AUFVX3lxTE0tSkZueWFHSVNmZ1dpSlAtbURkbk40bW40Y3NDdTM1b3I2TVNOS1FSTzVqMnozek9FM3RGb3hMQTdEODRfVklwdU9iSmtFSEZTTFdxa3VoVWpkaW9YTFhvNjV4U3hVUkU1OC1PZ29lbEY4UTRZemRoeFZ4SHZDeU1TaEVWSG55eERuU1Y1bkFoYTBYT2RURWtqdEliRDliSkRKMU4yQkNGTkFXZGdYMlJMSXNNa1k5SWVQTVdKUGF0WkhYcFA0VHF2WnRyMEozanNBQzBCR1U0V1lYZ096Y01BcDYybGRvYTAzRjc1VVkwNkt0NWFBN3dXdU5kSA",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "228367a0-7488-4a10-a60b-a6feef6a94bb",
+    "title": "Tata Motors Bags Over 3,400 eCV Orders as Commercial EV Adoption Gains Momentum - Saur Energy",
+    "url": "https://news.google.com/rss/articles/CBMizAFBVV95cUxPVWs0aDJFZ05Gd1BVc3c4M0Vxb2RiYm1VbWRYd2xfU3QzWkRJd3FjbVdHMmhoU2pOVjBibGEtQzJEaE10NC03TkJvRGN2Zm5tZzk1MkU2Nmp4T2o0RUN6MU5SenBRN3E5U0ZjRFVnVmJCZXZEZjVjblZsNTZ1bDY1aUFVV1VUVVVVXzZxZlkxbm1VR0NhNllwczRoNTEzY2ZiTmpSSHhpU0hNRmNvUW9rdk9YcGpiRnhVaDR3TGlqdmI0S2pTa2MyTTl2OGw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "93778d88-1d27-45fa-acf2-2649d8ef52a3",
+    "title": "Tata Motors outlines aggressive product roadmap, eyes 15-model portfolio by FY2031 - India Today",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxPVGR4emtKcWJyYnBjbTNxQ1B4UktBdkNoNFhybVJGMTY3UjJqSnZCRFc2MUluaXBYQ0RIc2dXQkxSZGlqUXFjNEFOUFFzSWxDdVFGNE5jbm5vREg2bWlIWkZkQkhtTFVHOC1fd2JIT3RreEZQVDQ5c0xSNVFfc1NwaWZZc0FoMnBDdVg1SUs2T0VkQVFvNjdTcllzRHp3MmJxckZwOEFvbzFiSjJYbDZDQXo3M1FhQjlvcEIza2JmdUo0QnFHRHcxZm0wWUpid3prd094UUxDY0dzUdIB3wFBVV95cUxQX3lnM1RKMmlqdHMwcEUzSjM4UlZwMnN6Z0U4SUExNjYzTDJrczRfVFhwa0dpX2R4cHFxd1dJQVlZTXNxV3h5cXhGcnlVMkRKckVFUzVJMmpiempiNHpsem5ibGxTYzBMWFdkQ3hDOE5YWDdDY0c1ZzVaOXl2U0gyQ0FmQ2VaR05LX2R4UF9Tb3BRaXUwSWRQREtzTi1FMzYyeVBFSmY0cEFuR1F2WjFXOVpfRnZTZ0dKazBuNWxTX0NISFRqNVlMeVI1RjBxNlZQV2pyTG01ZnMxc3A3cnEw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "fc2c4700-7234-4a75-b73f-0918a550f787",
+    "title": "Stocks To Watch Today: IRFC OFS, Tata Motors' Rs 40,000-Crore Plan, Ola Electric In Focus - News18",
+    "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPMGo4cWJtcnptZk9CMUxPTjNLMlpsVEkwb0tPSDYxQkdrS085cUpRYTZqUkN1MVgzVmVVbDAzV1VPRjFXVzcyNm9ObGdZQmVXTW93aUFxUkthT2syNktGR0xUSTdUNldtcEpSMUl3VEUtVF90aU5Ic2VVYlo1em50UXM4UVhVNThodFY0eS1GdmhrcHktYnNYcHRKYUdEWDB2VTBjS0FpR2lUNkRBN1VFbldFSVZCckEwTFZyWS1fT2xPajRFQ3gwZUJvUDJzWW9XdXlKbjhpcFRhLUHSAeABQVVfeXFMTXdWVzM2Z3Z6QXNLN2ZFWUVlcEhYODZxcnNwUnZ3QndQenVFUHh5WjhvTW44U3FTRFJpb2tqVVg2azFLUGtCbGdRNmRGWHY4UDFDTk91MWo3RWdyUDlBZlNGY0Z6UEtfQzNXTVNXMkZMczVIcllFVlpOUmRQbXN5Mm9wQm5yWF9NRVoxdkNuUEZ4UTNMNnhneV9rZzJTR0phNW1yaG83MXpCNWtnNTZyV0hpLVgxYklQak14YXZOb1NRVWhsNWdLdG1laDBLQ25wOThWRG5xQnBiR2IxU1dUR3Y",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "eac8d19a-06fa-4b4d-8e06-517210a4b937",
+    "title": "Buy Tata Motors; target of Rs 600: Emkay Global Financial - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxPQVRXWThpX0kyX09yemcyY01fLU4wUEx0YVpmRGcwOVVNR3kwcE9qaUJQM3pDcWNiYlRSRk82NXBOT3lKODFrWU10QllCcW95VlBad3FxanJhbjNrUzBXbnpZT0h6SGtTQjZ4dEliTVdGdUhndG5ETXN1VmgwMDVRbWhoSmRMWHZVRktfNU1TcEc1YXhTRkJkRE8tS2Q3dnVUMjVUYmRWdndNSFNQY05CZV83NFdkczUyN0FISHVR0gHDAUFVX3lxTE5VVFhvc2R6NU5VMENyQmhWYnBxUmhpNThGLXBtdTk4OC1LdGtET3paSmxUcXFVZlhsd0Jnc1gtd2FBLWI1Z29OVk5wZ0hDbEtfdVhLRVpNdWpJY01IQUdleVBQYjMxYmtpYmphTjJ3bVZmeWNqMkdWS21Dcnd5X1RfdEJldExZb2w5MXkyUG12SF9KLWRqMHkybjlPUEZ1WjF0QUZqckJDTHlfWlBMaXRoQXMzMEtJcHpZR2ljYmczcEFKOA",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "d3079f6d-4255-4baf-bd84-4cd827836531",
+    "title": "Tata Motors Secures 3,400+ eCV Orders, Signals Scale-Up of Electric Commercial Mobility in India - Auto Punditz",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxQZndHWTFEQkQ1NU5mRnFmZ3hvYnluWXgtWXBOTEc5ZGNyeXk2eWFHLVdhdUdpN1hhTzlTOFBoMUhDTHJTR2lZSnMwbVdrNUhiTkpQQVlKT19CSGhrTG9PV3JNVTdkNTdDM2pEZFBtSF92UEhpT3VZdlFwSGNyekMxb0tXenNjMlNXWC1zVHNWR05KSVlfSHFja24taHRjdEllc1MwLWlsalNHVF9UbF93aFRwcEwxM2FVaGR3azJUazhaaHF3SFE",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "6fca5eae-7565-4813-9a8e-5e11945e43b0",
+    "title": "Tata Motors PV's Ambitious FY31 Roadmap Fails To Impress Brokerages \u2014 Check Targets, Outlook - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxQR1NUenZjSV9OMFllNndSSS1ZWVV4QnI1aTRZTGNwU2tzWEo0QjM2b0VidV9VZjREUi1UOHpxSnMyV1RZRGMyY19zNHNoZC1uVFJtcHhTTGZ0Ql9iVEcyNUV3cjlnemk0ZmRpZnRJWHd6bzFWY3VnOUp3aXdERHZrQUxEX0Z1RGs2dTNGejBCdWRkWTVFQmNLLUp2QXcxaHVTRnl0bTc4VzFtV0JzRWNJQ2o3RUhJc0NEak1UWFV6eHRra0FvdzMtR20xV2Z3UdIB1gFBVV95cUxNd0lrc09Jc2NqVVZEdU9tcVBGU3hremEyQVpydHUzTkNYbWJlQjBNcU1OWXpLa29hMnNZT0Q4QVNFSXpYTDRYMTJZbUZlSUs3UGNHdjQ4ZmlpajVIZjRRZW5zNXMwam02ZUdqZUd3TGxsMDJoa2RueHI0R0FxcElLWmw2RFd3QktQNnQ2dEFrWUhyWGx4Q2g4UVVBZjZzNFA5NUxyRF9nTzhtUzRYUDkyLUhMVlczYTVrYl9OX0ZXX1IyUnhHeVFYWEU3bmE5RDNPYjdNT3Rn",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "43765953-0334-4f3a-9996-fd930c28dfbe",
+    "title": "Tata Motors told to replace Harrier or refund Rs 21 lakh over \u2018life-threatening\u2019 defect - The Indian Express",
+    "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxNeGg4aWJTSjVwUHAtWURqWEZ0YWlFOUQ3ZVIxUEN5dERZeEg5dVVIZ2wyblBJM1pobWtheUUxN3l2WXBadWRfbDFLRjFfQS0tUEYxQmZ6QzFXQzd2WnJ6dDN5Qk0yXzJQRkRGWS04SjUzRWRyblRnb05MV2dMS1pFdmRmV3lGODBkbXh2SHdnRE4xUThsLXVMV0tiY2luU3dsUXJUbTJROFhkcS15MmRDVlpRZXIyYmZLWTh30gHCAUFVX3lxTFAtbWVPMS1sM3BvRXJ0ZUhZQk1yLU9tSEowS003Mkg0X3ZoLWpYLVdEWGVPR0ExbWdjdUlhZktFWGxiRngtdUNyWFFFQXRhSFNkWUlvY0lfQnR3TVpCODBmeDFLZjd4VWxZUjdVZWpYMW1OZHZrdkhieGsyUW5lWU1WaUMyMkNzTEJDcnFaeUxjSTIxS3g4N2t3Vks3eTM1aDBZNTkyRkNUdHBOWl9fVlo4OTE2eVJ0a2w5dlZoaGROXzV3",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "7db072e2-b75a-4c00-9f75-4e144e06934f",
+    "title": "Tata Sierra EV revealed - Autocar India",
+    "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTE1JcHlvWGVjTGdFekVzaGUzeHRpR0xBTVR0WnBheGpYXzJyWmhpNEZpQlRncHpabE5rdEw1VUZncmVpZG8zLUxYOEhOMGV5NFlWMU0zTlh2ZmY1S3JCR3AyRVZtdVVrRlVVVEM5MC1iQW1WWjhVU0xJ0gF8QVVfeXFMTk5ZQWUzczdveFlLMkVvaWdZeUl3Q2RiZTZXdkphU1lmalU1M2h1VFBrWXQ5OFpLWnQyQXVFT1pzMWQ4d19RTzFxWS1OVkNaY1FqdFYwZmphbzdwZWl6aV83LU93T25wSWZmSkhHQmtQWUR2cUJDSUNkek9ZTw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "9841da49-090f-4c1e-9834-6e6024c63a8b",
+    "title": "Tata Motors shares jump 5% on strong growth guidance. What are Nomura, other brokerages saying? - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMi-AFBVV95cUxNNGNDUjJSNnVlR1ZyTl9qdEVXME5xb0ZXZ3Bpci1pdmQ5Z0hHcjU0MVFTOVNYUk5WOG1CaEY4SGsySDBSZ2I4MUF0ZmVnSmRuZHFhMEQ4cC1ONUV5aW8tX0lJS3Jra1lDWXhHZy1FSGJ0V28wYkVIa2JOdnh2VXlmTmJEamNDUGZjeXhobkZYaE9uRlQ4b0VYMkpQeDFTcW9RXzFZWmRCVGlLc2lQNXd4WURBSHJ5a3ZYaWI4Z0NHRERGTTd6aVJTRDlaTndybG9Nel9WcVM3M3JMWXBtUWx1U0tEOGhZNFdfM2J0U09FVWd5VE55R0RVN9IB_gFBVV95cUxQVmZfN0JOb0FvN1FLajFMNktoU0pnRFRvYzhBQ3plc2JxSEktMXJaU0JWbHFyQWlVS291V0JXTUlpVF84RmdYYXAwT3Q4MnhHSXRoMGdNSEtRMTNIQnV5MmQyUG5BdjVNQjJ6LXNqU2sta0NFR0t2aUhrN091TG5hZTZhRVhuQkI4YWRFXzJkREV3ZFNCYVl4VkJMbnZwOWRJcUtUY1BrR0VVQ1gwWWhPdmR3RnpKY2lCZlNsSXlscTVDeDBXT2FNU2tnMlBSTDg5eThIZ1hkYllWbW5kYlI2eFdZQS1Kc2hhQzFlMDdBYTlFSzJfMWtvaVVJNVNidw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "fbd66271-c52c-4c2a-85bf-7e1d44d9c883",
+    "title": "Tata Motors secures order for over 3,400 electric commercial vehicles - Deccan Herald",
+    "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxPNzhTNFpmWmRYN3d4b040TnNYdVBMam0ybjFlYUs3WEIzeXJibVJtb3p0UHZSVmFyMUdxemZWdGpVN3FleW1udzQ3bXMwdjZRejBTakNPMm5qd1hoTENROUFNR1BGVUx4bU9VbmpsQ1dpaTFSUWZaMmxCZTFtTmR3bmV5b3l4SGhxZnR5VENYcTh4YW1ubmt6RklsVm5PY1hvcG02Qm5xS0dURTZmdm0xVUNnZjhMVjloY0tQeEZBSXRyQQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "c8bf5238-e65d-4c72-8b4e-f91cc44ef26a",
+    "title": "Tata Motors Plans Rs 40,000 Crore Capex, Targets 20% Market Share by FY31 - Daily Pioneer",
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxQdVFrN3otb1ZlTHRDdVpGTkRQWWJzWll0R2UyanFXNjdRWTJDTEhaVFJVWU5FWlhmNTJ2YzhWRDZ5S0xTNE5nNHZ3VTlFS1kzQ3NxRlBJZzhfcVQ4ZzN5clRPY0l0bFN5bGlBSUtiQndKMHpnMGk4RENOWmVTZTludS0zSEM1ai1kUEFyeHZYR3k",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "86ef5bd0-5052-481c-bd2f-ccf947050d4b",
+    "title": "Tata Motors: Motilal Oswal Reiterates 'Sell' on JLR Concerns, Cost Pressures \u2014 Check Target Price - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxONTJ6ZHF6UThoaWtUSlJZYU9IeFdsWlJkY3JjV1pwWDAxMmFnUzZTVDBweElkTjEtc2VfOXJQb2c1ZEtVRUJrT2IxZ05JNlVsVVNvVE02SWZZeEJFTF9LRFVQcERGQnR0WjZqZW01VmpxdGR4ZTk2QTFfbDdIdG1fUGFuczhob3Z3NE1DZU9UaG1fRmpKZWVYaE8zUFhKaGxRcG4wdEJwMURTM1pBUnY5bHo1YzlqTmlBVURGdldHSXc4RnpVdHlNdG9qNzJLclhm",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "88f0affe-9849-4859-a18e-b46f960596e0",
+    "title": "First Look At The Tata Sierra EV\u2019s Interior, Set For Another Climbing Record After The Harrier EV? - CarDekho",
+    "url": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxPMldJUDJqOTR5SEJlWkNEZTh2Mzc0LWZsdUxuSUd4aFJrYkVnd183UDB1aXczcDBBLUJveThDSDFYb1RNV0xVcWVCc2RIcXA1dmJqd1RodEJDQ3A0cU1iWVgyTngzWEltaW1oRDNRTDhwdThqRDRsRzA1QmxiNXBUcDUyTTJTQlZFZ3lXUW1RNDRQZnE4SU96dzd5SUsydEtmUmhJcXhyZ1VyMmNJVy1DRzZCU2xVNU42QmpQOTRLVTItbFF0TTBYellzdThiOExtYVJHXzNxUURfVnhxbGfSAeYBQVVfeXFMT1Y3cW5qZUZTQ01YbUQyWDR6djFQRi16NW5nYzRjc2F5VUtidkk4QnQ5NTdRVnRKeF9RdXFIQ3ZyeWVpcHYzUnVrTGt6M0Y5X2lhMmxiZjhIZkYwaGlPaFZJNXpIbmxjQ2ViVWJJZDJJdko0NFNDd1ZXclJhb3VYRll0QUUzc3JWRUJvQVF2eE0tcWxraEhoTHdVLU84aXktRGR1M25ScVlYWWxXY1RnOWNYSVhxbFU4Nk5seXJLNEJTZUt1LW1jc1huQWR5RTBNcWhqQzRWbEhfUC10S0dpYTFWeFJKcGc",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "d98466a9-aac9-4f32-b0df-a5e69c27c362",
+    "title": "2026 Tata Sierra EV Exterior Design Revealed: This Is What Latest Teaser Shows - ZigWheels.com",
+    "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxNb3JUT0RjQWxneEZocDdkQXdhaFhZcFB6cy14N2RjTlVEcFNycDdtakRhdWx3YXJRWmlFWVNPSUpxNWxFRjhrUUlfMmZqZmNUeFRqSWdJNXJVN1Y4RjhUWlo4bXJMMjBIYm8wNktIQjIzNUJBOF9IcDRWanZLWU9rRzF4dHBGeF9IRFpvUVJaVWZuOUdxZWxrekJSV2F0RVYyTHVLamdXdzBtOFgwdFN3blEtTmtlcXc",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "400fd8dc-a3c4-4e40-8915-14ba8faf2ea0",
+    "title": "Kangra Consumer Commission Orders Tata Motors To Replace Defective Harrier SUV Or Refund \u20b921.4 Lakh With... - Live Law",
+    "url": "https://news.google.com/rss/articles/CBMi8gFBVV95cUxQUXAyeGotX1JDOEJpX3g2VUZyWmpyZ1lZZmdkenJjV0hTcV9nWmpmcE5IaDFTdFpFeXplSVE5QzA2WGFLRDk1MngwQUhwbmtRMW9FNWJwWldkZVh0eVJpRnE0VE1pQWFEejhET05zN0h2UTNmY2ZZQmU0Wnp5OHhHbzRIeHhya0xYMHlULTRuZllSUUJoSUloa21DTC03VTdEaWpybGpGeEoyUTBhUWhLcm81OXlTaGhIZ3V5cXhIcVhGZExQUXVTVlNpVC1PSUdaMWVzR3FMUTQ3ZE9NOVpZcWNkQlJvOHhURTgyc1kwM2tCQdIB8gFBVV95cUxQUXAyeGotX1JDOEJpX3g2VUZyWmpyZ1lZZmdkenJjV0hTcV9nWmpmcE5IaDFTdFpFeXplSVE5QzA2WGFLRDk1MngwQUhwbmtRMW9FNWJwWldkZVh0eVJpRnE0VE1pQWFEejhET05zN0h2UTNmY2ZZQmU0Wnp5OHhHbzRIeHhya0xYMHlULTRuZllSUUJoSUloa21DTC03VTdEaWpybGpGeEoyUTBhUWhLcm81OXlTaGhIZ3V5cXhIcVhGZExQUXVTVlNpVC1PSUdaMWVzR3FMUTQ3ZE9NOVpZcWNkQlJvOHhURTgyc1kwM2tCQQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "fba4c9fd-9079-4707-9ca5-9a49a5befd51",
+    "title": "Tata Motors shares rise after 3,400-plus EV order win - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxPeG5xLTdkNHdMaXlBSGZRZG5ERXFMamlXaFk4VWstaVF3TmoyVVhaeS1LcjdrdmZtMEhMQkFWTFRGMjdHc2lrRHF2LVpnT2w3aTdNYV9KcEZ6ZFBldXlSVzJqUmFSV0E0NFh1MzdkdDg1aGJaSmdkbjd0N0UxemNlVUNLUUxRRjdRSGRPenU0REtYMEppZ1dsLUtJMVVtT3Eza1premZkd1NzZ3hyOTM1MC1BVlh1eEItRE52WkducjRCT3dLYTJwZWQ5MjR3MkJvZTNYcWNVNXo1NGZl",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "a066b2bc-cdf2-46b0-b7ab-5486fa8d9fae",
+    "title": "Tata Motors bets \u20b940,000 crore on premium car boom - BusinessLine",
+    "url": "https://news.google.com/rss/articles/CBMitgFBVV95cUxPZjNjY3FTZkVMM05DanhSQUpOaExFN3YxeXI4bEhEd00xajBqSktWNkxiQzJwZU1teko2dEg3aTBaLS0telczUm45cHVCak5HTUZaVXFBVWp4Wi1QMGFlSHZFbnJibTVqTmFYQXVfX2lybGpxWW1HNzVWR0QtWTFkbHpXRWk1S0RBR0RxOWtTOGd6OUNGRzNKLTdCemZHdkVTSGtCU1QyQjU2UWlMX1RqcEZ4MlZtQQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "367f9c39-601b-4203-946b-1f9d1260c4e8",
+    "title": "We Have New Tesla Cybercab Specs Before You're Supposed to See Them Thanks to EPA Documents - Car and Driver",
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxOTGtPRlF3VENUSlhwbk50dlNtejM0ZlFQQ09CczZDQWV3YnVTSEd6bUV2UV9uV2NDNV9MOWtGYnZPY3RuN1k5VHBqdWNXU240ZGFhWDhZd0JQUWpXQl93N3RRMmJOOWRmUnN5RWZHTWEzQmxzaFc1dHBTNUdHWVpVa0RYQ2lXa1hXT3FacS1lSDM0QQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "60b670d7-6261-414b-84f9-69c459af2c53",
+    "title": "Tata Motors Lines Up 20-Plus Product Interventions in Push for 20% PV Market Share by FY31 - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxOVXdMQUdZbTBkRFVBQVlqMHotOERDRXJ5OUpfNVpwdUc4WFhNZ01QZHBxTzg0MFdkZjZxamRhUjFIelNobFRfWEpEQ3ZKUWk3WU41azRETW9zQXZsX0FBdXFQQ1JKTk1CTWVPLThveVpUblRQeHVBYkNYeXVTdlFvMVB3R3JSZzlTaEtQRm9rSHJ5MFZWY01SNENxV3VMS1g4eWdaYTJ4QzRZVlRVdFUxS0FicmdaQ2JEeEpBdmJHeEZqSEhoOXpZT0tTQ0JkeVZH0gHYAUFVX3lxTE1sWGFEMUVCLXlZbVZBR0xSVFN4aFJZVkdSa2trRU45a3RKTHFQR2NtT3A0M3BnelV4aVVOV3BJcnhXT0dVakQtdXBRSmJJb0dZTEJoQ2w5TU9hSWlHMmdKeVJUQWEzMmU4MWdJUG5QR00xNjdFUTZGZjJ1TElMWUNsc0VOU2VTRjdvZzV6b2h1czhDRE1JMjdvR0Jzc1JUdFRlX1JCYUd4QXN5aUhySHdZSlNXVzVJOHU4Y0VwODljNDJwYTNJSUl2YjdVcVdxbl9RSXdQdURyOQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "c0ed986e-54c4-49fd-a143-9db3fea71ac3",
+    "title": "Here are Wednesday's biggest analyst calls: Nvidia, Tesla, Netflix, Broadcom, Micron, Lyft, AMD, Figma & more - CNBC",
+    "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxOeG5kVGY4dVlUdEphODZJTTBQSExjMG9aTjdpU0g2UUNzcS1QTTV2UDJ5MThwa0hmZmZzYk9YN1h0NzZDVXhrZ3JxdUFia1RhcnRlQnE5YWRnSHZWSTFFTG9yajhHNHZHdVlGbVhEcVVEa1EwLXJWWEh1WDJ3V05mamtqVlE5a0xYRnlPM0JCeVI4cTFfR0M2azdkMy1sQQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "c205e39c-043f-4991-98c8-f198cfbcd7cf",
+    "title": "Jim Cramer Remembers How He Was Criticized After Tesla, Inc. (TSLA)\u2019s IPO - Yahoo Finance",
+    "url": "https://news.google.com/rss/articles/CBMipAFBVV95cUxNc3NEZ1E4T3VicnVCRnV0MTBhU2xjWmFHSXgzYTBseVh0U2N6a2pyLVNGcWZhR3NrRUZGamdySmFvVmo4ZHNydlZHVUVqVjJoLU9WUl9KYTRPdThPRGdkOFJQM2RrQ0NTdzVmQS1zY0tucjRSeDNaMXdGR043Rjk2Y05EdlZRc05tcXA4RGotbFVaY1ZZSTZDaHd4dWJwcHdWd2VNdA",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "e79f7101-e1af-4da4-acf5-e83aea980ecc",
+    "title": "Tata plans 6 new models; targets 20% market share by FY2031 - Team-BHP",
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxQbzFOcTlJWlhaYkk2MG85WmZacGhNaVRwRjh1akZBdHQxdTB1cXU3dEFnZlFmN0F4REQ4T2pIVFVEU1gtc3B2U3NnaGY2RUhOckdDanVHLUxaT0g4VnU2Vy11ZFg2OUpqSklSb21GNzM5MFh6TmZhaFFDNnVaQzNPeGhsRHJDSzZBS29ZX9IBkgFBVV95cUxNcXNtQ1dzT0ROX0RmYmVDVXpwcXpXMTc2VkJBMjdaT25LR0ZvcGdnclJIVmpEbjZleEhtMm0tMHAwMHNOcFdIb09IYXloNERINEIwLVM2d1Z3WEVTRll6V01reXBmMGRxNTBYQXZPVzVYem5Rd1N6SUNQd2xkWVdleEdsSXRKamFyc09NWjUyZGdhUQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "4e289d46-7e3f-429b-9ec7-2e2c314d7a61",
+    "title": "Tata Motors PV's product spend hits Rs 36,500 crore, pipeline swells to Rs 76,000 crore - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi4gFBVV95cUxORktGSHVFTl9sY0E2Y1R1TXg4b3pkU19hQmlsU19aWnhFZmZWaGpQM3ZsN1JESE93VFEwdkpqY2ZiaDFPNkFIc2ExUmhMY0hJUEpRSkJ2eHZfYjZoNHloQ1FSQWYtWXdXRGluU0FiYkxZeUVSTlhyVUVCSXY3MW5XbnNKX09TOW5HSXo3RndIQ1QtQmlOQkdtYTNNUnpHQjVXZGxveXp3VGtORjc5ZjBieWxISzBHZER0YVluNVVIUURYUHZ1VDVnWnIzZjhLenZmaUxSRGVBWTY3N1RmSHRrV19B0gHnAUFVX3lxTFB1aERPdEN4SGpRYnowd2tJbnRrZDRSXzhJSXhVZE5GOE9qbnJQU050UFRqRHZjTWR1UzBEUHhEaGs1a3hXOTFBekVvdTFHWG1QdVV3S3BCWEhaNzhxNGh0eWFCYjh0TXM1NUlRZDFwZ2Y1SGxDaUdyR280amtKa3c5dUhMUnhvMTI2TnliYkxfeVBmQVQ1c2Z4RTdIdlNOd2h2ZElRejUzeWpaRUN0SWg0MjdTcEdCSUpxRkd1R0QwVHd4azl4aWxhczhXMzZvQzItNGFTNFlXenI0T2U2WkhBczlwVWwwWQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "09945bca-9b5c-4718-a753-cc8e90aa5c2e",
+    "title": "Rivian says Tesla-style self-driving is coming this year - Business Insider",
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPSWh1UkNfLUpxTmR1azkxSUw4VU1yUldzRjF6SDJhUHFYU3NDQzdrbVhPajVYTHBTb2FTdXI1ZUg5RDlNZ2hsUTJMOGRWOU5VQnprNGg3bHEwMnZNZ2FlSzhpQ0pueHRTRDdLalc0VHM5ODE5aHZ6MG1vRWVReUNOQm5PaFptMENFTE1GMU5kdw",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "2d47cc4a-2a34-41d0-a309-1cef4af94beb",
+    "title": "Tata Sierra EV revealed ahead of June 30 launch, to get all-wheel drive setup - India Today",
+    "url": "https://news.google.com/rss/articles/CBMi0wFBVV95cUxPVlNYb1FESGVLNkJ2UTEtYXJ6c3VoTk5PZ3RpZGpQWjJRdGJScldtUWItNW1ySjI3R1Fyck14QjVwb3R3YjdCT0xjRjJqQ0NNaU9ZYnJOZlFqTTNiOEJvYzV5UkdkRjBGQ0FrUlp5UDQ3TmQxLUd3NGdnU1Y3VEN0T216V1ktUHdRMEhfWmpLdTBpaEpXQ0V3UVRkRnNRMExCMTFYOGhzc012SFVlX3A1RDhFLWRQN2pNb3l5Mmttc3NPTDVQaWN5REhBdFZSU1RQMkk00gHYAUFVX3lxTE1pbFlSWnRyMG54T0pod3gxaGtXbkVXdGpISEZ3bGpsUE9naDVrcmlOcTJlWFNzZ3B4b04wSUgxemJrOEFQQ1hHaXZhV1dWbXFFWVYzQmdDalNQNWk4TDF6MkQxa3VXS1NRcHlGWjE0cUp1QjJubERGOHZvQkFXVFprS2VGemZQdjFqUnFmSXpGNDFIODVyc0pMOEI0cnpNMXA3R3NEODM1aDhGOFJpVEoxVS1zblF4QmczRTViTzV4MXRsZDhPYzk2bTU2RzhOUGl6STVKOXc0Ng",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "bc1306a6-0ea5-4c39-ad6b-fbfac781e9b4",
+    "title": "Stocks in news: Vedanta, Honasa Consumer, IRCTC, Bajaj Auto, Tata Motors - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMi2AFBVV95cUxOcFl4NG1rTmVHd3NJLXZjdThRYmxoVndsd2lPVG04MUdCTW1NQTVpTFBaQ0s0Y2lWOURrc0NXVm5ZUnhnOFV6bEZJX2FURzlCdmtKMEVITG9TZ0VKSEJaeldWWFI3NnA4b21nZGp2Ti1KZkVuanNDR3cxNVlZMmJlSV9UdURRWE5NMUY0d2ZxVUZ4b2prbUJkWEs2X1Y5a0w5TWxxd25wUXdXRUNoa3N4V2QzejNUSlQwd1pkN3g2NHFmRUpfR0x0LTFHT2gxTjItcGZqVUhhS3jSAd4BQVVfeXFMTmNSaWZjSjROYzNvanZ4SXduNG1fY0JxaDJZY0tMZlNGajZ5cEc1OFZ1d3liTlI5NEV0X0I2dERJTGtSV1NQMnVPZ2ZHcUZoSXgxcjBpWHdLRzdTZGNGeVFETDJ5eXc0NVhySWtWVm5EWmVYZVpVdEN1U0ZKb2M3N3NVbmNLUFpETlc5em5TTlRNRFMzN1BIVWJPMXJ2S1oxdG5Kdnd4NFJsMXJJc1dLVkktb0cyTFVua09Kal9JdVJJXzBCanYtSU9aX2dnclpJblBEcnJXWTNISUl4UzRn",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "01972c91-bf2a-48f3-9b22-8fa59e8d586b",
+    "title": "India: Tata Motors secures over 3,400 electric CV orders - electrive.com",
+    "url": "https://news.google.com/rss/articles/CBMilwFBVV95cUxOSmZoNm9HSEF4V1FMWHRhM2pkSmg3WGYwQl9SYWFrYUV6WGd6YlFaNzEwd09ta1dSRjFkc2VCSnBCSEl3Y3cxMzdSejN4dDRPbVJKYmZyZUFEUTlNMnFGcHhSQm1BZVRIZGhXYW5DUXJzRW54S3pUV005Uk1UMDQtYTN2Si04RDhkaW85ZEpCZFBoRU1SYWxV",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "0e4ce075-c3ba-4de8-85df-921d8a63b3dd",
+    "title": "Who is the Indian entrepreneur tapped by Meta to lead WhatsApp? - Financial Times",
+    "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFBKY3dOY0pTM3Fpd2E0MkNMVkRGWnU4NzZqc1dwOUc3dC1DTmJOaGEwa21ONy1ITjQtV19VNXdRSFh6YzA1ZHBFbDRiSTNkSDRLSS1pbWNSeXdiS0JsUWw4d3QwWDJFamxxQU0tekEwTDM",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "2f59df9d-8ed2-495f-b0b7-ca46b79a03e7",
+    "title": "Meta halts worker tracking for AI training due to privacy fears - BBC",
+    "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE40ZUFOUnJIQk90TzBjX092eGoybjAwMGJ1ZEVJc2k2U3plTVdkQXRLZ2E2cFV4M1JfZGxQWnpoMnhYUU9PN25vd3pVaTF0a1k3eFpZdEk2bVVGQQ",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "0e5d1b20-174e-4aa3-993f-03649ce5ea45",
+    "title": "Tata Motors' Commercial Vehicle Division Sets Ambitious Growth Goals - India News Network",
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPdDFiZHpsQ0pyczFvZ1hrN2FWYmRjQWMxVjZnNGQwR2txUVJlLVBYc1c3Z19zOHVmQ0E2Z09Fal9zWTFfM2N3LXRIaUhQRk9LeEVxa3VPWlJJZUFFWHhodnRTR2QxeUFsR0swR3VEb0RIZ1NzQTI4ZVZYSGdPRDZaODhMOEZMdHZxTFJKaW9qT3VrV282QW9TWDB6M2s2dFdRTzhUX1dHT1BKSGZTN1oteS1n",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "74b4fdc9-a350-4589-9dbe-8cbda01c5cd2",
+    "title": "Tata Motors Joins MoRTH Commercial Vehicle Replacement Scheme for Delhi-NCR - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxONF9FNXI4a2M2WjY5a0R4bk5tX1VvYlhHaUtRUUtXYnN0RXF6Y19XM1JiX2hWMFF3TFlwbE5CdDh3ZnAwOFBHZkhJLVZBZTZjcU1GQ2hZalZSX2xOLUR4M2JEWkVpTnBRWTJoT1lVbFpEMnB3MEgyVWpsRkpCU1k4YXFNMFAtSDhmQlZfZTRocllEd0J3YUI3U1I4Vl9iU1hEYVBVUWtDSTZVQmo4UWRHOUdwa9IBuwFBVV95cUxPUHdyZk4xSUhrT0ptQlpZeWxOQ1JJa2JXRkxMUXllZHpLYUtRbWZpcEMweVpHbVNvSmhiZlh4V01tY2ZyZ0ZGb1F3VHJNeDFXWGxKZjJrQjAwNWZSRmhnT2NvMmlocW1EYVlvcXlNR2tBVzAtSnNLb2tvdGhwZjZ4X051LWo3RDdzaHpHa1BTRFFPOEVVczVEYWtibGFOYTVZMVpxRFg0ZkFoZXZoNmp2d3phcHNfZHVzYWNN",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "6b09c3e5-d5f3-4ba1-b400-f660288c7203",
+    "title": "Stocks in news: Vedanta, Honasa Consumer, IRCTC, Bajaj Auto, Tata Motors - India IPO",
+    "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxONGl2RWhPQ1RsNEZWLTRLTmF3NGdnVDl3SkViaDVzbE5ZcHZCVF9XQkh4WHRQYXAtOGFPM0xoMl94MHdvZ0tGczdFNFZjcF9WS3p0Qk5zQTZCaExPRWpqd2FPQ0F5WWZuTXFVcW1ZM0NDRGdsUTdfc05XR2luU25WMmlDbXZIVEFaSW96azNsZW5WaGxnYXlIRGpDNHdCSXhBNmJiSE5R",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "5dada901-38d5-48bb-a41b-baaeb4191ec6",
+    "title": "Tata Motors has secured 500 e-bus orders as electric commercial vehicle bookings exceed 3,400 units - Sustainable Bus",
+    "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxQNTFqbUVVTVg2Mk5SQzgzVTZqajViWGxHYVdfdW5OZXkxclJxQlp2eHI3Vk9USXd5TWNHUnpoOGRjdFhhTkNsaFY4ZkdabzIwRUhjTTJFcExUMDFxTXkxWWhBdGJWRVl3NzlrSEU5cGx6RG5YRFU1OEE0bVRjQ3dwYUJBZXpsRnlmbGJhVDZn",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "62df477d-764e-4dcd-876c-4a7ecae295eb",
+    "title": "Tata Sierra EV Revealed: New Teaser Shows SUV Climbing Giant Sand Dune - DriveSpark",
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxQSzRnMkZ5WjBHYWt6eW92QmVOR2R1TER4VnpKZThnUE5Bb1NaamJHN3hVSUVkQ3NTRVpmbmM1cklucHhOQmkxeGczb2hsQ3VVRmhablJWMXdDbVNTblhPcjY0amZxRDNXVFdrOFExbUxlTGZMRXoyRnd1blpsX1RMNUtubnhwS3BCOHdiNFFVcXBfT2piQVlmX2l6Y3Z4VmZ4NDd0OVFfZndFSjhiZUdOMW5WYm9CNzVaNnc",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "e6fda599-1572-4fd9-8e3e-b364a187087b",
+    "title": "N Chandrasekaran\u2019s new mandate: Turn Tata Motors into a consumer brand powerhouse - Storyboard18",
+    "url": "https://news.google.com/rss/articles/CBMizAFBVV95cUxPVE9uSzNnQ2NMUFhwYmJobERSOTZWZWEzVFJTMVFtY3pkaC1SRC1VRzNxRV9MdDEwc0dFNDlxMUhCeDdhODFhZUVvUjZvcVE0MUEyYjlFM3NPblJLaFo2cDctRDVKWkJoOFR1Q2MtX19yM1h3bkkxOXFud3VubktKX1lRSzBSR2Q0eWp6VUF2elZnUHR4MFNRcHlnd0ZsN1VfVDItVnhGbEFHWUpiTllPaGZ3dGNPcktSVWNScFV3TWR5T0tTbGpBQ3dRYWPSAdIBQVVfeXFMT3BldVFwWUVrWm5vWWFMR0d6UU1iaFFhcWV3X3dTNTRtWXJxMzVodHp6YXo5akJuekczNzdZdWphY21ScWlTMkFSTU9hbUpfMWZTYzhTTHZJRXR0a2lXZ0pWcmtNMHdBc3U1ZnlTUVBidTBTaXl4bnZ5V1J4ZnkwLVd6ejRHSHg3YmExZFJTaGhKRG0wWEdPU3dFZ3Jva2Jzbm1WMW44Z2xNeE5nMlgwbV9SZmpLMGd6b1BoalpLeW5mYkdrUVpPZEVvVFpXRXRJZk1n",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "5f50b9e1-43c8-47ed-81d3-56efa3a173e6",
+    "title": "Tata Motors CV Share Price Jumps 4% on Bullish Brokerage Calls - Business Outreach Magazine",
+    "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPSFZvdmc0UmM1TmJZSFJVMU5GalRWdHJhZVJYT3FtNVFVUm1kYkZmTHg1bTR6SGYtX25sT1czVXhnc2x2cWhBNWVTR2pIX2ZCdE10S21RcHQ5MkVrbUxBZ3l2cmlId3lYcjdVZUZtbUpBRTdqVmJJTXAxeTJmXzhSRg",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "c516aa72-0ea3-4e69-9dd4-4b57fe58bc05",
+    "title": "Tata Sierra EV teased again: Tries to pull off rare feat! - The Times of India",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxOckR0RGxsMFppalVYZ1lwRjQtc0dyUGtlNjVYbFRoRFBFa0NzSGRVenpndUhnUnNDeDlHSWtXeHN3QURxSzFFTTZkZU9YUVFtSWVsM0JmQm43dGlJYlJseEYwMjBpT0JELUhuUGRNbk1ZeDFNM0I0b09wY0sxUlhXNEFmQTJMNzJmOFB6T1Nnb2hIenhvTW9tWmVJUmZKc29GREI0dTVfenltTHR2M1BueHVnWkVWaE4xa1EwZjRLeUVpbExBUWfSAcsBQVVfeXFMTWtjQ0hnRWhWZHhSelJmUUlmb1VibzlfemlaWXlybWR4Z18xNm1qOXd5OUJZZ0ExbnpFam16VWphYWVoQ1B3ejJpRUM4bDNvbmVJVEZSUEJlLXFUY1hxWXRGOUlJTEFTUjZja1lxcVZBMmYxX0V1bEFmYmhzdG5wRXdDaFJxdFo3Y3c0T2lsNzRPTEFkS2FBNUVaaGExZ0dCcDlfeTZCMDJjTEpRSkZub3JYdDF2YlNpRDFOa2xrcFVEeDVsZWhUMlhBZWs",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "460e7f63-70cb-437a-8295-081abb9b075b",
+    "title": "Tata Motors Secures Over 3,400 Electric Commercial Vehicle Orders Across Segments - Motorindia",
+    "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPNGZ3dGEyZmtvSHhheG51NHBCOVhGS0FpVkVYeENiUGdYNUV5SEVDXzR4elVPMF9QdUhza09SMTNaY1NTaWNyM0lFUV95ZDZqU0dpRGxoYWVMSThGVVY1WnFzRWF2UDJpMWZIWmpLTWpYbW5zZFA0eVJJTzFNUVByc0llVk1OU3d0NXBCaXpkcnB0UHVURmdzYnpiN2JScWVNczBDaURfbElnOFhQRXhGQWk1RQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "73595b71-273b-4074-9432-1c0aa25ae7c3",
+    "title": "Tata Motors shares gain 2% as firm secures over 3,400 electric commercial vehicle orders across segments - Upstox",
+    "url": "https://news.google.com/rss/articles/CBMi7AFBVV95cUxPUXAzWnotTVJtMk0xZGF3VjdWRVpDLTJSS2k2X25ONWpqWURhTDdYZFRNY0dxaVNmQU5lX0FZZkFmX2dhOUthNEdiMGhsVTZmbm9GRjc5U1lla3NtS21TY0xHZnE4X2dWTG9xWWJTb3F6cW5saWMyRkNXbW5JZ1RXRTBhQjRoeTdtUjQ0YklrcFVqamlQeFpKRXM5UEVhZmFYTFJUTGpPZFJjRGcxNVNKenJfZGR0VWhoLVlJdm5MVVJNMWpIY3NETHd6SE9BQ2VJbWRrclB0dk0zNnFGaV82ZVpzYmlPN1Z2SEozaQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "ea6cf926-7cee-40f8-8d3c-45eb044eda50",
+    "title": "Tata Motors Passenger Vehicles eyes 20% market share by FY31 - Business Today",
+    "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxQblNzU2p4Tm1HZnZoT3lkNGRLWVR1UHRodUt1LVFvRUFseUxJSkdBeEp2REJXOGlLQVRTYXZGdS0zV3JGUGlZUFBXQUVuUF9YQ0RWT3VVanJpdEVURUgxX2dGeF9Qcm91a0tqcHVDUXpLRlMyaExBR2JsRS1VeGFMSFloam1Yb2JURDlpUFk4LXBFZlJkeHNSa0dPNlRxS2pvQkw5eDVHcDNXUUhDZ0RQenZUUzMyVG9o0gG-AUFVX3lxTE4ya1k4YkhHbVF1X1E1YUdIcy1ZY0l3ZW9jV3V0V1VGZGFhb0ZYVmNGZFJpS2diemJrZmdUSFY1bjJrbDhzWEhibnJvZFpaQVEtMTdES0VzM2MtNWsxOUNNcXR6TnJJcm5jTm4xYWMxT2gxYXVPd1RnMTVMYV82Q3dybHd2SDgxQ0dvdVFFMVA4bk10TGZJQnVnSkNKZFJ4YTJtRkhTWDV6NHhZWmVMc2FiUk9JSUVIU2NfSE84Z0E",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "193a9916-58e8-4613-86a2-79ba02448299",
+    "title": "Tata Motors reports 3,400-plus eCV orders across India - Automotive World",
+    "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxQNGZ4Y0k4dU84SVVjdjhfWWNsS1Zoa3ljNml1V0hhMHM2aWg3a1hzOGpkWmlqX3p2WG9LY3pVS3k2ZnlOLTloaEZUNEtoM3kxRVhGWWMyR0oxTm9JbWotbUZDSWVCRWM5Y3lYYWFsMGNJUkRNb214SkRiVWxSMzZoOTFPUzlYY0d3VHlFc3lXb2QtcGlCRUE",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "4527ab60-8ee6-45ff-9f63-6f0a40487a06",
+    "title": "Tata Motors pitches Iveco deal as launchpad for global CV ambitions, signals shift beyond India-centric... - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMigAJBVV95cUxOZE0wM01laTZjTXpvUVRQZmdwSEV2T3VwcXBmMzZIZzI4aHUwZ2ctREx5UzZjclJJSGVFQlRkWVhsWGc0dnZqcnVQUzBqUGpjZjRrQjJVZmxUS0RVNlZ3Yl9Xd0VORFRfb25hUDgyYy1kYU1sRmR2RUxBYnN1TVp0Vk4zSEpFRXdBTTdsXzJzMTR4dVRsV1dHdEhNS3BFb29rb3JpZGlialZNVHFaVUNZVWNEVXE3RVpRczFLUEZ4cXJnT3Z6MnE2RzRid1RRZ0ZHTHRQQzVINWc2c1ZYcnUzNFAwUW4xZFRwZWwyM0ZNNndaMUtobzNRaEZBcWYtOFJr0gGGAkFVX3lxTE5Fc0FZX1JLa2FTVldVV1l3bWhNVFFlRTY0a2d5bkVzNEdqR05FUlpmWVVPZW53bGIyVU16elRSUld4QWlQTEl4cFRQcHMwYnBodVJyOHJYZ3cwU2FyWUxWQ3Z4bFg2WmJjLWVlZDl4OHpaMXdxY2hETDJlTGtDZ2wyUmVtWEllSW5pVl9yZ0NvdlFsenB4dWIyM2g4UnZIaXR0dW5ZU1hDVnpSU1dwQ1ZiNUlkUl82MjFKdGlKUDFoUmI4d0I2dTdyYjFTdUh2TnRScWlCemtlU0xfVlEtRmVfNjFvZUx2bVFKTDBvZG4xdkVrZFVCV2ljVDh6ZVpFNkNMTHh0NkE",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "62b9516d-f108-451e-b967-472448dc7d8a",
+    "title": "Tata Motors bags over 3,400 electric commercial vehicle orders across SCVs, trucks, buses - Fortune India",
+    "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxQb3RVUDhIMUlGT0VNeDhaUjJmRnEzdktVYU03UDdIVE1qTnFta09USDE5SXV4RDZpV1EwMXV1TWNVa0xYUWcxTEkzWENVaXpZYVlfNFhyZHJtRGdaX2tYYnNKVGY5aW5neFFOdDNvY2prMWdtV2N4Z1Z6SS1QWnlWTng0aEk3R3BIdVlTcE9JMDdfc3FLSmx6RjROcUR4WjF2M2hIUkU0Rk1KVDZZOEotUU9may1RRmdwdC1OZWJ6WHRTMk1zQmfSAdMBQVVfeXFMUG1ic2VhWUhQRVJYYWdYMmNHdVhNSzBXbjVPSEJscVdNR243dG5NRVd4aGRLOThDaTNwY21ZdlA5YTFMSTlkS09CamFuX0NGaExHaGJHcXpfbDd2Qk9xcnFCU205MFI3ZzJEVEU4djNQQkwzdWhLVmwyQWswN1RBZzF3Qk8tcEs3RFZGNW5PM2w0X0VjNFZHV3pTcFBZSHNjVGRUeTItcTVueGl5bzRzUUJqbDBjVjVEdFliMFF0eEVpYXZpRXdFVzctaTNVYk1RWllpSQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "f431161a-c01c-460f-a82f-2328f5dc03ff",
+    "title": "Maruti, M&M, Tata Motors eye UK EV market boost after India-UK trade pact - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxOcnpKb1hoUl9rUUFfVUV3d0FKRlBFVWVDT0hzRW14dzliZ01VZGJqLWh1RkJ3QlNUc3FHZ01HMmtIUmtGM3pHZzhNbmxEcHdFZmNua05mY1ZnUWFEcGJPMldrRXM4VFF4MFBuM1VYbkVPN09UUEgyWEljYnZrLVR3R3RzWnNpTUZ4cjl0cndjUHVFUHRsRWZ2WkUzN0dzM1VTSmk5VU1fZVVLZ1EzRTBpb3prSFY0UWhXQU5DSkJmRmhkUG8tOWZV0gHMAUFVX3lxTFBhZlJQUzhDTnpPR1NjclJmVldnVjhKQ2dISU5TNEdQRGhkdlJiaWFjaUd1eG04d01lSTd6YUFMbFVqczlPUTdTTXJBM1k1TjFiVGNDd2hkOUptdW03dWhnbHFrSW11RVpYUmxlQUptanJoQ0lleURvVHhfaGVvRHpGVVFDaXdaM0F5anBpVW1iWnB0RTc1RVlmX3QySi1Kd0VlWkRjRmxWWlZSeFBwZzl4MFFlaExNOTBRdjg0ZnZQdnlNVmFmMXkzXzJfRg",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "554dd75f-1f09-4af6-99f2-98a6c0a13054",
+    "title": "tata motors secures over 3 400 electric commercial vehicle orders across multiple segments - ICICI Direct",
+    "url": "https://news.google.com/rss/articles/CBMi4gFBVV95cUxOSV9SYnpiTlN2anh4ME9IUmptbVNqa3pFaW4zSEhXR2staUwyV2V2SHVQRTVBWUJBUmtwR0JBT0pMN3dXbDRXNlNxSldBQTdEWEV1azdWbFZJNC1IdWtDRUVNSEFMZm1MNjZONFAxLXdobVNmQzBJM1l6NHNCN2Vfblhjem5YampwODBjRXc2ZENiRzZxMjNmR3lRYTJUc2ZpQjdLMkhZME1scTluZUJsczBlTzdKT3htWm1yRThnWUt4cWFPM3hmamZ4NDZ0XzlMeElQZmJudlhWRTYwdGgtcWln",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "e09d411f-21be-464c-b97c-3723a160087b",
+    "title": "Brought home a Tata Sierra TGDI: Booking, delivery & first impressions - Team-BHP",
+    "url": "https://news.google.com/rss/articles/CBMimgFBVV95cUxQTF9wdEJNVnBZV2pXUEJlanVqMXNZcjRsQ3d6ZjdWUnJrVjFtSVNoX09XM0ZOMzg3b1k1SDlyeFVWWXU1ekdWQXcwTTRHVWtoUzJaWlBjTDlLZE5EcWlMNVYyMnUyWFFuWDhyMFBqd3hmcW5MMmhpbG9uVkpJRXJ6SlNta01GNlRYY2k5OF82TWNZVWhsZTlnOS1B0gGfAUFVX3lxTE8xMk5ZaEdDT0N6SklOR2J0TnowVFRkU3dtV045MllJb0VaTWYyZWkxVjI4Z2NsNl9oT0RzZl8tcTFwQ0wzR09zTmhNRGZyM2VIcGFGQW5YTlZIcDlwWmpQWEdyWUI2WUNlVC1lUVA2b0Q3Q0Z0dVJyYkE1OGhKUkxEdERIZlJ2LXdENEhlWGV0d3ZGTEpUQ0E3VHFuVXFFVQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "6dcf3332-5bcb-4f08-9882-e6985a189730",
+    "title": "Tata Avinya EV Interior Patent Reveals Dashboard, Steering Wheel Design - autoX",
+    "url": "https://news.google.com/rss/articles/CBMitAFBVV95cUxNN3Z6RkY1czN3b01YXzl5d25udlppRnR3MWJ2aG5URE5UYVd4eVg2STdhU1BLSHpxaVVEdGVTNll0WFRFNlNDWjNEdVVrY3JQcmhCQmRFdXdQWTdXU3dQX3B2NTIxaXFTWGxuZnAtNm4wdWx3WjFtakFVSEZYN2ZZc0hoR19XZWMteUZISUxhdnVDY0h1ZGhsU3BzbE0wcXhBV2dYdFNkRWtSUVlXa2c4c2dVYXk",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "2a86415c-823f-48cc-a7db-2acc152a2de3",
+    "title": "Travis County officials responding to deadly crash Wednesday morning near Tesla Gigafactory - KVUE",
+    "url": "https://news.google.com/rss/articles/CBMi7gFBVV95cUxQa2I4cGw1VHY5bGdmVTVfNkYzV29TQUVWdElSUGRSS3E3dlo5dXNYTWlmNEU4NGlVUU9XZkNacnMycE54RGRta0ltSnhUWnJ0eTAzTTNZTHg5T0dEdE0xa0ttdFYzaHRwa1hiNEZkQy11SmN2ZENMdHRKRXowVXJkMmptVTFscG1qQXA2bkdZZEhZT195WVV6WXQweWJoVmFKQnE2WFVKZEdpaHJoTVpFTjJaTFEtTG90Sjd2R2g2MjRnbmM1LWpRay0tTnRYaTRjdHV0V0VGS052c3RRalFYODRGRTg0WjVOeHktUzdn",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "33eb8041-8277-46e3-9fb3-9a3bff3d01d9",
+    "title": "Man Steers Tesla Through Fence and into Steve Benko Pool at Waveny; No Injuries [UPDATED] - NewCanaanite.com",
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxNNmp6Qmp0NGJPS0pXODJJT3ExVXAxZ2tYMjNRWE10N3Y4YjVrOEFqLTRzV3Q5SnhQUlVaTkJaZWZLWnJjdV8yc0VWYmluTm9oNlNyUGdLWk5mQVNkZzlOQVJkN3BfSzNtRFlYNXI1d1E1YXBidk5vc3JQZVFtNnZnLTNHWEFNMzZMeDdYeFlPcThUZnlKM0VmX0F4b3MxemtNanVRV3o5bnpoOFhpUHVfOHlIRU1fNVVGdUE",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "d49d2a83-1762-48db-b06b-c1dd548e2ff8",
+    "title": "Here's What The Tesla Lineup Will Look Like In The Next Few Years - CarBuzz",
+    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE9PZmRjMHc3TUFfeWVuZVR2Y29SUi1BV3RCM1hUTl9nbDZpYkRJQnEyQmRHMm9rWktWWDFFamdFaE1QZFlrMDAwTUxYdHN0aVhqUy1DVHEwVThUNS13WlhSVDc2aTlIZUE",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "fd879610-0e76-42dc-9232-6855e863d3df",
+    "title": "Tata Motors secures over 3,400 electric commercial vehicle orders - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi_AFBVV95cUxQNGdfU2hzUG9LYkp6ZW9YYmtCRElDOEZCcHFkQnlqYWljNzlHeU1UZFRBQzJvc1F1Tl9aZzBWTFdEY3RoYTVpMGlPOHZ6YXMwTWltZERiRFNJclBtTENPemJhN19FTVc3Q2E2Z1lyWmUwVWZvaFBfWkhheGZOMmdySzRNUVJMSWZzVExEbW9RTjU5d1BJYXdQVzRQZkx3Szh5NTk2bkgwdXVubDBqUEFTemxvMHdrV1ctcXU5ZEM1dHRVdmFpcUozWWp5WE4yWWxKZnlzTFZCWmp0WlRlcTR5MnRhYndud0JBV1FRajlRU25lZjVYaXkzb0d2cHE",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "d5b9b494-1567-4aec-b3b7-355aa24e0feb",
+    "title": "Tesla offers discounted home batteries in New England VPP push - Canary Media",
+    "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxOYWo5WEtKclhFVVlwSUJvb2xScDg0bUllZUZXbl9BQ0xOcHd0UFhlVVA0MEtDeDE2bGxpQ1lMM2VGV3BOeTNSR045MlFBS19YWGZfMjU3Q0h2WnhIQTNEbzFiT3VUN1ZRckVNbC1TLVFIamtrMlpidmxXVm9WSk01TTI0dUpLelNSOWdR",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "df7511b4-4632-41d6-9c88-649d20ff0d2d",
+    "title": "Elon Musk gets a $116 billion Tesla payday - Electrek",
+    "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOdzlQM2R4NGZBXzAwWG43LTFTdXFZT040WnFXZ1Jab1NzZmJqdGhWa1RNa05XTWxwcjNDcjk2Z2JFdEhFVldXQ0NkUlBvSEdlNnVGM3JRRWtwQW5xaWNDWnoxRUpHOTdqRUVvNlJIMklSQVlNckc0blhEeHBTZFNUX2toNExoWUlU",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "f1b20771-9e34-44ff-8a6f-ad16c0bc9729",
+    "title": "Tata Motors Investor Day recording available on website - scanx.trade",
+    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxNRHF5dmNlQXZCa0lWYkRzRkNGT0RQa25FM3RxOE9SX3kwS3FjTDJma2s3a2FKbEMyWGtlODlYaFVrMnQzQThPMVZKcFhidlFPbG51UzhPTnB6QVQ1dmptTmNja2VQS1hLNUphb3c4d1l6cURRTkVnRmtWVUhCX1hJQWM0dU12R2FSeFlzQTFZRHZvbGt4SzRuT25sS0VMOEFpTXVKa2Z4MUdSZkl4NVE",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "ecf34fc7-7471-4cd3-8cdb-25881c6db7c9",
+    "title": "Homegrown Carmakers Maruti, Tata Motors and M&M Explore UK EV Export Opportunities Under New Trade Pact - ACKO Drive",
+    "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxOQ2RBT2hsR0FMS1FTeng5Y2Zib0FTbFVKM2l5V2JNNVpwYng5QzhaVkJFRUxKRXZvaFdsYmd6SG8tbkg3aFljVGE4YTRFdDhxUERXbEE1a0RCUXBqRDFYZGU4Mkt2bVl5cFQtdi1xREVmb2RlMk5wQl9Wb1RYLWxmTjJ2b3hHX05TNmVnUlZNNm1HWlhTN2M0TWV3WTVCLVlWbkdHNlpBVG8xUkpXZHBGM1N0Y0w0NE14Mm1Yd3B3LXRlOWNNZFRDdnlSRS1LZzA",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "45c7982c-678f-434c-9c1f-e2e158cfc8be",
+    "title": "Sven Patuschka wins ETAuto Tech Award 2026 for CTO of the Year \u2013 Automotive Technology - ET Auto",
+    "url": "https://news.google.com/rss/articles/CBMi7gFBVV95cUxNRWZiQllJRzFXbzhqMjhSWlU4VGZBQkxJYXZtVGdzcHhrOTJOdzQtZGRobUl5YTZGREJNWENjVzBiQWQyam1TeDdSdDluRlI4eGJ6OTltSWUwakpZWk9YQkF3Y1BobWdBU3MyaHAxc2VpNl96VFZXSGtiN09hMmthbWFPSnFIV1NTMXc1QkZvMDJlY3RWZVFROWN2ZGpBYzlnRDRJQnVsM1A3Z1ZJUm1PTUdpcGl3UVdrcFFMNlJlc2E3UllSSXJJbXV6d1dBR0g4ZU1naEtOQzFmd2twYU5iOXlMY0I0UzBZdFEtNzVR0gHzAUFVX3lxTFBMN09yT0dPQmRVSERlV3JUdVp6Ni1VMkZZeGkyWjBwcjFybzVYZG5fR3ZBNzl6a2FTNVp5SllwLTdwUVZtcEZkY2ZtQmcxcVU2ejRXWmZEQ0t6SFl5U01wb1cxWDBOaTAwS1IzRzBfRHlCSGJWZlhSNFdqazhaTE14emdlRmNSQ2xNY0RrSk5adkFMQXB0ZmNlUDlWVDNseGJWdjRGbUZYbWZ2d25wekJTOTlJNnl6SUFrZWdrOGNFdURHZ3NEQzRPMlVkVzR0WGR3djBCS01WYmNpWk9kVzhfTnQxUzlQRjYtOEQwSXhiQ2lqYw",
+    "ground_truth_labels": []
+  },
+  {
+    "document_id": "1c96baae-dbc2-4bc3-8ea0-ff7f4eb50699",
+    "title": "Tata Motors CV bets on IVECO, EVs and AI Logistics to drive next growth phase - BusinessLine",
+    "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxQUHVhNHM0YzZ4X2l5MUUzVV9MY2hybFlUVnJKSUtxdWFHT2ItSUthdlNvbGFJc09nZFh6amw1MzV3SkZWZk1Za2tqQ0hFTnVjZmE3MktrVGM4Rmw4ODI5bjF1NzctakJVTkhOellScV85am4xMl9VYW55UFpLekJMeGt0YURMVUNLeXhZakx4eWg2eGxHejNYcmxoUHhYMVQ2OENScGY3N3dZeDVwaWRESENGQkJGTzk1TnJmeGt2VWxUY2x0a0JpcTE0ck5HVEhNWk9nY1VLT3FyMU3SAeIBQVVfeXFMTlg4TkxhWUZQYl8zNTFERk53RktZYmJlelRRbWI1NnBCdXFJYTFRSDEwdEM3bThQVDJiUl9tcFZyazFlZFdSTEp2SzJTZ1d2RElHSXdrOW9ZaWJ5LW1qVW1zWlNPbUNjNXpFdTRwOEQ3TWFTY0pSeng1SHZYb0FMYUdHbVF0N3lBWHU3dzZURXdaZVkyNExzU3pYQ00yeDNzOWhwSXAxWVBjQVRDR1V1SDI3cU5xeFNwdmtrRm51OXdZNDRwWFFmTzFuMHhLaFc5T0o1UXhqTGFVZklJS3NOREhGZw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "cdfef790-ab63-41d8-9a75-bdfe4e70a6bf",
+    "title": "Tata Motors CV bets on global expansion, EVs and digital businesses for next phase of growth - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMi-wFBVV95cUxPUWZ0Q3V5eloxbTJDQUpXUGhFalRwZGhKS2pMUEhIbEhzNmxpMFR6a0xRUVRwY3lxRy0tTTV1bWwtU0c3TEZRWGVPaFhSR2FCZ29LUUhiTmRNblpjbDNKbUlSLWhKckNhTXJmOFF1SHNuNS1zeUNOUjJWb3gwbGEzOXYwakJtSFkyNW5GR1A0am1NYjF4Y0psajk4QWtDTEtjR0w3VnVYS1dGZTBXWG1OSHZUUHV5MGFwUGJfNmhQOFhQMzVhaUNBSkhoZm5wbWl0SUpqWUtBd2pGRjhTYmZranFWdnZJMWVrMnp0NF9KdUlkU01xZDRyUTFkTdIBgwJBVV95cUxPSm91SEdkd1N3OFJfNTk2aTJuM3ctUDc4THBmTm1IRTZBcEUzelI4alpkbzlHNWwtVkYzbmlLUWd2LTBQaV9xN3U0VXBvOWg4TFZOMVhxSGtvUEd6bUN6TkI0WW9tdTBTX3BPU09oUTF5cU9xbjFocUNha0lVQXAydXBhQkZvUXJTN3RrV1hpczZrbFFvQ1BBam1ma0ZZdUtvemRsbkFKUGdVU21Fa3B6eGg3X1lEWjhjcmpwNlJCRVZXY3hWRnJYeGpqWFlZS1VlSEprTEdSTmZuSHI0NS1ORHc2NjlKX0x1YzlrXzM3MC1pN0xkNHlrTDljYWtKY2NQdmFJ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "3351ec91-116f-4055-8b4b-eb65dce6966b",
+    "title": "Tata Sierra EV exterior fully revealed in fresh teaser ahead of June 30 launch - HT Auto",
+    "url": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxNOThzcWxYSFVkTEpuSkRjNW42a2dLSEwyM2lyMzY4UHBHTUFFeWw1QWlmVV9EeDhjMm9UUG1hdkRqTm5keVJxQlBybkZIRlc0ZWttVzZRNEw5blVKN09wTjV0QVlGQzNGVGc2RUliSUZZek1rSm1Sb0ppaFJpWHVfbFI5Yk01cHFWd3g1VnVRZGpPVFlFZUlhdXlXTC1IN01ySEM0OEpUeTY4MGlnNDdHdEFrUFNWRS1ya3hENkVfa1pocVRvT3gzTmZ0MFNHT0tHM3J4MHNONnU5ZXQ1RV8yaHZCcm5uUk5H0gHuAUFVX3lxTE15Qm5nQ19RTWxnSllWQThjTjJ3Z2ptbV91Rm1FMkxqd21lTnlPS1otb1ZCQmY5ZDJfaVJLNE5MUzVuQ0xSaFB1RVU5eV9NRkp3ZWJySkVSVDVpcEpja1pjclUtSkdiVDRMRERxZjlNbFR3bFFralFEb3l3OHlJTi1QOWdtcmVJQ0ZRenJFcE9jdnJnNlBlbmJhNmJZYmhpN2gxdnFTTndMTmJwSURadmp3aVlkYVZfOW1xNk00MVNySWtuN21DLVV6YkNGSWJfaGpGb3VZRjBVNU1sakpfQU9IMjV1Y3AxQTNOUGhnU2c",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "78985c42-3482-4696-aa81-79c1ec06b675",
+    "title": "India can leapfrog China in shift to AI-defined vehicles: Tata Motors PV CTO - ET Auto",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxPTV9jcW1uUDBuYTNSR003dHdfSnRSMTRuYV9qNXg3T190cmwwanA3V1ZBSkUyeWU5ZVQ1bmpFN0N4dU5vQ1ZYTGotYVdUVzhNek9LVzdqd2toN05zaWs2ZVhKUnZZaHh0WUVYeUxfb3lKcTZWaGtsQmFwWm9JbzBIQ0huX2lxQi02T0VRakdzRlZMZ2pISUVHWHdESjMzclBhNkYtVkVQTUxqbzBhMDJhZ3ZaQkRWblZ5SnNDN2Vfc2sxY05rc01vSHpjbTJfMWU5MU0zNkpmLWJWd9IB3wFBVV95cUxPWG1UTi1aSS16LTBnSmNMVWJ5MnEwOHo2Z1QyT0hjZkpoR2gzdGR4REx3VjRfUGw3WmtrRmZUT1RCcGtXMmk2VUtXWHF4YWhBcEExM182cW1xRXlhbzg0OFNmNmU4NFduTk0wdi00VnVUWGlmWVJqUjUyZHVDcVN2YW54Z05WYTdQd215UUNuSTRGMk5TLXZwM3hvc2RTOVNLa01VZi1RYmtyd05FRzBUUU51bVpiV194SHFMV2tRWmVkVDhIeVV4U3pVOGdUXzN1cEs5MTljSjVBM2l2VnVV",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "86d40e14-ce28-4541-a5d8-ddd9fd1212c1",
+    "title": "Tata Motors CV shares gain after bullish analysts expect stock to cross \u20b9500 levels - CNBC TV18",
+    "url": "https://news.google.com/rss/articles/CBMi1AFBVV95cUxPNmRqMGlVb09NRzF5Wld2OEo1WkNDcTZmSTFNOVJkSFdUMlgwX0RtNnZqUFk5cXVxZjFGMUdZUUZCUjhfTE44ckhvZTFhdHZ1M2hkdkh4WE5vNkxXR3Z5RzdtVG1TY2NUNUZxd3VNekxRdkhNR0dsU1B5SzI3UmtVSVdIQ2R5VHg1bHJKemJjZkNnbnlrM0llb0NDd01zMnJIX3VHQ2hEX1FhVzNBejg3SlBvQ1JTN0V2c0pQUzU0RE83NXMyM01CMDBEcWlmWWRXSjBfQtIB1AFBVV95cUxPNmRqMGlVb09NRzF5Wld2OEo1WkNDcTZmSTFNOVJkSFdUMlgwX0RtNnZqUFk5cXVxZjFGMUdZUUZCUjhfTE44ckhvZTFhdHZ1M2hkdkh4WE5vNkxXR3Z5RzdtVG1TY2NUNUZxd3VNekxRdkhNR0dsU1B5SzI3UmtVSVdIQ2R5VHg1bHJKemJjZkNnbnlrM0llb0NDd01zMnJIX3VHQ2hEX1FhVzNBejg3SlBvQ1JTN0V2c0pQUzU0RE83NXMyM01CMDBEcWlmWWRXSjBfQg",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "da75082e-41f6-4371-a0ba-f28c9aa15713",
+    "title": "JM Financial retains Buy on Tata Motors, sees 14% upside; stock up 4% - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMi7wFBVV95cUxPLW9MbGVFQUJ3VXVzampqY2poeldsNTZrT1RhWUJQYWxsN0tEOGItTUE3Vmt6N3Zjc3l4eDdTRnB2Y1ltU0I2NDhZV1hUbE9ZdWZpU0VENlZsN3FrUTFlbnpOSHV2c0xqU1FkemVFNi13REVKVnFDQXFsRF94OFJDLXEwMk1VUmV0SDI2alBuamVJUE03V0Z4bVBlT0hISzhIdHBEeFVuX3BhaGI1M0hxQlFIMEVFZGpXSGd1a1FGazlvNEdaZlRmSkVkVVIwdmE0enl1V3NEdmx6MGJPdkY4VEFhVGFxZ0VqeG44WmNIONIB9AFBVV95cUxPTDRWN1gyWFk5V2FRY2xOTk4zV3ZxS2w5eVdPWjZkOVUySUVpaDI2UHgtQmlFMXhoWWFwbGVCRGlsY05CekZ3d0YtdlZTOVNYbWNqc0hHQkwtUDVMbk9qdkxUcVJxUW5uR3N0VG5PeU4xa2ZOQnVFVGYyWDhFOGQ3b3BoaU5fS0czT29HQ3VQZFRUc0JPWDIxTlEyRzR6YmlNV2pMR1p6RXpQRUk5YVBjR3YyZ2VWY3hVSFdFZkhJNlFrYW9QMXd0N0UwblZRekZOaFVQcWZsTVVuVW1OMDdVeFdiT09HVzVFQ3NiNUthZWVtcGtw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "62bcecce-1b29-4262-824a-765fb917f586",
+    "title": "Hold Tata Motors Passenger Vehicles; target of Rs 370: ICICI Securities - TradingView",
+    "url": "https://news.google.com/rss/articles/CBMizAFBVV95cUxPdXBmR3ZHRnpUOUtjeWZ2ZlFCeUk4dXRpUV8zTC03Q1pWOXF0SDdZeWJyRkRUckd3ckVBSXRRYjBoZnkwaXQ1RHB1a3dUelA5blJENjlqLU1aUU84SDlnRGI2YmNxN3lfc2dsaWxOVnQyVkcyRUM5cjZPSEdUZjNGV2drQzFITEo3UWhfVVcza1dlRnZYdmI5SmJCUVNKZlAyN2hHN2VkYjg0ZHlnU0pMMVBJWXR0Q3ZFc2xtX2xOVEN6MW1SdGdlUlJvWWY",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "744362a0-7c0f-45a1-9cf9-59e40ed1c945",
+    "title": "Tata Motors to invest up to Rs 40,000 crore by FY31 - The Economic Times",
+    "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxQZ0t6YlZaaU9GZmFSaUNJRGZOQnFIZlZJRXVvWDVnR2FYMDR0V2ZfZHoxUjl6c3R3SHdIOE1tQTBEYXVseFd1V2pNLXhuRlYwSDc2OTdRTjQ2WUdmOHVDNXExbWdlREdpdjFVWXFLaG8xcDRVeGppQk13QnBnZElqUkozUEQteGFCcEpjNTljUmNOd2FlLTFZWEJrRmMyRDhWZ09Nclc5QW9XbmR1Z2c0MGI0LXBvSlVtYVMwYWViTk5aWDZVSmtJ0gHMAUFVX3lxTE9QOFRzdGVlUVdkVU1WbDk4ZmRHeVFpZy1ITWRXRzRZUXd2N3pJSGJMUUZ6c09aWVJFdmlfOUV5TlppUGZCVF85M2ZxeDZXdlRaZk9TMEowdkRwTElUenAxcGpjNDlfWkw1OExvUHZhTGtqUVFZaWIyOWs2ZGZIOFN2TGZSMG15N05KVjVYcVZ0SlI4NlJKelFlTm9xdnhkenJua2lyUWpMZUJkZ2FLOV9WY0lBTm5Sc3dRWUpDdGRmTFZRVlZ2TmpXMTNvNQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "207d9163-53d9-43f1-abdb-0efe238d709b",
+    "title": "Tata Motors PV Plans Capex of up to Rs 40k Cr in 5 Yrs, Eyes 20 PC Mkt Share by FY31 - HDFC Sky",
+    "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxPdnlUQ1FJMnZvZ2paa0tJUHVoR2s3QWg2U2ZYZkRmQmgydl9FTldKaGhHV2N1U0xyM21yNGlRakhSMm03OWhUQ1hmN0RHRUIxbURPQ1hjY2Nwby1JaDk3RUZEbXhuSWlzOFdlR2NkMjUtOXFxU0kwOUllQkRmT1FoZGhWRy03X1NRT2c",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "70157e93-bb4b-44d9-8b40-a0605a71f002",
+    "title": "Sell Tata Motors Passenger Vehicles Ltd for the Target Rs 312 by Motilal Oswal Financial Services Ltd - Investment Guru India",
+    "url": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxQQVFZWFBlV280Z1R6T3dZM0drblJCbW5NcnlJaVA3aHBBQlZYWmZjMEJta0VsT0pQMUFyNzBIcHFqMUp3MVc4TmJ1MkF1M2tlMmJNMkJQT29PVjRrWnJZd3l5VW1TaVR5alBoWHNmWGdqdGRZSUtiWDVDMDVOdV9lOWdCU25EUnlRazUxUDNCSjgydDdDbWVsZzRoRGpkZnFseWhZblFNRmxMbXlzWU50SE8zbVpRZWJTNGtPWVpwaEpwdlY1RDZVRUlwNkZ4czNDMmpNQzh6bnZCblRvSlZKZnNVS2s",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "de372747-c9fe-402d-a99d-d7405d42cad5",
+    "title": "Tata Motors uses AI to cut defects and predict what customers want - YourStory.com",
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPaDlsYm8xZmliSE5jcUxkWHQ4MkRzTkhRTkNoNTR2QzUtdWRManNFYkpWTWRBUnhiQmhMSG1uTm1IX29IWHJWWUZnLTJFRlE5Zk51Sjc4MkpPUXBLdXBjQzJMSW05REgyNUI5Y1BLa0VPMXgxRFVxNE95ZkVSaGNYQ21icEtuOEJuVUQ0OUhlYw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "6b8b8ac7-b59b-4321-ae00-d47ecadd8419",
+    "title": "Tata Motors Targets Up to 4x EV Sales Growth by FY31 As Sierra.ev, Safari.ev and Avinya Shape Next Phase - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMi1gFBVV95cUxPZzdrblBJT095NWdVcVl1dURvRnNlT3V1MGFaNWlmTEhZY0FZS2thZldoSmw5dUctMEZwTlZCdkZkUzFVMGFDNkZraVBTaTlSZzFmaktwN2xreEFaUXIwNS03NlR3UUlmLVJiMnA2MjBWSkZiblFIY2pWcm12Q1hvdWI1d1RiQkVGdG5BOVY0eDZkNU4xUWpEVGhJcmo1TTFtXzRaS0Vwa1N1VTVMQjJNc0VHS1poV3lXN1pqZDJiSUpVd21yay1ZdEg5Q1JpM2gweHVTamRn0gHeAUFVX3lxTE5OZkdXeGlOcEtVVGV2TVM3VXlGSy0tNG5keWhkcXgzREZ5UDdyQ3pNYVZXYWdCOENZZ1c2QjZ2VE82N3ZtcEhFNUFYNnQ4ZjNxaWJCajEzZUFiakdiTWdNWmx4MDBNRU0wcXUyNFJsR1hsUk1YT3lUZGd1N2prUnF4VzlWOEVPU1RqZERQZ2J5YVZ6WFF4M3VqOXNTaU9pdXdPazlnSHJkdVZLQUlqcWJVSzJ3WjhUelJFOGJDcnY5SzhnbU9WOTdKdjJEWW51ZlZpVFdQM3pseVhoT3dPdw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "48a8f3c9-c498-485b-9ad1-082d3c3b530e",
+    "title": "Tata Motors To Launch 10 New Cars, Expand Portfolio To 25 Models By 2031 - Gaadiwaadi.com",
+    "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxPU2xGU056d2xhb19jSEFENnY5LWtOLW53ZnNDX0lRakpjS1FGT0ZjNXhJM2VGZmgzQ0Nqc3VhamhiTFJnZVJpaU9KU0JDejlmRExEbHh1RDNGZG9EZ2xaMHExRENheDk5WWtTYVItZTdvMlBKWXRNbVNJWXRTUXNLTGZWZWlwRDl1TUNLX3JlVS10Nmd0UHdzeUVMVdIBoAFBVV95cUxPWTRZSkpTbEFONWRVcWdKdVlHbFU5MUpTWHB3RnVEZ3BWbGV2THI3S2F2MFItRjNMNXozMTQzLTlYSU9xaEl0OUtTX2RaV3hCMHhMLW4xejhQQ09VejFJU2VfZ1QteFRoU2lFTEUxaVpKSUlOZEY1Ul9HTjRFQWdobzNhT2J4b3IybHZlZ3hyQTNGSmgtbDFDWmJpYk9rQklm",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "bee6e55c-fa6d-4969-a06d-bebadfc3bcf6",
+    "title": "Tata Motors shares rise after 3,400 e-vehicle order win - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi7wFBVV95cUxNaVpkLW1ONTBzc1gwZUxLVThXUlV5VmR3UWxJaVlNd3I2R3N2ajhQSUN4OFl4MGFNVVhmcjNtU25qOG95bkk1RjFDVzljMWR2S2VIUEU1STB1clp2VzdiRkpEMDA4aGg5d0NDbFVXcDJuV0xnY2VCT0NUTDB4ajZFbXRKdVU1bm5lNkl5YVljWXIzMWx5MnhHYTV3R1JENzJZVGpLZk5JSHIzcHVrbUZ5Rjg1UVVFdmhLLUxTVmVJeWhRbmwwdDhlZjVuT1VYeXNlUFRnejNDcXdjaURmNndsTnpPeUctTTRhOUo2bTQwNA",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "67abf07b-65d9-452a-9af3-7448f6472f58",
+    "title": "Tata Motors PV targets 15% annual growth, capacity expansion to 1.3 million units - scanx.trade",
+    "url": "https://news.google.com/rss/articles/CBMi7AFBVV95cUxQb0xHazU2WHhlZDZmbmZqWmN0SVNMbEtkTTlFXzZhWExkcmJzc2JqWUQ3NEsxNnhOcFhOLXVVWlluOFNlNWw3c3RCUkpIaHRYdU01cUVoX0gydGh3R1ZGWWlCXzAzVERWWjl5NWtwRGh4NUZ3SFFJUTJrWTZSeDVkblA3VDRUQXc2Zll0bUcwYTRaX2RQOVdTN3hFMTg5QmxRZFEzbjVwc09BZjFQajBUa0Z2Wm50V0FLTHkyakdhUWRGV0NWVVdiUGVITUNSMFpYaGRRX2tzOHJJRktTRUR5NWdCTm5GZlhlYWxfXw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "a32cbfa1-382b-4d70-b6e1-5e1eda5e12f5",
+    "title": "Tata Motors PV to invest up to \u20b940,000 crore, targets 20% domestic market share and 12 lakh annual sales by FY31: MD Shailesh Chandra - Fortune India",
+    "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxQRmhOU2V6MTYyQkRFT0wtVjhWV29BRDhYOE1mYUhHbElXbDkwTjU0UkZZaERaWHhqb3lMSFc4MmVzbk5SVWt1WThvS08tY3Nqa3piRlEyWVNFLVZXZWR2ZnlDYmZWNTFqdS1vOEJmM1YtVFJ4dzB4WnM2R0RpUG1aT2VZWFRkakF1d3Zqckh3ZGx5OTN1TjNmRFdOQm5RRGhBR1NTT3dvWlRIZ25LU2dfZnUybTdpMUtlVTFPbWZBbmM1d9IBzwFBVV95cUxQaEZTV2FHRDFzREc4YnN1YWpGSkFUekdtNkZDb0dWcmFoQTYxQ0RXOFgxbTVsdmF1anI3cFZzZ0c2RDVVSFJBdU1jbmQ1aFBPdnpOMmJDSUdFZjhsQVRRNEYzVGo2am9NYzhvMzBnMjUxbG03cnNlTklsOGVrTmlBS1Bhd3NXSVlEdzRpSjQtRURtV3N5TlZVTm5Na2Z3Skotdmk2THU1cmRjWUlWUlBKbVFFSVhTcFV0Z1gyWWZmVHdyeUtOajNwOXVTSDduZE0",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "6d710e8e-f1ab-4d24-85df-89cd7987477e",
+    "title": "Tata Motors secures 3,400 electric vehicle orders - Construction Week India",
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPcjJKU244R3dCN1kwM2hvRnBCNGR1dW03QW9zUEpLQk9HcGx2Z2Y2RnpOQmhfUlNncGh2dE54MjJoR0t1UW5BQUR1UlBqN3hCd0lmYUhZbVVqamV0TWhBeVZhNmVLRDRDX2hGN2M0dEJLQ1VHQVZPSWxvbFowN3BIR0lBVDZ1anZNY1VkRnpuWQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "ba6b0eea-05bf-488b-aeb7-421e1ef3770a",
+    "title": "India's Tata Motors PV aims to nearly double revenue, volume by 2031 - Reuters",
+    "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxQbWRRcGJVbW03Vi1oNHAxUDJYQW8yR0VvMXRmMTNVSFA2alJNU3huZWVyT3Z0Ymp3aVl5WDdpd0VzNDN5eTZaaFBrekFfSmtaQ3RnVlJ6OXctUllPQkJxTlJtM0ZNZXZqLWE1Y2VhWEpvR0I0WURmQ191a082NUMxV1ZkZjdKdy1sbWRRbGhEVXlodDcwc19Oc3NUTTI3RTQzZWNWSkxhZi0xdU5RUlAzSmhSYVFJaVV1bU1Ma3VB",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "3ffdf957-185b-432f-b6b9-4936c4e13cad",
+    "title": "Tata Motors FY 31 Launch Plans - 15 ICE Cars and 10 EVs - RushLane",
+    "url": "https://news.google.com/rss/articles/CBMinAFBVV95cUxPcVM5Uno2UFo2emNOWHVwbmZucGkxYVU0eXpOaTY4MTF3eFJ4Q20ycHpNdGdwbXVrYUtPdHA1RzRWSS1Ha3BGbU5BSXFGMzNqb1ZGMEs5SFVxTXk4X3hBdWFZbnRWcFIxclhEN0Y5cHdnUFdtd1Y1MF9sQU5iOUk3dzZzdHFidDJBbm9hSVNzVVBaM19BejBYaUhGM0vSAZwBQVVfeXFMT3FTOVJ6NlBaNnpjTlh1cG5mbnBpMWFVNHl6Tmk2ODExd3hSeENtMnB6TXRncG11a2FLT3RwNUc0VkktR2twRm1OQUlxRjMzam9WRjBLOUhVcU15OF94QXVhWW50VnBSMXJYRDdGOXB3Z1BXbXdWNTBfbEFOYjlJN3c2c3RxYnQyQW5vYUlTc1VQWjNfQXowWGlIRjNL",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "6a9c89b3-2aaa-4350-998e-3c54f4c7fc32",
+    "title": "Buy, Sell Or Hold: Reliance Industries, Tata Motors CV, DLF, Garden Reach Shipbuilders And Ola Electric \u2014 Ask Profit - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxPOFBPRldkNDI5NkVNYjBPd1RWVlUyeGZjS3JzTVRVYlpyZlI1bXVRYTVSSWNleER2ZFdpZENWRzlyM3p1ODdaZTNyM0FUTUlEUEIzMlAyeWFHMXNWeGlncFpyYldOUmdvMlo5RC1qaXFGQUNkTUt4a1JlcnozUWdiSFVtVml2ckxBMm1QQV91SXZrMjFlRWUzVXVRSFFWanlpV0xoRjVTVHZMU0lVVWJjMWNoVHVGWFEzQlhWSThlTElTNEdGTWhJR2VieG9WdGsxanZfVTBIM1A5SkJSUGs4ME42aWZucTk00gHwAUFVX3lxTFB6ZDNsSWM1OXZ4M3l5QnBrSDdpY2FtLVR6dklFMldpbTdfZVhuTDNtVTVaN3UyMGFVZml0SnpzYW5jUDBrSXNNei05VmlQZ2RPaXQwTTRjR0g3bmt4UmhXdERCOEJKd3NvRHJHLTdEeC1VdkkyZGdhNkxUOU40THM0NFpvZGdjQU8yYjl5NTZ6VHFDUll0UTZxTnM1S1FKcC1qOUhYOHA4bEtlLVUyUTFpWmNwbVIyMXVpYWpHZnhtNU9tS2hjMjcyYjdCdlNzbnhSNm94MWYzV0ZoMzhfaXR5RGUyZjgxaElwdFJmTG9ScA",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "8a5481e0-8481-4dea-b496-01d2f3fe8c11",
+    "title": "Tata Motors PV Targets \u20b91.4 Lakh Crore Revenue From Indian Business by FY31 - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMitAFBVV95cUxNR1Y2Zm5CRy1zcTY3WFhSS3hySEZJX1lYMWJhT0lLNEdLZWozS0tHZ2J5eDlSeXhyNEVFZU9KU1JiTUZJMHp3NVlmS1ZwamJINFNYRi12aHNfV1dQVllKV2phYklpb1ZBalJVMGd2dGttMGFTUEl0RFlrRDluRy1CU09mUl9SNnBaNlVZTERza1g4QzI1eDJETzEzbF8wNUhPbmIxb25QdDYyM2hsRmFBdEgzU0rSAbwBQVVfeXFMT2dQTkk0TlV6bDlJUkZBOW1XcjI4b0JHZG90ams1bVZHZV8wN2Ffb195Z0k2S1FXdUZjWUFaV29tY0tOOF9obTZPc1NnQzBQd1BJQlhUWE5ENW5DNDF1NVQxS2Z1OGVEMmllTl9vV29rTGk2d1Z6Y1IwUjRrcjM4SUpDWnBiUTh5YXY3clRHb0FybHRlb2NmSHhzN1VVVl94VUpTWkgyazJiVm5JbmFzbC1GSXpyUEZMN1ZoQmU",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "6de82987-235a-4d7d-abf0-3fc29c2744bf",
+    "title": "Tata Motors wins over 3,400 electric commercial vehicle orders - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi-AFBVV95cUxQMEpXaklMa29TRXh2ZGlBdVYtWlBLOW1BeFRvVmdGeG96eXRzSEpqU3pwbFVlVnhQYkxaQlhwZHEzcGF6Wmdmem9ISGZtUDdyODJpNGc3dTdFUnJiV1JQdUxsbmJRZG1Pa3oycGExb1FFdllsdlFSMWlRVEhFSzFWUm1sMlNrdDktN1U1NFVCbmdtLUczd3psdnRSeVctMHc3NlFmV09HTTZPNXYxdWlCNzJVdm5ubDZTbXVjV1pLb1AtOTdabEdtd2ZZUUsydEluWXItVEFIMmtsTFM1ODI1cWRyaWhuMlowUW9KMk5qRzZ4dnNTMk1PSw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "e819a29e-d0a1-40a0-b5a1-eafb32d9a1eb",
+    "title": "Buy, Sell Or Hold: L&T, Tata Motors PV, M&M, Ola Electric, ITC, Ramco Cement, And More \u2014 Ask Profit - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMi4gFBVV95cUxQMGYwai10LXBkT2lpUDBUUUI5dHpsN0hDbWFrT1BRc0lUM0JTcUkwTjJjMXF4VndvbURyeHdaWlJ4eGRVY1AxX01HcVEwXzJPZy14RkdYbVg1eXhYWHhsZlM2VzRlVkFkcjgxV3BXY19lZDgydXdPTDh0TnM2dVZjUEJFNGtlT3d5ZUVYM0RaeGF4c1NJblB2QnNuZFlMOTFVSlJWRnZuQkVuNzBMb3NnenpxcEx0d2xBd3pyZ2dhOWNqUi1haEY0bE05T0JPWS12aUhYSHpSZ0JaaXJLS0RFRFdR0gHqAUFVX3lxTE9oZWtuUlBDWENnWG9DRFBybHFSZEpRZU04aXd4M3E5VEZySDQtQ29MbUU4YjBmbWJLV19nQUVCMkM5dW5UMHpnSDByNU9ranZuZWJGOThCalBDdTJJSUwtZDNsdVI1elJETTNnWFhCSTA2Z05vR1d2YXlzUXljZEhyaGEzaDkya0NEQ05fYzBuMnBWQVhtVzB6M0FHMVVJOUh0ZEVDWkRtOEpTa1RoOTJqQW9yRHJfZ0hDVmZYTWY5bWdFWk02aXBOYnhJMWJtY0M5WTdKMlBaTEZ4Skx2U2FEX1E3b003UWktQQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "91ca0e28-5cff-4e47-a6cf-781cf8ad163c",
+    "title": "Tata Motors CV sets FY2028 global top-four ambition after Iveco deal - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi_wFBVV95cUxQTFd3amtWRWpJTzRVeEVvM3hORW9sTG9wSThoa25ORDFDMVd5bS1McVgxT015VUt2clNVZHJfWTN3XzJCanppTHViUTBIWUNGX1pMU3c3dzFsNVd0UVFmemRicHQ4NUQxTXRjbDlrUy1JQTdCZUZnNE1ZX2NBQm1nejh3U1ktWDVkMjN2NjUwWU9WNTU0YVQ0RDBtM2M5a1BoWXJDcTNrRjgwV19HSXRJdTlycHRhUjM4bXl1NDJYZDVEVUgzVFFVTldDTEtfNk9HTzJXVE03b0V6WmYzLTU3ZVR4d2ZsSkxpV3NZWmhwV2xvajQ0cmxNdG1nSnIzUkU",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "837a160f-8e60-4f73-840c-11af58417c3f",
+    "title": "Tata Motors Commercial Vehicle Share Jumps 4% as Brokers Cheers Maker\u2019s Market Share Ambitions - HDFC Sky",
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxQOThNLUVucnpYX29vMjEtN3h3ZVlqV21kTjdHZXpra1RSV1BOdFJGSHRYbFEwYzd3RzdkRHp6U2xBcS1qX054d3U3MWJVQUNzUURmSmxDTFA1ekdNcXpRaF9paVNtTzM2QUJ3T3lXdmNOT21SVVhwWDJCVVdobUxWbXFEa1J1M1pwS3dEYg",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "5860c9a4-1931-4518-81b2-780ea953cf84",
+    "title": "Stock Picks Today: Adani Enterprises, BEL, Tata Motors PV, HDFC Life, And More On Brokerages' Radar - NDTV Profit",
+    "url": "https://news.google.com/rss/articles/CBMi0wFBVV95cUxPXzNDckZiVktyeGItdGRhcW1Yc29QS2Q0aTVZaGw0UTBDOEN3WlUyM215LWJFOHk1MWlqQS1NaWNtXy1iZWk1eVlMVVJUSm5HX3pEZUZtYnA3Q19ZclE4QWk0WG5uUTdnYXFWZzhtcnE2Q1lKQS13eVF2cTl5emV1V3lMTVJ0OVFPYVNtaTBnSmtCZkt1TGM4ZVBiSFRJZDFfNGM4UVFyZDBWZnE1ZGFSZU0xZUZMcTJudGJ2cVNlMkJMNVRUbDlTTmZWS0pDUzFScnhB0gHbAUFVX3lxTE9rTWNMc09wZi1aeTk1dDF5eGdoQld5QV9GeThGTEpYYm9kRy1SdzJCb1B4MmFRLUc3dGx0aG1mcEVhVnktYkgwWTItNHN4b1pMd3hWd3ktX0FGMWlHc2dkb3A1OHJRYkVkQ0NPOEs3dUczR3NPcnRJQXR1emxxTW9EaDhIZmNxX3VMUW1kSjhSUEQ0Y1NUSEtaTUx2TGVWMGRmYk14ZlJWUE16ZTlqNTEydjBFQmlZbmtQMmVzU3VJYk52c1k0clN5cElwa3VOdkV4YWxva09ZcFNZbw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "b9aa45c2-cbd6-43e9-9e58-8a1410efe672",
+    "title": "Tata Motors targets bigger slice of PV and CV markets - Mint",
+    "url": "https://news.google.com/rss/articles/CBMi_wFBVV95cUxNdWg5QjdRUmhwZzJoYkFKdkJFVFFEekZNc3I2elZjbzJyMEwzY2ZKYlVkeFpFUHpBZXp1akhlMC1zYUYxTkhEZ0RwandLanhJeU9uVjd1YnVPU2ZucklDNzJEamZxd0F1RUFza0g3NHZoUUxlOTl5SGdsMW9WN3lCeHdWNl83Wm0ydmhEbE51ZkoxNzZBVFU4RmRaZ1ZkOEpudG5Ga1NYbHU4R1VrLXFFaFdaS2FpVWFETy1RTk1NUV9pNEszYmJMdWxYTnhGb3ItRHU5TE1lU3lfYnRWUUVNbU5EQnB0blpTS3duRUdCWDAwUjlYQTQtM1hzc0NRazjSAYQCQVVfeXFMUDg4S0gzd25wWFl3WkRjNHFvTUNxVEJWSkNOS1JkRW43R1VPSjF2ejVJQU4wYUoyR0tZOXdSMm1CRVVic3hfR0ZBNmZfYmxvbVJhUFpLSzI0ZHFRbmV0bndfQ2hzODFzRmtYTHpoc3lMdWkzNGRBZEs4NjJCTVZhNmFrZS1oUDZTVncxd2MxZGEzcDlaME9EOG1Vc3hqM0ZLZmJocHM5RTlHMXMzVmpzcnRVa1lPbkFOeDJzWlk2NmV2WlVmNmZsWnpNdzJtSnhvY2E5QTZBMktyQy1OY3lVSUhmUGJxNjktLWVTeUxkUklWMmR5eWNGNmphNkpDU1l2dTVobW0",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "5afe5376-aca8-490a-b5e8-7d1bdaf79351",
+    "title": "Tata Motors (CV) Surges 5% As Brokerages See Up To 27% Upside - outlookbusiness.com",
+    "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxPRWs3Xzc5ZjRZUExxTWZqSTdfcUtLQ21BWU40dGsyVGFIVWdQaEhUWlMtajZEclBqUHhWdUt0Y0FJY0dYSFJxX19zMlk5OXRFUElYMWJ3Z1VFYTZ6Z1lDZXRydVBWTFI4RVAwNXhRZzh1UmtrOFR2b2JDZnFyT3cyZWpsZFFPOE1QM0tZRGhXSi1wWE5QMUlHeG42VmtNQdIBqwFBVV95cUxPV3ltR1FDMmdLWDdDSWN5TlFGMGJ5SVZCN043UmxTcTNiZnRYdHVPbWhnc1JwSXpwcFljTDNVYzF4cWhOdkppelFhams5MXI4WU9ZY1piVTV4UEtBYS1rRFNHbFFTb2g2aHI5MXV0cVBUWkZkMmhabVd5TTFLRlVxRnBydmZWTV95LWVYTnR1MDRWMXJRSHJXZ1lPcWpYZUN3c0FYRHZXbHRZUTQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "5970fa9c-509d-4da3-9240-2f1152a1b221",
+    "title": "Neutral TATA Motors; target of Rs 416: Motilal Oswal - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMitAFBVV95cUxNaG9CekRfQUZvV1VuSEpVcXI2QXFBOTl4b0F5c282QnZoeXM1ZkxpLTZoV1BNZFBSNVlHOU9qaUlpa0FyenBQSGhXbENqaWdoVkVOZ0hSdHlsZDZJSkNkSE5pNEZWSU1lenE0WnJkdFZwdjFwenNzTHN3d0xYaHRRM0p3NWxpVklfeHZYVnZwTC1sczZJeVdYUEdQbTN2U0dwaUtKcWJka1dHOHFBeW9QVVREeC3SAboBQVVfeXFMT1VYdEtnalNSdlE4MHZISFBLMjNrVWpMYlJPNjJNRkl3WE1LTXdJb3FfUlhyb2I5TkpCdnBtTV9nNGx4T2pYNERlZm1VNEJHc0Q3RDFNSk9CUmpubDkwOUVqWGJmNTFGeThMV0ZheHI0WnNBcTExT2RyU05QZl9UcjdKQmhibnlUcDV6cnRtREdSVkF2aXVfZkJ1SGpaRXhpd2J2M05BSDRWb0lSakdQU1ZjYWVXSlhhTEJn",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "f2617348-8a36-4e97-aaf6-441250753e5c",
+    "title": "Tata Motors sees EVs, CNG at 45% of PV market by FY31 - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMingFBVV95cUxPYjduUGdNR1lGdEk1WVhHdWw4ZXRNZkZPRjlNa0prdHE5aFpPNmpFWGs4RlpJb3ViNy1lbXBnRmNGQ2RGZUt4eGgzTEVSNXhCRVJSWlI5WFlkSXRFUHNQZjFobXJPdFFnU2hOZnpSb01heWczaktzUHhWSVRhSnY1bExWUGZ6WWw4ZE5zUnNrT2dGQWRHY0h3SUNMNVZ1d9IBpgFBVV95cUxPMV9NNnpvazNJMFFzUTZ1cVdMOTBkRVdtX1luN0lJV1lMWXVJTHBnb0RiRVRISDFwWEViY3JwaTU3c2w2UTNCTTI0dlp0QjdmMy1NLWVYSmVjc2FKbFZuTGRqVWdyeWhiby13bVl1YnhLQjRMVUpyblJ1eV9EVC1SU05FemV1RzVwUkh0NkFVRDQ4X2lURE5qYXJFRnlxMXZOQ0tyR2ln",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "437a56ed-eac2-41ed-b1c1-7a8731ae157a",
+    "title": "Tata Motors Confirms 4 New Electric SUVs: We Tell You What They Are - Cartoq",
+    "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxQbjFJRTdmODJtWGlJaXpGWHJqVmxoYjU1WURaYnY4MDQ4TC1DbXk1YTl6SzRfOGNGSnFyczhxM0NkY0RxeFVxam1qQVBqQU0yWnIzMkNpNjJMQ3dQRy02MGVJVVRjWmRrSWgxOEFrdC1jVmZYUzF1NDZpRi1pRVFqWHJjSno",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "85374675-7790-4576-a405-5b96bf8333f8",
+    "title": "Tata Motors CV biz switches gear from trucks to wider mobility highway - Business Standard",
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxOLWxiU2RLX01uRUJUUncxc1RuQTNWUDQwdHI0X00xbkc0M1hWcjVIWmJyc3VtbHhvWGNXVWdUbk40SWx6UlZJelVfQmF3Z005Y2JZQW50SXlKQndyaWtJazkxejlkT0hfQndxN09TMXBFZEJybjdCVlFNUVRCN3hUU0NaNVM2bXcxVHplbVI4UlJocHNMa0k2bnRCVXhrOTBjZnJCRGRoMEtESTlHMlRTZnFaNkZXSVhsd19MRDlObEd2RDVXRVVXcWdVbmZQcmhjeGZWSkhJQS1Ed9IB3wFBVV95cUxOSHVDWFd0S2F4V3Z4dFBUUE5RdW05Z2dTeG02UlBwN3JWbk53N3hDSzRrR1U1cVAzNUJkLTZZR3RBXzZnbUdBc2FoMnplOUN3dWpVZWdabkxUQTZWdG1nVF9ZUlo2dEU5VTU2UzIteFlra1RMU19ab0tBTXhmem1ZY2NkUmlzNkgxUWNMbXBjZUlXUXVNZVYwbFZMeHhRTmxPQTU0blN3NmhSZjd4RzBoZzIzTGpYVnk0MDg1MGNaUFdVbWVJbzBuZHhYVm4xRVZvdlZ5bkhHOWZEUy1hbGNJ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "e40ac696-4bed-43ec-a88d-a0f62088850f",
+    "title": "Tata Motors PV Plans to Double Annual Sales to Over 12 Lakh Units by FY31 - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMisAFBVV95cUxQR253UmxwM2lkeFlnRkN4ZFIwMERaUTdJazBLenZWOUNlUS1HTTRDaTJ1dTRrbFlUM1NwQ2tUUmo3dkR3dmxNRkdmbVZPb2otWFdaMXYteGRUQWVtOWtQTXE5VFU0OWl0a25TZWdNVUcxT1lpcmZleWZ4WTg5V3U2T3IxdV9FSXIxSEZCanFfOVIyMkRzUnRjcFY2LVF2N2s5ck9UX0twaTVXMGNaS3RlVdIBuAFBVV95cUxOR0s2VzNoeWg4OTNDd3NEVkdkcUxibjhYQlhDNDUzSnl1a2dKRXRlbndYbTVaUGFyQmFXZjNzRksxVkJZY2xwYXRfeDR6Y1YtN2NSaTJWc2QxaWltbmFHX0ZRUWVULVYtaDJqeGpJR0gxWjdVUUhKLXRVZlBDODdhVTM4dUF4a00yRVpIMW0xQmtqTmN2NFJQd1NCc1NfYUs5UFJiaGtnZm9IeTJfU21qSVd3WTBfOHRO",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "7b275866-bb93-4bb8-8baa-fbf7a6a33b22",
+    "title": "Tata Motors PV Targets \u20b96 Lakh Crore Revenue, 10% EBIT Margin by FY31 - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMitgFBVV95cUxPeFNZdHBQM2FtVkxoVE9yNFNhNXpDWWI1ZndDV05fUjl4WGN6YmE0QUZDTGUydXZWS24xeTJVaVc0RUxTRjlJV0VXWDl3dUVWRk5mYnNuWXFFUHlKdW5PY2dBN3RmRW1vcEwxeTVwSnIzSkdIT3U1MVUyRlVtQW9pYzU0MmpabktiaTJRT3JOM3ZrbzJBNkItVUlPMEpQNm5DdHlUNkQ4dkhrTkRJT19xV3pFVWpSd9IBvgFBVV95cUxPNW94SllScThhSTFaRGFSSkpTYktNeG44RG5aZXN6VC1fNmxIa0Q0SXJGa3NSSm9pS25hMW16V2Z3WEhFMmhjb1ZONDhtZzVhOTFGU1hINTVGWnVvUWtvYUhlTllXVEFjbGoyN2FKMU9qRHkycTRWOEM0bTBoNXM0QmROcGU2akphV0lJVzhyOGJybU9jU0VlMF82YlZOZFFITngtT09SN3Y1cjBXd0pFRFJEbWdlR0NkcXV1Y2hB",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "09a85cbf-8794-410e-b176-45d439a5d09a",
+    "title": "Tesla and Ford tore apart Chinese EVs to find out how they work and keep costs down and they were both blown away with what they found - supercarblondie.com",
+    "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTFAwNjQta1p6SGJWS1lLZ0hzWUxfVGFSWHp3WlZ4VjZxaml4dHBWTlRXbFd6ZU03SWY2clVlM3FZX2l4YXlET2VNeXQzbThRb2M1U0IxZ3o0M0dLTE4wRTZ1aklNdU1CQnV4TWhaM2dHbWllaHpv",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "2440a4ec-70e9-473b-996d-3feb0fb13f27",
+    "title": "Here's why Motilal Oswal is cautious on shares of both Tata Motors entities - CNBC TV18",
+    "url": "https://news.google.com/rss/articles/CBMi8AFBVV95cUxNMmE4VmdRLWFZaUlsNUtsclFNeWR1eUx5ZE9GU3llSTdSdjkweXBEUEZqLWhaM0w0X1g0NDRiNTFEYkpSSDg2SE9FOUktalZpTmxBWFlNbVVyd0dDcTFSdDhMQkV0MjVMZlU1czFsbF9FR0h3UEg0UUpybkhiZ2VMaWowOUtvdlFxZl9OcGlPRXFiNm0tb0xEYXZleU1pck42OFBMTlBEcGNDTEw4RU1KRlhQVkU2b1k2NEFqQ0dfbHNZdlJQeVFIRVRBbXpZSklBT3A0RjJhblpXNTRjcTk0Z2Z6UFA5V3NDbDVCc09jVE7SAfABQVVfeXFMTTJhOFZnUS1hWWlJbDVLbHJRTXlkdXlMeWRPRlN5ZUk3UnY5MHlwRFBGai1oWjNMNF9YNDQ0YjUxRGJKUkg4NkhPRTlJLWpWaU5sQVhZTW1VcndHQ3ExUnQ4TEJFdDI1TGZVNXMxbGxfRUdId1BINFFKcm5IYmdlTGlqMDlLb3ZRcWZfTnBpT0VxYjZtLW9MRGF2ZXlNaXJONjhQTE5QRHBjQ0xMOEVNSkZYUFZFNm9ZNjRBakNHX2xzWXZSUHlRSEVUQW16WUpJQU9wNEYyYW5aVzU0Y3E5NGdmelBQOVdzQ2w1QnNPY1RO",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "2c0b23a8-85bb-45be-a8e6-8f1502272210",
+    "title": "University Ave home TP\u2019d; grocery thefts; airbags deploy in Tesla dealership crash (Police Blotter, June 7-13) - Los Gatan",
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxObXdXYjNxMlNqb1BfS3FVMzhYNGR5NDFodzc0dWVXVTIteDVCNmxVd3dLTW51YWhiVzBqczNtRzlqR19HcXFnUWZsUXJGNDZ1djR0aFVYWkdZZ1FTV0YtQmNYRktoaVVmMktRUUNlS2JKdlY2OE8taUFmYXVBdS1mSzJab2VGNm9kcXp6U3M5M2xHNDNEVWNFNVV4cHBMc3R6VU0wVXh3c0F3VWJ1XzA1RHllOGdaYmtySU5zUWFCNXlIdTl4",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "1a33ec01-e455-49d7-8126-3e439455ce17",
+    "title": "Tesla Defies Auto Industry Sales Slump, Goldman Raises Q2 Delivery Forecast - Investor's Business Daily",
+    "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxQVnlBZnFJSmJ4TnlYY0N2RFAzdkU5VzhPcHR3MlpVODFvQWNTR25pTXhtSU5OWHYzcGlhdk8yU1FzMFF5enpzejZxekNGZmpZd2tPSEJqZ2dDeE5LZjVFaFhnM25xMVRvYnlBS1JvS0NuWkVwY2JteEk4TzBoVkNmMDFsOGQxVzhPaHpQQy1BQnNGNEps",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "1e85eeb4-4124-4679-a1b5-10785eacca85",
+    "title": "Tesla adds a car vacuum to a Supercharger for the first time - Electrek",
+    "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE5MM0x2b1VDd0w2OWZzcFViOTBiUFprQkE2eURuSHFTOXhLNGlZRmpfclpTX1hhUHMzRnVGMU9xVTRzU0lGc1dZcGdNMWxhUFV1eG42RWJoaXFJampWZmc3cFZsckdvZmtuNmpsZWUxTU9tTXpBbnBRYQ",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "0b23e69b-417b-451c-a81f-057c848ec62a",
+    "title": "Increasing connectivity fuels speculation of a potential Tesla-SpaceX merger - Baton Rouge Business Report",
+    "url": "https://news.google.com/rss/articles/CBMitgFBVV95cUxQUnA3cnR0bHF1b0VXSVBsNXJOTnJ3WXpOVTdRZzZWVzdvaTh4NVZPNDZDVlMzRlUwamFodm1pM1BvSTdpeDhDZ2RFTk94WmZzVkN1SHBzTy1iSEJTSkl3Vk9YY19LMnFCZ3Fhdl81YnRZR09mODVyYmhKSFBvZG5sdVhlUFlmc3VTaXV6c282LWVQdmFOY0d3UkxtbUFOejFFV1ZlWXJoZHBRMm1VaE5qdWtMRlRTUdIBvgFBVV95cUxOX09NSUVqemZZMWNJTGxaZXVkRzVLUU9FejFPZ055aW5jRlp5Rmd0MnZGVTZKMXBsb1hBTHFxU2xmYmFGaWJiNmpOVTM4TjRLYjUxRHEtd2pUeWlDYjA1V3U3QWp0QWxZOTRzdFRKdU45bmQzaFdDTEdBV2t6SHVpbVJPa1ZiUGtLYU96Q3NfY1lNUHdVN0l0NGZWNnNVZjh2R0JvZ24wQ2l3V2g2V3dQQ0oySXFWQUwtcGltX2VR",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "18953b4a-cc10-4dfa-a7db-62c285b99345",
+    "title": "Uber takes on Waymo and Tesla with expanded robotaxi service in Houston - CNBC",
+    "url": "https://news.google.com/rss/articles/CBMitAFBVV95cUxOWnlxcS1TOFJFRjhJcGxsSXltQ3oxWDdsaUJfYWdCT2duU3gyNTdtdGd3REMwVU84dl9RdE1nTXQ0Tm45OHdmVlliWWNzVUYwVVlPRjVRaDBiZzYyc0txYldWYnE4V0hLT2Z1RDFvZlJwaEY2Y3d3OXFwaWxjSE9fZmIxalRydlZKcWRmMFQtQVBTam5aeGhkWGV3M2RoamRVME5ocUl5VXktZHJ1Ykh4OU5Dd04",
+    "ground_truth_labels": [
+      "Tesla"
+    ]
+  },
+  {
+    "document_id": "6f061cce-3e94-4593-9da7-eac3b8ec392e",
+    "title": "Meta launches its own smart glasses line starting at $299 - Fortune India",
+    "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxPa0JRa3Y1Q2xjVXdxRkhjU0F5UExkR1FSbFJRR0RlYXFnUEhzX0t3LUZ2enNrQkFRcl90Q01qdElkWEZfR2NyWldoaFNnQnJjMEZ4ZDkyWjBMVHZVcWc1aFJvSnRmaGMyQUw2bU84SC1LLW5rdGVrLWdRa0NVdEx6NW90N1hvSk9lZU54b2oxZ0FTd0xBNVM0R3J5R2J3eXJVVWJud2h30gGzAUFVX3lxTE5vbmF2N3BnSVhNNHdxeHNtLThNTHNucXl0WlJRNU9RM1c4TVQ5T0hNRXJtNE4tdHQ2bWVqdFQtdlY2aXJST1M5azJsTXM3aERoRjhFUTUteTNUWUxSNHgyZVZzYTZIY0FQLUdteGlublEyVUVSQk9FV2ZDaEJZVm9JVlV2VWxOVGFzbXNrYnF6MUdfck94bmlnaWRFcGhGdEkweWo1dFpNVVVwOXQxQ0pfZFBJ",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "7b7dcc87-561f-4155-bbbe-75151134d27b",
+    "title": "Introducing Meta Glasses: A Range of New Styles from Meta and EssilorLuxottica, Starting at $299 - Meta Store",
+    "url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxQUk5PUXR3V2JLN2IwYjBicV9vY1oxbTBxc3hKTjJ4eEVGSEVUbTNBSmY0bHhmRkh0clV0aGc3N3h3X1FEZTZ6RXdpTy1WVVFpYVRKck1LZmp2MW4yNldFaG9YMkh6LXZld0N2UWx3aWFyTW9KcFp6cW1XcGZKb0Qwd2JpdDlpLW41YjROVHFsLUdjUTNoaFVBcksyel9vODhTUThJQVljVVRFWG1EQ3hsMkU4RElWcW5kUWdCSQ",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "88c9ab90-e987-4cc0-95a7-227a87403f6c",
+    "title": "We\u2019re Partnering With EssilorLuxottica to Launch Meta Glasses - Meta Store",
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxQX3h4ZHdPTDhKWGNjOVNya20xNVdFcU50Tnh5dnJGdkV4MFJyMDhzenkwU0xkVmZGNHgybTIzc2VDZEt0VU1RYVpqWV82cHRLZ0NqZTJmaUIwSnJUTUdydm1KdmJkQjhDNDFZallKSEFUQWVLbGxmOFZSYXdHQ1RDUFl0WFE0NnNJODgtb9IBkgFBVV95cUxQbkxNb3c0VWRVWjlEMFdtTV9xWThlQU50Sy05MldQYU5OX3RCdTFJYnlCYmRrMXJ3MmlsZ1J1emxLSGhhZFpkS1JKYWZPRXNVazYzcXY1OG1jWUtwUWl5eVV6b3VXM3p6RWFqZzViNUdCNzFuandPSjM3RWd2UktOQUhmeDJfNkc1bnJXR19zYlBKdw",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "28c4626c-7d5a-40d6-8f5c-e3e54a13faa7",
+    "title": "Tata Motors CV Unit Targets 40% Market Share by FY28, Banks on IVECO Deal and Digital Platforms - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMi1gFBVV95cUxPeTNSRWltQWI3U1lCNnZjWEg1cFprbVlwM3BYOEVPUVJOUFZnTDN3dDh4Vkh2Tk5uSUVzTF9UN1hMVlZZcU5yWWQtREJPWTRpS0RjamtmVkppOEpLaDhJN25pb29pUlpvanF3MVlRV05Dbkl6Wm5LMlR4Vy1PRFBSRVBoUVgyLXF4ZS1EZWtWWWRLZHl5aWR1MkhaNExLVlBubkdFaXpKOVNNT1ZwZ29HODhHdE8zUGxkWjBDRURsWmgycW5LZGlVMTVFd2pPaHhYekVGd2dn0gHeAUFVX3lxTE0weHByRnowWjQ0UTlRMmh0YjdKREZrekVCbVR0cUJTTDhlTG9leVFqaFlFNDJSTE5KOF9LN2hvSHdYdHBhdkpMU1dRRnR0TC12ZFF6M0FVQ2FacDNhcEJrMkljeGI3dHB6MHZLZzNtajh4UHFUSVhzN01OaHhPSEYzSWpiVTJIaEFVSnBVN1gyblRNNVRxd0VuQUJoOWhXUHJSM0RXb29fWi00Yjlfbm5GcVgzSVdCaDV0Q2dLTG5nSUpndVRiMHFoekpsRFlzT3MyZlctQy1ySG4wWVBIdw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "a0854bc9-be85-43a7-9bab-c2a95d847d80",
+    "title": "Meta reveals cold email that led to Kunal Shah's WhatsApp CEO appointment - India Today",
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxNZHRxQzV6MEctN2tZZG9ENGlDVkpDMmhza1pKM1V6enFFRG5Td2UwWjFpWGttcUs3VXNCdGdzLXFlaGRBSGJxR21yMHdzWDJMX25idmdXM3NkMWJpLWJlQzZGRnBqRXRrN3VMd3FpSXhic0JBcUhSZnpNUHpfNlhJQjhqSWF4QTFoN1dFTHJNdlptQkNQd0hHazQ3SVo1OVZ3NDQ0SEw0NlNuWloySjZQRURsYW5Cc0VvQlHSAb8BQVVfeXFMTVF0eUp2ZnJxblliVWctOEFFM0NCanlzNkVycmlRQm1MUTVTTVFrWi05TVB4WnpRUk9PMHAtWFhlNnh4bkJNeXhZYTBIQWdnQ0tPNVBPX3FfMmVOUnpYNmZmWU1jbUlfejBuR19LQnRwNkpXdWVDdm14M1l3NGMwOTlRV0NMTlI1cTBOREFjYkRDMG9BSldxcE82cERDVmw2d2g5bTFWb3gzN2ttVEstNkVIRXZ5ZGRLTjR6ODlBN3c",
+    "ground_truth_labels": [
+      "Meta"
+    ]
+  },
+  {
+    "document_id": "14e541e5-7040-4f29-9eed-d127d5e2f91b",
+    "title": "India expands Delhi truck scheme with Tata Motors MoU - Automotive World",
+    "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxOS09pakhCclJQeWVXbnZlZEpfOEFsYzdQTzFINHIwM3h4M1llUHFneENWQ2MyUjIyR004U2oxSWRrMU9JNm9uMHBoOWdmNHB2WnYzTHU1djBsZFhMeFZILUN2Vkplemp1cmY5NFdmakdvVDFkYU1JVGg4RXhvTndpckswb24yazFmTjFBZ3NUdk56alpqUEE",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "326076b5-cb46-4339-a8ee-2ada21cc896b",
+    "title": "Tata Motors shares rise after 3,400+ EV order win - MSN",
+    "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxNRHFGQmh3WmsxQ1hUbktBWENiNmhJRnZZQ1poYkpfOG84TWduZjFuMk5qc1ZDbktRa2UxYkJrQk1DZUxxb2VMRkF3cWdsRW5UbnNkS0dOMWtEbDROVTdZR1NQZnFJaGsta2xIWTBaOFhieGJhXzdWeTMyZW56T2ZjUmIzMmJ0R3A0UkR4c2ZzRTYyLW9vR3VVd3haUVVibm5WNGlEMGdUd3hLa2g0QlVIVEtfTnBjNEhrQ1hVSzN5RlNZMFloTHpsSUxDazJXTXF3eFpDN1BfZ0VTUmMzV05SdjZndnJ2Zw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "4812ad74-c426-4d14-9a80-62100e879160",
+    "title": "Tata Motors CV Climbs 4% As Brokerages Bet On Market Share Gains, Margin Expansion - BW Businessworld",
+    "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxQN3dJenR2YzZSOFdLNmxQd2ZhTHZZcmpFeUFvVTlZc3R3aEFvbmMtWHBZWjRSSDg4VkVaaUs5MGdGWGFBQVF0SGFkQzEtRFpnMkJuSGFqWGpDVTdaMnJMT29tX1F5ZjhwdVJaVDVuT0JjNzBwS0hZQmxuYTZqaVpjN0JpeGJlY1ZNazJBZ1RhWDI5WWM4R1hEbFN1Y3RzWFFOVlc3R3d4VUNZNHA5RW1YYU1Qa3I3QkxsOVhhVkZMYTNJQQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "512cb7f9-6bfd-488c-b164-2d374170d265",
+    "title": "Tata Motors' Digital Arm Shifts From Products to Platform Play - Autocar Professional",
+    "url": "https://news.google.com/rss/articles/CBMioAFBVV95cUxPMC1NRURXamRReTBQcHVvRUxlQnNzcjh6WjFycTBJR0FZSGFUMzVMa21BSWxXUzBVM2Fkay1TY05VaGNxTGFzaU51MUhpa1lNMEplT25KdldXUXhBRnE5a1hMQXRNWU1aSHF1RjZWT21tM05XVGNWMnQ0OEJGSG9HSWNzaUM2MzgyWjdrN2M5aTRMTy1kX2lMSW5mWFhfeDFB0gGoAUFVX3lxTE1xSkhaODVrSi1wTkhwR2MzQkt6bWRZVGttWTFZZXZ2ZWxKT000LUdnVWhpSzJpa1hKeW9aZnItNUxCN2s4NW9BZ2MwVThyVEtZckRjMnlJYnpKSUpENHBLYm1BUXNwLVo0cmZ0cWxKUGh4RF9jS09YZEVRTHhZR1A1ejEzN2lBc3Y5QlpwQUtFQkVzZmN5MFNXbUNxOGc3N1djYkp4clRaUg",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "5192f05c-95ad-43fb-a02f-831492f44a1e",
+    "title": "Tata Motors turns to AI to build cars, cut defects and predict customer demand - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi1gFBVV95cUxOcUdCekEwaGctakdYWVBCaFpiWnNEMENDRlZrMUhuZE9BeFdVNkVhbm1IMzdQelE5VjBKNG1YSWRxVF92M2ZCQVZKZ2VaZUp3YnhHb1RzQ0I3MnFWVWZvaHNidUx5RVZ5WTdJVEUtNWxmamkzY3c1SEYwOU5uWmk4M0hUbVlKZjBVSzBucUFGeEZKLXhrTzc1X29hWjJOWjkzRnl1amxsQ1RyWEhtY2NpR0FocENXWWt4NS1MN0l0dllQRjBHTFJlSF9yRWw4bTRBQkxwQ2hR0gHbAUFVX3lxTE9iOVhrM1lHVTNrQnFaNU1ZTk1Qd1dJaEZmQ0sxMTBUeHp4dEVmR2ozZnJxR3lLa01uZVNXRW50SjVVX1JHZUhxMzZzaDQzRVZGenB1MHhuM3VJRk5nc3RlaFVlbWVxaVk3ZUlFeHdRZWNCbTVsNTRWcGxTTEVKWXU4aWo2UjVOek5GYmc4cWFEcUxJZWdYSXlTd0taUXRWdWF5OXFsUEFDeG1WVTJieWdETHR3NHZ1cUxmWjdMTW5lel9iVElJa0ZadTROdV81RjVKY0JyRU9EbUlSWQ",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "5817903b-15fc-48be-9641-fbd06c40d422",
+    "title": "Tata Harrier Owner Gets Relief In Consumer Case : Tata Motors Asked To Replace Defective Car Or Refund... - Live Law",
+    "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxQM1p6d1BaZkVMSmdxQU1ELWxJWW9zSnhnMXg0UmZfWnpWMnhNdzZBdHlNMGh2MlFoZktBcjlaYjNRUllZN3Z3S0tzay1XNkhYNmtuclpRM2xkdlNndG5oOFU1V3k1X0VzMktKX0dkS1drdG9ZazhVZUd6LWVMVUpXemRMSUp3dHlOVjN4Q0RscXd3ZTk4Zm5ZYlVUUXZkYkYxcEJYLWpHaGxnVFRXcFFhRm1vYlhaVkx4cU00ZDh4TkpleGpMMHpTcWltRVlqa3lzR1FYc3hlZmRiZE5SWWtmRng2QWt5OUhxQ2NJNHh6X3VidTjSAfgBQVVfeXFMUEpUaF80bEcxTDY3NDdKUllKWU44YlpXX2xVTVEyNjFDenJ5bWtpT2NLOG5JWUxRNnpTTzMyUDU5X1lvOEp6SEdSVWhndGt2cE1pdXFwaEJOUzZWcjR3MXZkOUM5QzdzbkFyR3ZCYjk4OHd5ZmdocWtRMXdndHpZSE53OFVOcGJTeFNrMlcxZ1RwUEt2YTREZHlMRzRJSFY2MjBEWHBDTmJKOWt0NENjX2htUmlsWUNTZVhFQWdfc29ad09CUFdDYzl5akg2d1VTeUdQZGpzQVNHZ29HZE5GN1RVNGxzLUVZeXNEaUVhcDFobXVzN2g2dzI",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "17a0ca42-d595-4929-83e9-b62b768ee6d7",
+    "title": "Tata Motors secures orders for over 3,400 electric commercial vehicles - BusinessLine",
+    "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxOOFpQeEdSLVFyR1FRQTQ3RklvU3hDOWJhUnZfNzVmNGJ0cjBmNHFzN0I0Y0taUkRhZDlSbDIyTVhtUlNGeDU2bG1iMVFrcm0zOVpqNlIzMnBKZXViaVNVaUdreHZyUUZITHVyWlQ3cUtVb1N1TWozQjlhUHJRVS1jeGI5SW1FeTBTOU1DZEFMYnJabWF3U3UwZnRzcEdBcUZ2WHUzTFRXWTVKUUM4UUhjaVJQTFdZQUlwZ2VMandHaXRtWW83WFlkNTBGbWIzalpiMVHSAdgBQVVfeXFMTUxhaS1aRnBDaHphSEt2cm9MWEdpQ1JOM1Y1d1RLVE16X1JodnNWakE1ckJCenVpMzF1OHdLWXVySVFtQWd6UU5KZEVnU29BU0JtdFBBZHJVbFVva3FkdGlTWC1FVGF6UUlNUmVFMHZGNGF2YzMzZXFZcF9Rc1FZRHJpZEhYZk1uclloOVVvVkdqd1BESGpYQTAySmVHQVFPeVE1T2ZTcC1nUE5RSExEZWJqLXdiaDAzTTM3dUFNSzhOeFQ3RFhMd3FJSDFxcVd4SllLNDRxd1dn",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "21bb0890-70b1-41d0-95f1-31ad4d0c3733",
+    "title": "Tata Motors CV stock gains 4% as brokerages bullish on 40% market-share target, eye benefits from Iveco... - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi_wFBVV95cUxNNHFMY1lSSnp4anh5emNtekdxUmk1MVVCdXhZTzlzSHN1dlFfS0lzdUtVQ3JmaDNHblhSY2ZXa0VCVTNIcGpjR0p4d2tvM3ZUeERsQ3R1UlNqTXl5RG41MXdxMWQ3blZXWUowb0VScmtzN0N1eExUaVQ1WVRPUkNLcXl2RGhlSVU1bVZ3X2ZYUDdZa2dwelR1V1hyd3ZQTFl1OFFaLUkwamRjS0ZpRGlkN1NvOHhzbmxWZmloQW1FaGFvMXBwZG9CZHN4Wmw2RTA1OWo3RVNXYU5XQWRyUWkwUlI0R0FuTVF6NmlvckJyWHlORnp4Z05DMXpWVnJNQWvSAYQCQVVfeXFMUHdGcGwtUXBSNUFScjhFQzcyaE5DY00xbEFINlRYYllYTDRDb1NTcHdJMzVCb2tiOGx5dUNMZEIxc0pPM2RmbXZjczc4TS1oWlBTUlM5NUR3RjdfUVN1XzM4NDZfSjdrS3JzVUxoNGVVY3p1S1hSRjZWTHFBUERpT2lkNXZEajNhNGZBX3JwRFA3cHFBNDk0MVV5eGJOanE5UlpFd2RSSTVZM0g2TkVYcEJmZE82amRrZmRyd0lCSkFjVDBzUlNGYkd0LU52ZnlmWF90ZFRfLTFtNnBsS3AyQV9seXlxNVdTYUtGSW1aNWY1MVM1TjF4S2Ridm9CaG5GUThPcE4",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "183d3bf1-5571-4f52-9d5d-615a8e3b78d7",
+    "title": "Sell Tata Motors Passenger Vehicles; target of Rs 312: Motilal Oswal - Moneycontrol.com",
+    "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxPTjMtdTkybGZVb3FEOVVQeTNwOWNzTUkweVF1Qjg0d2VzVWxna1o2U0VOZzlXSVliS0NhVXptS094ODdObE5FN09DSlBWQ0RtQ3dhc0VLZWM4MlcxcllOME1fZkZobkFTZ0pXa0VzckRMc09KbFpVbjNoUFU2bU5IM1RJMVZkZnBQbE53ZTV2UjNLalU5S2JRVVp0SG5rOHduOGJkRmFGa2paS3lYVk5reUo0bU1GcGRtUDczUFZjQ0xTdXJneHpPMm1CNGw2UGZRMXfSAdIBQVVfeXFMT04zLXU5MmxmVW9xRDlVUHkzcDljc01JMHlRdUI4NHdlc1VsZ2taNlNFTmc5V0lZYktDYVV6bUtPeDg3TmxORTdPQ0pQVkNEbUN3YXNFS2VjODJXMXJZTjBNX2ZGaG5BU2dKV2tFc3JETHNPSmxaVW4zaFBVNm1OSDNUSTFWZGZwUGxOd2U1dlIzS2pVOUtiUVVadEhuazh3bjhiZEZhRmtqWkt5WFZOa3lKNG1NRnBkbVA3M1BWY0NMU3VyZ3h6TzJtQjRsNlBmUTF3",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  },
+  {
+    "document_id": "19b097d7-952e-482a-87b2-2e9b2e1e29e0",
+    "title": "Tata Motors Bets Big on the Future: \u20b940,000 Crore Investment Plan Targets 12 Lakh Annual Sales by FY31 - Auto Punditz",
+    "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxNSWpWVDhuTkFwbXNnMGpxTEg3WFNtRTdEUnY3QVJpRVp2VVhJNjV2VXY0M0QyampZZlhKRXJZT3hwWHA0OW1Gdmo3NktWbVkyb0s0cE1PeFlvZm1POE9MeWQtQkRrblo0eTk2UzB6MEVKbW9sSjJBUG5qclVDcEtkSm1HR1ZMNnZ0MGxLRzJGV0lYUUdMeDBqX0tRNmh2eDdxZXRuR1M4RU1lR2VSMVRDRGYtUlN6bUN0cVA5UjJuWUFKZUNwQ2ZaNVZPQS1nZw",
+    "ground_truth_labels": [
+      "Tata Motors"
+    ]
+  }
+]

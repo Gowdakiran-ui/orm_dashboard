@@ -1,0 +1,29 @@
+{
+  "null_check_document_sentiments": {
+    "null_label": 0,
+    "null_score": 0,
+    "null_confidence": 0,
+    "null_weighted": 0,
+    "null_reliability": 0
+  },
+  "range_check_document_sentiments": {
+    "invalid_confidence_count": 0,
+    "invalid_sentiment_score_count": 0,
+    "invalid_source_reliability_count": 0
+  },
+  "sentiments_on_empty_content": 0,
+  "distinct_labels_found": [
+    "Negative",
+    "Positive",
+    "Neutral"
+  ],
+  "weighted_score_consistency": {
+    "mismatch_count": 0,
+    "note": "weighted_sentiment_score should equal sentiment_score * source_reliability"
+  },
+  "entity_sentiment_distinct_labels": [
+    "Positive",
+    "Negative",
+    "Neutral"
+  ]
+}
