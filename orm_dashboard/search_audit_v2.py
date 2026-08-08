@@ -1,8 +1,10 @@
 import os
 import re
+import pathlib
+_HERE = pathlib.Path(__file__).parent
 
 print("--- SVG Strokes with slash ---")
-frontend_dir = r"c:\codebase\viewer\orm_dashboard\src"
+frontend_dir = str(_HERE / "src")
 for root, _, files in os.walk(frontend_dir):
     for file in files:
         if file.endswith('.tsx') or file.endswith('.ts'):
@@ -13,7 +15,7 @@ for root, _, files in os.walk(frontend_dir):
                         print(f"{file}:{line_num} -> {line.strip()}")
 
 print("\n--- Backend Pagination and N+1 Queries ---")
-backend_dir = r"c:\codebase\viewer\orm_collection\app\api\endpoints"
+backend_dir = str(_HERE.parent / "orm_collection" / "app" / "api" / "endpoints")
 for root, _, files in os.walk(backend_dir):
     for file in files:
         if file.endswith('.py'):

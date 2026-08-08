@@ -1,7 +1,9 @@
 import os
+import pathlib
+_HERE = pathlib.Path(__file__).parent
 
 print("--- Checking all charts for stroke patterns ---")
-frontend_dir = r"c:\codebase\viewer\orm_dashboard\src\components"
+frontend_dir = str(_HERE / "src" / "components")
 invalid_count = 0
 for root, _, files in os.walk(frontend_dir):
     for file in files:

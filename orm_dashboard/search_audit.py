@@ -1,5 +1,7 @@
 import os
 import re
+import pathlib
+_HERE = pathlib.Path(__file__).parent
 
 def search_files(directory, extensions, patterns):
     matches = {p_name: [] for p_name in patterns.keys()}
@@ -18,7 +20,7 @@ def search_files(directory, extensions, patterns):
                             })
     return matches
 
-frontend_dir = r"c:\codebase\viewer\orm_dashboard\src"
+frontend_dir = str(_HERE / "src")
 patterns = {
     'invalid_svg': r'stroke="#[A-Fa-f0-9]{6}/\d{2}"',
     'window_open': r'window\.open\([^)]+\)'
@@ -32,5 +34,5 @@ for p_name, matches in results.items():
         print(f"  {m['file']}:{m['line']} -> {m['match']}")
 
 print("\n--- Backend sources.py ---")
-with open(r"c:\codebase\viewer\orm_collection\app\api\endpoints\sources.py", 'r', encoding='utf-8') as f:
+with open(str(_HERE.parent / "orm_collection" / "app" / "api" / "endpoints" / "sources.py"), 'r', encoding='utf-8') as f:
     print(f.read())

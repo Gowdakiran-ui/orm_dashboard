@@ -23,24 +23,17 @@ SET row_security = off;
 -- Name: pgagent; Type: SCHEMA; Schema: -; Owner: -
 --
 
-
-
---
--- Name: SCHEMA pgagent; Type: COMMENT; Schema: -; Owner: -
---
-
+CREATE SCHEMA pgagent;
 
 
 --
 -- Name: pgagent; Type: EXTENSION; Schema: -; Owner: -
 --
 
+CREATE EXTENSION IF NOT EXISTS pgagent WITH SCHEMA pgagent;
 
 
---
---
-
-
+SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
@@ -436,13 +429,13 @@ CREATE TABLE public.executive_reputation_scores (
     client_id uuid NOT NULL,
     entity_id uuid NOT NULL,
     executive_name character varying(255) NOT NULL,
-    score double precision NOT NULL,
-    grade character varying(2) NOT NULL,
-    sentiment_component double precision NOT NULL,
-    risk_component double precision NOT NULL,
-    narrative_component double precision NOT NULL,
-    trend_component double precision NOT NULL,
-    visibility_component double precision NOT NULL,
+    score double precision,
+    grade character varying(2),
+    sentiment_component double precision,
+    risk_component double precision,
+    narrative_component double precision,
+    trend_component double precision,
+    visibility_component double precision,
     confidence_score double precision NOT NULL,
     reputation_trend character varying(20) NOT NULL,
     top_positive_narrative character varying(255),
@@ -515,20 +508,42 @@ CREATE TABLE public.narratives (
 
 
 --
+-- Name: pipeline_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pipeline_runs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    client_id character varying(64) NOT NULL,
+    run_id character varying(64) NOT NULL,
+    status character varying(20) DEFAULT 'QUEUED'::character varying NOT NULL,
+    stage character varying(30) DEFAULT 'QUEUED'::character varying NOT NULL,
+    progress_pct integer DEFAULT 0 NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    finished_at timestamp with time zone,
+    current_worker character varying(100),
+    execution_mode character varying(20) DEFAULT 'async'::character varying NOT NULL,
+    celery_task_id character varying(100),
+    error_detail text,
+    log_tail text,
+    duration_s double precision
+);
+
+
+--
 -- Name: reputation_scores; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.reputation_scores (
     id uuid NOT NULL,
     client_id uuid NOT NULL,
-    score double precision NOT NULL,
-    grade character varying(2) NOT NULL,
-    sentiment_component double precision NOT NULL,
-    risk_component double precision NOT NULL,
-    narrative_component double precision NOT NULL,
-    trend_component double precision NOT NULL,
-    source_component double precision NOT NULL,
-    visibility_component double precision NOT NULL,
+    score double precision,
+    grade character varying(2),
+    sentiment_component double precision,
+    risk_component double precision,
+    narrative_component double precision,
+    trend_component double precision,
+    source_component double precision,
+    visibility_component double precision,
     confidence_score double precision NOT NULL,
     reputation_trend character varying(20) NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
@@ -953,6 +968,14 @@ ALTER TABLE ONLY public.model_runs
 
 ALTER TABLE ONLY public.narratives
     ADD CONSTRAINT narratives_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pipeline_runs pipeline_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_runs
+    ADD CONSTRAINT pipeline_runs_pkey PRIMARY KEY (id);
 
 
 --
@@ -1439,6 +1462,27 @@ CREATE INDEX ix_narratives_client_id ON public.narratives USING btree (client_id
 
 
 --
+-- Name: ix_pipeline_runs_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_pipeline_runs_client_id ON public.pipeline_runs USING btree (client_id);
+
+
+--
+-- Name: ix_pipeline_runs_client_id_started_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_pipeline_runs_client_id_started_at ON public.pipeline_runs USING btree (client_id, started_at);
+
+
+--
+-- Name: ix_pipeline_runs_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ix_pipeline_runs_run_id ON public.pipeline_runs USING btree (run_id);
+
+
+--
 -- Name: ix_reputation_scores_client_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1891,5 +1935,5 @@ ALTER TABLE ONLY public.trend_events
 -- PostgreSQL database dump complete
 --
 
-\unrestrict uSvTCy6mWwTa7vigmKqmeCo5TNnVbfMpFAbBVcJUIpMjxjAhhh0GwuzQO8nu6XZ
+
 

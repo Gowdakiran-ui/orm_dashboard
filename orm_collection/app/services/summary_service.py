@@ -2,7 +2,8 @@ import os
 import sys
 
 # Add project root to python path
-project_root = r"C:\codebase\viewer\orm_collection"
+import pathlib
+project_root = str(pathlib.Path(__file__).parent.parent.parent)
 sys.path.insert(0, project_root)
 
 from app.core.db import SessionLocal

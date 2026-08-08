@@ -1,8 +1,10 @@
 import os
 import re
+import pathlib
+_HERE = pathlib.Path(__file__).parent
 
 print("--- Searching for #[A-Fa-f0-9]{8} ---")
-frontend_dir = r"c:\codebase\viewer\orm_dashboard\src"
+frontend_dir = str(_HERE / "src")
 found = False
 for root, _, files in os.walk(frontend_dir):
     for file in files:

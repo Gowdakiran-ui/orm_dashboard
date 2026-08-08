@@ -206,7 +206,7 @@ This report presents the verification results for the generic Client Onboarding 
 * **Match Rate**: {results["Fortis Hospital"].get("match_rate", 0.0) * 100}%
 * **Processing Success Rate**: 100.0%
 """
-    artifact_path = r"C:\Users\Kiran gowda.A\.gemini\antigravity\brain\8439791b-88b9-4157-b9f8-eb217bbfb8e3\client_onboarding_report.md"
+    artifact_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports", "client_onboarding_report.md")
     os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
     with open(artifact_path, "w") as f:
         f.write(report_content)
