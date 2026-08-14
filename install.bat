@@ -70,7 +70,8 @@ if exist "%VENV%\Scripts\activate.bat" (
 ) else (
     echo        Creating virtual environment at: %VENV%
     python -m venv "%VENV%"
-    if %ERRORLEVEL% NEQ 0 (
+    set "VENV_EXIT=!ERRORLEVEL!"
+    if !VENV_EXIT! NEQ 0 (
         echo.
         echo  ERROR: Failed to create virtual environment.
         pause
@@ -117,16 +118,21 @@ if exist "%ORM_DASHBOARD%\node_modules" (
     echo        [OK]
 ) else (
     echo        Running npm install in orm_dashboard...
-    pushd "%ORM_DASHBOARD%"
-    npm install
-    if %ERRORLEVEL% NEQ 0 (
+    REM --prefix targets the directory directly -- pushd's directory change
+    REM does not reliably persist for npm.cmd when invoked from inside a
+    REM parenthesized cmd block, confirmed via a clean-room install test.
+    REM `call` is required too: npm is npm.cmd, a batch wrapper, and
+    REM invoking a .cmd from inside another batch file without `call` can
+    REM silently reset the caller's delayed-expansion state, breaking the
+    REM !NPM_EXIT! check below. Both confirmed via clean-room testing.
+    call npm --prefix "%ORM_DASHBOARD%" install
+    set "NPM_EXIT=!ERRORLEVEL!"
+    if !NPM_EXIT! NEQ 0 (
         echo.
         echo  ERROR: npm install failed. Check the output above for details.
-        popd
         pause
         exit /b 1
     )
-    popd
     echo        [OK]
 )
 
@@ -139,7 +145,8 @@ echo [7/9] Checking spaCy model (en_core_web_sm)...
 if %ERRORLEVEL% NEQ 0 (
     echo        Downloading en_core_web_sm...
     "%PYTHON_EXE%" -m spacy download en_core_web_sm
-    if %ERRORLEVEL% NEQ 0 (
+    set "SPACY_EXIT=!ERRORLEVEL!"
+    if !SPACY_EXIT! NEQ 0 (
         echo.
         echo  ERROR: Failed to download spaCy model en_core_web_sm.
         pause
@@ -161,7 +168,8 @@ echo [8/9] Checking Playwright Chromium browser...
 if %ERRORLEVEL% NEQ 0 (
     echo        Installing Playwright Chromium...
     "%PYTHON_EXE%" -m playwright install chromium
-    if %ERRORLEVEL% NEQ 0 (
+    set "PLAYWRIGHT_EXIT=!ERRORLEVEL!"
+    if !PLAYWRIGHT_EXIT! NEQ 0 (
         echo.
         echo  ERROR: Failed to install Playwright Chromium.
         pause
@@ -192,12 +200,12 @@ if exist "%ORM_COLLECTION%\.env" (
         echo.
         echo  You MUST update the following values before starting:
         echo    DB_HOST      -- hostname of your PostgreSQL server
-        echo    DB_PORT      -- PostgreSQL port (default: 5432)
+        echo    DB_PORT      -- PostgreSQL port, default 5432
         echo    DB_USER      -- PostgreSQL username
         echo    DB_PASSWORD  -- PostgreSQL password
         echo    DB_NAME      -- PostgreSQL database name
-        echo    REDIS_URL    -- Redis connection URL (e.g. redis://localhost:6379/0)
-        echo    GROQ_API_KEY -- your Groq API key (required for AI features)
+        echo    REDIS_URL    -- Redis connection URL, e.g. redis://localhost:6379/0
+        echo    GROQ_API_KEY -- your Groq API key, required for AI features
         echo.
         echo  S3 variables are only required if ENABLE_S3_STORAGE=true.
         echo  *** END ACTION REQUIRED ***
@@ -208,6 +216,11 @@ if exist "%ORM_COLLECTION%\.env" (
 )
 
 :: Frontend .env.local (orm_dashboard\.env.local)
+REM Both .env files use a shared secret (NEXT_PUBLIC_API_SHARED_SECRET must
+REM match the backend's API_SHARED_SECRET) -- left as the .env.example
+REM placeholder, the dashboard fails every API call with 401 "Invalid or
+REM missing API key" (confirmed via a clean-room install test). Syncing it
+REM automatically here means a fresh install works without a manual step.
 if exist "%ORM_DASHBOARD%\.env.local" (
     echo        Frontend .env.local already exists -- not overwriting.
 ) else (
@@ -215,6 +228,7 @@ if exist "%ORM_DASHBOARD%\.env.local" (
         copy /Y "%ORM_DASHBOARD%\.env.example" "%ORM_DASHBOARD%\.env.local" >nul
         echo        Frontend .env.local created from .env.example.
         echo        Update NEXT_PUBLIC_API_URL if the backend is not on localhost:8000.
+        powershell -NoProfile -Command "$b = Get-Content '%ORM_COLLECTION%\.env' -Raw; if ($b -match '(?m)^API_SHARED_SECRET=(.*)$') { $s = $matches[1].Trim() }; if ($s) { (Get-Content '%ORM_DASHBOARD%\.env.local') -replace '^NEXT_PUBLIC_API_SHARED_SECRET=.*$', \"NEXT_PUBLIC_API_SHARED_SECRET=$s\" | Set-Content '%ORM_DASHBOARD%\.env.local'; Write-Host '       Synced NEXT_PUBLIC_API_SHARED_SECRET from backend .env.' } else { Write-Host '       WARNING: could not read API_SHARED_SECRET from backend .env -- update NEXT_PUBLIC_API_SHARED_SECRET manually.' }"
     ) else (
         echo  WARNING: %ORM_DASHBOARD%\.env.example not found -- skipping frontend env setup.
     )
