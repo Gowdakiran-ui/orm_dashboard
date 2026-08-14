@@ -30,8 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files -- .env.example is a secret-free template and IS meant to be
+# committed (install.bat copies it to .env.local for new users); only the
+# real, credential-bearing files are excluded.
+.env
+.env.local
+.env.*.local
 
 # vercel
 .vercel
