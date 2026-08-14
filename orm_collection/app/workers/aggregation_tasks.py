@@ -815,10 +815,123 @@ def _fail_run(db, pipeline_run_id: str, error_detail: str, log) -> None:
             run.finished_at = now
             if run.started_at:
                 run.duration_s = (now - run.started_at).total_seconds()
+            if run.processing_started_at:
+                run.execution_duration_s = (now - run.processing_started_at).total_seconds()
             db.commit()
     except Exception as exc:
         db.rollback()
         log.error("pipeline_fail_run_update_error", error=str(exc))
+
+
+def _update_progress(db, pipeline_run_id: str, progress_pct: int, log_line: str) -> None:
+    """
+    Item 17: update progress_pct/log_tail *within* a stage, without an FSM
+    stage transition. transition() rejects a same-stage "transition" (e.g.
+    PROCESSING -> PROCESSING isn't in _ALLOWED_TRANSITIONS), so incremental
+    progress needs the same direct-field-set escape hatch _fail_run already
+    uses for a different reason. Swallows its own errors so a progress
+    update glitch can never abort the actual pipeline stage calling it.
+    """
+    try:
+        run = db.query(PipelineRun).filter(PipelineRun.run_id == pipeline_run_id).with_for_update().first()
+        if run and not run.is_terminal:
+            run.progress_pct = progress_pct
+            if log_line:
+                run.log_tail = log_line[:2000]
+            db.commit()
+    except Exception:
+        db.rollback()
+
+
+# ---------------------------------------------------------------------------
+# PipelineRun watchdog
+# ---------------------------------------------------------------------------
+
+_PIPELINE_RUN_TERMINAL = {"SUCCESS", "FAILED"}
+_PIPELINE_RUN_TIMEOUT_MINUTES = 60
+
+
+@shared_task
+def pipeline_run_watchdog():
+    """
+    Watchdog for PipelineRun (Phase 13), mirroring collection_watchdog's
+    staleness-sweep pattern in collection_tasks.py. Runs every 15 minutes.
+
+    This is the actual enforcement mechanism for a hung/crashed pipeline run.
+    A Celery soft_time_limit/time_limit was considered instead, but
+    run_client_pipeline runs under --pool=solo, where time-limit enforcement
+    is a no-op: BasePool.on_soft_timeout/on_hard_timeout are unimplemented
+    (`pass`) and only the prefork pool overrides them to kill the child
+    process. Solo has no child process to kill, so a decorator-level time
+    limit would silently do nothing while looking like a real ceiling.
+    A Beat-scheduled sweep works regardless of pool type since it acts from
+    outside the stuck task.
+
+    Threshold: 60 minutes, chosen against the live-measured real-world
+    duration of ~7-10 minutes (431s worker / 591s wall for an 88-document
+    run) plus generous headroom for larger clients.
+    """
+    from datetime import datetime, timezone, timedelta
+    import structlog
+    from app.utils.redis_client import redis_client
+
+    log = structlog.get_logger().bind(task="pipeline_run_watchdog")
+    db = SessionLocal()
+    try:
+        timeout_limit = datetime.now(timezone.utc) - timedelta(minutes=_PIPELINE_RUN_TIMEOUT_MINUTES)
+
+        stuck_runs = db.query(PipelineRun).filter(
+            ~PipelineRun.status.in_(_PIPELINE_RUN_TERMINAL),
+            PipelineRun.started_at < timeout_limit,
+        ).all()
+
+        if not stuck_runs:
+            log.info("watchdog_no_stuck_runs")
+            return
+
+        log.warning("watchdog_found_stuck_runs", total_stuck=len(stuck_runs))
+
+        for run in stuck_runs:
+            run_id_str = run.run_id
+            client_id_str = run.client_id
+            log.warning("watchdog_recovering_run", run_id=run_id_str, client_id=client_id_str,
+                       status=run.status, stage=run.stage, started_at=str(run.started_at))
+
+            reason = (f"reconciled by pipeline_run_watchdog: stuck in status={run.status} "
+                     f"stage={run.stage} past {_PIPELINE_RUN_TIMEOUT_MINUTES}-minute timeout")
+            run.status = "FAILED"
+            run.stage = "FAILED"
+            run.error_detail = reason
+            run.log_tail = reason
+            now = datetime.now(timezone.utc)
+            run.finished_at = now
+            if run.started_at:
+                run.duration_s = (now - run.started_at).total_seconds()
+            if run.processing_started_at:
+                run.execution_duration_s = (now - run.processing_started_at).total_seconds()
+            db.commit()
+
+            # Release the Phase 13 lock (pipeline:lock:{client_id}) — but only
+            # if it still belongs to *this* run_id, so a lock legitimately
+            # re-acquired by a newer run in the meantime is never touched.
+            lock_key = f"pipeline:lock:{client_id_str}"
+            try:
+                raw = redis_client.get(lock_key)
+                if raw:
+                    raw_str = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+                    data = json.loads(raw_str)
+                    if data.get("run_id") == run_id_str:
+                        redis_client.delete(lock_key)
+                        log.warning("watchdog_released_pipeline_lock",
+                                   client_id=client_id_str, run_id=run_id_str)
+            except Exception as exc:
+                log.error("watchdog_lock_release_error", error=str(exc))
+
+    except Exception as exc:
+        db.rollback()
+        log.error("watchdog_failed", error=str(exc))
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------
@@ -831,11 +944,14 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
     persist new documents. Returns list of new document IDs.
     """
     from app.models.rss_feed import RSSFeed
-    from app.models.source import Source, SourceCategory
+    from app.models.source import Source
     from app.models.document import Document
-    from app.adapters.rss import GoogleNewsRSSAdapter
+    from app.adapters.rss import RSSAdapter
+    from app.adapters.registry import ADAPTER_REGISTRY
     from app.services.document_service import process_and_save_document
     from app.schemas.document import NormalizedDocument
+    from app.workers.collection_tasks import _get_or_create_source
+    from app.utils.text_processing import canonicalize_url
 
     log = logger.bind(stage="COLLECTING", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
     t0 = time.perf_counter()
@@ -845,33 +961,18 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
     if not client:
         raise ValueError(f"Client {ctx.client_id} not found")
 
-    feeds = db.query(RSSFeed).filter(RSSFeed.is_active == True).all()
-    client_feeds = [f for f in feeds if client.name.lower() in f.feed_name.lower()]
+    client_feeds = db.query(RSSFeed).filter(
+        RSSFeed.is_active == True,
+        RSSFeed.client_id == ctx.client_id
+    ).all()
 
-    adapter = GoogleNewsRSSAdapter()
     new_doc_ids: List[str] = []
 
-    cat = db.query(SourceCategory).filter(SourceCategory.name == "RSS News").first()
-    if not cat:
-        cat = SourceCategory(name="RSS News", base_reliability_score=1.0)
-        db.add(cat)
-        db.commit()
-        db.refresh(cat)
-
     for feed in client_feeds:
-        source = db.query(Source).filter(Source.url == feed.feed_url).first()
-        if not source:
-            source = Source(
-                category_id=cat.id,
-                name=feed.feed_name,
-                source_type="rss",
-                url=feed.feed_url,
-                schedule_cron="0 * * * *",
-                is_active=True,
-            )
-            db.add(source)
-            db.commit()
-            db.refresh(source)
+        source = _get_or_create_source(db, feed)
+
+        adapter_cls = ADAPTER_REGISTRY.get(feed.source_format, RSSAdapter)
+        adapter = adapter_cls()
 
         try:
             entries = adapter.fetch(feed.feed_url)
@@ -880,7 +981,15 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
                 norm_doc = NormalizedDocument(**norm)
                 is_saved, _, _ = process_and_save_document(db, norm_doc)
                 if is_saved:
-                    db_doc = db.query(Document).filter(Document.url == norm["url"]).first()
+                    # Item 20: process_and_save_document() inserts
+                    # Document.url as canonicalize_url(doc_data.url), not the
+                    # raw URL (document_service.py:24,40) -- looking it back
+                    # up by the raw URL silently missed every document whose
+                    # URL had a query string/fragment stripped by
+                    # canonicalization, undercounting new_doc_ids (live
+                    # audit evidence: new_docs=14 reported vs 88 actually
+                    # processed for the same run).
+                    db_doc = db.query(Document).filter(Document.url == canonicalize_url(norm["url"])).first()
                     if db_doc:
                         new_doc_ids.append(str(db_doc.id))
         except Exception as fe:
@@ -931,6 +1040,18 @@ def _stage_process(ctx: PipelineContext, db, doc_ids: List[str]) -> None:
         )
     db.commit()
 
+    # Item 17: PROCESSING is the stage that actually takes time (measured
+    # live: 403s of a 431s run, 93.6% of total duration, ~4.6s/document of
+    # transformer inference) but progress_pct sat pinned at 20 for the
+    # entire stage, since nothing updated it between the COLLECTING->
+    # PROCESSING transition (which sets 20) and the PROCESSING->TREND
+    # transition (which sets 40). Update after every document: at ~4.6s/doc
+    # the write is negligible overhead either way, so no batching interval
+    # is needed. Capped at 39 (not 40) so an in-progress PROCESSING stage is
+    # never visually indistinguishable from having already completed into
+    # TREND, which is what the real _update_run(..., "TREND", ...) call
+    # sets once this function returns.
+    total = len(doc_ids)
     processed = 0
     failed = 0
     for doc_id in doc_ids:
@@ -940,6 +1061,10 @@ def _stage_process(ctx: PipelineContext, db, doc_ids: List[str]) -> None:
         except Exception as exc:
             failed += 1
             log.error("doc_nlp_failed", document_id=doc_id, error=str(exc))
+
+        done = processed + failed
+        pct = 20 + min(19, int(19 * done / total))
+        _update_progress(db, ctx.run_id, pct, f"Processed {done}/{total} documents ({failed} failed)")
 
     duration_ms = (time.perf_counter() - t0) * 1000
     log.info("stage_complete", processed=processed, failed=failed, duration_ms=round(duration_ms, 2))
@@ -1093,6 +1218,13 @@ def run_client_pipeline(self, run_id: str, client_id: str):
     )
 
     t_pipeline = time.perf_counter()
+
+    # Item 18: mark when execution actually begins (lock held, about to run
+    # stages), separately from started_at (set at row-creation/QUEUED time,
+    # before this task was necessarily even picked up by a worker) so
+    # execution_duration_s can be computed independent of queue wait.
+    pipeline_run.processing_started_at = datetime.now(timezone.utc)
+    db.commit()
 
     try:
         # ── Stage: COLLECTING (5% → 20%) ──────────────────────────────────

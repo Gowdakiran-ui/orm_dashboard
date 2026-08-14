@@ -1,7 +1,7 @@
 import praw
 import json
 from typing import List, Dict, Any, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from .search_base import BaseSearchAdapter
 
@@ -58,7 +58,7 @@ class RedditAdapter(BaseSearchAdapter):
         return results, new_cursor
 
     def normalize(self, raw_data: Dict[str, Any], source_id: str, **kwargs) -> Dict[str, Any]:
-        published_at = datetime.utcfromtimestamp(raw_data.get("created_utc", 0))
+        published_at = datetime.fromtimestamp(raw_data.get("created_utc", 0), tz=timezone.utc)
         
         return {
             "source_id": source_id,
@@ -68,6 +68,6 @@ class RedditAdapter(BaseSearchAdapter):
             "url": raw_data.get("url", ""),
             "author": raw_data.get("author", ""),
             "published_at": published_at,
-            "collected_at": datetime.utcnow(),
+            "collected_at": datetime.now(timezone.utc),
             "raw_payload": json.dumps(raw_data)
         }

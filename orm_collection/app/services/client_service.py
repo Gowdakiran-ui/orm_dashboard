@@ -1,6 +1,7 @@
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from uuid import UUID
 from app.models.client import Client
@@ -41,96 +42,162 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
         industry=onboarding_data.industry
     )
     db.add(db_client)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # The normalized-name check above has a check-then-insert race gap
+        # (same class of bug as D4's sources.url race) — a concurrent
+        # onboarding request for the exact same name can slip past it and
+        # hit the DB-level uq_clients_name constraint instead. Surface the
+        # same clean 400 rather than a raw 500.
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Client with a similar name already exists.")
     db.refresh(db_client)
 
-    # 2. Create the Primary Entity
-    entity_in = EntityCreate(
-        client_id=db_client.id,
-        name=onboarding_data.primary_entity_name,
-        entity_type="brand",
-        website=onboarding_data.website,
-        domain=onboarding_data.domain,
-        ticker_symbol=onboarding_data.ticker_symbol,
-        industry=onboarding_data.industry
-    )
-    db_entity = create_entity(db, entity_in)
+    # Steps 2-8 create the entity/keywords/feeds/source for the client just
+    # committed above. create_entity/add_alias/generate_keywords_for_entity
+    # each commit independently (they're shared with entities.py's
+    # standalone single-entity endpoints, which need that), so a failure
+    # partway through this block can't be undone with a plain db.rollback()
+    # — anything already committed stays committed. Track what got created
+    # and compensate (delete it) on failure instead, so onboarding ends in
+    # either a fully-provisioned client or a client with no orphaned
+    # half-provisioned entities (TASK.md Phase 4 item 4).
+    created_entity_ids = []
+    try:
+        # 2. Create the Primary Entity
+        entity_in = EntityCreate(
+            client_id=db_client.id,
+            name=onboarding_data.primary_entity_name,
+            entity_type="brand",
+            website=onboarding_data.website,
+            domain=onboarding_data.domain,
+            ticker_symbol=onboarding_data.ticker_symbol,
+            industry=onboarding_data.industry
+        )
+        db_entity = create_entity(db, entity_in)
+        created_entity_ids.append(db_entity.id)
 
-    # 3. Add aliases if relevant (e.g. ticker symbol)
-    if onboarding_data.ticker_symbol:
-        add_alias(db, db_entity.id, onboarding_data.ticker_symbol)
+        # 3. Add aliases if relevant (e.g. ticker symbol)
+        if onboarding_data.ticker_symbol:
+            add_alias(db, db_entity.id, onboarding_data.ticker_symbol)
 
-    # 4. Generate keywords
-    generate_keywords_for_entity(db, str(db_entity.id), onboarding_data.primary_entity_name)
+        # 4. Generate keywords
+        generate_keywords_for_entity(db, str(db_entity.id), onboarding_data.primary_entity_name)
 
-    # 5. Automatically create RSS Feeds & Google News queries for this entity/client
-    # Let's create an RSS feed for general news related to the entity
-    # We will generate search queries for Google News RSS:
-    # URL format for Google News: https://news.google.com/rss/search?q={query}
-    # We will sanitize the query string.
-    sanitized_name = onboarding_data.primary_entity_name.replace(" ", "+")
-    google_news_url = f"https://news.google.com/rss/search?q={sanitized_name}+OR+{onboarding_data.domain or sanitized_name}"
-    
-    # Check if this feed url already exists before adding
-    existing_feed = db.query(RSSFeed).filter(RSSFeed.feed_url == google_news_url).first()
-    if not existing_feed:
-        db_feed = RSSFeed(
-            feed_name=f"{onboarding_data.primary_entity_name} Google News Feed",
-            feed_url=google_news_url,
-            category="News",
-            poll_interval_minutes=60,
+        # 5. Automatically create RSS Feeds & Google News queries for this entity/client
+        # Let's create an RSS feed for general news related to the entity
+        # We will generate search queries for Google News RSS:
+        # URL format for Google News: https://news.google.com/rss/search?q={query}
+        # We will sanitize the query string.
+        sanitized_name = onboarding_data.primary_entity_name.replace(" ", "+")
+        google_news_url = f"https://news.google.com/rss/search?q={sanitized_name}+OR+{onboarding_data.domain or sanitized_name}"
+
+        # Check if this feed url already exists before adding
+        existing_feed = db.query(RSSFeed).filter(RSSFeed.feed_url == google_news_url).first()
+        if not existing_feed:
+            db_feed = RSSFeed(
+                feed_name=f"{onboarding_data.primary_entity_name} Google News Feed",
+                feed_url=google_news_url,
+                category="News",
+                poll_interval_minutes=60,
+                is_active=True,
+                client_id=db_client.id
+            )
+            db.add(db_feed)
+
+        # 5b. Also provision GDELT DOC 2.0 and HN Algolia json_api feeds for this
+        # entity (Part B4). Conservative poll interval: GDELT's confirmed live
+        # rate limit is ~1 request/5s, HN Algolia has no documented hard limit —
+        # 60 minutes is well above either floor.
+        gdelt_url = f"https://api.gdeltproject.org/api/v2/doc/doc?query={sanitized_name}&mode=artlist&format=json&maxrecords=50"
+        existing_gdelt_feed = db.query(RSSFeed).filter(RSSFeed.feed_url == gdelt_url).first()
+        if not existing_gdelt_feed:
+            db.add(RSSFeed(
+                feed_name=f"{onboarding_data.primary_entity_name} GDELT Feed",
+                feed_url=gdelt_url,
+                category="News",
+                poll_interval_minutes=60,
+                is_active=True,
+                client_id=db_client.id,
+                source_type="json_api",
+                source_format="gdelt_json"
+            ))
+
+        hn_url = f"https://hn.algolia.com/api/v1/search?query={sanitized_name}&tags=story"
+        existing_hn_feed = db.query(RSSFeed).filter(RSSFeed.feed_url == hn_url).first()
+        if not existing_hn_feed:
+            db.add(RSSFeed(
+                feed_name=f"{onboarding_data.primary_entity_name} HN Algolia Feed",
+                feed_url=hn_url,
+                category="News",
+                poll_interval_minutes=60,
+                is_active=True,
+                client_id=db_client.id,
+                source_type="json_api",
+                source_format="hn_algolia_json"
+            ))
+
+        # 6. Automatically create Collection Source (in the sources table)
+        from app.models.source import Source, SourceCategory
+        # Find or create a category for RSS. Shared reference-data row (not
+        # client-specific) — its own commit is intentionally left as-is:
+        # rolling it back on a later failure could pull the category out
+        # from under other clients' concurrently-committed sources.
+        cat = db.query(SourceCategory).filter(SourceCategory.name == "RSS News").first()
+        if not cat:
+            cat = SourceCategory(name="RSS News", base_reliability_score=1.0)
+            db.add(cat)
+            db.commit()
+            db.refresh(cat)
+
+        db_source = Source(
+            category_id=cat.id,
+            name=f"{onboarding_data.primary_entity_name} RSS Source",
+            source_type="rss",
+            url=google_news_url,
+            schedule_cron="0 * * * *",
             is_active=True
         )
-        db.add(db_feed)
+        db.add(db_source)
 
-    # 6. Automatically create Collection Source (in the sources table)
-    from app.models.source import Source, SourceCategory
-    # Find or create a category for RSS
-    cat = db.query(SourceCategory).filter(SourceCategory.name == "RSS News").first()
-    if not cat:
-        cat = SourceCategory(name="RSS News", base_reliability_score=1.0)
-        db.add(cat)
+        # 7. Create real competitors if provided in onboarding data
+        if hasattr(onboarding_data, 'competitors') and onboarding_data.competitors:
+            for comp_data in onboarding_data.competitors:
+                # Check if competitor already exists by name
+                existing_comp = db.query(Entity).filter(
+                    Entity.client_id == db_client.id,
+                    Entity.name == comp_data.name,
+                    Entity.entity_type == "competitor"
+                ).first()
+
+                if not existing_comp:
+                    comp_entity_in = EntityCreate(
+                        client_id=db_client.id,
+                        name=comp_data.name,
+                        entity_type="competitor",
+                        website=comp_data.get('website'),
+                        domain=comp_data.get('domain'),
+                        ticker_symbol=comp_data.get('ticker_symbol'),
+                        industry=onboarding_data.industry
+                    )
+                    comp_entity = create_entity(db, comp_entity_in)
+                    created_entity_ids.append(comp_entity.id)
+
+        # 8. Automatically create Processing Configuration / Refresh matching engine
+        # In our platform, the matching engine needs to reload the new active keywords
+        from app.services.matching_engine import engine_instance
+        engine_instance.refresh_processor(db)
+
         db.commit()
-        db.refresh(cat)
+    except Exception as exc:
+        db.rollback()
+        if created_entity_ids:
+            db.query(Entity).filter(Entity.id.in_(created_entity_ids)).delete(synchronize_session=False)
+            db.commit()
+        logger.error("client_onboarding_failed", client_id=str(db_client.id), stage="entity_setup", error=str(exc))
+        raise HTTPException(status_code=500, detail="Client onboarding failed while provisioning the primary entity; changes were rolled back.")
 
-    db_source = Source(
-        category_id=cat.id,
-        name=f"{onboarding_data.primary_entity_name} RSS Source",
-        source_type="rss",
-        url=google_news_url,
-        schedule_cron="0 * * * *",
-        is_active=True
-    )
-    db.add(db_source)
-
-    # 7. Create real competitors if provided in onboarding data
-    if hasattr(onboarding_data, 'competitors') and onboarding_data.competitors:
-        for comp_data in onboarding_data.competitors:
-            # Check if competitor already exists by name
-            existing_comp = db.query(Entity).filter(
-                Entity.client_id == db_client.id,
-                Entity.name == comp_data.name,
-                Entity.entity_type == "competitor"
-            ).first()
-            
-            if not existing_comp:
-                comp_entity_in = EntityCreate(
-                    client_id=db_client.id,
-                    name=comp_data.name,
-                    entity_type="competitor",
-                    website=comp_data.get('website'),
-                    domain=comp_data.get('domain'),
-                    ticker_symbol=comp_data.get('ticker_symbol'),
-                    industry=onboarding_data.industry
-                )
-                create_entity(db, comp_entity_in)
-
-    # 8. Automatically create Processing Configuration / Refresh matching engine
-    # In our platform, the matching engine needs to reload the new active keywords
-    from app.services.matching_engine import engine_instance
-    engine_instance.refresh_processor(db)
-
-    db.commit()
     return db_client
 
 def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None):
@@ -156,8 +223,7 @@ def delete_client(db: Session, client_id: UUID) -> dict:
     from app.utils.redis_client import redis_client
 
     # Find client-specific feeds and sources
-    feeds = db.query(RSSFeed).all()
-    client_feeds = [f for f in feeds if client_name.lower() in f.feed_name.lower()]
+    client_feeds = db.query(RSSFeed).filter(RSSFeed.client_id == client_id).all()
     feed_urls = [f.feed_url for f in client_feeds]
     sources = db.query(Source).filter(Source.url.in_(feed_urls)).all()
     source_ids = [s.id for s in sources]

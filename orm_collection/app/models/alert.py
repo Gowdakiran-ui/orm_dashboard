@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Boolean, Integer
+from sqlalchemy import Column, String, Text, Float, DateTime, ForeignKey, Boolean, Integer, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.core.db import Base
@@ -30,20 +30,27 @@ class Alert(Base):
     worker_id = Column(String(64), nullable=True)
     latency_ms = Column(Float, nullable=True)
     retry_count = Column(Integer, nullable=True, default=0)
-    failure_reason = Column(String, nullable=True)
-    
-    from app.models.risk import JSONEncodedDict
-    state_history = Column(JSONEncodedDict, nullable=True)
-    
+    # Phase 6 item 31: DB column is `text` (unbounded); String (no length
+    # here, but still a VARCHAR-family type) was a formal type mismatch.
+    failure_reason = Column(Text, nullable=True)
+
+    # Phase 6 item 29: DB columns are native Postgres `json`. Previously
+    # JSONEncodedDict (impl=TEXT) -- worked at the Python level since the
+    # custom type round-trips dict/list either way, but the DB<->model type
+    # declaration mismatch meant a future `alembic revision --autogenerate`
+    # could try to narrow these back to text. Using the generic SQLAlchemy
+    # JSON type instead, which matches the live `json` (not `jsonb`) type.
+    state_history = Column(JSON, nullable=True)
+
     # Phase 6.2 Accuracy Hardening Columns
     confidence_score = Column(Float, nullable=True)
     evidence_score = Column(Float, nullable=True)
     article_count = Column(Integer, nullable=True, default=1)
-    supporting_signals = Column(JSONEncodedDict, nullable=True)
-    explainability = Column(JSONEncodedDict, nullable=True)
+    supporting_signals = Column(JSON, nullable=True)
+    explainability = Column(JSON, nullable=True)
     lifecycle_status = Column(String(30), nullable=False, default="NEW")
-    lifecycle_history = Column(JSONEncodedDict, nullable=True)
-    escalation_history = Column(JSONEncodedDict, nullable=True)
+    lifecycle_history = Column(JSON, nullable=True)
+    escalation_history = Column(JSON, nullable=True)
     human_summary = Column(String, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

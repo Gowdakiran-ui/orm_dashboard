@@ -228,6 +228,13 @@ class RiskEngine:
                     if payloads:
                         all_payloads.extend(payloads)
                     success_docs += 1
+                    sp.commit()  # Release this document's SAVEPOINT — without this,
+                    # each successful document leaves its nested transaction open,
+                    # stacking on the next db.begin_nested() call. With enough
+                    # documents, the final db.commit() below has to walk back up
+                    # through every unreleased savepoint (SQLAlchemy's
+                    # self._parent.commit(_to_root=True) chain), deep enough to
+                    # hit Python's recursion limit — confirmed live, see FINDINGS.md.
                 except Exception as doc_exc:
                     sp.rollback()  # Rollback ONLY this document's savepoint
                     failed_docs += 1

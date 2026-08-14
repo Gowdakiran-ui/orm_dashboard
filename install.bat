@@ -232,7 +232,7 @@ echo.
 set "VERIFY_SCRIPT=%ROOT%\scripts\verify_environment.py"
 if exist "%VERIFY_SCRIPT%" (
     pushd "%ORM_COLLECTION%"
-    "%PYTHON_EXE%" "%VERIFY_SCRIPT%"
+    "%PYTHON_EXE%" "%VERIFY_SCRIPT%" --apply-schema
     set VERIFY_EXIT=!ERRORLEVEL!
     popd
     if !VERIFY_EXIT! NEQ 0 (

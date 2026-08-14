@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { calculateSentimentDistribution } from "@/utils/calculateSentimentDistribution";
+import { getRiskLevel } from "@/utils/riskLevel";
+import { calculateClientSOV } from "@/utils/shareOfVoice";
 
 interface AnalyticsProps {
   documents: any[];
@@ -130,22 +132,24 @@ export function useAnalytics({
       .sort((a, b) => b.value - a.value);
   }, [documents]);
 
+  // D3: bands now match risk_engine.py's get_risk_level() via the shared
+  // getRiskLevel helper, instead of an independently-guessed 20/50/80 split.
   const riskSeverityData = useMemo(() => {
     let low = 0, med = 0, high = 0, crit = 0;
     (documents || []).forEach(d => {
       if (d) {
-        const r = d.risk || 0;
-        if (r >= 80) crit++;
-        else if (r >= 50) high++;
-        else if (r >= 20) med++;
+        const level = getRiskLevel(d.risk || 0);
+        if (level === "CRITICAL") crit++;
+        else if (level === "HIGH") high++;
+        else if (level === "MEDIUM") med++;
         else low++;
       }
     });
     return [
-      { name: "Critical (80+)", value: crit, fill: "#EF4444" },
-      { name: "High (50-79)", value: high, fill: "#F97316" },
-      { name: "Medium (20-49)", value: med, fill: "#EAB308" },
-      { name: "Low (<20)", value: low, fill: "#10B981" }
+      { name: "Critical (76+)", value: crit, fill: "#EF4444" },
+      { name: "High (51-75)", value: high, fill: "#F97316" },
+      { name: "Medium (26-50)", value: med, fill: "#EAB308" },
+      { name: "Low (0-25)", value: low, fill: "#10B981" }
     ];
   }, [documents]);
 
@@ -178,7 +182,7 @@ export function useAnalytics({
     const clientSentimentNormalized = (clientAvgSentiment + 1) * 50;
     const clientAvgRisk = risks?.average_recent_risk_score ?? 0;
     const clientRiskContainment = 100 - clientAvgRisk;
-    const clientSOV = Math.max(0, 100 - (normalizedBenchmarks || []).reduce((sum: number, b: any) => sum + b.sov, 0));
+    const clientSOV = calculateClientSOV(normalizedBenchmarks);
 
     const data: any[] = [
       { subject: "Reputation Score" },
@@ -217,7 +221,7 @@ export function useAnalytics({
         impact,
         likelihood,
         z: (d.risk || 0) * 2,
-        severity: (d.risk || 0) > 75 ? "CRITICAL" : (d.risk || 0) > 45 ? "HIGH" : "MEDIUM"
+        severity: getRiskLevel(d.risk || 0)
       };
     });
   }, [documents]);
@@ -253,7 +257,7 @@ export function useAnalytics({
         const c = d.topic || "General";
         const r = d.risk || 0;
         const s = d.sentiment || 0;
-        const sev = r >= 80 ? "CRITICAL" : r >= 50 ? "HIGH" : r >= 20 ? "MEDIUM" : "LOW";
+        const sev = getRiskLevel(r);
         if (grid[c] && grid[c][sev]) {
           grid[c][sev].count++;
           grid[c][sev].avgRisk += r;
@@ -387,9 +391,10 @@ export function useAnalytics({
     let maxRisk = 0;
     (documents || []).forEach(d => {
       if (d?.risk !== undefined) {
-        if (d.risk >= 80) crit++;
-        else if (d.risk >= 50) high++;
-        else if (d.risk >= 20) med++;
+        const level = getRiskLevel(d.risk);
+        if (level === "CRITICAL") crit++;
+        else if (level === "HIGH") high++;
+        else if (level === "MEDIUM") med++;
         else low++;
         if (d.risk > maxRisk) maxRisk = d.risk;
       }
@@ -411,7 +416,7 @@ export function useAnalytics({
     
     const competitorCount = (normalizedBenchmarks || []).length;
     const marketRank = clientRank;
-    const clientSOV = Math.max(0, 100 - (normalizedBenchmarks || []).reduce((sum: number, b: any) => sum + b.sov, 0)).toFixed(1);
+    const clientSOV = calculateClientSOV(normalizedBenchmarks).toFixed(1);
 
     const formatLastRun = (isoStr: string | null) => {
       if (!isoStr) return "Never";
@@ -443,17 +448,22 @@ export function useAnalytics({
     const growthTrendsCount = (trendEvents || []).filter((t: any) => t?.trend_direction === 'UP' || t?.trend_direction === 'GROWING').length;
     const decliningTrendsCount = (trendEvents || []).filter((t: any) => t?.trend_direction === 'DOWN' || t?.trend_direction === 'DECLINING').length;
 
-    // Helper for confidence / coverage defaults
-    const getConfidenceScore = (obj: any) => {
+    // D4: these used to fall back to fixed 0.85/0.87 "plausible" numbers
+    // whenever the source object had no real confidence/coverage field
+    // (e.g. before the client's reputation has loaded) — rendered
+    // indistinguishably from a genuine measurement. Return null instead so
+    // callers can render an honest "Not Available".
+    const getConfidenceScore = (obj: any): number | null => {
       if (obj && typeof obj.confidence_score === 'number') return obj.confidence_score;
       if (obj && typeof obj.confidence === 'number') return obj.confidence;
-      return 0.85; // Default fallback if N/A
+      return null;
     };
-    const getCoverageScore = (obj: any) => {
+    const getCoverageScore = (obj: any): number | null => {
       if (obj && typeof obj.data_coverage === 'number') return obj.data_coverage;
       if (obj && typeof obj.coverage === 'number') return obj.coverage;
-      return 0.87; // Default fallback if N/A
+      return null;
     };
+    const fmtScore = (v: number | null) => v === null ? "Not Available" : v.toFixed(2);
 
     return [
       {
@@ -478,13 +488,19 @@ export function useAnalytics({
         status: getEngineStatus(t_t.processed > 0, t_t.processed - t_t.failed > 0),
         processed: t_t.processed !== undefined ? t_t.processed : docCount,
         produced: t_t.processed !== undefined ? (t_t.processed - t_t.failed) : topicsGenerated,
-        successRate: t_t.success_rate || "100%",
-        success: t_t.success_rate || "100%",
-        failed: t_t.failed || 0,
+        // D4: fall back to an honest "Not Available" rather than a fabricated
+        // "100%"/0 when the /telemetry endpoint hasn't returned real
+        // success_rate/failed values for this engine yet.
+        successRate: t_t.success_rate || "Not Available",
+        success: t_t.success_rate || "Not Available",
+        failed: t_t.failed !== undefined ? t_t.failed : null,
         metrics: [
           { label: "Documents", value: t_t.processed !== undefined ? t_t.processed : docCount },
           { label: "Topics Generated", value: t_t.processed !== undefined ? (t_t.processed - t_t.failed) : topicsGenerated },
-          { label: "Average Confidence", value: getConfidenceScore(reputation).toFixed(2) },
+          // D4: the backend has no per-topic confidence telemetry — this
+          // used to read the client's unrelated reputation confidence
+          // instead (the "wrong-object" bug). No real value exists here.
+          { label: "Average Confidence", value: "Not Available" },
           { label: "Latency", value: t_t.avg_time_ms !== undefined ? `${t_t.avg_time_ms.toFixed(1)} ms` : "N/A" }
         ],
         description: "Categorizes unstructured document feeds into strategic business dimensions.",
@@ -495,14 +511,16 @@ export function useAnalytics({
         status: getEngineStatus(s_t.processed > 0, s_t.processed - s_t.failed > 0),
         processed: s_t.processed !== undefined ? s_t.processed : docCount,
         produced: s_t.processed !== undefined ? (s_t.processed - s_t.failed) : sentimentCount,
-        successRate: s_t.success_rate || "100%",
-        success: s_t.success_rate || "100%",
-        failed: s_t.failed || 0,
+        successRate: s_t.success_rate || "Not Available",
+        success: s_t.success_rate || "Not Available",
+        failed: s_t.failed !== undefined ? s_t.failed : null,
         metrics: [
           { label: "Positive", value: positive },
           { label: "Neutral", value: neutral },
           { label: "Negative", value: negative },
-          { label: "Average Confidence", value: getConfidenceScore(reputation).toFixed(2) },
+          // D4: same wrong-object bug as Topic Classification above — no
+          // real per-sentiment confidence telemetry exists on the backend.
+          { label: "Average Confidence", value: "Not Available" },
           { label: "Latency", value: s_t.avg_time_ms !== undefined ? `${s_t.avg_time_ms.toFixed(1)} ms` : "N/A" }
         ],
         description: "Computes polarity scores (-1.0 to +1.0) and vectors for sentiment matching.",
@@ -513,9 +531,13 @@ export function useAnalytics({
         status: getEngineStatus(docCount > 0, (tr_t.produced || trendCount) > 0),
         processed: docCount,
         produced: tr_t.produced !== undefined ? tr_t.produced : trendCount,
-        successRate: "100%",
-        success: "100%",
-        failed: 0,
+        // D4: the backend's /telemetry response has no success_rate/failed
+        // field for this engine at all (it only tracks a `produced` count,
+        // not a per-item pass/fail state) — "Not Available" reflects that
+        // honestly instead of a fabricated "100%"/0.
+        successRate: "Not Available",
+        success: "Not Available",
+        failed: null,
         metrics: [
           { label: "Trend Events", value: tr_t.produced !== undefined ? tr_t.produced : trendCount },
           { label: "Growth Trends", value: growthTrendsCount },
@@ -529,9 +551,9 @@ export function useAnalytics({
         status: getEngineStatus(docCount > 0, (r_t.produced || crit + high + med + low) > 0),
         processed: docCount,
         produced: r_t.produced !== undefined ? r_t.produced : crit + high + med + low,
-        successRate: "100%",
-        success: "100%",
-        failed: 0,
+        successRate: "Not Available",
+        success: "Not Available",
+        failed: null,
         metrics: [
           { label: "Risks Detected", value: r_t.produced !== undefined ? r_t.produced : crit + high + med + low },
           { label: "Critical", value: crit },
@@ -546,9 +568,9 @@ export function useAnalytics({
         status: (a_t.produced || critAlerts + warnings) > 0 ? "HEALTHY" : "NO FINDINGS",
         processed: docCount,
         produced: a_t.produced !== undefined ? a_t.produced : critAlerts + warnings,
-        successRate: "100%",
-        success: "100%",
-        failed: 0,
+        successRate: "Not Available",
+        success: "Not Available",
+        failed: null,
         metrics: [
           { label: "Alerts Generated", value: a_t.produced !== undefined ? a_t.produced : critAlerts + warnings },
           { label: "Warnings", value: warnings }
@@ -561,9 +583,9 @@ export function useAnalytics({
         status: getEngineStatus(docCount > 0, (n_t.produced || narrativeCount) > 0),
         processed: docCount,
         produced: n_t.produced !== undefined ? n_t.produced : narrativeCount,
-        successRate: "100%",
-        success: "100%",
-        failed: 0,
+        successRate: "Not Available",
+        success: "Not Available",
+        failed: null,
         metrics: [
           { label: "Narratives", value: n_t.produced !== undefined ? n_t.produced : narrativeCount },
           { label: "Clusters", value: narrativeCount }
@@ -576,13 +598,13 @@ export function useAnalytics({
         status: getEngineStatus(docCount > 0, (rep_t.produced || repHistory.length) > 0),
         processed: docCount,
         produced: rep_t.produced !== undefined ? rep_t.produced : repHistory.length,
-        successRate: "100%",
-        success: "100%",
-        failed: 0,
+        successRate: "Not Available",
+        success: "Not Available",
+        failed: null,
         metrics: [
           { label: "Score", value: currentRep.toFixed(1) },
-          { label: "Coverage", value: getCoverageScore(reputation).toFixed(2) },
-          { label: "Confidence", value: getConfidenceScore(reputation).toFixed(2) }
+          { label: "Coverage", value: fmtScore(getCoverageScore(reputation)) },
+          { label: "Confidence", value: fmtScore(getConfidenceScore(reputation)) }
         ],
         description: "Consolidates multi-dimensional telemetry into unified brand equity index.",
         navigationId: "reputation"
@@ -592,9 +614,9 @@ export function useAnalytics({
         status: getEngineStatus(docCount > 0, (er_t.produced || execCount) > 0),
         processed: docCount,
         produced: er_t.produced !== undefined ? er_t.produced : execCount,
-        successRate: "100%",
-        success: "100%",
-        failed: 0,
+        successRate: "Not Available",
+        success: "Not Available",
+        failed: null,
         metrics: [
           { label: "Executives", value: execCount },
           { label: "Average Score", value: avgExecScore }
@@ -607,9 +629,9 @@ export function useAnalytics({
         status: getEngineStatus(docCount > 0, (b_t.produced || competitorCount) > 0),
         processed: docCount,
         produced: b_t.produced !== undefined ? b_t.produced : competitorCount,
-        successRate: "100%",
-        success: "100%",
-        failed: 0,
+        successRate: "Not Available",
+        success: "Not Available",
+        failed: null,
         metrics: [
           { label: "Competitors", value: competitorCount },
           { label: "Benchmarks Generated", value: b_t.produced !== undefined ? b_t.produced : competitorCount }

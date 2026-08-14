@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Float, Integer, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from app.core.db import Base
 
@@ -60,5 +60,8 @@ class DocumentMatch(Base):
     matched_text = Column(Text)
     match_type = Column(String(50))
     match_confidence = Column(Float, default=1.0)
-    match_metadata = Column(JSON, nullable=True)
+    # Phase 6 item 30: DB column is `jsonb`. Using JSONB (not generic JSON)
+    # matches live data and makes jsonb operators/indexes reachable through
+    # the ORM.
+    match_metadata = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

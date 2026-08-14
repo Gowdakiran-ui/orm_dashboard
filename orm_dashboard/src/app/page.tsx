@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,11 +10,6 @@ import {
   Eye, Play, Loader2, ArrowRight, Search, Plus
 } from "lucide-react";
 import Link from 'next/link';
-import { 
-  LineChart as RechartsLineChart, Line, XAxis, YAxis, 
-  CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
-} from 'recharts';
 
 // Fallback / Presentational Components
 import { AnalyticsTabHeader } from "@/components/AnalyticsTabHeader";
@@ -28,8 +23,7 @@ import { PipelineStatusPanel } from "@/components/PipelineStatusPanel";
 import { Sidebar } from "@/components/Sidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
-import { EntityNetwork } from "@/components/EntityNetwork";
-import { PipelineFlowDiagram } from "@/components/PipelineFlowDiagram";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import { NarrativesTab } from "@/components/NarrativesTab";
 import { RiskTab } from "@/components/RiskTab";
@@ -44,26 +38,6 @@ import { usePipelineManager } from "@/hooks/usePipelineManager";
 import { useExecutiveData } from "@/hooks/useExecutiveData";
 import { useCompanyManagement } from "@/hooks/useCompanyManagement";
 import { useAnalytics } from "@/hooks/useAnalytics";
-
-// Error Boundary Component
-class ErrorBoundary extends React.Component<{ children: React.ReactNode, fallback: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
-}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("reputation");
@@ -82,9 +56,17 @@ export default function Home() {
   const data = useDashboardData();
 
   // 2. Pipeline Manager
-  const pipeline = usePipelineManager(data.clientId, () => {
+  // D1: usePipelineManager's polling effect depends on this callback's
+  // identity. An inline arrow here would be recreated every render, and
+  // this component re-renders every second (the currentTime clock tick
+  // above), which tore the poll effect down and rebuilt it before its
+  // 2s setTimeout could ever fire. setDashboardRefreshKey is a raw useState
+  // setter (stable forever), so useCallback with it as the only dependency
+  // gives a permanently stable onComplete.
+  const handlePipelineComplete = useCallback(() => {
     data.setDashboardRefreshKey((k) => k + 1);
-  });
+  }, [data.setDashboardRefreshKey]);
+  const pipeline = usePipelineManager(data.clientId, handlePipelineComplete);
 
   // 3. Executive / Entity Promotion Logic
   const exec = useExecutiveData(data.clientId, () => {
@@ -187,14 +169,23 @@ export default function Home() {
         {/* Dashboard View Container */}
         <div className="flex-1 space-y-4 p-4 lg:p-6 max-w-[1900px] mx-auto w-full">
           
-          {!data.clientId ? (
+          {!data.clientId && data.clientsError ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] border border-dashed border-red-500/30 rounded-2xl bg-[#060B18]/30 p-8 text-center font-mono my-8">
+              <AlertTriangle className="h-12 w-12 text-red-500/60 opacity-80 mb-4 animate-pulse" />
+              <h2 className="text-md uppercase tracking-wider text-red-400 font-bold mb-2">Backend Unreachable</h2>
+              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                Could not load the client list from the backend. This is not the empty-account state — the intelligence platform's API did not respond.
+              </p>
+              <p className="text-[10px] text-slate-500 mt-2">{data.clientsError}</p>
+            </div>
+          ) : !data.clientId ? (
             <div className="flex flex-col items-center justify-center min-h-[400px] border border-dashed border-[#1F2937]/60 rounded-2xl bg-[#060B18]/30 p-8 text-center font-mono my-8">
               <Compass className="h-12 w-12 text-[#D4AF37]/60 opacity-80 mb-4 animate-pulse" />
               <h2 className="text-md uppercase tracking-wider text-[#D4AF37] font-bold mb-2">No Enterprise Selected</h2>
               <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
                 There are no active corporate entities monitored at the moment. Please select or onboard a company to view the reputation intelligence indices.
               </p>
-              <button 
+              <button
                 onClick={() => { company.setAddOpen(true); company.setAddError(null); }}
                 className="mt-6 px-5 py-2.5 bg-[#D4AF37] hover:bg-[#F3C63F] text-[#030712] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors duration-200 shadow-lg shadow-[#D4AF37]/10"
               >
@@ -297,90 +288,103 @@ export default function Home() {
 
               {/* C. RISK CENTER VIEW */}
               {activeTab === "risk" && (
-                <RiskTab
-                  alertsLoading={data.alertsLoading}
-                  alertsError={data.alertsError}
-                  alerts={data.alerts}
-                  documentsLoading={data.documentsLoading}
-                  documentsError={data.documentsError}
-                  documents={data.documents}
-                />
+                <ErrorBoundary fallback={<TelemetryErrorWidget title="Risk Center Error" />}>
+                  <RiskTab
+                    alertsLoading={data.alertsLoading}
+                    alertsError={data.alertsError}
+                    alerts={data.alerts}
+                    documentsLoading={data.documentsLoading}
+                    documentsError={data.documentsError}
+                    documents={data.documents}
+                  />
+                </ErrorBoundary>
               )}
 
               {/* D. COMPETITOR COMPARE VIEW */}
               {activeTab === "competitors" && (
-                <CompetitorsTab
-                  benchmarksLoading={data.benchmarksLoading}
-                  benchmarksError={data.benchmarksError}
-                  benchmarks={data.benchmarks}
-                  competitorRadarData={analytics.competitorRadarData}
-                  activeClientName={activeClientName}
-                  normalizedBenchmarks={analytics.normalizedBenchmarks}
-                  reputation={data.reputation}
-                  repBreakdown={data.repBreakdown}
-                  clientRank={analytics.clientRank}
-                  documents={data.documents}
-                />
+                <ErrorBoundary fallback={<TelemetryErrorWidget title="Competitor Compare Error" />}>
+                  <CompetitorsTab
+                    benchmarksLoading={data.benchmarksLoading}
+                    benchmarksError={data.benchmarksError}
+                    benchmarks={data.benchmarks}
+                    competitorRadarData={analytics.competitorRadarData}
+                    activeClientName={activeClientName}
+                    normalizedBenchmarks={analytics.normalizedBenchmarks}
+                    reputation={data.reputation}
+                    repBreakdown={data.repBreakdown}
+                    clientRank={analytics.clientRank}
+                    documents={data.documents}
+                  />
+                </ErrorBoundary>
               )}
 
               {/* E. EXECUTIVE REPUTATION VIEW */}
               {activeTab === "executives" && (
-                <ExecutivesTab
-                  execHistoryLoading={data.execHistoryLoading}
-                  execHistory={data.execHistory}
-                  execTrendChartData={analytics.execTrendChartData}
-                  executivesLoading={data.executivesLoading}
-                  executivesError={data.executivesError}
-                  executives={data.executives}
-                  lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
-                  documents={data.documents}
-                  narratives={data.narratives}
-                />
+                <ErrorBoundary fallback={<TelemetryErrorWidget title="Executive Reputation Error" />}>
+                  <ExecutivesTab
+                    execHistoryLoading={data.execHistoryLoading}
+                    execHistory={data.execHistory}
+                    execTrendChartData={analytics.execTrendChartData}
+                    executivesLoading={data.executivesLoading}
+                    executivesError={data.executivesError}
+                    executives={data.executives}
+                    lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
+                    documents={data.documents}
+                    narratives={data.narratives}
+                  />
+                </ErrorBoundary>
               )}
 
               {/* F. NARRATIVE CLUSTER VIEW */}
               {activeTab === "narratives" && (
-                <NarrativesTab
-                  documentsLoading={data.documentsLoading}
-                  executivesLoading={data.executivesLoading}
-                  narrativesLoading={data.narrativesLoading}
-                  documents={data.documents}
-                  executives={data.executives}
-                  narratives={data.narratives}
-                  activeClientName={activeClientName}
-                  selectedNarrative={data.selectedNarrative}
-                  setSelectedNarrative={data.setSelectedNarrative}
-                  narrativesError={data.narrativesError}
-                  clientId={data.clientId}
-                />
+                <ErrorBoundary fallback={<TelemetryErrorWidget title="Narrative Cluster Error" />}>
+                  <NarrativesTab
+                    documentsLoading={data.documentsLoading}
+                    executivesLoading={data.executivesLoading}
+                    narrativesLoading={data.narrativesLoading}
+                    documents={data.documents}
+                    executives={data.executives}
+                    narratives={data.narratives}
+                    activeClientName={activeClientName}
+                    selectedNarrative={data.selectedNarrative}
+                    setSelectedNarrative={data.setSelectedNarrative}
+                    narrativesError={data.narrativesError}
+                    clientId={data.clientId}
+                  />
+                </ErrorBoundary>
               )}
 
               {/* G. INTELLIGENCE STREAM VIEW */}
               {activeTab === "feed" && (
-                <FeedTab
-                  documentsLoading={data.documentsLoading}
-                  documentsError={data.documentsError}
-                  documents={data.documents}
-                  narratives={data.narratives}
-                  executives={data.executives}
-                  systemStatus={data.systemStatus}
-                />
+                <ErrorBoundary fallback={<TelemetryErrorWidget title="Intelligence Stream Error" />}>
+                  <FeedTab
+                    documentsLoading={data.documentsLoading}
+                    documentsError={data.documentsError}
+                    documents={data.documents}
+                    narratives={data.narratives}
+                    executives={data.executives}
+                    systemStatus={data.systemStatus}
+                    clientId={data.clientId}
+                  />
+                </ErrorBoundary>
               )}
 
               {/* H. AI PIPELINE HEALTH VIEW */}
               {activeTab === "pipeline" && (
-                <PipelineTab
-                  commandStats={data.commandStats}
-                  documents={data.documents}
-                  trendEvents={data.trendEvents}
-                  alerts={data.alerts}
-                  narratives={data.narratives}
-                  repHistory={data.repHistory}
-                  executives={data.executives}
-                  benchmarks={data.benchmarks}
-                  engineDiagnosticsList={analytics.engineDiagnosticsList}
-                  onSelectTab={setActiveTab}
-                />
+                <ErrorBoundary fallback={<TelemetryErrorWidget title="Pipeline Health Error" />}>
+                  <PipelineTab
+                    commandStats={data.commandStats}
+                    documents={data.documents}
+                    trendEvents={data.trendEvents}
+                    alerts={data.alerts}
+                    narratives={data.narratives}
+                    repHistory={data.repHistory}
+                    executives={data.executives}
+                    benchmarks={data.benchmarks}
+                    engineDiagnosticsList={analytics.engineDiagnosticsList}
+                    onSelectTab={setActiveTab}
+                  />
+                </ErrorBoundary>
               )}
             </>
           )}

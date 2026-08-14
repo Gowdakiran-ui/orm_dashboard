@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from app.core.db import Base
 
@@ -23,7 +23,8 @@ class Narrative(Base):
     # Accuracy & Explainability
     summary_text = Column(String(4000), nullable=True)
     confidence_score = Column(Float, nullable=False, default=1.0)
-    evidence_metadata = Column(JSON, nullable=True)
+    # Phase 6 item 30: DB column is `jsonb`, matching JSONB here.
+    evidence_metadata = Column(JSONB, nullable=True)
     
     # Observability Metadata
     run_id = Column(String(100), nullable=True)

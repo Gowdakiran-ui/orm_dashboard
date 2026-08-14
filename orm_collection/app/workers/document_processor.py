@@ -2,6 +2,7 @@ from celery import shared_task
 from app.core.db import SessionLocal
 from app.models.collection_job import CollectionJob
 from app.adapters.rss import RSSAdapter
+from app.adapters.registry import ADAPTER_REGISTRY
 from app.schemas.document import NormalizedDocument
 from app.services.document_service import process_and_save_document
 import json
@@ -11,11 +12,11 @@ import structlog
 logger = structlog.get_logger()
 
 @shared_task(bind=True, max_retries=3)
-def process_document_task(self, job_id: str, source_id: str, raw_document_data_json: str, extract_article: bool = False, client_id: str = None):
+def process_document_task(self, job_id: str, source_id: str, raw_document_data_json: str, extract_article: bool = False, client_id: str = None, source_format: str = "rss"):
     db = SessionLocal()
     try:
         raw_data = json.loads(raw_document_data_json)
-        
+
         if extract_article:
             # Placeholder for Article Extraction (e.g. using beautifulsoup4 or newspaper3k)
             # url = raw_data.get('link')
@@ -23,7 +24,8 @@ def process_document_task(self, job_id: str, source_id: str, raw_document_data_j
             # raw_data['content'] = extract_text(html)
             pass
 
-        adapter = RSSAdapter()
+        adapter_cls = ADAPTER_REGISTRY.get(source_format, RSSAdapter)
+        adapter = adapter_cls()
         normalized_dict = adapter.normalize(raw_data, source_id)
         normalized_doc = NormalizedDocument(**normalized_dict)
 

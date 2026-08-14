@@ -28,7 +28,11 @@ def execute_document_intelligence_sync(document_id: str, client_id: str = None, 
     db = SessionLocal()
     try:
         from app.models.document import Document
-        doc = db.query(Document).filter(Document.id == document_id).first()
+        # Row lock (matches the pattern already used for client-row locking in
+        # aggregation_tasks.py and document locking in topic_classification_batch_processor.py):
+        # without it, two workers reading the same document's status before either
+        # commits would both pass the check and both proceed into the pipeline.
+        doc = db.query(Document).filter(Document.id == document_id).with_for_update().first()
         if doc:
             if doc.processing_status in ["MATCHED", "SKIPPED", "FAILED"]:
                 logger.info("document_already_processed_skipping", document_id=document_id)

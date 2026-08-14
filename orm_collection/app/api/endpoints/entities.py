@@ -24,15 +24,19 @@ def read_entity(entity_id: UUID, db: Session = Depends(get_db)):
 
 @router.post("/{entity_id}/aliases", response_model=EntityAliasResponse)
 def create_entity_alias(entity_id: UUID, alias_in: EntityAliasCreate, db: Session = Depends(get_db)):
+    if not get_entity(db, entity_id):
+        raise HTTPException(status_code=404, detail="Entity not found")
     return add_alias(db, entity_id, alias_in.alias_text)
 
 @router.post("/{entity_id}/keywords", response_model=EntityKeywordResponse)
 def create_entity_keyword(
-    entity_id: UUID, 
-    keyword_in: EntityKeywordCreate, 
+    entity_id: UUID,
+    keyword_in: EntityKeywordCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
+    if not get_entity(db, entity_id):
+        raise HTTPException(status_code=404, detail="Entity not found")
     keyword = add_keyword(
         db, 
         str(entity_id), 

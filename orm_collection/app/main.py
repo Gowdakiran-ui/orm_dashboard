@@ -30,13 +30,22 @@ logger = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load the global matching engine
+    # Startup: Load the global matching engine.
+    # Phase 5 item 25: a DB hiccup here previously propagated out of
+    # lifespan and killed the whole uvicorn process before it could ever
+    # serve /health. Degrade gracefully instead, matching the pattern
+    # already used for the Redis listener below (pubsub.py) — the engine
+    # stays unloaded (engine_instance.is_loaded stays False, surfaced via
+    # /health) and refresh_processor's other callers (endpoints, tasks)
+    # can still populate it once the DB recovers.
     db = SessionLocal()
     try:
         engine_instance.refresh_processor(db)
+    except Exception as e:
+        logger.error("Failed to load matching engine at startup; continuing degraded", error=str(e))
     finally:
         db.close()
-        
+
     # Start Redis Pub/Sub listener for keyword updates
     start_pubsub_listener()
     
@@ -50,8 +59,8 @@ app = FastAPI(title="ORM Collection Layer API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.CORS_ALLOWED_ORIGINS_LIST,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -122,19 +131,22 @@ async def structlog_middleware(request: Request, call_next):
             
     return response
 
-from app.api.endpoints import clients, entities, sources, matching, feeds, documents, collection, search, client_intelligence, executives, alerts
+from app.api.endpoints import clients, entities, sources, matching, feeds, documents, collection, search, client_intelligence, alerts, intelligence
+from app.core.auth import verify_api_key
 
-app.include_router(clients.router, prefix="/clients", tags=["clients"])
-app.include_router(entities.router, prefix="/entities", tags=["entities"])
-app.include_router(sources.router, prefix="/sources", tags=["sources"])
-app.include_router(matching.router, prefix="/matching", tags=["matching"])
-app.include_router(feeds.router, prefix="/feeds", tags=["feeds"])
-app.include_router(documents.router, prefix="/documents", tags=["documents"])
-app.include_router(collection.router, prefix="/collection", tags=["collection"])
-app.include_router(search.router, prefix="/search", tags=["search"])
-app.include_router(client_intelligence.router, prefix="/client-intelligence", tags=["client_intelligence"])
-app.include_router(executives.router, prefix="/executives", tags=["executives"])
-app.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+_auth = [Depends(verify_api_key)]
+
+app.include_router(clients.router, prefix="/clients", tags=["clients"], dependencies=_auth)
+app.include_router(entities.router, prefix="/entities", tags=["entities"], dependencies=_auth)
+app.include_router(sources.router, prefix="/sources", tags=["sources"], dependencies=_auth)
+app.include_router(matching.router, prefix="/matching", tags=["matching"], dependencies=_auth)
+app.include_router(feeds.router, prefix="/feeds", tags=["feeds"], dependencies=_auth)
+app.include_router(documents.router, prefix="/documents", tags=["documents"], dependencies=_auth)
+app.include_router(collection.router, prefix="/collection", tags=["collection"], dependencies=_auth)
+app.include_router(search.router, prefix="/search", tags=["search"], dependencies=_auth)
+app.include_router(client_intelligence.router, prefix="/client-intelligence", tags=["client_intelligence"], dependencies=_auth)
+app.include_router(intelligence.router, prefix="/intelligence", tags=["intelligence"], dependencies=_auth)
+app.include_router(alerts.router, prefix="/alerts", tags=["alerts"], dependencies=_auth)
 
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):

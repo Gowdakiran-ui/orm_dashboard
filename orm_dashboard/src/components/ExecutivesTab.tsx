@@ -8,9 +8,11 @@ import {
 } from 'recharts';
 import { 
   Users, Activity, Search, AlertTriangle, ShieldCheck, Trophy, Info, 
-  TrendingUp, Calendar, AlertOctagon, Cpu, CheckCircle2, X, ExternalLink, Award 
+  TrendingUp, Calendar, AlertOctagon, X, ExternalLink, Award
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 
 export interface ExecutivesTabProps {
   execHistoryLoading: boolean;
@@ -449,6 +451,11 @@ export function ExecutivesTab({
                       </TableCell>
                       <TableCell className="text-center font-mono text-xs text-slate-350">
                         {e.confidence_score !== undefined ? `${(e.confidence_score * 100).toFixed(0)}%` : "100%"}
+                        {e.health_status === 'PARTIAL' && (
+                          <Badge className="ml-1.5 text-[8px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            LIMITED DATA
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center font-mono text-xs text-slate-350">
                         {e.data_coverage !== undefined ? `${(e.data_coverage * 100).toFixed(0)}%` : "40%"}
@@ -533,7 +540,7 @@ export function ExecutivesTab({
                     {doc.reputation_impact}
                   </TableCell>
                   <TableCell className={`text-center font-mono text-xs font-bold ${
-                    doc.risk >= 80 ? "text-red-500" : doc.risk >= 50 ? "text-orange-500" : "text-yellow-500"
+                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-500"
                   }`}>
                     {doc.risk}
                   </TableCell>
@@ -650,31 +657,6 @@ export function ExecutivesTab({
                   </div>
                 </div>
 
-                {/* Pipeline Audit Checklist */}
-                <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center">
-                    <Cpu className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Processing Pipeline Lineage
-                  </span>
-                  <div className="bg-[#030712] p-4 rounded border border-[#1F2937]/40 space-y-2.5 text-[10px]">
-                    {[
-                      { stage: "Ingestion & Parse", status: "SUCCESS" },
-                      { stage: "Entity Extraction & Match", status: "SUCCESS" },
-                      { stage: "Topic Classification Model", status: "SUCCESS" },
-                      { stage: "Sentiment Score Inference", status: "SUCCESS" },
-                      { stage: "Risk Rating Matrix Evaluator", status: "SUCCESS" },
-                      { stage: "Alert Rules Engine Dispatch", status: selectedDoc.risk >= 80 ? "ALERT TRIGGERED" : "COMPLETED" }
-                    ].map((step, idx) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-slate-400">{idx + 1}. {step.stage}</span>
-                        <div className="flex items-center space-x-1.5">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                          <span className="text-emerald-400 font-bold">{step.status}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
               </div>
 
               {/* Drawer Footer */}
@@ -705,26 +687,4 @@ export function ExecutivesTab({
 
     </div>
   );
-}
-
-class ErrorBoundary extends React.Component<{ children: React.ReactNode, fallback: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
 }

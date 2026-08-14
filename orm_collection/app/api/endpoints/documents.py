@@ -11,15 +11,24 @@ router = APIRouter()
 
 @router.get("/", response_model=List[DocumentResponse])
 def read_documents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
     return db.query(Document).order_by(Document.published_at.desc(), Document.id.desc()).offset(skip).limit(limit).all()
 
 @router.get("/{document_id}")
-def read_document(document_id: UUID, db: Session = Depends(get_db)):
-    doc = db.query(Document).filter(Document.id == document_id).first()
+def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_db)):
+    from app.models.entity import Entity, EntityMention
+
+    # Scope by client_id — a document is only returned if it's actually
+    # matched to an entity belonging to the requesting client (API_FORENSICS.md
+    # Section 2 / TASK.md Phase 2 item 2). Matches the join pattern already
+    # used correctly in GET /client/{client_id} below.
+    doc = db.query(Document).join(DocumentMatch).join(Entity).filter(
+        Document.id == document_id,
+        Entity.client_id == client_id,
+    ).distinct().first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-        
-    from app.models.entity import Entity, EntityMention
+
     from app.models.source import Source
     from app.models.sentiment import DocumentSentiment
     from app.models.risk import RiskEvent
@@ -58,6 +67,7 @@ def read_document(document_id: UUID, db: Session = Depends(get_db)):
         t_name = getattr(doc_topic.topic, "name", None)
         if t_name:
             narr_rec = db.query(Narrative).filter(
+                Narrative.client_id == client_id,
                 Narrative.narrative_name.ilike(f"%{t_name}%")
             ).first()
             if narr_rec:
@@ -83,6 +93,7 @@ def read_document(document_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/client/{client_id}")
 def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
     from app.models.client import Client
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:

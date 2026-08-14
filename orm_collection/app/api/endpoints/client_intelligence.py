@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List, Dict, Any
@@ -7,31 +7,6 @@ from app.models.client import Client
 from app.models.trends import TrendEvent
 
 router = APIRouter()
-
-@router.get("/{client_id}/trends", response_model=Dict[str, Any])
-def get_client_trends(client_id: UUID, db: Session = Depends(get_db)):
-    """
-    @deprecated
-    Unused by current dashboard. Preserved for future trend analytics expansion.
-    """
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    # Get recent trends
-    events = db.query(TrendEvent).filter(TrendEvent.client_id == client_id).order_by(TrendEvent.created_at.desc(), TrendEvent.id.desc()).limit(20).all()
-    
-    # Organize by type
-    mention_trends = [{"entity_id": str(e.entity_id), "percentage_change": e.percentage_change, "severity": e.severity} for e in events if e.trend_type == "Mention"]
-    topic_trends = [{"topic_id": str(e.topic_id), "percentage_change": e.percentage_change, "severity": e.severity} for e in events if e.trend_type == "Topic"]
-    sentiment_trends = [{"percentage_change": e.percentage_change, "severity": e.severity} for e in events if e.trend_type == "Sentiment"]
-
-    return {
-        "client_id": str(client.id),
-        "mention_trends": mention_trends,
-        "topic_trends": topic_trends,
-        "sentiment_trends": sentiment_trends
-    }
 
 @router.get("/{client_id}/trend-events", response_model=List[Dict[str, Any]])
 def get_client_trend_events(client_id: UUID, db: Session = Depends(get_db)):
@@ -76,54 +51,7 @@ def get_client_risks(client_id: UUID, db: Session = Depends(get_db)):
         "recent_high_events": sum(1 for e in recent_events if e.risk_level == "HIGH")
     }
 
-@router.get("/{client_id}/risk-events", response_model=List[Dict[str, Any]])
-def get_client_risk_events(client_id: UUID, db: Session = Depends(get_db)):
-    """
-    @deprecated
-    Unused by current dashboard. Kept for future detailed risk timeline features.
-    """
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    events = db.query(RiskEvent).filter(RiskEvent.client_id == client_id).order_by(RiskEvent.created_at.desc(), RiskEvent.id.desc()).limit(100).all()
-    results = []
-    for e in events:
-        results.append({
-            "id": str(e.id),
-            "document_id": str(e.document_id) if e.document_id else None,
-            "entity_id": str(e.entity_id) if e.entity_id else None,
-            "risk_score": e.risk_score,
-            "risk_level": e.risk_level,
-            "confidence_score": e.confidence_score,
-            "risk_factors": e.risk_factors,
-            "created_at": e.created_at.isoformat() if e.created_at else None
-        })
-    return results
-
 from app.models.alert import Alert
-
-@router.get("/{client_id}/alerts", response_model=List[Dict[str, Any]])
-def get_client_alerts(client_id: UUID, db: Session = Depends(get_db)):
-    """
-    @deprecated
-    Unused by current dashboard (active-alerts used instead). Kept for historical alert log features.
-    """
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    alerts = db.query(Alert).filter(Alert.client_id == client_id).order_by(Alert.created_at.desc(), Alert.id.desc()).limit(100).all()
-    results = []
-    for a in alerts:
-        results.append({
-            "id": str(a.id),
-            "alert_type": a.alert_type,
-            "severity": a.severity,
-            "title": a.title,
-            "is_acknowledged": a.is_acknowledged,
-            "created_at": a.created_at.isoformat() if a.created_at else None
-        })
-    return results
 
 @router.get("/{client_id}/active-alerts", response_model=List[Dict[str, Any]])
 def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
@@ -177,22 +105,6 @@ def get_client_top_narratives(client_id: UUID, db: Session = Depends(get_db)):
     } for n in narratives]
     return results
 
-@router.get("/{client_id}/narrative-summary", response_model=Dict[str, Any])
-def get_client_narrative_summary(client_id: UUID, db: Session = Depends(get_db)):
-    """
-    @deprecated
-    Unused by current dashboard. Maintained for future top-level narrative reporting.
-    """
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    narratives = db.query(Narrative).filter(Narrative.client_id == client_id).all()
-    return {
-        "total": len(narratives),
-        "emerging": sum(1 for n in narratives if n.status == "EMERGING"),
-        "peak": sum(1 for n in narratives if n.status == "PEAK")
-    }
-
 from app.models.reputation import ReputationScore
 
 @router.get("/{client_id}/reputation", response_model=Dict[str, Any])
@@ -200,7 +112,7 @@ def get_client_reputation(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(ReputationScore.created_at.desc()).first()
+    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(ReputationScore.created_at.desc(), ReputationScore.id.desc()).first()
     if not rep:
         return {
             "score": None,
@@ -233,7 +145,7 @@ def get_client_reputation_breakdown(client_id: UUID, db: Session = Depends(get_d
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(ReputationScore.created_at.desc()).first()
+    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(ReputationScore.created_at.desc(), ReputationScore.id.desc()).first()
     if not rep:
         return {
             "sentiment": None,
@@ -281,42 +193,104 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
         "top_positive": s.top_positive_narrative,
         "top_negative": s.top_negative_narrative,
         "confidence_score": s.confidence_score,
-        "data_coverage": s.data_coverage
+        "data_coverage": s.data_coverage,
+        "health_status": s.health_status
     } for s in scores]
+
+@router.get("/{client_id}/executive-history", response_model=Dict[str, List[Dict[str, Any]]])
+def get_client_executive_history(client_id: UUID, db: Session = Depends(get_db)):
+    """
+    Historical reputation score timeline per executive — the missing fetch
+    behind the "Leadership Figures Reputation Trend" card (TASK.md Item 4).
+    Mirrors get_client_reputation_history's shape but keyed by executive
+    name, since the frontend plots one line per executive.
+    """
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    from app.models.executive_reputation import ExecutiveReputationScore
+
+    # Cap at the last 30 points per executive via a row_number() partition
+    # (same pattern as get_client_executives's latest-per-executive subquery
+    # above) rather than a flat LIMIT, which would starve later executives
+    # once an earlier one accumulates more than 30 rows.
+    row_num = func.row_number().over(
+        partition_by=ExecutiveReputationScore.entity_id,
+        order_by=ExecutiveReputationScore.created_at.desc()
+    ).label("row_num")
+    subq = db.query(
+        ExecutiveReputationScore.executive_name,
+        ExecutiveReputationScore.score,
+        ExecutiveReputationScore.created_at,
+        row_num
+    ).filter(ExecutiveReputationScore.client_id == client_id).subquery()
+
+    rows = db.query(subq).filter(subq.c.row_num <= 30).order_by(subq.c.created_at.asc()).all()
+
+    history: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        history.setdefault(r.executive_name, []).append({
+            "date": r.created_at.isoformat() if r.created_at else None,
+            "score": r.score
+        })
+    return history
 
 from app.models.competitor_benchmark import CompetitorBenchmark
 
 @router.get("/{client_id}/benchmark", response_model=List[Dict[str, Any]])
-def get_client_benchmark(client_id: UUID, db: Session = Depends(get_db)):
+def get_client_benchmark(
+    client_id: UUID,
+    response: Response,
+    limit: int = Query(25, ge=1, le=200, description="Max competitors to return (SQL-level pagination, not a client-side truncation)."),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     from app.models.entity import Entity
-    benchmarks_raw = db.query(CompetitorBenchmark, Entity).join(
+
+    # B1/B5: latest row per competitor is now selected at the SQL level (same
+    # pattern as get_client_executives above), instead of loading every
+    # historical row for the client and deduplicating in Python. Previously
+    # this loaded the client's full competitor_benchmarks history (e.g. 180
+    # rows for Tesla) to return 10.
+    latest_sub = db.query(
+        CompetitorBenchmark.competitor_entity_id,
+        func.max(CompetitorBenchmark.created_at).label("max_created")
+    ).filter(CompetitorBenchmark.client_id == client_id).group_by(
+        CompetitorBenchmark.competitor_entity_id
+    ).subquery()
+
+    base_query = db.query(CompetitorBenchmark, Entity).join(
         Entity, Entity.id == CompetitorBenchmark.competitor_entity_id
-    ).filter(CompetitorBenchmark.client_id == client_id).order_by(CompetitorBenchmark.created_at.desc()).all()
-    
-    # Deduplicate in Python keeping the first one seen (which is the latest due to DESC order)
-    seen_competitors = set()
-    benchmarks = []
-    for b in benchmarks_raw:
-        comp_id = b.CompetitorBenchmark.competitor_entity_id
-        if comp_id not in seen_competitors:
-            seen_competitors.add(comp_id)
-            benchmarks.append(b)
-            if len(benchmarks) >= 10:
-                break
-    
+    ).join(
+        latest_sub,
+        (CompetitorBenchmark.competitor_entity_id == latest_sub.c.competitor_entity_id) &
+        (CompetitorBenchmark.created_at == latest_sub.c.max_created)
+    ).filter(CompetitorBenchmark.client_id == client_id)
+
+    # B1: the old cap of 10 silently dropped Tesla's 11th competitor with no
+    # signal to the caller. Total count is now exposed via a response header
+    # so a truncated page is visible rather than silent; `limit`/`offset`
+    # give a real pagination mechanism instead of a bigger magic number.
+    total_count = base_query.count()
+    response.headers["X-Total-Count"] = str(total_count)
+
+    benchmarks = base_query.order_by(CompetitorBenchmark.created_at.desc()).offset(offset).limit(limit).all()
+
     if not benchmarks:
-        # Check if there are any competitor entities at all
+        # B3: the engine's own skip threshold (calculate_competitor_benchmarks)
+        # is `len(competitors) < 1` — align the endpoint's sentinel to the same
+        # threshold instead of a stricter local `< 2` that disagreed with it.
         competitor_count = db.query(Entity).filter(
             Entity.client_id == client_id,
             Entity.entity_type == "competitor"
         ).count()
-        
-        if competitor_count < 2:
+
+        if competitor_count < 1:
             return [{"message": "No competitor intelligence available."}]
-    
+
     return [{
         "id": str(b.CompetitorBenchmark.id),
         "competitor_id": str(b.CompetitorBenchmark.competitor_entity_id),
@@ -326,28 +300,14 @@ def get_client_benchmark(client_id: UUID, db: Session = Depends(get_db)):
         "reputation": b.CompetitorBenchmark.reputation_score,
         "sentiment": b.CompetitorBenchmark.sentiment_score,
         "risk": b.CompetitorBenchmark.risk_score,
-        "visibility": b.CompetitorBenchmark.visibility_score
+        "visibility": b.CompetitorBenchmark.visibility_score,
+        # B2: already computed and stored by BenchmarkEngine, same propagation
+        # gap the P2-A fix closed for get_client_executives above.
+        "health_status": b.CompetitorBenchmark.health_status,
+        "confidence_score": b.CompetitorBenchmark.confidence_score,
+        "data_coverage": b.CompetitorBenchmark.data_coverage,
+        "top_narrative": b.CompetitorBenchmark.top_narrative
     } for b in benchmarks]
-
-@router.get("/{client_id}/competitors", response_model=List[Dict[str, Any]])
-def get_client_competitors(client_id: UUID, db: Session = Depends(get_db)):
-    """
-    @deprecated
-    Unused by current dashboard. Retained for future competitor list management features.
-    """
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    from app.models.entity import Entity
-    competitors = db.query(Entity).filter(
-        Entity.client_id == client_id,
-        Entity.entity_type == "competitor"
-    ).all()
-    
-    if not competitors or len(competitors) < 2:
-        return [{"message": "No competitor intelligence available."}]
-    
-    return [{"id": str(e.id), "name": e.name} for e in competitors]
 
 @router.get("/{client_id}/share-of-voice", response_model=List[Dict[str, Any]])
 def get_client_sov(client_id: UUID, db: Session = Depends(get_db)):
@@ -392,34 +352,6 @@ def get_client_competitive_summary(client_id: UUID, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Client not found")
     return {"status": "ok"}
 
-@router.get("/{client_id}/reputation-advice", response_model=Dict[str, Any])
-def get_client_reputation_advice(
-    client_id: UUID,
-    mode: str = "standard",
-    temperature: float = 0.0,
-    db: Session = Depends(get_db)
-):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    from app.services.ai.advisor.reputation_advisor import ReputationAdvisor
-    advisor = ReputationAdvisor()
-    return advisor.generate_reputation_advice(db, str(client_id), mode=mode, temperature=temperature)
-
-@router.get("/{client_id}/crisis-plan", response_model=Dict[str, Any])
-def get_client_crisis_plan(
-    client_id: UUID,
-    mode: str = "standard",
-    temperature: float = 0.0,
-    db: Session = Depends(get_db)
-):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    from app.services.ai.crisis_planner.crisis_planner import CrisisPlanner
-    planner = CrisisPlanner()
-    return planner.generate_crisis_plan(db, str(client_id), mode=mode, temperature=temperature)
-
 @router.get("/{client_id}/executive-candidates", response_model=List[Dict[str, Any]])
 def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()
@@ -430,7 +362,7 @@ def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_d
     candidates = db.query(ExecutiveCandidate).filter(
         ExecutiveCandidate.client_id == client_id,
         ExecutiveCandidate.promoted_to_executive_id.is_(None)
-    ).order_by(ExecutiveCandidate.mention_count.desc(), ExecutiveCandidate.confidence.desc()).all()
+    ).order_by(ExecutiveCandidate.mention_count.desc(), ExecutiveCandidate.confidence.desc()).limit(500).all()
     
     return [{
         "id": str(c.id),
@@ -453,7 +385,7 @@ def get_client_competitor_candidates(client_id: UUID, db: Session = Depends(get_
     candidates = db.query(CompetitorCandidate).filter(
         CompetitorCandidate.client_id == client_id,
         CompetitorCandidate.promoted_to_competitor_id.is_(None)
-    ).order_by(CompetitorCandidate.mention_count.desc(), CompetitorCandidate.confidence.desc()).all()
+    ).order_by(CompetitorCandidate.mention_count.desc(), CompetitorCandidate.confidence.desc()).limit(500).all()
     
     return [{
         "id": str(c.id),

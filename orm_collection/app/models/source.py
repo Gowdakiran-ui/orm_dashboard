@@ -19,7 +19,7 @@ class Source(Base):
     category_id = Column(UUID(as_uuid=True), ForeignKey("source_categories.id"))
     name = Column(String(255), nullable=False)
     source_type = Column(String(50), nullable=False) # rss, reddit, etc.
-    url = Column(String(1024))
+    url = Column(String(1024), unique=True)
     schedule_cron = Column(String(50), nullable=False)
     query_template = Column(Text)
     is_active = Column(Boolean, default=True)
@@ -28,7 +28,7 @@ class SourceHealth(Base):
     __tablename__ = "source_health"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False)
+    source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, unique=True)
     status = Column(String(50))
     reliability_penalty = Column(Numeric(3, 2), default=0.00)
     consecutive_failures = Column(Integer, default=0)

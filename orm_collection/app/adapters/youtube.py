@@ -1,6 +1,6 @@
 import json
 from typing import List, Dict, Any, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from googleapiclient.discovery import build
 from .search_base import BaseSearchAdapter
@@ -49,10 +49,11 @@ class YouTubeAdapter(BaseSearchAdapter):
         video_id = raw_data.get("id", {}).get("videoId", "")
         
         published_str = snippet.get("publishedAt")
-        published_at = datetime.utcnow()
+        published_at = datetime.now(timezone.utc)
         if published_str:
             try:
-                published_at = datetime.strptime(published_str, "%Y-%m-%dT%H:%M:%SZ")
+                # YouTube's publishedAt is always Z-suffixed (UTC).
+                published_at = datetime.strptime(published_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
             except ValueError:
                 pass
                 
@@ -64,6 +65,6 @@ class YouTubeAdapter(BaseSearchAdapter):
             "url": f"https://www.youtube.com/watch?v={video_id}",
             "author": snippet.get("channelTitle", ""),
             "published_at": published_at,
-            "collected_at": datetime.utcnow(),
+            "collected_at": datetime.now(timezone.utc),
             "raw_payload": json.dumps(raw_data)
         }

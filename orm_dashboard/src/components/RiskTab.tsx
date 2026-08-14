@@ -4,13 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   AlertTriangle, Shield, ShieldAlert, X, ExternalLink, 
-  TrendingUp, Calendar, AlertOctagon, Info, Cpu, CheckCircle2
+  TrendingUp, Calendar, AlertOctagon, Info
 } from "lucide-react";
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line 
 } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 
 export interface RiskTabProps {
   alertsLoading: boolean;
@@ -38,15 +39,10 @@ export function RiskTab({
       .filter(d => d && typeof d.risk === "number")
       .map(d => {
         const likelihood = Math.round(((1 - (d.sentiment ?? 0)) / 2) * 100);
-        let severity = "LOW";
-        if (d.risk >= 80) severity = "CRITICAL";
-        else if (d.risk >= 50) severity = "HIGH";
-        else if (d.risk >= 20) severity = "MEDIUM";
-        
         return {
           ...d,
           likelihood,
-          severity
+          severity: getRiskLevel(d.risk)
         };
       })
       .sort((a, b) => b.risk - a.risk);
@@ -58,35 +54,44 @@ export function RiskTab({
   }, [selectedDocId, riskDocs]);
 
   // 1. Risk Summary Statistics
+  // D3: previously only tracked critical/medium/low with thresholds that
+  // didn't match risk_engine.py, and had no "high" bucket at all — any
+  // document scoring 50-79 matched none of the three conditions and
+  // silently vanished from critical+medium+low while still counting toward
+  // `total`. Now uses the canonical 4-band classification.
   const stats = useMemo(() => {
     const total = riskDocs.length;
     let critical = 0;
+    let high = 0;
     let medium = 0;
     let low = 0;
     let sumScore = 0;
     let highest = 0;
 
     riskDocs.forEach(d => {
-      if (d.risk >= 80) critical++;
-      else if (d.risk >= 20 && d.risk < 50) medium++;
-      else if (d.risk < 20) low++;
-      
+      const level = getRiskLevel(d.risk);
+      if (level === "CRITICAL") critical++;
+      else if (level === "HIGH") high++;
+      else if (level === "MEDIUM") medium++;
+      else low++;
+
       sumScore += d.risk;
       if (d.risk > highest) highest = d.risk;
     });
 
     const avg = total > 0 ? (sumScore / total).toFixed(1) : "0.0";
 
-    return { total, critical, medium, low, avg, highest };
+    return { total, critical, high, medium, low, avg, highest };
   }, [riskDocs]);
 
   // 2. Severity Distribution Chart Data
   const severityChartData = useMemo(() => {
     let lowCount = 0, medCount = 0, highCount = 0, critCount = 0;
     riskDocs.forEach(d => {
-      if (d.risk >= 80) critCount++;
-      else if (d.risk >= 50) highCount++;
-      else if (d.risk >= 20) medCount++;
+      const level = getRiskLevel(d.risk);
+      if (level === "CRITICAL") critCount++;
+      else if (level === "HIGH") highCount++;
+      else if (level === "MEDIUM") medCount++;
       else lowCount++;
     });
     return [
@@ -168,10 +173,11 @@ export function RiskTab({
     <div className="space-y-8 relative">
       
       {/* 1. Risk Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 font-mono">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 font-mono">
         {[
           { label: "Total Risks", value: stats.total, color: "text-[#D4AF37]" },
           { label: "Critical Risks", value: stats.critical, color: "text-red-500" },
+          { label: "High Risks", value: stats.high, color: "text-orange-500" },
           { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
           { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
           { label: "Avg Risk Score", value: stats.avg, color: "text-slate-200" },
@@ -402,7 +408,7 @@ export function RiskTab({
                     {doc.title}
                   </TableCell>
                   <TableCell className={`text-center font-mono text-xs font-black ${
-                    doc.risk >= 80 ? "text-red-500" : doc.risk >= 50 ? "text-orange-500" : "text-yellow-500"
+                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-500"
                   }`}>
                     {doc.risk}
                   </TableCell>
@@ -528,31 +534,6 @@ export function RiskTab({
                   </div>
                 </div>
 
-                {/* Pipeline Audit Checklist */}
-                <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center">
-                    <Cpu className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Processing Pipeline Lineage
-                  </span>
-                  <div className="bg-[#030712] p-4 rounded border border-[#1F2937]/40 space-y-2.5 text-[10px]">
-                    {[
-                      { stage: "Ingestion & Parse", status: "SUCCESS" },
-                      { stage: "Entity Extraction & Match", status: "SUCCESS" },
-                      { stage: "Topic Classification Model", status: "SUCCESS" },
-                      { stage: "Sentiment Score Inference", status: "SUCCESS" },
-                      { stage: "Risk Rating Matrix Evaluator", status: "SUCCESS" },
-                      { stage: "Alert Rules Engine Dispatch", status: selectedDoc.risk >= 80 ? "ALERT TRIGGERED" : "COMPLETED" }
-                    ].map((step, idx) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-slate-400">{idx + 1}. {step.stage}</span>
-                        <div className="flex items-center space-x-1.5">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                          <span className="text-emerald-400 font-bold">{step.status}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Related Narratives */}
                 <div className="space-y-2">
                   <span className="text-[10px] text-slate-500 uppercase font-bold">Related Narrative Tracks</span>
@@ -621,8 +602,8 @@ export function RiskTab({
                       <div className="flex justify-between items-start">
                         <span className="text-[10px] text-slate-500">Source: {doc.source}</span>
                         <Badge className={`font-mono text-[8px] ${
-                          doc.risk >= 80 ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                          doc.risk >= 50 ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
+                          doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                          doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
                           "bg-yellow-500/10 text-yellow-450 border border-yellow-500/20"
                         }`}>
                           Risk Score: {doc.risk}

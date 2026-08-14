@@ -83,6 +83,15 @@ class PipelineRun(Base):
     started_at = Column(DateTime(timezone=True), nullable=False,
                         default=lambda: datetime.now(timezone.utc))
     finished_at = Column(DateTime(timezone=True), nullable=True)
+    # Item 18 (Phase 4): started_at is set at row-creation time (QUEUED, via
+    # the API endpoint) — before a worker has necessarily picked the task
+    # up. duration_s (below) is therefore queue-wait + actual execution
+    # combined, which the audit found silently conflated (one historical
+    # row: 843s of pure queue wait inside a reported 1262s "duration").
+    # processing_started_at is set separately, once a worker actually
+    # acquires the pipeline lock and begins running stages, so
+    # execution_duration_s can be computed as execution-only.
+    processing_started_at = Column(DateTime(timezone=True), nullable=True)
 
     # Execution metadata
     current_worker = Column(String(100), nullable=True)
@@ -94,7 +103,8 @@ class PipelineRun(Base):
     log_tail = Column(Text, nullable=True)
 
     # Perf
-    duration_s = Column(Float, nullable=True)
+    duration_s = Column(Float, nullable=True)  # queue-wait + execution (wall clock since started_at)
+    execution_duration_s = Column(Float, nullable=True)  # execution only, since processing_started_at
 
     # ---------------------------------------------------------------------------
     # FSM helpers
@@ -140,6 +150,8 @@ class PipelineRun(Base):
             self.finished_at = now
             if self.started_at:
                 self.duration_s = (now - self.started_at).total_seconds()
+            if self.processing_started_at:
+                self.execution_duration_s = (now - self.processing_started_at).total_seconds()
 
     @property
     def is_active(self) -> bool:

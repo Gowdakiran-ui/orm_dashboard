@@ -75,7 +75,11 @@ export function PipelineDiagnosticsPanel({
       {/* Telemetry-style progress indicators with execution percentages and latencies */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 font-mono text-xs">
         {pipelineDiagnostics.map((engine, idx) => {
-          let pct = 100;
+          // D4: previously defaulted to 100 whenever successRate wasn't a
+          // parseable number (e.g. the now-honest "Not Available" string),
+          // silently redrawing a fabricated full progress bar. null means
+          // genuinely unmeasured.
+          let pct: number | null = null;
           if (engine.successRate && typeof engine.successRate === "string") {
             const parsed = parseFloat(engine.successRate);
             if (!isNaN(parsed)) pct = parsed;
@@ -113,12 +117,13 @@ export function PipelineDiagnosticsPanel({
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[9px] text-slate-400">
                     <span>Execution Success Rate</span>
-                    <span className="font-bold text-slate-200">{pct.toFixed(1)}%</span>
+                    <span className="font-bold text-slate-200">{pct !== null ? `${pct.toFixed(1)}%` : "Not Available"}</span>
                   </div>
                   <div className="w-full bg-[#030712] rounded-full h-1.5 border border-[#1F2937]/45 overflow-hidden">
-                    <div 
-                      style={{ width: `${pct}%` }} 
+                    <div
+                      style={{ width: pct !== null ? `${pct}%` : "0%" }}
                       className={`h-full rounded-full transition-all duration-500 ${
+                        pct === null ? "bg-slate-700" :
                         pct > 90 ? "bg-emerald-500" :
                         pct > 70 ? "bg-orange-500" : "bg-red-500"
                       }`}

@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 
 export interface RiskAnalyticsPanelProps {
   riskMatrixData: any[];
@@ -29,13 +30,13 @@ export function RiskAnalyticsPanel({
       ? (riskMatrixData.reduce((sum, d) => sum + (d.impact || 0), 0) / totalIncidents) 
       : 0.0;
     
-    const criticalCount = riskMatrixData.filter(d => (d.impact || 0) >= 80).length;
+    const criticalCount = riskMatrixData.filter(d => (d.impact || 0) > RISK_THRESHOLDS.HIGH_TO_CRITICAL).length;
     const alertsStatus = alertTimelineData.length === 0 ? "System Stable" : "Active Alerts";
 
     return [
       { label: "Total Incidents", value: totalIncidents, desc: "Monitored threat vectors", icon: Shield, color: "text-[#38BDF8]" },
       { label: "Avg Risk Rating", value: avgRiskVal.toFixed(1), desc: "Average severity score", icon: Activity, color: "text-amber-500" },
-      { label: "Critical Incidents", value: criticalCount, desc: "Risk score 80+", icon: ShieldAlert, color: "text-red-500" },
+      { label: "Critical Incidents", value: criticalCount, desc: "Risk score 76+", icon: ShieldAlert, color: "text-red-500" },
       { label: "Ingestion Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400" }
     ];
   }, [riskMatrixData, alertTimelineData]);

@@ -43,7 +43,16 @@ class EntityExtractor:
         2. Run NER-based discovery to create candidates for unknown entities
         """
         document = db.query(Document).filter(Document.id == document_id).first()
-        if not document or not document.normalized_content:
+        if not document:
+            return
+        if not document.normalized_content:
+            # Without this, a document with empty (not NULL) normalized_content
+            # returns here without ever reaching the processing_status="MATCHED"/
+            # "SKIPPED" assignment below, leaving it stuck at "PROCESSING"
+            # (set by the caller, execute_document_intelligence_sync) forever —
+            # found live via a document permanently stuck this way.
+            document.processing_status = "SKIPPED"
+            db.commit()
             return
         
         # Step 1: Match existing entities using keyword matching
@@ -76,7 +85,10 @@ class EntityExtractor:
                     mention = EntityMention(
                         document_id=document.id,
                         entity_id=entity.id,
-                        role="ORG" if entity.entity_type in ["brand", "competitor"] else "PERSON",
+                        # "rejected_competitor" (A3) is still an organization —
+                        # without it here, a reclassified entity's mentions would
+                        # be labelled PERSON in the /intelligence response.
+                        role="ORG" if entity.entity_type in ["brand", "competitor", "product", "rejected_competitor"] else "PERSON",
                         mention_count=1,
                         confidence_score=accuracy_meta["final_confidence"]
                     )

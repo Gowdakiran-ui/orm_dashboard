@@ -3,8 +3,92 @@ from app.core.db import SessionLocal
 from app.models.rss_feed import RSSFeed
 from app.models.collection_job import CollectionJob
 from app.adapters.rss import RSSAdapter
+from app.adapters.registry import ADAPTER_REGISTRY
 import json
 from datetime import datetime, timezone
+
+
+def _get_or_create_source(db, feed: RSSFeed):
+    """
+    Resolve the `sources` row backing this feed, creating it if needed.
+    documents.source_id is an FK to sources.id (not rss_feeds.id) — this is
+    the shared find-or-create used by both the async fetch_feed_task path
+    and the synchronous aggregation_tasks.py::_stage_collect path.
+
+    Uses INSERT ... ON CONFLICT (url) DO NOTHING + SELECT (same pattern as
+    the A3 dedup fix on documents) rather than SELECT-then-INSERT, since two
+    pollers can race on the same feed URL — sources.url now has a UNIQUE
+    constraint (see FINDINGS.md D4), so a plain SELECT-then-INSERT would
+    raise IntegrityError under that race instead of silently creating a
+    second row.
+    """
+    from sqlalchemy.dialects.postgresql import insert
+    from app.models.source import Source, SourceCategory
+
+    cat = db.query(SourceCategory).filter(SourceCategory.name == "RSS News").first()
+    if not cat:
+        cat = SourceCategory(name="RSS News", base_reliability_score=1.0)
+        db.add(cat)
+        db.commit()
+        db.refresh(cat)
+
+    stmt = insert(Source).values(
+        category_id=cat.id,
+        name=feed.feed_name,
+        source_type=feed.source_format,
+        url=feed.feed_url,
+        schedule_cron="0 * * * *",
+        is_active=True,
+    ).on_conflict_do_nothing(index_elements=['url'])
+    db.execute(stmt)
+    db.commit()
+
+    return db.query(Source).filter(Source.url == feed.feed_url).first()
+
+
+def _record_source_health(db, source_id, success: bool):
+    """
+    Upsert the source_health row for a source after a poll completes.
+    reputation_engine.py (~line 249) reads reliability_penalty as a 0.0-1.0
+    fraction subtracted from base_reliability_score (~1.0) then scaled to
+    0-100 — see FINDINGS.md D6 for the exact read-side formula this is
+    matched against. There is no prior writer to match beyond that formula,
+    so consecutive_failures/penalty growth is a new, deliberately simple
+    choice: reset to healthy on any success, else penalty grows linearly
+    with consecutive_failures capped at 1.0 (fully unreliable at 5+ in a
+    row). status is not read anywhere today; kept human-readable for
+    dashboards/future use.
+    """
+    from sqlalchemy.dialects.postgresql import insert
+    from app.models.source import SourceHealth
+
+    now = datetime.now(timezone.utc)
+    existing = db.query(SourceHealth).filter(SourceHealth.source_id == source_id).first()
+    prev_failures = existing.consecutive_failures if existing else 0
+
+    if success:
+        values = dict(
+            source_id=source_id,
+            status="healthy",
+            reliability_penalty=0.0,
+            consecutive_failures=0,
+            last_success_at=now,
+        )
+    else:
+        consecutive_failures = (prev_failures or 0) + 1
+        values = dict(
+            source_id=source_id,
+            status="failing",
+            reliability_penalty=min(1.0, consecutive_failures * 0.2),
+            consecutive_failures=consecutive_failures,
+            last_success_at=existing.last_success_at if existing else None,
+        )
+
+    stmt = insert(SourceHealth).values(**values)
+    update_cols = {c: stmt.excluded[c] for c in ("status", "reliability_penalty", "consecutive_failures", "last_success_at")}
+    stmt = stmt.on_conflict_do_update(index_elements=['source_id'], set_=update_cols)
+    db.execute(stmt)
+    db.commit()
 
 @shared_task
 def schedule_feeds():
@@ -82,6 +166,7 @@ def fetch_feed_task(self, feed_id: str):
     Fetches an RSS feed and enqueues document processing.
     """
     db = SessionLocal()
+    job_id_pk = None
     try:
         feed = db.query(RSSFeed).filter(RSSFeed.id == feed_id).first()
         if not feed:
@@ -92,29 +177,57 @@ def fetch_feed_task(self, feed_id: str):
         db.add(job)
         db.commit()
         db.refresh(job)
+        # Captured as a plain value (not the ORM object) so the exception
+        # handler can look this exact job up by primary key, not by
+        # "most recent job for this source_id" — two overlapping runs for
+        # the same feed (e.g. a manual trigger racing the scheduler) each
+        # have their own job, and querying by source_id can mark the wrong
+        # one failed (see FINDINGS.md D8).
+        job_id_pk = job.job_id
 
         # Transition to collecting
         job.status = "collecting"
+        # Advance last_polled_at as soon as an attempt begins, not only on
+        # success (Phase 2 item 8 — was the root cause of the permanent
+        # re-fetch loop: schedule_feeds's due-check only looked at
+        # last_polled_at, which previously never moved on failure, so a
+        # feed that had never/not-recently succeeded looked "due" on every
+        # 1-minute Beat tick forever, ignoring poll_interval_minutes
+        # entirely). Setting it here, before adapter.fetch() can raise,
+        # also closes a second overlap: since it now reflects "an attempt
+        # is underway" immediately, schedule_feeds's next tick won't
+        # re-dispatch a duplicate attempt for a feed that's still inside
+        # fetch_feed_task's own internal 60s/120s/240s retry backoff
+        # (item 10) — previously nothing stopped that, since the job row
+        # for this source already reads "failed" as soon as the first
+        # retry-triggering exception hits (see the except block below),
+        # well before the retry chain actually exhausts.
+        #
+        # A brand-new, never-yet-polled feed is unaffected (item 9): this
+        # only fires once an attempt has actually started, so the very
+        # first schedule_feeds pass for a feed with last_polled_at=None
+        # still dispatches it immediately, same as before.
+        feed.last_polled_at = datetime.now(timezone.utc)
         db.commit()
 
-        adapter = RSSAdapter()
+        adapter_cls = ADAPTER_REGISTRY.get(feed.source_format, RSSAdapter)
+        adapter = adapter_cls()
         entries = adapter.fetch(feed.feed_url)
-        
-        # Identify the client_id for this feed by name match
-        from app.models.client import Client
-        clients = db.query(Client).all()
-        client = next((c for c in clients if c.name.lower() in feed.feed_name.lower()), None)
-        client_id = str(client.id) if client else None
+
+        source = _get_or_create_source(db, feed)
+        _record_source_health(db, source.id, success=True)
+        client_id = str(feed.client_id) if feed.client_id else None
 
         from .document_processor import process_document_task
-        
+
         docs_found = 0
         entries_to_process = []
         new_last_guid = feed.last_entry_guid
-        
+
         for entry in entries:
-            # Check if we already processed this based on guid/published_at
-            guid = entry.get('id', entry.get('link'))
+            # Check if we already processed this based on guid/published_at.
+            # 'id'/'link' cover RSS entries, 'url' covers GDELT, 'objectID' covers HN Algolia.
+            guid = entry.get('id') or entry.get('link') or entry.get('url') or entry.get('objectID')
             if feed.last_entry_guid == guid:
                 break # Reached the last fetched item (assuming chronological order)
                 
@@ -142,23 +255,40 @@ def fetch_feed_task(self, feed_id: str):
         for entry in entries_to_process:
             raw_payload = json.dumps(entry)
             process_document_task.delay(
-                str(job.job_id), 
-                str(feed.id),
-                raw_payload, 
+                str(job.job_id),
+                str(source.id),
+                raw_payload,
                 feed.extract_full_article,
-                client_id=client_id
+                client_id=client_id,
+                source_format=feed.source_format
             )
         
     except Exception as exc:
         db.rollback()
-        # Update Job Status if possible
+        # Update Job Status if possible — by primary key (job_id_pk), not by
+        # "most recent job for this source_id". See FINDINGS.md D8.
         import uuid
         feed_uuid = uuid.UUID(feed_id)
-        job = db.query(CollectionJob).filter(CollectionJob.source_id == feed_uuid).order_by(CollectionJob.started_at.desc()).first()
-        if job:
-            job.status = "failed"
-            job.completed_at = datetime.now(timezone.utc)
-            db.commit()
+        if job_id_pk is not None:
+            job = db.query(CollectionJob).filter(CollectionJob.job_id == job_id_pk).first()
+            if job:
+                job.status = "failed"
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+
+        if self.request.retries >= self.max_retries:
+            # Retries exhausted. Only record failing health if this feed has
+            # a Source row already (i.e. it has succeeded at least once
+            # before) — Source rows are lazily created on first successful
+            # poll (FINDINGS.md D4), and D6 doesn't pre-create one just to
+            # log a health row for a feed that has never worked.
+            from app.models.source import Source
+            failed_feed = db.query(RSSFeed).filter(RSSFeed.id == feed_uuid).first()
+            if failed_feed:
+                existing_source = db.query(Source).filter(Source.url == failed_feed.feed_url).first()
+                if existing_source:
+                    _record_source_health(db, existing_source.id, success=False)
+
         # Exponential backoff: 60s, 120s, 240s
         backoff = 60 * (2 ** self.request.retries)
         raise self.retry(exc=exc, countdown=backoff)
@@ -246,8 +376,6 @@ def collection_watchdog():
     from datetime import datetime, timezone, timedelta
     from app.utils.redis_client import redis_client
     from app.models.collection_job import CollectionJob
-    from app.models.rss_feed import RSSFeed
-    from app.models.client import Client
     import structlog
 
     log = structlog.get_logger().bind(task="collection_watchdog")
@@ -284,23 +412,14 @@ def collection_watchdog():
             redis_client.delete(f"pipeline:job:total:{job_id_str}")
             redis_client.delete(f"pipeline:job:processed:{job_id_str}")
 
-            # Safely release corresponding Client pipeline locks
-            feed = db.query(RSSFeed).filter(RSSFeed.id == job.source_id).first()
-            if feed:
-                clients = db.query(Client).all()
-                client = next((c for c in clients if c.name.lower() in feed.feed_name.lower()), None)
-                if client:
-                    client_id_str = str(client.id)
-                    lock_key = f"pipeline:running:{client_id_str}"
-                    current_lock = redis_client.get(lock_key)
-                    current_lock_str = current_lock.decode('utf-8') if isinstance(current_lock, bytes) else str(current_lock) if current_lock else None
-                    
-                    # Verify lock ownership: if lock starts with scheduled- or sync- or is success/failed, we can clear it.
-                    # Do not release if it belongs to an active, non-timeout manual Celery task
-                    if current_lock_str:
-                        if current_lock_str.startswith("scheduled-") or current_lock_str.startswith("sync-") or current_lock_str in ("success", "failed"):
-                            redis_client.set(lock_key, "failed", ex=300)
-                            log.warning("watchdog_released_client_lock", client_id=client_id_str, lock_key=lock_key, previous_lock=current_lock_str)
+            # Note: this branch used to also try releasing a Client pipeline
+            # lock keyed `pipeline:running:{client_id}`. Confirmed via repo-wide
+            # grep (Phase 1, INFRA_FORENSICS.md) that nothing sets that key
+            # anymore — the Phase 13 orchestrator uses `pipeline:lock:{client_id}`
+            # exclusively (see PipelineRun watchdog in aggregation_tasks.py,
+            # which targets the correct key). Removed as dead code rather than
+            # repointed, since CollectionJob and PipelineRun are separate FSMs
+            # and this watchdog has no PipelineRun row to correlate against.
 
     except Exception as exc:
         db.rollback()

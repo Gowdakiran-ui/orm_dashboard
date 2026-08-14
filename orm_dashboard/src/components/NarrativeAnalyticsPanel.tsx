@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Compass, Users, MessageSquare, AlertOctagon, TrendingUp, Cpu } from "lucide-react";
+import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { 
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, RadarChart, PolarGrid, 
@@ -36,7 +37,7 @@ export function NarrativeAnalyticsPanel({
   // 1. KPI Summaries based on live data
   const kpis = useMemo(() => {
     const totalNarratives = narrativeBubbleData.length;
-    const highRiskCount = narrativeBubbleData.filter(n => (n.risk || 0) >= 50).length;
+    const highRiskCount = narrativeBubbleData.filter(n => (n.risk || 0) > RISK_THRESHOLDS.MEDIUM_TO_HIGH).length;
     
     const sortedByMentions = [...narrativeBubbleData].sort((a, b) => b.mentions - a.mentions);
     const topNarrative = sortedByMentions.length > 0 ? sortedByMentions[0].name : "None";
@@ -294,15 +295,16 @@ export function NarrativeAnalyticsPanel({
                   <Scatter name="Narratives" data={normalizedBubbleData} isAnimationActive={true}>
                     {normalizedBubbleData.map((entry: any, index: number) => {
                       const risk = entry.risk || 0;
+                      const level = getRiskLevel(risk);
                       let fill = "#10B981";
                       let filter = undefined;
-                      if (risk >= 80) {
+                      if (level === "CRITICAL") {
                         fill = "#EF4444";
                         filter = "url(#glow-crit)";
-                      } else if (risk >= 50) {
+                      } else if (level === "HIGH") {
                         fill = "#F97316";
                         filter = "url(#glow-high)";
-                      } else if (risk >= 20) {
+                      } else if (level === "MEDIUM") {
                         fill = "#EAB308";
                         filter = "url(#glow-med)";
                       }

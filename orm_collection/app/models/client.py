@@ -8,7 +8,7 @@ class Client(Base):
     __tablename__ = "clients"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False, unique=True)
     industry = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

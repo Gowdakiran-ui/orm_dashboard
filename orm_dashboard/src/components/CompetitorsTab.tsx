@@ -8,9 +8,12 @@ import {
 } from 'recharts';
 import { 
   Compass, Users, BarChart3, Search, AlertTriangle, ShieldCheck, 
-  Trophy, Info, Activity, Calendar, AlertOctagon, Cpu, CheckCircle2, X, ExternalLink 
+  Trophy, Info, Activity, Calendar, AlertOctagon, X, ExternalLink
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { calculateClientSOV } from "@/utils/shareOfVoice";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -39,17 +42,28 @@ export function CompetitorsTab({
 }: CompetitorsTabProps) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
 
-  // 1. DYNAMIC COMPREHENSIVE RANKING (Deterministic & Tie-proof)
+  // 1. COMPREHENSIVE BRAND LIST FOR DISPLAY
+  // C3: rank is no longer computed here. There were three independent,
+  // disagreeing rank computations in this codebase: the backend `rank`
+  // column (BenchmarkEngine, per A2.12/B6 — the canonical one, comparable
+  // across client+competitors on one formula), useAnalytics.ts's
+  // `clientRankValue`/`clientRank`, and this component's own tie-aware
+  // recomputation. Per A9/B6, the backend field is authoritative for
+  // competitors; the client's brand entity has no benchmark row of its own
+  // to read a backend rank from, so `clientRank` (computed in useAnalytics.ts
+  // from the same reputation comparison the backend ranking uses) is the one
+  // client-side stand-in, now actually wired in below instead of being a
+  // dead prop. This memo only builds row data for display/sorting; it does
+  // not invent a rank number.
   const rankedBrands = useMemo(() => {
     const clientRep = reputation?.score ?? 0;
     const clientSent = repBreakdown?.sentiment ?? 0;
-    const clientRisk = repBreakdown?.risk !== undefined && repBreakdown?.risk !== null 
-      ? 100 - repBreakdown.risk 
+    const clientRisk = repBreakdown?.risk !== undefined && repBreakdown?.risk !== null
+      ? 100 - repBreakdown.risk
       : 0;
-    
+
     // Calculate Client SOV
-    const totalCompSOV = (normalizedBenchmarks || []).reduce((sum, b) => sum + (b.sov ?? 0), 0);
-    const clientSOV = Math.max(0, 100 - totalCompSOV);
+    const clientSOV = calculateClientSOV(normalizedBenchmarks);
 
     const list = [
       {
@@ -57,16 +71,36 @@ export function CompetitorsTab({
         isClient: true,
         reputation: clientRep,
         sentiment: clientSent,
+        hasEvidence: true,
         risk: clientRisk,
-        sov: clientSOV
+        sov: clientSOV,
+        rankStr: clientRank
       },
       ...(normalizedBenchmarks || []).map(b => ({
         name: b.competitor_name,
         isClient: false,
         reputation: b.reputation ?? 0,
-        sentiment: b.sentiment ?? 0,
+        // C1: client sentiment (repBreakdown.sentiment) is already 0-100
+        // (ReputationEngine's ((avg+1)/2)*100). Competitor sentiment from
+        // /benchmark is the raw -1..+1 average — normalize with the same
+        // (x+1)*50 mapping the radar chart already uses below, so both are
+        // on the same scale before they're compared in this table/summary.
+        sentiment: ((b.sentiment ?? 0) + 1) * 50,
+        // C5: `b.rank` is already the canonical zero-evidence signal (0 =
+        // unranked, per B6/C3/A2.10 below) — confirmed live that
+        // rank/health_status/confidence_score always agree (0 disagreements
+        // across every current benchmark row), so this reuses that same
+        // signal instead of introducing a second, possibly-inconsistent
+        // check. A zero-evidence competitor's `sentiment` is still the raw
+        // (0+1)*50=50 computed above (not touched — same value used for
+        // sorting/leader calcs as before this fix), but the table cell
+        // below renders "No Data" instead of that number for it, so a
+        // fabricated neutral score is never shown as if it were real.
+        hasEvidence: !!b.rank,
         risk: b.risk ?? 0,
-        sov: b.sov ?? 0
+        sov: b.sov ?? 0,
+        // B6/C3: backend rank, 0 = unranked (no evidence — A2.10).
+        rankStr: b.rank ? `#${b.rank}` : "Unranked"
       }))
     ];
 
@@ -78,31 +112,16 @@ export function CompetitorsTab({
       return a.name.localeCompare(b.name);
     });
 
-    // Assign rank values
-    let currentRank = 1;
-    const ranked = list.map((item, idx) => {
-      if (idx > 0 && Math.abs(list[idx - 1].reputation - item.reputation) > 0.0001) {
-        currentRank = idx + 1;
-      }
-      return {
-        ...item,
-        rankVal: currentRank
-      };
-    });
-
-    // Map tie prefixes where identical rank values occur
-    return ranked.map(item => {
-      const isTied = ranked.filter(r => r.rankVal === item.rankVal).length > 1;
-      return {
-        ...item,
-        rankStr: isTied ? `Tied #${item.rankVal}` : `#${item.rankVal}`
-      };
-    });
-  }, [activeClientName, reputation, repBreakdown, normalizedBenchmarks]);
+    return list;
+  }, [activeClientName, reputation, repBreakdown, normalizedBenchmarks, clientRank]);
 
   // 2. EXECUTIVE COMPETITIVE SUMMARY
   const summary = useMemo(() => {
-    if (rankedBrands.length === 0) return null;
+    // C4: same fix as the landscape table below — rankedBrands always
+    // includes the client row, so this must gate on competitor presence,
+    // not rankedBrands.length, or a client-only "summary" (leader = self,
+    // closest threat = N/A) renders as if it were a real comparison.
+    if (normalizedBenchmarks.length === 0) return null;
 
     // Leader (Highest Reputation Score)
     const leader = [...rankedBrands].sort((a, b) => b.reputation - a.reputation)[0];
@@ -153,14 +172,14 @@ export function CompetitorsTab({
       fastestRising: "Insufficient historical data", 
       recommendation
     };
-  }, [rankedBrands]);
+  }, [rankedBrands, normalizedBenchmarks]);
 
   // 3. THREAT LEVEL COLUMN CALCULATION (Dynamic Indexing)
   // Threat Index Formula = (Competitor SOV * 0.40) + ((100 - Competitor Reputation) * 0.30) + (Competitor Risk * 0.30)
   const getThreatLevel = (sov: number, reputation: number, risk: number) => {
     const index = (sov * 0.4) + ((100 - reputation) * 0.3) + (risk * 0.3);
     if (index >= 75) return { label: "CRITICAL", class: "bg-red-500/10 text-red-400 border border-red-500/30" };
-    if (index >= 50) return { label: "HIGH", class: "bg-orange-500/10 text-orange-450 border border-orange-500/30" };
+    if (index >= 50) return { label: "HIGH", class: "bg-orange-500/10 text-orange-400 border border-orange-500/30" };
     if (index >= 25) return { label: "MEDIUM", class: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/30" };
     return { label: "LOW", class: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" };
   };
@@ -171,28 +190,29 @@ export function CompetitorsTab({
   }, [normalizedBenchmarks]);
 
   const competitorEvents = useMemo(() => {
+    // C5: attribution now comes only from `extracted_entities`, which is the
+    // API's projection of actual entity_mentions rows (documents.py joins
+    // EntityMention -> Entity) — a real, verified link between this document
+    // and a specific entity. The previous version also matched on a naive
+    // case-insensitive substring search over title+content with no word
+    // boundary, so any Apple article mentioning "NASDAQ" or "Guardian" in
+    // passing text got attributed to those as if they were the subject.
     return (documents || [])
-      .filter(d => {
-        if (!d) return false;
-        // Verify that the document matches one of the verified competitors
-        const docText = (d.title || "") + " " + (d.original_content || "");
-        const matchesName = competitorNames.some(name => docText.toLowerCase().includes(name));
-        const matchesEntity = d.extracted_entities?.some((e: any) => 
-          e.entity_type === "competitor" || competitorNames.includes(e.name.toLowerCase())
-        );
-        return matchesName || matchesEntity;
-      })
       .map(d => {
-        const docText = (d.title || "") + " " + (d.original_content || "");
-        const matchedComp = (normalizedBenchmarks || []).find(b => 
-          docText.toLowerCase().includes(b.competitor_name.toLowerCase()) ||
-          d.extracted_entities?.some((e: any) => e.name.toLowerCase() === b.competitor_name.toLowerCase())
+        if (!d) return null;
+        const mention = (d.extracted_entities || []).find((e: any) =>
+          e && e.name && competitorNames.includes(e.name.toLowerCase())
+        );
+        if (!mention) return null;
+        const matchedComp = (normalizedBenchmarks || []).find(b =>
+          b.competitor_name.toLowerCase() === mention.name.toLowerCase()
         );
         return {
           ...d,
-          matchedCompetitor: matchedComp ? matchedComp.competitor_name : "Competitor"
+          matchedCompetitor: matchedComp ? matchedComp.competitor_name : mention.name
         };
       })
+      .filter((d): d is NonNullable<typeof d> => d !== null)
       .sort((a, b) => {
         const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -424,7 +444,7 @@ export function CompetitorsTab({
                           data={[
                           { 
                               name: activeClientName, 
-                              'Share of Voice': Math.max(0, 100 - normalizedBenchmarks.reduce((acc, curr) => acc + curr.sov, 0)) 
+                              'Share of Voice': calculateClientSOV(normalizedBenchmarks)
                           },
                           ...normalizedBenchmarks.map((b) => ({
                               name: b.competitor_name,
@@ -490,7 +510,7 @@ export function CompetitorsTab({
                     <TableHead className="text-slate-500 font-mono text-[10px] text-center flex items-center justify-center space-x-1">
                       <span>THREAT LEVEL</span>
                       <div className="group relative cursor-help">
-                        <Info className="h-3 w-3 text-slate-500 hover:text-slate-350" />
+                        <Info className="h-3 w-3 text-slate-500 hover:text-slate-200" />
                         <div className="absolute z-50 hidden group-hover:block bg-[#030712] border border-[#1F2937] p-2.5 rounded shadow-2xl font-mono text-[8px] w-64 text-left space-y-1 right-0 top-full mt-1.5 leading-normal normal-case font-normal text-slate-400">
                           <span className="font-bold text-[#D4AF37] block mb-1">Threat Index Calculation:</span>
                           Formula: <code className="text-slate-200">SOV * 0.40 + (100 - Reputation) * 0.30 + Risk * 0.30</code>
@@ -506,44 +526,62 @@ export function CompetitorsTab({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rankedBrands.map((brand, i) => {
-                    const threat = getThreatLevel(brand.sov, brand.reputation, brand.risk);
-                    return (
-                      <TableRow 
-                        key={i} 
-                        className={`border-[#1F2937]/40 hover:bg-[#060B18] transition-colors ${
-                          brand.isClient ? "bg-[#D4AF37]/5 hover:bg-[#D4AF37]/10" : ""
-                        }`}
-                      >
-                        <TableCell className="font-mono text-xs font-bold text-slate-200">
-                          {brand.name} {brand.isClient ? "(Client)" : ""}
-                        </TableCell>
-                        <TableCell className={`text-center font-mono text-xs font-bold ${
-                          brand.isClient ? "text-[#D4AF37]" : "text-slate-400"
-                        }`}>
-                          {brand.rankStr}
-                        </TableCell>
-                        <TableCell className="text-center font-mono text-xs font-bold text-slate-200">
-                          {brand.reputation.toFixed(1)}
-                        </TableCell>
-                        <TableCell className="text-center font-mono text-xs text-slate-300">
-                          {brand.sentiment.toFixed(1)}
-                        </TableCell>
-                        <TableCell className="text-center font-mono text-xs text-slate-300">
-                          {brand.risk.toFixed(1)}
-                        </TableCell>
-                        <TableCell className="text-center font-mono text-xs text-slate-300">
-                          {brand.sov.toFixed(1)}%
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className={`font-mono text-[8px] ${threat.class}`}>
-                            {threat.label}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {rankedBrands.length === 0 && (
+                  {/* C4: rankedBrands always contains the client row even with
+                      zero competitors, so `rankedBrands.length === 0` never
+                      fires and a client-only "comparison" (misleadingly ranked
+                      #1) rendered instead of an honest empty state. Gate on
+                      actual competitor presence instead. */}
+                  {normalizedBenchmarks.length > 0 ? (
+                    rankedBrands.map((brand, i) => {
+                      // C2: threat level is a competitor's threat to the client;
+                      // it is not meaningful applied to the client's own row,
+                      // and the formula is weighted toward SOV (0.40), which the
+                      // client structurally dominates (clientSOV = 100 - sum of
+                      // competitor SOV), so the client's own row would score as
+                      // a "threat" against itself. Only compute it for competitors.
+                      const threat = brand.isClient ? null : getThreatLevel(brand.sov, brand.reputation, brand.risk);
+                      return (
+                        <TableRow
+                          key={i}
+                          className={`border-[#1F2937]/40 hover:bg-[#060B18] transition-colors ${
+                            brand.isClient ? "bg-[#D4AF37]/5 hover:bg-[#D4AF37]/10" : ""
+                          }`}
+                        >
+                          <TableCell className="font-mono text-xs font-bold text-slate-200">
+                            {brand.name} {brand.isClient ? "(Client)" : ""}
+                          </TableCell>
+                          <TableCell className={`text-center font-mono text-xs font-bold ${
+                            brand.isClient ? "text-[#D4AF37]" : "text-slate-400"
+                          }`}>
+                            {brand.rankStr}
+                          </TableCell>
+                          <TableCell className="text-center font-mono text-xs font-bold text-slate-200">
+                            {brand.reputation.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="text-center font-mono text-xs text-slate-300">
+                            {brand.hasEvidence ? brand.sentiment.toFixed(1) : (
+                              <span className="text-slate-600">No Data</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center font-mono text-xs text-slate-300">
+                            {brand.risk.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="text-center font-mono text-xs text-slate-300">
+                            {brand.sov.toFixed(1)}%
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {threat ? (
+                              <Badge className={`font-mono text-[8px] ${threat.class}`}>
+                                {threat.label}
+                              </Badge>
+                            ) : (
+                              <span className="text-slate-600 font-mono text-[9px]">N/A (Client)</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-10">
                         <div className="flex flex-col items-center space-y-3">
@@ -588,7 +626,7 @@ export function CompetitorsTab({
           </div>
           <div>
             <span className="text-slate-500 block">Most Active Topic:</span>
-            <span className="text-slate-250 font-bold">{activitySummary.activeTopic}</span>
+            <span className="text-slate-200 font-bold">{activitySummary.activeTopic}</span>
           </div>
         </CardContent>
       </Card>
@@ -636,11 +674,11 @@ export function CompetitorsTab({
                     {doc.reputation_impact}
                   </TableCell>
                   <TableCell className={`text-center font-mono text-xs font-bold ${
-                    doc.risk >= 80 ? "text-red-500" : doc.risk >= 50 ? "text-orange-500" : "text-yellow-500"
+                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-500"
                   }`}>
                     {doc.risk}
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-450 truncate max-w-[100px]">{doc.source}</TableCell>
+                  <TableCell className="font-mono text-xs text-slate-400 truncate max-w-[100px]">{doc.source}</TableCell>
                   <TableCell className="font-mono text-[10px] text-slate-500">
                     {doc.timestamp ? new Date(doc.timestamp).toLocaleDateString(undefined, { dateStyle: 'short' }) : "N/A"}
                   </TableCell>
@@ -710,7 +748,7 @@ export function CompetitorsTab({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Sentiment Polarity (Multiplier):</span>
-                      <span className="text-slate-350">{selectedDoc.sentiment?.toFixed(2) || "0.00"}</span>
+                      <span className="text-slate-300">{selectedDoc.sentiment?.toFixed(2) || "0.00"}</span>
                     </div>
                   </div>
                 </div>
@@ -738,31 +776,6 @@ export function CompetitorsTab({
                     ) : (
                       <span className="text-[10px] text-slate-500">No matching corporate entities identified.</span>
                     )}
-                  </div>
-                </div>
-
-                {/* Pipeline Audit Checklist */}
-                <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center">
-                    <Cpu className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Processing Pipeline Lineage
-                  </span>
-                  <div className="bg-[#030712] p-4 rounded border border-[#1F2937]/40 space-y-2.5 text-[10px]">
-                    {[
-                      { stage: "Ingestion & Parse", status: "SUCCESS" },
-                      { stage: "Entity Extraction & Match", status: "SUCCESS" },
-                      { stage: "Topic Classification Model", status: "SUCCESS" },
-                      { stage: "Sentiment Score Inference", status: "SUCCESS" },
-                      { stage: "Risk Rating Matrix Evaluator", status: "SUCCESS" },
-                      { stage: "Alert Rules Engine Dispatch", status: selectedDoc.risk >= 80 ? "ALERT TRIGGERED" : "COMPLETED" }
-                    ].map((step, idx) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-slate-400">{idx + 1}. {step.stage}</span>
-                        <div className="flex items-center space-x-1.5">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                          <span className="text-emerald-400 font-bold">{step.status}</span>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </div>
 
@@ -796,26 +809,4 @@ export function CompetitorsTab({
 
     </div>
   );
-}
-
-class ErrorBoundary extends React.Component<{ children: React.ReactNode, fallback: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
 }

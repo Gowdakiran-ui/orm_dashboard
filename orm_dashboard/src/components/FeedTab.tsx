@@ -10,7 +10,10 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
-import { API_BASE } from "@/lib/api";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
+import { fetchDocumentDetails } from "@/lib/api";
 
 
 export interface FeedTabProps {
@@ -20,43 +23,7 @@ export interface FeedTabProps {
   narratives?: any[];
   executives?: any[];
   systemStatus?: any;
-}
-
-// Security original URL check helper
-function isValidOriginalArticleUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  try {
-    const trimmed = url.trim();
-    const parsed = new URL(trimmed);
-    const hostname = parsed.hostname.toLowerCase();
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname.includes("internal") ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("10.")
-    ) {
-      return false;
-    }
-    const pathname = parsed.pathname.toLowerCase();
-    if (pathname.includes("/api/") || pathname.endsWith("/api") || pathname.includes("/v1/") || pathname.includes("/v2/")) {
-      return false;
-    }
-    const archiveExtensions = [".zip", ".tar", ".gz", ".tgz", ".rar", ".7z", ".bz2"];
-    if (archiveExtensions.some(ext => pathname.endsWith(ext))) {
-      return false;
-    }
-    const screenshotExtensions = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"];
-    if (screenshotExtensions.some(ext => pathname.endsWith(ext)) || pathname.includes("screenshot") || pathname.includes("capture")) {
-      return false;
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return false;
-    }
-    return true;
-  } catch (e) {
-    return false;
-  }
+  clientId?: string | null;
 }
 
 export function FeedTab({
@@ -65,7 +32,8 @@ export function FeedTab({
   documents = [],
   narratives = [],
   executives = [],
-  systemStatus
+  systemStatus,
+  clientId
 }: FeedTabProps) {
   // State for selected document details panel
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
@@ -81,13 +49,12 @@ export function FeedTab({
 
   // Fetch document details when selected ID changes
   useEffect(() => {
-    if (!selectedDocId) {
+    if (!selectedDocId || !clientId) {
       setSelectedDocDetails(null);
       return;
     }
     setDetailsLoading(true);
-    fetch(`${API_BASE}/documents/${selectedDocId}`)
-      .then(res => res.ok ? res.json() : null)
+    fetchDocumentDetails(clientId, selectedDocId)
       .then(data => {
         setSelectedDocDetails(data);
         setDetailsLoading(false);
@@ -97,7 +64,7 @@ export function FeedTab({
         setSelectedDocDetails(null);
         setDetailsLoading(false);
       });
-  }, [selectedDocId]);
+  }, [selectedDocId, clientId]);
 
   // Section 1: Executive KPI Calculations
   const metrics = useMemo(() => {
@@ -177,22 +144,24 @@ export function FeedTab({
   }, [documents]);
 
   // Section 4: Risk Distribution
+  // D3: bands now match risk_engine.py's get_risk_level() via the shared
+  // getRiskLevel helper, instead of an independently-guessed 20/45/75 split.
   const riskDistribution = useMemo(() => {
     let low = 0, medium = 0, high = 0, critical = 0;
     documents.forEach(d => {
-      const risk = d.risk || 0;
-      if (risk >= 75) critical++;
-      else if (risk >= 45) high++;
-      else if (risk >= 20) medium++;
+      const level = getRiskLevel(d.risk || 0);
+      if (level === "CRITICAL") critical++;
+      else if (level === "HIGH") high++;
+      else if (level === "MEDIUM") medium++;
       else low++;
     });
 
     const total = documents.length || 1;
     return [
-      { label: "Critical (>=75)", count: critical, percentage: Math.round((critical / total) * 100), color: "bg-red-500", text: "text-red-400" },
-      { label: "High (45-74)", count: high, percentage: Math.round((high / total) * 100), color: "bg-orange-500", text: "text-orange-400" },
-      { label: "Medium (20-44)", count: medium, percentage: Math.round((medium / total) * 100), color: "bg-amber-500", text: "text-amber-400" },
-      { label: "Low (<20)", count: low, percentage: Math.round((low / total) * 100), color: "bg-sky-500", text: "text-sky-400" }
+      { label: "Critical (76+)", count: critical, percentage: Math.round((critical / total) * 100), color: "bg-red-500", text: "text-red-400" },
+      { label: "High (51-75)", count: high, percentage: Math.round((high / total) * 100), color: "bg-orange-500", text: "text-orange-400" },
+      { label: "Medium (26-50)", count: medium, percentage: Math.round((medium / total) * 100), color: "bg-amber-500", text: "text-amber-400" },
+      { label: "Low (0-25)", count: low, percentage: Math.round((low / total) * 100), color: "bg-sky-500", text: "text-sky-400" }
     ];
   }, [documents]);
 
@@ -425,7 +394,7 @@ export function FeedTab({
               <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
                 {documents.map((d, i) => {
                   const isSelected = selectedDocId === d.id;
-                  const docRiskColor = d.risk >= 75 ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk >= 45 ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
+                  const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
                   
                   // Timestamp formatter
                   const formattedTime = d.timestamp 
@@ -530,8 +499,8 @@ export function FeedTab({
                       <div>
                         <span className="text-[8px] text-slate-500 uppercase block font-bold">Risk Index</span>
                         <span className={`font-bold text-[11px] ${
-                          selectedDocDetails.risk >= 75 ? "text-red-400" :
-                          selectedDocDetails.risk >= 45 ? "text-amber-400" :
+                          selectedDocDetails.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" :
+                          selectedDocDetails.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" :
                           "text-sky-400"
                         }`}>
                           {selectedDocDetails.risk} pts
@@ -648,26 +617,4 @@ export function FeedTab({
       )}
     </ErrorBoundary>
   );
-}
-
-class ErrorBoundary extends React.Component<{ children: React.ReactNode, fallback: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
 }

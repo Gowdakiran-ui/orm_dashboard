@@ -63,7 +63,7 @@ def get_collection_errors(limit: int = 50, db: Session = Depends(get_db)):
     failed = (
         db.query(CollectionJob)
         .filter(CollectionJob.status == "failed")
-        .order_by(CollectionJob.started_at.desc(), CollectionJob.id.desc())
+        .order_by(CollectionJob.started_at.desc(), CollectionJob.job_id.desc())
         .limit(limit)
         .all()
     )
@@ -71,9 +71,13 @@ def get_collection_errors(limit: int = 50, db: Session = Depends(get_db)):
     if not failed:
         return {"error_count": 0, "errors": [], "message": "No collection errors recorded."}
 
+    feed_ids = list({job.source_id for job in failed if job.source_id})
+    feeds = db.query(RSSFeed).filter(RSSFeed.id.in_(feed_ids)).all() if feed_ids else []
+    feed_map = {feed.id: feed for feed in feeds}
+
     errors = []
     for job in failed:
-        feed = db.query(RSSFeed).filter(RSSFeed.id == job.source_id).first()
+        feed = feed_map.get(job.source_id)
         errors.append({
             "job_id": str(job.job_id),
             "feed_id": str(job.source_id),
@@ -84,5 +88,5 @@ def get_collection_errors(limit: int = 50, db: Session = Depends(get_db)):
             "documents_found": job.documents_found,
             "documents_failed": job.documents_failed,
         })
-    
+
     return {"error_count": len(errors), "errors": errors}

@@ -118,11 +118,11 @@ fi
 write_log "Backend is healthy." "SUCCESS"
 
 write_log "Starting General Celery Worker..." "INFO"
-(cd "$ORM_COLLECTION_DIR" && source venv/bin/activate && python -m celery -A app.core.celery_app.celery_app worker --loglevel=info --hostname=general@%h --pool=solo --concurrency=4 -Q io_queue,cpu_queue,nlp_queue,aggregation_queue) &
+(cd "$ORM_COLLECTION_DIR" && source venv/bin/activate && python -m celery -A app.core.celery_app.celery_app worker --loglevel=info --hostname=general@%h --pool=solo --concurrency=1 -Q io_queue,cpu_queue,nlp_queue,aggregation_queue) &
 WORKER_PID=$!
 
 write_log "Starting Pipeline Celery Worker..." "INFO"
-(cd "$ORM_COLLECTION_DIR" && source venv/bin/activate && python -m celery -A app.core.celery_app.celery_app worker --loglevel=info --hostname=pipeline@%h --pool=solo --concurrency=4 -Q pipeline_queue) &
+(cd "$ORM_COLLECTION_DIR" && source venv/bin/activate && python -m celery -A app.core.celery_app.celery_app worker --loglevel=info --hostname=pipeline@%h --pool=solo --concurrency=1 -Q pipeline_queue) &
 PIPELINE_WORKER_PID=$!
 
 # Wait for celery worker to ping

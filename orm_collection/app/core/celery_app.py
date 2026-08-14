@@ -44,6 +44,8 @@ celery_app.conf.update(
         'app.workers.collection_tasks.fetch_feed_task':   {'queue': 'io_queue'},
         'app.workers.collection_tasks.schedule_feeds':    {'queue': 'io_queue'},
         'app.workers.collection_tasks.flush_metrics_task':{'queue': 'io_queue'},
+        'app.workers.collection_tasks.collection_watchdog':{'queue': 'io_queue'},
+        'app.workers.aggregation_tasks.pipeline_run_watchdog':{'queue': 'io_queue'},
         'app.workers.search_tasks.execute_search_task':   {'queue': 'io_queue'},
         'app.workers.search_tasks.schedule_searches':     {'queue': 'io_queue'},
         # CPU-bound NLP tasks
@@ -75,6 +77,24 @@ celery_app.conf.update(
         'flush-metrics-every-5-minutes': {
             'task': 'app.workers.collection_tasks.flush_metrics_task',
             'schedule': crontab(minute='*/5'),
+        },
+        # D7: collection_watchdog exists (recovers CollectionJobs stuck in
+        # collecting/processing past a 2h timeout) but was never scheduled —
+        # see FINDINGS.md D7. Two jobs were found stuck live (20+ and 3+
+        # days old) before this was added.
+        'collection-watchdog-every-15-minutes': {
+            'task': 'app.workers.collection_tasks.collection_watchdog',
+            'schedule': crontab(minute='*/15'),
+        },
+
+        # Phase 1: PipelineRun (Phase 13) had no watchdog at all — the reason
+        # 12 rows sat non-terminal for up to 21 days (INFRA_FORENSICS.md
+        # Symptom #1/#2, reconciled in this same phase). Routed to io_queue,
+        # not pipeline_queue, so it still runs even if the pipeline_queue
+        # worker itself is the one that died.
+        'pipeline-run-watchdog-every-15-minutes': {
+            'task': 'app.workers.aggregation_tasks.pipeline_run_watchdog',
+            'schedule': crontab(minute='*/15'),
         },
 
         # --- R1: Trend Detection — runs every hour ---
@@ -157,9 +177,16 @@ def init_celery_worker(**kwargs):
     from app.services.matching_engine import engine_instance
     from app.core.pubsub import start_pubsub_listener
 
+    # Phase 5 item 25: same unguarded-DB-access issue as main.py's lifespan()
+    # — an OperationalError here previously killed the worker process before
+    # it could pick up a single task. Log and continue degraded instead;
+    # refresh_processor's other callers repopulate the engine once the DB
+    # recovers.
     db = SessionLocal()
     try:
         engine_instance.refresh_processor(db)
+    except Exception as e:
+        logger.error("Failed to load matching engine at worker startup; continuing degraded", error=str(e))
     finally:
         db.close()
 

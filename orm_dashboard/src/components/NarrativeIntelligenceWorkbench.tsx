@@ -7,44 +7,9 @@ import {
   Users, Layers, ExternalLink, RefreshCw, BarChart2, CheckCircle2, AlertTriangle
 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
-import { API_BASE } from "@/lib/api";
-
-
-function isValidOriginalArticleUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  try {
-    const trimmed = url.trim();
-    const parsed = new URL(trimmed);
-    const hostname = parsed.hostname.toLowerCase();
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname.includes("internal") ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("10.")
-    ) {
-      return false;
-    }
-    const pathname = parsed.pathname.toLowerCase();
-    if (pathname.includes("/api/") || pathname.endsWith("/api") || pathname.includes("/v1/") || pathname.includes("/v2/")) {
-      return false;
-    }
-    const archiveExtensions = [".zip", ".tar", ".gz", ".tgz", ".rar", ".7z", ".bz2"];
-    if (archiveExtensions.some(ext => pathname.endsWith(ext))) {
-      return false;
-    }
-    const screenshotExtensions = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"];
-    if (screenshotExtensions.some(ext => pathname.endsWith(ext)) || pathname.includes("screenshot") || pathname.includes("capture")) {
-      return false;
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return false;
-    }
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
+import { fetchDocumentDetails } from "@/lib/api";
+import { RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 
 interface NarrativeIntelligenceWorkbenchProps {
   documents: any[];
@@ -60,6 +25,7 @@ export function NarrativeIntelligenceWorkbench({
   executives = [],
   narratives = [],
   clientName,
+  clientId,
   onSelectDocument
 }: NarrativeIntelligenceWorkbenchProps) {
   // State for selected narrative
@@ -130,10 +96,9 @@ export function NarrativeIntelligenceWorkbench({
   }, [selectedNarrativeId, narrativeList]);
 
   useEffect(() => {
-    if (!activeNarrative || !activeNarrative.rawDocs) return;
+    if (!activeNarrative || !activeNarrative.rawDocs || !clientId) return;
     activeNarrative.rawDocs.forEach((doc: any) => {
-      fetch(`${API_BASE}/documents/${doc.id}`)
-        .then(res => res.ok ? res.json() : null)
+      fetchDocumentDetails(clientId, doc.id)
         .then(details => {
           setDocUrls(prev => {
             if (prev[doc.id] === details?.url) return prev;
@@ -147,7 +112,7 @@ export function NarrativeIntelligenceWorkbench({
           });
         });
     });
-  }, [activeNarrative]);
+  }, [activeNarrative, clientId]);
 
   // Filtered & Sorted list
   const processedNarratives = useMemo(() => {
@@ -260,7 +225,7 @@ export function NarrativeIntelligenceWorkbench({
           {processedNarratives.length > 0 ? (
             processedNarratives.map((n) => {
               const isSelected = selectedNarrativeId === n.id;
-              const riskColor = n.risk >= 75 ? "text-red-400 border-red-950/40 bg-red-950/20" : n.risk >= 45 ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
+              const riskColor = n.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : n.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
               const trendSign = n.trend >= 0 ? "+" : "";
               const statusBadgeColor = n.status === "Critical" ? "bg-red-950/40 text-red-400 border border-red-800/40" : n.status === "Active" ? "bg-amber-950/40 text-amber-400 border border-amber-800/40" : n.status === "Mitigated" ? "bg-emerald-950/40 text-emerald-400 border border-emerald-800/40" : "bg-sky-950/40 text-sky-400 border border-sky-800/40";
 
@@ -384,7 +349,7 @@ export function NarrativeIntelligenceWorkbench({
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="bg-[#030712]/40 border border-[#1F2937]/45 rounded p-2 text-center">
                   <span className="text-[8px] text-slate-600 block uppercase font-bold">Risk Index</span>
-                  <span className={`text-sm font-bold block mt-0.5 ${activeNarrative.risk >= 75 ? "text-red-400" : activeNarrative.risk >= 45 ? "text-amber-400" : "text-sky-400"}`}>{activeNarrative.risk} pts</span>
+                  <span className={`text-sm font-bold block mt-0.5 ${activeNarrative.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" : activeNarrative.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" : "text-sky-400"}`}>{activeNarrative.risk} pts</span>
                   <span className="text-[8px] text-slate-500 block mt-0.5">{activeNarrative.risk >= 60 ? "HIGH PROFILE" : "MONITORED"}</span>
                 </div>
                 <div className="bg-[#030712]/40 border border-[#1F2937]/45 rounded p-2 text-center">
@@ -462,7 +427,7 @@ export function NarrativeIntelligenceWorkbench({
           {activeNarrative ? (
             activeNarrative.rawDocs && activeNarrative.rawDocs.length > 0 ? (
               activeNarrative.rawDocs.map((doc: any) => {
-                const docRiskColor = doc.risk >= 75 ? "text-red-400 bg-red-950/20" : doc.risk >= 45 ? "text-amber-400 bg-amber-950/20" : "text-sky-400 bg-sky-950/20";
+                const docRiskColor = doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 bg-red-950/20" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 bg-amber-950/20" : "text-sky-400 bg-sky-950/20";
                 const formattedDate = doc.timestamp 
                   ? new Date(doc.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
                   : "Unknown";

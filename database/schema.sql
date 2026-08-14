@@ -1,8 +1,22 @@
 --
 -- PostgreSQL database dump
 --
-
-
+-- This file is the authoritative schema source of truth for this project
+-- (see TASK.md — Remove Alembic, Adopt schema.sql as Source of Truth).
+-- Regenerated via `pg_dump --schema-only` against the local dev DB.
+--
+-- Two things were stripped from the raw pg_dump output before committing:
+--  1. `\restrict`/`\unrestrict` — pg_dump 18 wraps dumps in these psql-only
+--     meta-commands. They are not valid SQL and this project applies schema
+--     via psycopg2/SQLAlchemy, not the psql CLI, so left in they would break
+--     any programmatic apply.
+--  2. The `pgagent` schema/extension (CREATE SCHEMA pgagent, CREATE
+--     EXTENSION pgagent, and their COMMENT ON statements) — this is local
+--     pgAdmin job-scheduler tooling that leaked into the local dev DB, not
+--     part of the application's own schema. It is not referenced by any
+--     model or migration and would likely fail to install on a hosted
+--     provider (e.g. Render) that doesn't ship the pgagent extension.
+--
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -19,32 +33,9 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
---
--- Name: pgagent; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA pgagent;
-
-
---
--- Name: pgagent; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pgagent WITH SCHEMA pgagent;
-
-
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
-
---
--- Name: alembic_version; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.alembic_version (
-    version_num character varying(32) NOT NULL
-);
-
 
 --
 -- Name: alert_client_states; Type: TABLE; Schema: public; Owner: -
@@ -429,13 +420,13 @@ CREATE TABLE public.executive_reputation_scores (
     client_id uuid NOT NULL,
     entity_id uuid NOT NULL,
     executive_name character varying(255) NOT NULL,
-    score double precision,
-    grade character varying(2),
-    sentiment_component double precision,
-    risk_component double precision,
-    narrative_component double precision,
-    trend_component double precision,
-    visibility_component double precision,
+    score double precision NOT NULL,
+    grade character varying(2) NOT NULL,
+    sentiment_component double precision NOT NULL,
+    risk_component double precision NOT NULL,
+    narrative_component double precision NOT NULL,
+    trend_component double precision NOT NULL,
+    visibility_component double precision NOT NULL,
     confidence_score double precision NOT NULL,
     reputation_trend character varying(20) NOT NULL,
     top_positive_narrative character varying(255),
@@ -502,7 +493,7 @@ CREATE TABLE public.narratives (
     latency_ms double precision,
     retry_count integer,
     summary_text character varying(4000),
-    confidence_score double precision DEFAULT 1.0,
+    confidence_score double precision DEFAULT 1.0 NOT NULL,
     evidence_metadata jsonb
 );
 
@@ -525,7 +516,9 @@ CREATE TABLE public.pipeline_runs (
     celery_task_id character varying(100),
     error_detail text,
     log_tail text,
-    duration_s double precision
+    duration_s double precision,
+    processing_started_at timestamp with time zone,
+    execution_duration_s double precision
 );
 
 
@@ -615,11 +608,16 @@ CREATE TABLE public.rss_feeds (
     poll_interval_minutes integer,
     is_active boolean,
     last_polled_at timestamp with time zone,
-    last_entry_guid character varying(512),
+    last_entry_guid text,
     last_entry_published_at timestamp with time zone,
     reliability_score double precision,
     extract_full_article boolean,
-    created_at timestamp with time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now(),
+    client_id uuid,
+    source_type character varying(20) DEFAULT 'entity_search'::character varying NOT NULL,
+    source_format character varying(20) DEFAULT 'rss'::character varying NOT NULL,
+    CONSTRAINT ck_rss_feeds_source_format CHECK (((source_format)::text = ANY ((ARRAY['rss'::character varying, 'gdelt_json'::character varying, 'hn_algolia_json'::character varying])::text[]))),
+    CONSTRAINT ck_rss_feeds_source_type CHECK (((source_type)::text = ANY ((ARRAY['entity_search'::character varying, 'topical_global'::character varying, 'json_api'::character varying])::text[])))
 );
 
 
@@ -768,14 +766,6 @@ CREATE TABLE public.trend_events (
     triggering_documents json,
     time_window character varying(50) DEFAULT '24h_vs_7d'::character varying
 );
-
-
---
--- Name: alembic_version alembic_version_pkc; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alembic_version
-    ADD CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num);
 
 
 --
@@ -1139,6 +1129,14 @@ ALTER TABLE ONLY public.reputation_scores
 
 
 --
+-- Name: clients uq_clients_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clients
+    ADD CONSTRAINT uq_clients_name UNIQUE (name);
+
+
+--
 -- Name: competitor_candidates uq_comp_cand_client_name; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1192,6 +1190,22 @@ ALTER TABLE ONLY public.executive_candidates
 
 ALTER TABLE ONLY public.executive_reputation_scores
     ADD CONSTRAINT uq_exec_reputation_run UNIQUE (entity_id, run_id);
+
+
+--
+-- Name: source_health uq_source_health_source_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.source_health
+    ADD CONSTRAINT uq_source_health_source_id UNIQUE (source_id);
+
+
+--
+-- Name: sources uq_sources_url; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sources
+    ADD CONSTRAINT uq_sources_url UNIQUE (url);
 
 
 --
@@ -1518,6 +1532,13 @@ CREATE INDEX ix_risk_events_entity_id ON public.risk_events USING btree (entity_
 
 
 --
+-- Name: ix_rss_feeds_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_rss_feeds_client_id ON public.rss_feeds USING btree (client_id);
+
+
+--
 -- Name: ix_search_cursors_keyword_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1812,6 +1833,14 @@ ALTER TABLE ONLY public.executive_reputation_scores
 
 
 --
+-- Name: rss_feeds fk_rss_feeds_client_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rss_feeds
+    ADD CONSTRAINT fk_rss_feeds_client_id FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE SET NULL;
+
+
+--
 -- Name: model_runs model_runs_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1934,6 +1963,4 @@ ALTER TABLE ONLY public.trend_events
 --
 -- PostgreSQL database dump complete
 --
-
-
 

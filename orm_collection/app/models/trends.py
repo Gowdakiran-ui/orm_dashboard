@@ -14,7 +14,7 @@ The database-level unique index enforces this at storage level using
 COALESCE for nullable columns.
 """
 import uuid
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Date, Boolean, Index, JSON
+from sqlalchemy import Column, String, Text, Float, DateTime, ForeignKey, Date, Boolean, Index, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func, text
 from app.core.db import Base
@@ -70,7 +70,10 @@ class TrendEvent(Base):
 
     # Phase 4.2 Explainability & Metadata
     trend_direction = Column(String(50), nullable=True)
-    decision_reason = Column(String, nullable=True)
+    # Phase 6 item 31: DB column is `text` (unbounded). String (no length
+    # here) is a VARCHAR-family type -- a formal type mismatch even though
+    # it wasn't actively truncating anything.
+    decision_reason = Column(Text, nullable=True)
     triggering_documents = Column(JSON, nullable=True)
     time_window = Column(String(50), nullable=True, default="24h_vs_7d")
 

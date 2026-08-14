@@ -25,7 +25,22 @@ def generate_keywords_for_entity(db: Session, entity_id: str, base_name: str) ->
             category="ALIAS",
             priority=5
         ))
-        
+
+    # 2b. No-space concatenation (e.g. "Ease My Trip" -> "EaseMyTrip").
+    # FlashText matches literal substrings only, no whitespace normalization —
+    # a multi-word brand written as one token in the press (confirmed live:
+    # EaseMyTrip's own press overwhelmingly uses "EaseMyTrip", not "Ease My
+    # Trip") was silently invisible to matching with only the spaced form
+    # generated. See FINDINGS.md TASK.md Item 2/Phase 2.
+    no_space = base_name.replace(" ", "")
+    if " " in base_name and no_space not in (base_name, alias_1):
+        keywords.append(EntityKeyword(
+            entity_id=entity_id,
+            keyword_text=no_space,
+            category="ALIAS",
+            priority=5
+        ))
+
     # Example: If base_name has " Inc" or " LLC", add a version without it
     if " Inc" in base_name or " LLC" in base_name or " Ltd" in base_name:
         clean_name = base_name.replace(" Inc", "").replace(" LLC", "").replace(" Ltd", "").strip()

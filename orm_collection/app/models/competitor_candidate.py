@@ -22,8 +22,11 @@ class CompetitorCandidate(Base):
     promoted_to_competitor_id = Column(UUID(as_uuid=True), ForeignKey("entities.id", ondelete="SET NULL"), nullable=True)
     promoted_at = Column(DateTime(timezone=True), nullable=True)
     
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Phase 6 item 32: DB has these NOT NULL with a default; model was
+    # looser (nullable defaults to True when omitted). Matching the DB,
+    # which is already correctly enforcing this.
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationship to the promoted competitor entity
     promoted_competitor = relationship("Entity", foreign_keys=[promoted_to_competitor_id])

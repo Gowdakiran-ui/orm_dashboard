@@ -7,3 +7,8 @@ __pycache__/
 .vscode/
 dist/
 build/
+scripts/.platform_pids.json
+.claude/
+orm_collection/scratch/
+orm_collection/celerybeat-schedule.*
+orm_collection/sentiment_audit_results/

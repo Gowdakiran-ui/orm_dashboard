@@ -462,19 +462,23 @@ class HardenedTopicClassifier:
             sorted_labels = [x[0] for x in labels_scores]
             sorted_scores = [x[1] for x in labels_scores]
 
-            # Identify which topics pass their per-topic threshold and keyword gating
+            # Identify which topics pass their per-topic confidence threshold.
+            # NOTE: this used to additionally require a literal TOPIC_KEYWORDS phrase
+            # match ("high precision keyword gating"). Verified live against real
+            # inference output (see FINDINGS.md P1-C): the model correctly and
+            # confidently classifies the overwhelming majority of documents (scores
+            # 0.5-0.99, well above the per-topic threshold), but TOPIC_KEYWORDS is a
+            # small set of literal phrases reverse-engineered from a narrow sample
+            # (e.g. "tapped by meta", "wins etauto") that essentially never recur
+            # verbatim — the AND-gate was rejecting ~99% of correctly-classified
+            # documents. Confidence threshold + apply_negative_suppression() below
+            # (real disambiguation rules, e.g. Nikola Tesla vs. Tesla Inc.) remain as
+            # the actual precision guards.
             passed_threshold_topics = []
-            preprocessed_text_lower = preprocessed_text.lower()
             for label, score in labels_scores:
                 thresh = topic_thresholds.get(label, 0.5)
                 if score >= thresh:
-                    # Enforce high precision keyword gating
-                    keywords = TOPIC_KEYWORDS.get(label, [])
-                    has_keyword = any(kw.lower() in preprocessed_text_lower for kw in keywords) if keywords else True
-                    if has_keyword:
-                        passed_threshold_topics.append(label)
-                    else:
-                        topics_rejected += 1
+                    passed_threshold_topics.append(label)
                 else:
                     topics_rejected += 1
 
@@ -842,19 +846,19 @@ class HardenedTopicClassifier:
                 sorted_labels = [x[0] for x in labels_scores]
                 sorted_scores = [x[1] for x in labels_scores]
 
-                # Apply per-topic thresholds & keyword gating
+                # Apply per-topic confidence thresholds. See FINDINGS.md P1-C: the
+                # literal TOPIC_KEYWORDS "high precision keyword gating" AND-gate
+                # previously here rejected ~99% of correctly, confidently classified
+                # documents (verified against real model output) because its phrases
+                # were reverse-engineered from a narrow sample and essentially never
+                # recur verbatim. apply_negative_suppression() below remains as the
+                # real precision guard.
                 passed_threshold_topics = []
-                preprocessed_text_lower = preprocessed_text.lower()
                 topics_rejected = 0
                 for label, score in labels_scores:
                     thresh = topic_thresholds.get(label, 0.5)
                     if score >= thresh:
-                        keywords = TOPIC_KEYWORDS.get(label, [])
-                        has_keyword = any(kw.lower() in preprocessed_text_lower for kw in keywords) if keywords else True
-                        if has_keyword:
-                            passed_threshold_topics.append(label)
-                        else:
-                            topics_rejected += 1
+                        passed_threshold_topics.append(label)
                     else:
                         topics_rejected += 1
 

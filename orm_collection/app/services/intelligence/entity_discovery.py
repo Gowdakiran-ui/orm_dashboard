@@ -2,9 +2,11 @@ import spacy
 import uuid
 import structlog
 import re
+from difflib import SequenceMatcher
 from typing import List, Dict, Any, Optional, Set
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, text
+from sqlalchemy.exc import IntegrityError
 import hashlib
 from datetime import datetime, timezone
 
@@ -31,9 +33,20 @@ class EntityDiscoveryConfig:
     COMPETITOR_CONFIDENCE_THRESHOLD = 0.70
     COMPETITOR_MIN_DOCUMENTS = 2
 
-    # Organizations to always ignore — media outlets, financial terminals, generic terms
-    IGNORED_ORGANIZATIONS = {
-        "microsoft", "google", "amazon", "linkedin", "reuters", "bloomberg",
+    # ── Ignore lists ────────────────────────────────────────────────────────
+    # Split into two sets (A1.5). The original single IGNORED_ORGANIZATIONS
+    # conflated two unrelated things: publishers/generic industry terms (which
+    # are genuinely never a competitor) and real operating companies (which are
+    # frequently *exactly* the competitor we want to discover). Keeping them in
+    # one set is why `microsoft`/`google`/`amazon` were permanently unpromotable
+    # for any client — confirmed live: Apple Inc has zero real competitors and
+    # `microsoft` never even reaches CompetitorCandidate, because
+    # _process_org_entity() skips on this same set.
+    #
+    # MEDIA_AND_GENERIC_TERMS — publishers, financial terminals, data platforms,
+    # bare industry buzzwords and role acronyms. Never a competitor, for anyone.
+    MEDIA_AND_GENERIC_TERMS = {
+        "linkedin", "reuters", "bloomberg",
         "msn", "businessline", "techcrunch", "moneycontrol.com", "ndtv",
         "the times of india", "hindustan times", "economic times", "et auto",
         "autocar", "autocar professional", "autocar india",
@@ -43,30 +56,126 @@ class EntityDiscoveryConfig:
         "business insider", "business standard", "value research",
         "infoworld", "thestreet", "marketwatch", "zacks", "benzinga",
         "the new stack", "mit technology review", "daily sabah",
-        "sec", "ipo", "ai", "cpu", "gpu", "llm", "uco bank",
-        "super", "rgb", "yoy", "bee", "cev", "ev", "cto", "cfo",
+        "sec", "ipo", "ai", "cpu", "gpu", "llm",
+        "super", "rgb", "yoy", "bee", "cev", "ev", "cto", "cfo", "coo",
+        # A1.8 — same shape as the acronyms above (bare financial-report
+        # terminology, never a competitor). "eps" (Earnings Per Share) was
+        # the specific gap that let PepsiCo's junk "EPS" competitor through
+        # (TASK_FORENSICS...md Phase 2 / TASK.md Phase 1); "ebitda"/"roi"/
+        # "qoq" are the same class, added together per the same audit
+        # rather than patched one at a time. Checked against all 84 live
+        # entity names first — none collide.
+        "eps", "ebitda", "roi", "qoq",
         "pr newswire", "globe newswire", "businesswire", "pr",
-        "softbank", "infosys", "tcs", "wipro",
         # Financial data / tech media platforms
         "marketbeat", "cleantechnica", "electrek", "the verge", "wired",
         "techradar", "venturebeat", "engadget", "gizmodo", "mashable",
         "ars technica", "arstechnica", "9to5mac", "9to5google",
         "statistics indexbox", "indexbox", "statista",
+        "gurufocus", "britannica money", "britannica",
+        # A1.9 — known compound junk words Layer O4's whole-word split
+        # misses ("newsroom" is one token, not "news"+"room", so it never
+        # intersects media_keywords). Investigated a generic substring/
+        # startswith check on media_keywords instead of a literal add, and
+        # rejected it: it would also flag real names that merely start with
+        # a keyword's letters by coincidence (e.g. a person or company
+        # named "Newsom" would match "news" as a prefix) — a real
+        # collision risk, not a hypothetical one, for a platform-wide,
+        # permanent classifier. An exact-match addition here has zero such
+        # risk and fixes the one confirmed case; add further compound
+        # words the same way if more are found, rather than switching to
+        # substring matching.
+        "newsroom",
+    }
+
+    # REAL_COMPANY_DENYLIST — operating companies that were on the original
+    # ignore list. They are NOT filtered out of competitor discovery any more.
+    # Retained as a named set purely so IGNORED_ORGANIZATIONS below stays
+    # byte-for-byte equivalent to what the executive-discovery Layer 6 filter
+    # and _is_valid_person_name() have always seen — those two consumers are
+    # deliberately unchanged by this phase.
+    REAL_COMPANY_DENYLIST = {
+        "microsoft", "google", "amazon", "uco bank",
+        "softbank", "infosys", "tcs", "wipro",
+    }
+
+    # Preserved for existing consumers (executive Layer 6 / _is_valid_person_name /
+    # _process_org_entity's person-side expectations). Identical membership to the
+    # pre-split list — do not narrow this without re-auditing the executive path.
+    IGNORED_ORGANIZATIONS = MEDIA_AND_GENERIC_TERMS | REAL_COMPANY_DENYLIST
+
+    # Market-instrument / venue noise. "AAPL Shares", "NASDAQ", "Nifty 50" are
+    # ORG-tagged by spaCy but are tickers, exchanges and index names, never
+    # competitors. Split from the regulator set that already existed.
+    MARKET_NOISE_TERMS = {
+        "shares", "share", "stock", "stocks", "ticker", "index", "indices",
+        "etf", "etfs", "adr", "futures", "options", "dividend", "dividends",
+        "earnings", "premarket", "aftermarket", "holdings",
+    }
+
+    EXCHANGES_AND_REGULATORS = {
+        "nasdaq", "nyse", "amex", "dow jones", "dow", "s&p", "sp500",
+        "ftse", "nikkei", "hang seng", "nifty", "sensex", "bse", "nse", "sebi",
+        "ntsb", "nhtsa", "sec", "fdic", "fed", "niti",
+        "faa", "epa", "doe", "doj", "ftc",
     }
 
     # Name suffixes that indicate media/analytics entities when appended to a root word
     MEDIA_COMPOUND_SUFFIXES = {"beat", "technica", "watch", "wire", "hub", "box"}
 
+    # Near-duplicate guard for competitor promotion (A1.7), mirroring
+    # EXECUTIVE_NAME_SIMILARITY_THRESHOLD. Set higher (0.88 vs 0.93 is *not*
+    # comparable across name shapes — org names are shorter, so ratios run hot).
+    # Verified against all 26 live promoted competitor names: the highest ratio
+    # between any two genuinely-distinct names is < 0.70, so 0.88 has a wide
+    # margin. Real near-dupes it catches: "General Motors"/"General Motor" 0.963,
+    # "Mercedes-Benz"/"Mercedes Benz" 0.923, "Ford"/"Fords" 0.889.
+    # Only applied to normalized names of >= 5 chars, because SequenceMatcher is
+    # unstable on very short strings ("BYD"/"BYDs" 0.857, "Meta"/"Beta" 0.75) —
+    # deliberately conservative, favors missing a near-dupe over blocking a real
+    # competitor, same stance as the executive guard.
+    COMPETITOR_NAME_SIMILARITY_THRESHOLD = 0.88
+    COMPETITOR_NEAR_DUPLICATE_MIN_LENGTH = 5
+
     # Maximum length for person names
     MAX_PERSON_NAME_LENGTH = 100
+
+    # A2.1 — corporate-descriptor nouns that disqualify a candidate from
+    # being a person name (Layer 7 of _is_valid_person_name_layered), for
+    # names that aren't caught by strict legal suffixes (_LEGAL_SUFFIXES,
+    # e.g. "Inc"/"Corp"/"Ltd") but are still never part of a real human
+    # name — confirmed live case: "Varun Beverages" (PepsiCo's actual
+    # bottling franchisee, not a person named "Varun" with surname
+    # "Beverages"). Checked against all live person-entity names in the DB
+    # first — none use any of these words, so this is a zero-risk addition.
+    CORPORATE_ENTITY_NOUNS = {
+        "beverages", "industries", "motors", "systems", "technologies",
+        "enterprises", "partners", "solutions", "labs",
+    }
+
+    # Near-duplicate guard for executive promotion (E2). Ratio from
+    # difflib.SequenceMatcher on normalized (lowercased, whitespace-collapsed)
+    # names. Tested against real cases: 0.966 for the live "Uday Ruddaraju" /
+    # "Uday Ruddarraju" pair, 0.941 "tim cook"/"tim cooke", 0.947
+    # "elon musk"/"elon musck" — all above this threshold. Genuinely distinct
+    # names stay below it: "john smith"/"jane smith" 0.8, "john smith"/
+    # "john smyth" 0.9, "john smith"/"john smithson" 0.87. Deliberately
+    # conservative (favors missing a near-dupe over blocking a real promotion).
+    EXECUTIVE_NAME_SIMILARITY_THRESHOLD = 0.93
 
 
 class EntityDiscoveryEngine:
     def __init__(self):
         try:
             self.nlp = spacy.load("en_core_web_sm")
-        except OSError:
+        except OSError as e:
             self.nlp = None
+            logger.critical(
+                "spacy_model_not_loaded",
+                model="en_core_web_sm",
+                reason=str(e),
+                effect="Executive/competitor discovery will return empty candidates silently."
+            )
 
     def extract_ner_entities(self, text: str) -> List[Dict[str, Any]]:
         """Extract PERSON and ORG entities using spaCy NER"""
@@ -168,6 +277,11 @@ class EntityDiscoveryEngine:
         - Check if known executive exists
         - If not, create or update ExecutiveCandidate
         """
+        # Strip possessive suffix ("Jensen Huang's" -> "Jensen Huang") before any
+        # matching/creation, mirroring _is_valid_org_name()'s possessive handling,
+        # so mentions attach to the same candidate/entity instead of splitting.
+        person_name = self._strip_possessive_suffix(person_name)
+
         # Normalize name for matching
         normalized_name = self._normalize_name(person_name)
         
@@ -320,10 +434,13 @@ class EntityDiscoveryEngine:
         if client_brand and normalized_name == self._normalize_name(client_brand.name):
             return "skipped"
         
-        # Skip ignored organizations unless they're in client's industry
-        if normalized_name in EntityDiscoveryConfig.IGNORED_ORGANIZATIONS:
-            if client_brand and client_brand.industry:
-                return "skipped"
+        # Skip publishers / generic industry terms. Narrowed from
+        # IGNORED_ORGANIZATIONS to MEDIA_AND_GENERIC_TERMS (A1.5): the old set
+        # also contained real operating companies, so a genuine competitor named
+        # in an article never even became a CompetitorCandidate. Verified live —
+        # Apple Inc had 188 candidates and not one of Microsoft/Google/Amazon
+        # among them, despite all three appearing in its document corpus.
+        if normalized_name in EntityDiscoveryConfig.MEDIA_AND_GENERIC_TERMS:
             return "skipped"
         
         # Get all client entities and match by normalized name in Python
@@ -518,13 +635,15 @@ class EntityDiscoveryEngine:
 
         # Layer 3 — Action Phrase Filter
         action_verbs = {
-            "buy", "sell", "invest", "watch", "read", "see", "compare", "review", 
-            "drive", "want", "learn", "get", "upgrade", "join", "stock", "earning", 
-            "earnings", "dividend", "dividends", "price", "share", "shares", "target", 
+            "buy", "sell", "invest", "watch", "read", "see", "compare", "review",
+            "drive", "want", "learn", "get", "upgrade", "join", "stock", "earning",
+            "earnings", "dividend", "dividends", "price", "share", "shares", "target",
             "rally", "drop", "plunge", "climb", "short", "news", "report", "update"
         }
-        if parts[0].lower().rstrip(".,") in action_verbs:
-            return False, "Layer 3 — Action Phrase Filter", f"Starts with action/marketing verb: '{parts[0]}'"
+        for part in parts:
+            p_lower = part.lower().rstrip(".,")
+            if p_lower in action_verbs:
+                return False, "Layer 3 — Action Phrase Filter", f"Contains action/marketing verb: '{p_lower}'"
 
         # Layer 4 — Publisher / Organization Filter
         publishers = {
@@ -551,7 +670,62 @@ class EntityDiscoveryEngine:
             if p_lower in products:
                 return False, "Layer 5 — Product Filter", f"Matches product/technology keyword: '{p_lower}'"
 
+        # Layer 6 — Generic/Organization Term Filter
+        # Reuses the same generic-term list the ORG path already treats as non-entities
+        # (media outlets, financial terminals, industry buzzwords like "AI", "GPU", "IPO").
+        # A real human name should never be composed of these terms; this catches cases
+        # where a headline fragment (e.g. "Moonshot AI") gets NER-mislabeled as PERSON.
+        for part in parts:
+            p_lower = part.lower().rstrip(".,")
+            if p_lower in EntityDiscoveryConfig.IGNORED_ORGANIZATIONS:
+                return False, "Layer 6 — Generic/Organization Term Filter", f"Matches generic organization/industry term: '{p_lower}'"
+
+        # Layer 7 — Corporate Entity Noun Filter (A2.1)
+        # No layer here previously required a *positive* human-name signal —
+        # only negative denylists (verbs, publishers, products, generic org
+        # terms). A syntactically valid 2-word Title-Case phrase like "Varun
+        # Beverages" cleared every layer above purely on shape, because none
+        # of Layers 3-6's denylists contain "beverages". Reuses
+        # `_LEGAL_SUFFIXES` (already used elsewhere in this file for the
+        # same concept — a word that marks a name as corporate rather than
+        # human) rather than duplicating it, extended with common
+        # corporate-descriptor nouns that aren't strict legal suffixes but
+        # are never part of a real person's name either.
+        for part in parts:
+            p_lower = part.lower().rstrip(".,")
+            if p_lower in self._LEGAL_SUFFIXES or p_lower in EntityDiscoveryConfig.CORPORATE_ENTITY_NOUNS:
+                return False, "Layer 7 — Corporate Entity Noun Filter", f"Matches corporate-entity noun: '{p_lower}'"
+
         return True, "", ""
+
+    def _strip_possessive_suffix(self, name: str) -> str:
+        """Strip a trailing possessive ("Jensen Huang's" -> "Jensen Huang"), same
+        suffix set _is_valid_org_name() checks for organizations."""
+        stripped = name.rstrip()
+        for suffix in ("'s", "’s", "s'"):
+            if stripped.endswith(suffix):
+                return stripped[: -len(suffix)].rstrip()
+        return stripped
+
+    def _find_near_duplicate_person_entity(
+        self, db: Session, client_id: str, name: str
+    ) -> Optional[Entity]:
+        """E2 guard: catch spelling-variant duplicates (e.g. "Uday Ruddaraju" vs
+        "Uday Ruddarraju") that the exact-match ilike check in
+        promote_executive_candidates() won't catch. Scoped to entity_type='person'
+        within the same client only, so two different clients' "John Smith"s never
+        collide. Not a merge — callers should skip promotion and log for review."""
+        normalized = re.sub(r"\s+", " ", name.strip().lower())
+        existing_people = db.query(Entity).filter(
+            Entity.client_id == client_id,
+            Entity.entity_type == "person"
+        ).all()
+        for entity in existing_people:
+            other_normalized = re.sub(r"\s+", " ", entity.name.strip().lower())
+            ratio = SequenceMatcher(None, normalized, other_normalized).ratio()
+            if ratio >= EntityDiscoveryConfig.EXECUTIVE_NAME_SIMILARITY_THRESHOLD:
+                return entity
+        return None
 
     def _normalize_name(self, name: str) -> str:
         """Normalize entity name for matching, stripping corporate suffixes"""
@@ -622,82 +796,390 @@ class EntityDiscoveryEngine:
                     
         return min(1.0, confidence)
 
+    # Legal suffixes that indicate a corporate name *when they terminate it*.
+    _LEGAL_SUFFIXES = {
+        "inc", "inc.", "corp", "corp.", "corporation", "ltd", "ltd.", "limited",
+        "llc", "llc.", "plc", "gmbh", "ag", "sa", "nv", "bv", "co", "co.",
+        "company", "holdings", "group",
+    }
+
     def _calculate_org_confidence(self, org_name: str) -> float:
-        """Calculate confidence score for an organization entity"""
-        # Base confidence
-        confidence = 0.70
-        
-        # Boost for organizations that look like company names
-        if any(indicator in org_name.lower() for indicator in 
-               ["inc", "corp", "ltd", "llc", "company", "corporation"]):
-            confidence += 0.15
-        
-        return min(1.0, confidence)
-
-    def _is_valid_org_name(self, org_name: str, client_name: str = "") -> bool:
         """
-        Guard against promoting media outlets, news publishers, financial platforms,
-        abbreviations, possessives, and client self-references as competitors.
-        Returns True if the name looks like a real competitor company.
+        Confidence score for an organization candidate, from name *shape* only.
+
+        A1.6: the previous version added a flat +0.15 for containing any of
+        inc/corp/ltd/llc anywhere in the string. Confirmed live, that inverted
+        the ranking — headline fragments and 13F filers ("6th Official Apple
+        Inc.", "Lavaca Capital LLC MarketBeat", "Citizens Financial Group Inc.")
+        scored 0.85 while every real competitor name capped at the 0.70 base.
+
+        The suffix signal is kept but conditioned on the suffix actually
+        *terminating* the name, which is what distinguishes a company name from
+        a sentence that happens to contain one. Fragment-shaped names are now
+        penalised instead of rewarded.
+
+        NOTE (forward-only): this runs at candidate creation, not on update, so
+        it does not rescore the 1,074 candidate rows already stored. Those are
+        re-gated by _is_valid_org_name_layered() at promotion time instead.
         """
-        normalized = self._normalize_name(org_name)
+        base = 0.70
+        cleaned = (org_name or "").strip()
+        if not cleaned:
+            return 0.0
 
-        # Block anything in the expanded ignore list
-        if normalized in EntityDiscoveryConfig.IGNORED_ORGANIZATIONS:
-            return False
+        tokens = [t for t in re.split(r"\s+", cleaned) if t]
+        if not tokens:
+            return 0.0
 
-        # Block very short abbreviations (≤3 chars) — GPU, AI, EV, etc.
-        if len(normalized) <= 3:
-            return False
+        confidence = base
 
-        # Block names that end with a domain TLD (.com, .co, .net, .org)
+        # Legal suffix, but only as the final token ("Acme Corp." yes;
+        # "6th Official Apple Inc." is caught by the fragment penalties below).
+        if tokens[-1].lower().rstrip(",") in self._LEGAL_SUFFIXES and len(tokens) >= 2:
+            confidence += 0.10
+
+        # Well-formed proper-noun shape: every token starts uppercase or is a
+        # lowercase connective ("of", "and", "de"). Headline fragments routinely
+        # break this ("the World's Most Valuable Company").
+        connectives = {"of", "and", "for", "the", "de", "du", "van", "von", "da"}
+        shape_ok = all(
+            tok[0].isupper() or tok.lower() in connectives
+            for tok in tokens
+            if tok and tok[0].isalpha()
+        )
+        if shape_ok:
+            confidence += 0.05
+        else:
+            confidence -= 0.15
+
+        # Fragment penalties — length and digits are the two strongest
+        # sentence-fragment tells in the live candidate sample.
+        if len(tokens) >= 4:
+            confidence -= 0.15
+        elif len(tokens) == 3:
+            confidence -= 0.05
+        if any(any(ch.isdigit() for ch in tok) for tok in tokens):
+            confidence -= 0.10
+        if "'" in cleaned or "’" in cleaned:
+            confidence -= 0.10
+
+        return max(0.0, min(1.0, round(confidence, 4)))
+
+    def _client_self_reference_terms(self, db: Session, client_id: str) -> set:
+        """
+        A1.4 — build the client's own-identity term set from data that actually
+        exists, rather than a guessed heuristic: the brand Entity's name, its
+        ticker_symbol, its EntityAlias rows, and its PRIMARY/ALIAS EntityKeyword
+        rows. All four are populated by client_service.onboard_client().
+
+        Verified live: this yields {"apple inc", "apple"} for Apple Inc,
+        {"tesla", "tsla"} for Tesla, {"pepsico", "pep"} for PepsiCo.
+        """
+        terms: set = set()
+        brand = db.query(Entity).filter(
+            Entity.client_id == client_id,
+            Entity.entity_type == "brand"
+        ).first()
+        if not brand:
+            return terms
+
+        def _add(value):
+            if value and str(value).strip():
+                terms.add(self._normalize_name(str(value)))
+
+        _add(brand.name)
+        _add(brand.ticker_symbol)
+        for alias in brand.aliases:
+            _add(alias.alias_text)
+        for kw in brand.keywords:
+            if (kw.category or "").upper() in ("PRIMARY", "ALIAS"):
+                _add(kw.keyword_text)
+
+        # The client's own products, from the entity_type the Entity model
+        # already documents ('brand', 'person', 'product', 'competitor') and
+        # from PRODUCT-category keywords.
+        #
+        # HONEST LIMITATION — verified live: there are currently zero
+        # entity_type='product' rows and zero PRODUCT-category keywords in the
+        # database, so this branch is inert today and "iPhones", "iPad",
+        # "MacBooks", "Nexon", "Punch" and "Sierra" still pass the gate. No
+        # other signal for "this is the client's own product" exists at this
+        # point in the pipeline — spaCy tags all of them ORG (verified). Rather
+        # than invent a per-client product blocklist, the classifier reads the
+        # data source that is supposed to hold this, so the gate starts working
+        # the moment onboarding populates it. Logged in FINDINGS.md.
+        product_entities = db.query(Entity).filter(
+            Entity.client_id == client_id,
+            Entity.entity_type == "product"
+        ).all()
+        for prod in product_entities:
+            _add(prod.name)
+            for alias in prod.aliases:
+                _add(alias.alias_text)
+
+        product_keywords = db.query(EntityKeyword).join(
+            Entity, Entity.id == EntityKeyword.entity_id
+        ).filter(
+            Entity.client_id == client_id,
+            EntityKeyword.category == "PRODUCT"
+        ).all()
+        for kw in product_keywords:
+            _add(kw.keyword_text)
+
+        terms.discard("")
+        return terms
+
+    def _is_valid_org_name_layered(
+        self,
+        org_name: str,
+        client_name: str = "",
+        self_reference_terms: Optional[set] = None,
+        source_terms: Optional[set] = None,
+    ) -> tuple:
+        """
+        Layered organization-name classifier. Returns (is_valid, layer, reason),
+        mirroring _is_valid_person_name_layered()'s contract so competitor
+        rejections are as observable as executive ones.
+
+        A1.1 — the previous implementation was a pure blocklist: any 4+ character,
+        <=4-word noun phrase that missed a ~90-entry set was accepted. Verified
+        live, it returned True for every junk competitor in the database
+        ("iPhones", "NASDAQ", "Guardian", "AAPL Shares", "Britannica Money",
+        "Nexon", "Punch", "Sierra", "Pepsi", "Example Corp.") and False for real
+        ones ("Microsoft", "AMD", "BYD").
+
+        A1.2 — investigated and REJECTED: requiring the spaCy ORG label as a
+        positive signal, the way PERSON is required for executives. It carries
+        zero discriminating power here. Every CompetitorCandidate row is already
+        ORG-labelled by construction (_process_document only routes label=="ORG"
+        into _process_org_entity), and en_core_web_sm was verified to tag
+        "iPhones", "Nexon", "Punch", "AAPL Shares", "NASDAQ", "Guardian" and
+        "Britannica Money" all as ORG. The label is an invariant of the table,
+        not a classifier input. See FINDINGS.md.
+        """
+        raw = (org_name or "").strip()
+        if not raw:
+            return False, "Layer O1 — Shape Validation", "Empty name"
+
+        normalized = self._normalize_name(raw)
+        if not normalized:
+            return False, "Layer O1 — Shape Validation", "Name normalizes to empty"
+
+        # ── Layer O1 — Shape validation ────────────────────────────────────
+        if re.search(r'^https?://', raw) or re.search(r'%[0-9A-F]{2}', raw) or re.search(r'<[^>]+>', raw):
+            return False, "Layer O1 — Shape Validation", "Contains URL, HTML or URL encoding"
+
+        if len(raw) > 120:
+            return False, "Layer O1 — Shape Validation", f"Length {len(raw)} exceeds organization-name bound"
+
+        if raw.rstrip().endswith(("'s", "’s", "s'")):
+            return False, "Layer O1 — Shape Validation", "Possessive form"
+
         if re.search(r'\.(com|co|net|org|io|in|uk)$', normalized):
-            return False
+            return False, "Layer O1 — Shape Validation", "Name is a web domain"
 
-        # Block possessives: "Tesla's", "PepsiCo's", "Elon Musk's"
-        if org_name.rstrip().endswith(("'s", "’s", "s'")):
-            return False
+        tokens = [t for t in re.split(r'\s+', raw) if t]
+        if len(tokens) > 4:
+            return False, "Layer O1 — Shape Validation", f"{len(tokens)} words — headline/sentence fragment, not a name"
 
-        # Block names that start with the client's own brand
-        # e.g. client="Tata Motors" blocks "Tata Motors CV", "Tata Motors PV"
-        # e.g. client="PepsiCo" blocks "PepsiCo CFO", "PepsiCo Q2 2026"
+        # A bare legal suffix is not a name ("LLC", "Inc", "Holdings").
+        if normalized.lower() in self._LEGAL_SUFFIXES:
+            return False, "Layer O1 — Shape Validation", "Bare legal suffix, no organization name"
+
+        # Ordinals only occur in prose ("6th Official Apple Inc."), never in a
+        # company name. Deliberately narrower than "starts with a digit", which
+        # would reject 3M and 7-Eleven.
+        if any(re.fullmatch(r'\d+(st|nd|rd|th)', t.lower().strip('.,')) for t in tokens):
+            return False, "Layer O1 — Shape Validation", "Contains an ordinal — sentence fragment"
+
+        # A1.3 — the old rule rejected everything <=3 characters, which blocked
+        # AMD, BYD, IBM, GM, HP and Kia. Length alone is not the discriminator;
+        # capitalization is. A real short name is an all-caps acronym (AMD, BYD,
+        # NIO) or a Title-case word (Kia, Ola). A short lowercase/mixed fragment
+        # is not. Bare industry acronyms that survive this (AI, GPU, EV, CPU)
+        # are caught by Layer O5, which is what that generic-term list is for.
+        if len(normalized) <= 3:
+            bare = re.sub(r'[^A-Za-z]', '', raw)
+            looks_like_name = bool(bare) and len(bare) >= 2 and (bare.isupper() or bare.istitle())
+            if not looks_like_name:
+                return False, "Layer O1 — Shape Validation", f"Short non-acronym token: '{raw}'"
+
+        if not re.search(r'[A-Za-z]', normalized):
+            return False, "Layer O1 — Shape Validation", "No alphabetic content"
+
+        # ── Layer O2 — Client self-reference ───────────────────────────────
+        # Fixes the prefix-only bug: for a multi-token client name like
+        # "Apple Inc", the old single-token rule at the end was skipped
+        # entirely, so "Apple" itself passed as a competitor of Apple Inc.
+        normalized_lower = normalized.lower()
+        terms = {t.lower() for t in (self_reference_terms or set()) if t}
         if client_name:
-            client_normalized = self._normalize_name(client_name).lower()
-            org_normalized_lower = normalized.lower()
-            # Block if the org name *starts with* the client brand (to catch sub-brands/departments)
-            if client_normalized and org_normalized_lower.startswith(client_normalized):
-                return False
-            # Also block if the client brand appears verbatim as the first token
-            client_first_token = client_normalized.split()[0] if client_normalized.split() else ""
-            org_first_token = org_normalized_lower.split()[0] if org_normalized_lower.split() else ""
-            # Only apply single-token rule when client name is a single word (e.g. "Tata", "Pepsi")
-            if len(client_normalized.split()) == 1 and org_first_token == client_first_token:
-                return False
+            terms.add(self._normalize_name(client_name).lower())
+        terms.discard("")
 
-        # Block names that contain common media/news/financial keywords
+        for term in terms:
+            if not term:
+                continue
+            if normalized_lower == term:
+                return False, "Layer O2 — Client Self-Reference", f"Matches the client's own identity term '{term}'"
+            if normalized_lower.startswith(term + " "):
+                return False, "Layer O2 — Client Self-Reference", f"Sub-brand/department of the client ('{term}')"
+            # "Pepsi" for client "PepsiCo", "Tata" for client "Tata Motors" —
+            # the candidate is a proper prefix of the client's own name.
+            if len(normalized_lower) >= 4 and term.startswith(normalized_lower):
+                return False, "Layer O2 — Client Self-Reference", f"Prefix of the client's own name '{term}'"
+
+        # ── Layer O3 — Publisher / source registry ─────────────────────────
+        # Grounded in the platform's own `sources` table rather than a curated
+        # list: if we ingest a feed published by this name, it is a publisher.
+        # Verified live — this is what identifies "Guardian" (source
+        # "The Guardian World", theguardian.com).
+        if source_terms and normalized_lower in {s.lower() for s in source_terms}:
+            return False, "Layer O3 — Publisher Registry", "Matches a registered content source/publisher"
+
+        # ── Layer O4 — Media / publisher keyword filter ────────────────────
         media_keywords = {
             "times", "news", "post", "press", "media", "journal",
             "daily", "weekly", "magazine", "wire", "digest",
             "briefing", "insider", "watch", "report", "beat",
             "fool", "alpha", "seeking", "cramer", "street",
         }
-        name_words = set(re.split(r'[\s,.-]+', normalized))
-        if name_words & media_keywords:
-            return False
+        name_words = {w for w in re.split(r'[\s,.\-]+', normalized_lower) if w}
+        hit = name_words & media_keywords
+        if hit:
+            return False, "Layer O4 — Media / Publisher Filter", f"Contains publisher keyword: {sorted(hit)}"
 
-        # Block names that look like financial/regulatory bodies
-        financial_bodies = {
-            "ntsb", "nhtsa", "sec", "fdic", "fed", "niti",
-            "faa", "epa", "doe", "doj", "ftc",
-        }
-        if normalized in financial_bodies:
-            return False
+        # ── Layer O5 — Market instrument / venue / generic-term filter ─────
+        if normalized_lower in EntityDiscoveryConfig.EXCHANGES_AND_REGULATORS:
+            return False, "Layer O5 — Market / Regulator Filter", "Exchange, index or regulatory body"
 
-        # Block multi-word names that look like headlines or sentences (>4 words)
-        if len(org_name.split()) > 4:
-            return False
+        noise = name_words & EntityDiscoveryConfig.MARKET_NOISE_TERMS
+        if noise:
+            return False, "Layer O5 — Market / Regulator Filter", f"Market-instrument phrase: {sorted(noise)}"
 
-        return True
+        if normalized_lower in EntityDiscoveryConfig.MEDIA_AND_GENERIC_TERMS:
+            return False, "Layer O5 — Market / Regulator Filter", "Generic industry/media term"
+
+        # Per-token match is restricted to terms of 4+ characters. The short
+        # entries in this set are bare industry acronyms ("ai", "ev", "gpu",
+        # "pr") that legitimately appear *inside* real company names — matching
+        # them per-token rejected "Mistral AI". Whole-name matching above still
+        # catches them when they stand alone.
+        for word in name_words:
+            if len(word) >= 4 and word in EntityDiscoveryConfig.MEDIA_AND_GENERIC_TERMS:
+                return False, "Layer O5 — Market / Regulator Filter", f"Generic industry/media term: '{word}'"
+
+        return True, "", ""
+
+    def _is_valid_org_name(
+        self,
+        org_name: str,
+        client_name: str = "",
+        self_reference_terms: Optional[set] = None,
+        source_terms: Optional[set] = None,
+    ) -> bool:
+        """Boolean wrapper over _is_valid_org_name_layered() — signature kept
+        backwards-compatible so existing call sites and the audit's direct-invoke
+        verification technique both keep working."""
+        is_valid, _layer, _reason = self._is_valid_org_name_layered(
+            org_name,
+            client_name=client_name,
+            self_reference_terms=self_reference_terms,
+            source_terms=source_terms,
+        )
+        return is_valid
+
+    def _registered_source_terms(self, db: Session) -> set:
+        """
+        A1.3/O3 helper — publisher names derived from the platform's own source
+        registry ("The Guardian World" -> theguardian.com -> "guardian").
+
+        Per-client search feeds are excluded. Onboarding creates one source per
+        client named after the client ("Apple Inc RSS Source", "Tesla GDELT
+        Feed"), so without this exclusion every client's own brand would look
+        like a publisher — and, worse, would be rejected as a competitor of
+        every *other* client. Verified: this is what wrongly rejected "Apple"
+        for Nvidia and OpenAI on the first run of the A3 re-validation.
+
+        The exclusion is grounded in the `clients` table plus the brand entity
+        names, not a guess about feed naming.
+        """
+        from app.models.source import Source
+
+        feed_word_pattern = re.compile(
+            r'\b(rss|feed|feeds|source|gdelt|algolia|hn|google news|json|api)\b',
+            re.IGNORECASE,
+        )
+
+        client_owned: set = set()
+        try:
+            for (client_name,) in db.query(Client.name).all():
+                if client_name:
+                    client_owned.add(self._normalize_name(client_name))
+            brand_names = db.query(Entity.name).filter(Entity.entity_type == "brand").all()
+            for (brand_name,) in brand_names:
+                if brand_name:
+                    client_owned.add(self._normalize_name(brand_name))
+        except Exception as exc:
+            logger.warning("competitor_source_client_names_unavailable", error=str(exc))
+        client_owned.discard("")
+
+        terms: set = set()
+        try:
+            for src in db.query(Source.name, Source.url).all():
+                name = (src.name or "").strip()
+                if not name:
+                    continue
+                cleaned = feed_word_pattern.sub(" ", name)
+                cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+                if not cleaned:
+                    continue
+                normalized = self._normalize_name(cleaned)
+                if not normalized:
+                    continue
+
+                candidate_terms = {normalized}
+                # "The Guardian World" -> also register "guardian": drop a
+                # leading article and keep the leading proper noun.
+                parts = [p for p in normalized.split() if p not in ("the", "a", "an")]
+                if parts:
+                    candidate_terms.add(parts[0])
+                    candidate_terms.add(" ".join(parts))
+
+                # Skip this source entirely if it is a client's own search feed.
+                if candidate_terms & client_owned:
+                    continue
+                terms |= candidate_terms
+        except Exception as exc:
+            logger.warning("competitor_source_terms_unavailable", error=str(exc))
+        terms.discard("")
+        return terms
+
+    def _find_near_duplicate_competitor_entity(
+        self, db: Session, client_id: str, name: str
+    ) -> Optional[Entity]:
+        """
+        A1.7 — competitor-scoped analogue of _find_near_duplicate_person_entity().
+        Blocks split identities such as "General Motors"/"General Motor" and
+        "Ford"/"Fords" from becoming two competitor rows in the same benchmark.
+        Not a merge — callers skip promotion and log for review, same stance as
+        the executive guard.
+        """
+        normalized = self._normalize_name(name)
+        if len(normalized) < EntityDiscoveryConfig.COMPETITOR_NEAR_DUPLICATE_MIN_LENGTH:
+            return None
+        existing = db.query(Entity).filter(
+            Entity.client_id == client_id,
+            Entity.entity_type == "competitor"
+        ).all()
+        for entity in existing:
+            other = self._normalize_name(entity.name)
+            if len(other) < EntityDiscoveryConfig.COMPETITOR_NEAR_DUPLICATE_MIN_LENGTH:
+                continue
+            ratio = SequenceMatcher(None, normalized, other).ratio()
+            if ratio >= EntityDiscoveryConfig.COMPETITOR_NAME_SIMILARITY_THRESHOLD:
+                return entity
+        return None
 
     def promote_competitor_candidates(
         self,
@@ -721,14 +1203,28 @@ class EntityDiscoveryEngine:
         # Fetch client for brand name (needed for self-reference check)
         client = db.query(Client).filter(Client.id == client_id).first()
 
+        # Built once per batch, not per candidate — both are whole-table reads.
+        self_reference_terms = self._client_self_reference_terms(db, client_id)
+        source_terms = self._registered_source_terms(db)
+
         for candidate in candidates:
-            # Gate: must look like a real company, not a news source or abbreviation
-            if not self._is_valid_org_name(candidate.organization_name, client_name=client.name if client else ""):
+            # Gate: must look like a real company, not a publisher, market
+            # instrument, generic term, or the client's own brand/sub-brand.
+            is_valid, reject_layer, reject_reason = self._is_valid_org_name_layered(
+                candidate.organization_name,
+                client_name=client.name if client else "",
+                self_reference_terms=self_reference_terms,
+                source_terms=source_terms,
+            )
+            if not is_valid:
                 logger.info(
                     "competitor_candidate_rejected",
                     client_id=client_id,
                     candidate_name=candidate.organization_name,
-                    reason="Failed org name validity check (media outlet, abbreviation, self-reference, or headline)"
+                    layer=reject_layer,
+                    reason=reject_reason,
+                    confidence=candidate.confidence,
+                    mention_count=candidate.mention_count,
                 )
                 continue
 
@@ -742,17 +1238,61 @@ class EntityDiscoveryEngine:
                 normalized_cand_name = self._normalize_name(candidate.organization_name)
                 client_entities = db.query(Entity).filter(Entity.client_id == client_id).all()
                 existing_entity = next((e for e in client_entities if self._normalize_name(e.name) == normalized_cand_name), None)
-                
+
                 if not existing_entity:
-                    # Create new competitor entity
-                    new_entity = Entity(
-                        client_id=client_id,
-                        name=candidate.organization_name,
-                        entity_type="competitor"
+                    # A1.7 near-duplicate guard: block a spelling/plural variant
+                    # of an already-promoted competitor ("General Motor" next to
+                    # "General Motors") from becoming a second row in the same
+                    # benchmark. Skip and log for review rather than auto-merging,
+                    # same stance as the executive E2 guard.
+                    near_dup = self._find_near_duplicate_competitor_entity(
+                        db, client_id, candidate.organization_name
                     )
-                    db.add(new_entity)
-                    db.flush()  # Get the ID
-                    
+                    if near_dup:
+                        logger.warning(
+                            "competitor_candidate_near_duplicate_blocked",
+                            client_id=client_id,
+                            candidate_name=candidate.organization_name,
+                            existing_entity_id=str(near_dup.id),
+                            existing_entity_name=near_dup.name,
+                            reason="Name is a near-duplicate of an existing promoted competitor "
+                                   "for this client — needs manual review before promoting or "
+                                   "merging, not auto-promoted."
+                        )
+                        continue
+
+                    # Advisory locks above cover candidate creation/update, not this
+                    # promotion path — two concurrent promotion calls could both reach
+                    # here for the same candidate. SAVEPOINT-isolate the insert (same
+                    # per-item isolation pattern as executive_reputation_engine.py's
+                    # db.begin_nested()) so a uq_entities_client_name collision only
+                    # rolls back this one candidate, not the whole batch, and recover
+                    # by treating it as "already promoted by the other transaction."
+                    savepoint = db.begin_nested()
+                    try:
+                        new_entity = Entity(
+                            client_id=client_id,
+                            name=candidate.organization_name,
+                            entity_type="competitor"
+                        )
+                        db.add(new_entity)
+                        db.flush()  # Get the ID
+                    except IntegrityError:
+                        savepoint.rollback()
+                        client_entities = db.query(Entity).filter(Entity.client_id == client_id).all()
+                        existing_entity = next((e for e in client_entities if self._normalize_name(e.name) == normalized_cand_name), None)
+                        if existing_entity:
+                            candidate.promoted_to_competitor_id = existing_entity.id
+                            candidate.promoted_at = datetime.now(timezone.utc)
+                            logger.info(
+                                "competitor_candidate_linked_to_concurrently_promoted_entity",
+                                client_id=client_id,
+                                candidate_name=candidate.organization_name,
+                                entity_id=str(existing_entity.id)
+                            )
+                        continue
+                    savepoint.commit()
+
                     new_keyword = EntityKeyword(
                         entity_id=new_entity.id,
                         keyword_text=candidate.organization_name,
@@ -762,11 +1302,11 @@ class EntityDiscoveryEngine:
                         is_active=True
                     )
                     db.add(new_keyword)
-                    
+
                     # Mark candidate as promoted
                     candidate.promoted_to_competitor_id = new_entity.id
                     candidate.promoted_at = datetime.now(timezone.utc)
-                    
+
                     logger.info(
                         "candidate_promoted",
                         client_id=client_id,
@@ -858,37 +1398,82 @@ class EntityDiscoveryEngine:
                 )
                 continue
 
-            # Check if entity already exists
+            # Check if entity already exists (strip any possessive suffix carried
+            # over from a candidate created before the entry-point fix, so it
+            # matches/creates under the canonical name rather than splitting)
+            promoted_name = self._strip_possessive_suffix(candidate.name)
             existing_entity = db.query(Entity).filter(
                 Entity.client_id == client_id,
-                Entity.name.ilike(candidate.name),
+                Entity.name.ilike(promoted_name),
                 Entity.entity_type == "person"
             ).first()
-            
+
             if not existing_entity:
-                # Create new executive entity
-                new_entity = Entity(
-                    client_id=client_id,
-                    name=candidate.name,
-                    entity_type="person"
-                )
-                db.add(new_entity)
-                db.flush()  # Get the ID
-                
+                # E2 guard: block promotion of a near-duplicate spelling variant of
+                # an already-promoted executive (same class of bug P1-B fixed for
+                # possessive suffixes). Skip and log for manual review rather than
+                # auto-merging — no existing "needs review" flag/state on
+                # ExecutiveCandidate to use instead, and inventing a merge here
+                # risks a false-positive merge of two genuinely different people.
+                near_dup = self._find_near_duplicate_person_entity(db, client_id, promoted_name)
+                if near_dup:
+                    logger.warning(
+                        "executive_candidate_near_duplicate_blocked",
+                        candidate=candidate.name,
+                        normalized_candidate=promoted_name,
+                        existing_entity_id=str(near_dup.id),
+                        existing_entity_name=near_dup.name,
+                        reason="Name is a near-duplicate spelling variant of an existing promoted "
+                               "executive for this client — needs manual review before promoting "
+                               "or merging, not auto-promoted."
+                    )
+                    continue
+
+                # Same concurrent-promotion race as promote_competitor_candidates()
+                # (advisory locks cover candidate creation/update, not this promotion
+                # path) — SAVEPOINT-isolate the insert so a uq_entities_client_name
+                # collision only rolls back this one candidate, not the whole batch.
+                savepoint = db.begin_nested()
+                try:
+                    new_entity = Entity(
+                        client_id=client_id,
+                        name=promoted_name,
+                        entity_type="person"
+                    )
+                    db.add(new_entity)
+                    db.flush()  # Get the ID
+                except IntegrityError:
+                    savepoint.rollback()
+                    existing_entity = db.query(Entity).filter(
+                        Entity.client_id == client_id,
+                        Entity.name.ilike(promoted_name),
+                        Entity.entity_type == "person"
+                    ).first()
+                    if existing_entity:
+                        candidate.promoted_to_executive_id = existing_entity.id
+                        candidate.promoted_at = datetime.now(timezone.utc)
+                        logger.info(
+                            "executive_candidate_linked_to_concurrently_promoted_entity",
+                            candidate=candidate.name,
+                            entity_id=str(existing_entity.id)
+                        )
+                    continue
+                savepoint.commit()
+
                 new_keyword = EntityKeyword(
                     entity_id=new_entity.id,
-                    keyword_text=candidate.name,
+                    keyword_text=promoted_name,
                     match_type="exact",
                     category="PRIMARY",
                     priority=1,
                     is_active=True
                 )
                 db.add(new_keyword)
-                
+
                 # Mark candidate as promoted
                 candidate.promoted_to_executive_id = new_entity.id
                 candidate.promoted_at = datetime.now(timezone.utc)
-                
+
                 logger.info(
                     "executive_promoted",
                     candidate=candidate.name,
@@ -896,7 +1481,7 @@ class EntityDiscoveryEngine:
                     validation_results="passed all layers",
                     reason_promoted=f"Met thresholds: mentions {candidate.mention_count} >= {EntityDiscoveryConfig.EXECUTIVE_MENTION_THRESHOLD}, docs {len(candidate.source_documents)} >= {EntityDiscoveryConfig.EXECUTIVE_MIN_DOCUMENTS}, confidence {candidate.confidence:.2f} >= {EntityDiscoveryConfig.EXECUTIVE_CONFIDENCE_THRESHOLD:.2f}"
                 )
-                
+
                 promoted_count += 1
                 promoted_executives.append({
                     "name": candidate.name,

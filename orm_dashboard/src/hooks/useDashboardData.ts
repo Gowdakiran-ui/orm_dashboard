@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { 
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown,
   fetchActiveAlerts, fetchNarratives, fetchCompetitorBenchmarks, fetchRisks, 
-  fetchExecutives, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed, 
+  fetchExecutives, fetchExecutiveHistory, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed,
   fetchCommandCenterStats,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
 } from "@/lib/api";
@@ -12,6 +12,7 @@ export function useDashboardData() {
   const [clients, setClients] = useState<any[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientsLoading, setClientsLoading] = useState(true);
+  const [clientsError, setClientsError] = useState<string | null>(null);
 
   // Data states & individual loading/error states
   const [reputation, setReputation] = useState<any>({ score: 0, grade: 'N/A', trend: 'STABLE' });
@@ -84,6 +85,7 @@ export function useDashboardData() {
     async function init() {
       try {
         const fetchedClients = await fetchClients(undefined, controller.signal);
+        setClientsError(null);
         if (fetchedClients && fetchedClients.length > 0) {
           setClients(fetchedClients);
           setClientId((currentId) => {
@@ -114,6 +116,23 @@ export function useDashboardData() {
       } catch (e: any) {
         if (e.name !== "AbortError") {
           console.error("Failed to fetch clients", e);
+          setClients([]);
+          setClientId(null);
+          setClientsError(e.message || "Unable to reach the backend");
+          setReputationLoading(false);
+          setHistoryLoading(false);
+          setBreakdownLoading(false);
+          setAlertsLoading(false);
+          setNarrativesLoading(false);
+          setBenchmarksLoading(false);
+          setRisksLoading(false);
+          setExecutivesLoading(false);
+          setSystemStatusLoading(false);
+          setDocumentsLoading(false);
+          setCommandStatsLoading(false);
+          setExecutiveCandidatesLoading(false);
+          setCompetitorCandidatesLoading(false);
+          setTelemetryLoading(false);
         }
       } finally {
         setClientsLoading(false);
@@ -371,6 +390,18 @@ export function useDashboardData() {
             .catch(() => { if (!signal.aborted) { setDocuments([]); setDocumentsError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setDocumentsLoading(false); }),
 
+          fetchExecutiveHistory(activeClientId, signal)
+            .then(data => {
+              if (!signal.aborted) {
+                const nextVal = data || {};
+                if (hasChanged(execHistory, nextVal)) {
+                  setExecHistory(nextVal);
+                }
+              }
+            })
+            .catch(() => { if (!signal.aborted) { setExecHistory({}); } })
+            .finally(() => { if (!signal.aborted) setExecHistoryLoading(false); }),
+
           fetchIntelligenceFeed(activeClientId, signal)
             .then(data => {
               if (!signal.aborted) {
@@ -533,6 +564,7 @@ export function useDashboardData() {
     clients,
     clientId,
     clientsLoading,
+    clientsError,
     reputation,
     reputationLoading,
     reputationError,

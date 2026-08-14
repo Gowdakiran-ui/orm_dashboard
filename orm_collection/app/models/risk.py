@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Integer
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Integer, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from app.core.db import Base
@@ -50,6 +50,9 @@ class RiskEvent(Base):
     
     # Phase 5.2 Accuracy & Explainability
     source_reliability = Column(Float, nullable=True)
-    explainability = Column(JSONEncodedDict, nullable=True)
+    # Phase 6 item 29: DB column is native Postgres `json` (unlike
+    # risk_factors above, which is genuinely `text` and correctly stays
+    # JSONEncodedDict). Using the generic SQLAlchemy JSON type to match.
+    explainability = Column(JSON, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

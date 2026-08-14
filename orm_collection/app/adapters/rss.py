@@ -2,7 +2,7 @@ import requests
 import feedparser
 import json
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from time import mktime
 from .base import BaseAdapter
 from app.utils.text_processing import clean_document_content
@@ -26,10 +26,30 @@ class RSSAdapter(BaseAdapter):
         """
         Normalizes a feedparser entry into the standard NormalizedDocument mapping.
         """
-        # Extract published date
+        # Extract published date. Use dict-style access, not hasattr/attribute
+        # access: after an async round-trip through json.dumps/json.loads (see
+        # collection_tasks.py -> document_processor.py), feedparser's
+        # FeedParserDict becomes a plain dict, which doesn't expose keys as
+        # attributes. FeedParserDict is itself a dict subclass, so .get()
+        # works identically for both the live feedparser object and the
+        # deserialized plain dict.
         published_at = None
-        if hasattr(raw_data, 'published_parsed') and raw_data.published_parsed:
-            published_at = datetime.fromtimestamp(mktime(raw_data.published_parsed))
+        published_parsed = raw_data.get('published_parsed')
+        if published_parsed:
+            # After the async json.dumps/json.loads round-trip, struct_time
+            # comes back as a plain list, which mktime() rejects (it only
+            # accepts a tuple or struct_time). Coerce to tuple first.
+            # mktime() interprets its input as LOCAL time and fromtimestamp()
+            # (no tz arg) converts back to local naive time, so the local
+            # offset cancels out and the naive result's wall-clock value
+            # already equals the UTC value feedparser gives us (feedparser
+            # always normalizes published_parsed to UTC). Passing tz=utc
+            # directly to fromtimestamp() here would NOT be equivalent — the
+            # epoch value from mktime() already has the local-offset
+            # assumption baked in, so interpreting it as UTC would shift the
+            # result by the local UTC offset. Just label the existing
+            # (already-correct) naive value as UTC (see FINDINGS.md D9).
+            published_at = datetime.fromtimestamp(mktime(tuple(published_parsed))).replace(tzinfo=timezone.utc)
             
         # Get content (prefer content over summary)
         content = ""
@@ -58,7 +78,7 @@ class RSSAdapter(BaseAdapter):
             "url": raw_data.get('link', ''),
             "author": raw_data.get('author', None),
             "published_at": published_at,
-            "collected_at": datetime.utcnow(),
+            "collected_at": datetime.now(timezone.utc),
             "raw_payload": json.dumps(raw_data)
         }
 

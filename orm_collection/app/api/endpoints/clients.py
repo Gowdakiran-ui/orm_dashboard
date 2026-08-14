@@ -15,7 +15,8 @@ POST /clients/{client_id}/pipeline/run
 GET /clients/{client_id}/pipeline/status
     - Reads the latest PipelineRun for this client from PostgreSQL
     - Returns: stage, progress_pct, status, started_at, finished_at,
-               duration_s, current_worker, log_tail, run_id
+               duration_s, processing_started_at, execution_duration_s,
+               current_worker, log_tail, run_id
     - NEVER calls AsyncResult
     - NEVER reads Redis
     - NEVER parses lock metadata
@@ -137,7 +138,7 @@ def trigger_client_pipeline(client_id: UUID, db: Session = Depends(get_db)):
     try:
         # Use send_task to explicitly use the configured celery_app (Redis)
         # instead of relying on @shared_task thread-local bindings which may default to AMQP.
-        print("INSIDE ENDPOINT, CELERY BROKER URL IS:", celery_app.conf.broker_url)
+        log.debug("celery_broker_url", broker_url=celery_app.conf.broker_url)
         task = celery_app.send_task(
             "app.workers.aggregation_tasks.run_client_pipeline",
             args=[run_id, str(client_id)]
@@ -146,17 +147,15 @@ def trigger_client_pipeline(client_id: UUID, db: Session = Depends(get_db)):
     except Exception as exc:
         # If dispatch fails, mark the run as failed immediately
         # Use the transition method to ensure finished_at and duration_s are set
-        import traceback
-        traceback.print_exc()
         try:
             pipeline_run.transition("FAILED", f"Failed to dispatch pipeline task: {exc}")
         except ValueError:
             pipeline_run.status = "FAILED"
             pipeline_run.stage = "FAILED"
-            
+
         pipeline_run.error_detail = f"Failed to dispatch pipeline task: {exc}"
         db.commit()
-        log.error("pipeline_dispatch_failed", error=str(exc))
+        log.error("pipeline_dispatch_failed", error=str(exc), exc_info=True)
         raise HTTPException(
             status_code=503,
             detail="Celery broker unreachable. Pipeline could not be queued.",
@@ -192,7 +191,9 @@ def get_client_pipeline_status(client_id: UUID, db: Session = Depends(get_db)):
             "progress_pct": int,
             "started_at": ISO8601 | null,
             "finished_at": ISO8601 | null,
-            "duration_s": float | null,
+            "duration_s": float | null,  # queue-wait + execution combined
+            "processing_started_at": ISO8601 | null,  # when execution actually began
+            "execution_duration_s": float | null,  # execution only
             "current_worker": str | null,
             "log_tail": str | null,
             "client_id": str,
@@ -216,6 +217,8 @@ def get_client_pipeline_status(client_id: UUID, db: Session = Depends(get_db)):
             "started_at": None,
             "finished_at": None,
             "duration_s": None,
+            "processing_started_at": None,
+            "execution_duration_s": None,
             "current_worker": None,
             "log_tail": None,
             "client_id": str(client_id),
@@ -228,7 +231,13 @@ def get_client_pipeline_status(client_id: UUID, db: Session = Depends(get_db)):
         "progress_pct": latest_run.progress_pct,
         "started_at": latest_run.started_at.isoformat() if latest_run.started_at else None,
         "finished_at": latest_run.finished_at.isoformat() if latest_run.finished_at else None,
+        # Item 18: duration_s is queue-wait + execution combined (measured
+        # from row-creation/QUEUED time). execution_duration_s is worker
+        # execution only, from when the lock was actually acquired. Both are
+        # kept — duration_s is the existing wall-clock contract, unchanged.
         "duration_s": latest_run.duration_s,
+        "processing_started_at": latest_run.processing_started_at.isoformat() if latest_run.processing_started_at else None,
+        "execution_duration_s": latest_run.execution_duration_s,
         "current_worker": latest_run.current_worker,
         "log_tail": latest_run.log_tail,
         "client_id": str(client_id),
@@ -262,6 +271,8 @@ def get_pipeline_run_by_id(client_id: UUID, run_id: str, db: Session = Depends(g
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
         "duration_s": run.duration_s,
+        "processing_started_at": run.processing_started_at.isoformat() if run.processing_started_at else None,
+        "execution_duration_s": run.execution_duration_s,
         "current_worker": run.current_worker,
         "log_tail": run.log_tail,
         "client_id": str(client_id),

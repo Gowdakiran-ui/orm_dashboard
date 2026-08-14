@@ -1,6 +1,5 @@
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from app.schemas.document import NormalizedDocument
 from app.models.document import Document
 from app.utils.text_processing import canonicalize_url, generate_content_hash
@@ -17,8 +16,9 @@ def process_and_save_document(db: Session, doc_data: NormalizedDocument) -> Tupl
     Returns (is_saved, is_deduplicated, match_count)
     
     Deduplication Strategy:
-    - PRIMARY:   ON CONFLICT DO NOTHING on `url` (canonical URL uniqueness)
-    - SECONDARY: Catch IntegrityError on `content_hash` (same content, different URL)
+    - ON CONFLICT DO NOTHING with no target — suppresses the insert on a
+      violation of either the `url` or `content_hash` unique constraint
+      (canonical URL match, or same content reaching us via a different URL).
     Both paths are treated as successful deduplications — no crash, no retry.
     """
     canonical_url = canonicalize_url(doc_data.url)
@@ -34,7 +34,8 @@ def process_and_save_document(db: Session, doc_data: NormalizedDocument) -> Tupl
             logger.warning("s3_upload_failed_offline", error=str(s3_err), content_hash=content_hash)
 
     try:
-        # Save Document using INSERT ON CONFLICT DO NOTHING (handles URL duplicates)
+        # Save Document using INSERT ON CONFLICT DO NOTHING (handles both
+        # URL and content_hash duplicates via a single SQL-level upsert)
         stmt = insert(Document).values(
             url=canonical_url,
             content_hash=content_hash,
@@ -46,24 +47,16 @@ def process_and_save_document(db: Session, doc_data: NormalizedDocument) -> Tupl
             published_at=doc_data.published_at,
             collected_at=doc_data.collected_at,
             raw_storage_path=s3_uri
-        ).on_conflict_do_nothing(
-            index_elements=['url']
-        )
-        
+        ).on_conflict_do_nothing()
+
         result = db.execute(stmt)
         db.commit()
-        
+
         if result.rowcount == 0:
-            # Document was deduplicated by URL — already existed
-            logger.debug("document_deduped_by_url", url=canonical_url)
+            # Document was deduplicated by url or content_hash — already existed
+            logger.debug("document_deduped", url=canonical_url, content_hash=content_hash)
             return False, True, 0
 
-    except IntegrityError as e:
-        # Content hash conflict: same content reached us via a different URL.
-        # This is a valid deduplication case, not an error.
-        db.rollback()
-        logger.info("document_deduped_by_content_hash", url=canonical_url, content_hash=content_hash)
-        return False, True, 0
     except Exception as e:
         db.rollback()
         logger.error("document_save_failed", url=canonical_url, error=str(e))

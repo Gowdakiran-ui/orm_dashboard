@@ -1,4 +1,5 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const API_SHARED_SECRET = process.env.NEXT_PUBLIC_API_SHARED_SECRET ?? "";
 
 
 const getCache = new Map<string, Promise<Response>>();
@@ -30,6 +31,7 @@ async function fetchWithRetry(
       
       const headers = {
         "Content-Type": "application/json",
+        "X-API-Key": API_SHARED_SECRET,
         ...(options.headers || {})
       };
 
@@ -47,10 +49,16 @@ async function fetchWithRetry(
       try {
         const res = await fetch(url, config);
         clearTimeout(timeoutId);
-        
+
         // Retry on transient 5xx server errors
         if (!res.ok && res.status >= 500 && retries > 0) {
           await new Promise(resolve => setTimeout(resolve, backoff));
+          // This GET's own not-yet-settled promise is still the cache entry for
+          // cacheKey; recursing into fetchWithRetry without clearing it first
+          // makes the recursive call read itself back out of the cache and
+          // await itself, deadlocking forever. Clear it so the retry is a
+          // fresh cache miss.
+          getCache.delete(cacheKey);
           return fetchWithRetry(url, options, retries - 1, backoff * 2, timeoutMs);
         }
         return res;
@@ -61,6 +69,7 @@ async function fetchWithRetry(
         }
         if (retries > 0 && err.name !== "AbortError") {
           await new Promise(resolve => setTimeout(resolve, backoff));
+          getCache.delete(cacheKey);
           return fetchWithRetry(url, options, retries - 1, backoff * 2, timeoutMs);
         }
         throw err;
@@ -89,6 +98,7 @@ async function fetchWithRetry(
   
   const headers = {
     "Content-Type": "application/json",
+    "X-API-Key": API_SHARED_SECRET,
     ...(options.headers || {})
   };
 
@@ -130,6 +140,26 @@ async function fetchWithRetry(
   }
 }
 
+// D2: every fetch* helper below used to swallow non-OK HTTP responses by
+// returning an empty/null sentinel, making a 401/404/500 indistinguishable
+// from "this client genuinely has no data" — the caller's existing
+// .catch()/try-catch error-state wiring (e.g. useDashboardData.ts's
+// setXError("Telemetry Offline") calls, feeding TelemetryErrorWidget) could
+// then only ever fire for a true network-level exception, not an HTTP error
+// response, which is the far more common failure mode. This throws instead,
+// so callers' already-built error handling actually receives HTTP failures.
+async function parseOrThrow(res: Response): Promise<any> {
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && typeof body.detail === "string") detail = body.detail;
+    } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
 interface CombinedSignal {
   signal: AbortSignal;
   cleanup: () => void;
@@ -159,14 +189,9 @@ function anySignal(signals: AbortSignal[]): CombinedSignal {
 
 
 export async function fetchClients(search?: string, signal?: AbortSignal) {
-  try {
-    const url = search ? `${API_BASE}/clients?search=${encodeURIComponent(search)}` : `${API_BASE}/clients`;
-    const res = await fetchWithRetry(url, { signal });
-    if (!res.ok) return [];
-    return res.json();
-  } catch (e) {
-    return [];
-  }
+  const url = search ? `${API_BASE}/clients?search=${encodeURIComponent(search)}` : `${API_BASE}/clients`;
+  const res = await fetchWithRetry(url, { signal });
+  return parseOrThrow(res);
 }
 
 export interface ClientOnboardingPayload {
@@ -218,35 +243,30 @@ export async function runClientPipeline(clientId: string, signal?: AbortSignal) 
 
 export async function fetchPipelineStatus(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/clients/${clientId}/pipeline/status`, { signal });
-  if (!res.ok) return null;
   // Phase 13: returns { run_id, status, stage, progress_pct, started_at, finished_at,
   //                      duration_s, current_worker, log_tail, client_id, error_detail? }
-  return res.json();
+  return parseOrThrow(res);
 }
 
 
 export async function fetchReputation(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/reputation`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchReputationHistory(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/reputation-history`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchReputationBreakdown(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/reputation-breakdown`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchActiveAlerts(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/active-alerts`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 /**
@@ -256,14 +276,12 @@ export async function fetchActiveAlerts(clientId: string, signal?: AbortSignal) 
  */
 export async function fetchTopNarratives(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/top-narratives`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchNarratives(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/narratives`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 /**
@@ -273,68 +291,68 @@ export async function fetchNarratives(clientId: string, signal?: AbortSignal) {
  */
 export async function fetchShareOfVoice(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/share-of-voice`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchCompetitorBenchmarks(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/benchmark`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchRisks(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/risks`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchExecutives(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executives`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
+}
+
+export async function fetchExecutiveHistory(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executive-history`, { signal });
+  return parseOrThrow(res);
 }
 
 export async function fetchSystemStatus(signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/collection/status`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchClientTelemetry(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/telemetry`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchDocuments(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/documents/client/${clientId}`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  // D5: no explicit limit meant the backend's default of 100 silently hid
+  // the majority of a large client's corpus (Tesla: 463 documents,
+  // confirmed live) from every tab that consumes `documents`. The endpoint
+  // already enforces a hard ceiling of 500 regardless of what's requested
+  // here, so 500 is the real maximum this call can ever return — not an
+  // arbitrary bigger magic number.
+  const res = await fetchWithRetry(`${API_BASE}/documents/client/${clientId}?limit=500`, { signal });
+  return parseOrThrow(res);
 }
 
 export async function fetchDocumentDetails(clientId: string, documentId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/documents/${documentId}`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  const res = await fetchWithRetry(`${API_BASE}/documents/${documentId}?client_id=${encodeURIComponent(clientId)}`, { signal });
+  return parseOrThrow(res);
 }
 
 export async function fetchSources(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/sources/`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchIntelligenceFeed(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/trend-events`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchCommandCenterStats(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/collection/status`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 /**
@@ -344,8 +362,7 @@ export async function fetchCommandCenterStats(clientId: string, signal?: AbortSi
  */
 export async function fetchReputationAdvice(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/reputation-advice`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 /**
@@ -355,20 +372,17 @@ export async function fetchReputationAdvice(clientId: string, signal?: AbortSign
  */
 export async function fetchCrisisPlan(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/crisis-plan`, { signal });
-  if (!res.ok) return null;
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchExecutiveCandidates(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executive-candidates`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function fetchCompetitorCandidates(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/competitor-candidates`, { signal });
-  if (!res.ok) return [];
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function promoteCompetitorCandidates(clientId: string, signal?: AbortSignal) {
