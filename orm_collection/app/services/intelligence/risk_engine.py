@@ -410,7 +410,7 @@ class RiskEngine:
         ).filter(DocumentTopic.document_id == document_id).all()
         top_topic = None
         topic_weight = 0
-        topic_conf = 1.0
+        topic_conf = 0.0  # No real topic signal unless a topic passes the gate below -- was 1.0, a fabricated max-confidence default (FINDINGS.md #24)
 
         # Take the highest weighted topic
         for dt in doc_topics:
@@ -424,7 +424,7 @@ class RiskEngine:
         # Get Document Sentiment
         doc_sentiments = db.query(DocumentSentiment).filter(DocumentSentiment.document_id == document_id).all()
         sentiment_weight = 0
-        sentiment_conf = 1.0
+        sentiment_conf = 0.0  # No real sentiment signal unless a DocumentSentiment row exists below -- same reasoning
         sent_label = "Neutral"
         if doc_sentiments:
             ds = doc_sentiments[0]

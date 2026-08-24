@@ -143,9 +143,18 @@ class GlobalMatchingEngine:
         kw_lower = matched_keyword.lower()
         entity_name_lower = (entity_name or "").lower()
         
-        is_generic_or_abbrev = len(matched_keyword) <= 4 or kw_lower in {
-            "meta", "tesla", "tata", "fsd", "tsla"
-        }
+        # "tesla"/"meta"/"tata" already get dedicated negative-context
+        # disambiguation at step 8 below (Nikola Tesla / tesla coil,
+        # meta-analysis, unrelated Tata Group companies) -- stacking the
+        # generic-alias penalty on top of that is redundant double scrutiny,
+        # and live data confirmed it was the actual cause of a 54.7%
+        # false-negative rejection rate on Tesla's own PRIMARY brand keyword
+        # (see FINDINGS.md). Real short/ambiguous keywords with no dedicated
+        # rule (tickers, acronyms) keep the existing generic-alias caution.
+        DISAMBIGUATED_BY_NEGATIVE_CONTEXT_RULE = {"tesla", "meta", "tata"}
+        is_generic_or_abbrev = kw_lower not in DISAMBIGUATED_BY_NEGATIVE_CONTEXT_RULE and (
+            len(matched_keyword) <= 4 or kw_lower in {"fsd", "tsla"}
+        )
         
         if category == "PRIMARY":
             base_confidence = 0.85

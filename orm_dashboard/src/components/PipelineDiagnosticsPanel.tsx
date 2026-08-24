@@ -2,17 +2,22 @@ import React, { useMemo } from "react";
 import { Database, Cpu, Activity, ShieldAlert, CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 
 export interface PipelineDiagnosticsPanelProps {
   pipelineDiagnostics: any[];
   documents: any[];
   lastProcessedTimestamp: string;
+  loading?: boolean;
+  error?: string | null;
 }
 
 export function PipelineDiagnosticsPanel({
   pipelineDiagnostics = [],
   documents = [],
-  lastProcessedTimestamp
+  lastProcessedTimestamp,
+  loading = false,
+  error = null
 }: PipelineDiagnosticsPanelProps) {
 
   // 1. KPI summary data
@@ -47,6 +52,24 @@ export function PipelineDiagnosticsPanel({
   }, [documents, pipelineDiagnostics]);
 
   const cardStyle = "bg-[#060B18]/60 border-[#1F2937]/70 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.06)] hover:border-[#D4AF37]/35 hover:shadow-[0_0_20px_rgba(212,175,55,0.12)] hover:-translate-y-0.5 transition-all duration-300 rounded-xl";
+
+  if (loading) {
+    return (
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 animate-pulse">
+        {[1, 2, 3].map(x => (
+          <div key={x} className="h-[220px] bg-[#060B18]/40 border border-[#1F2937]/60 rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+        <TelemetryErrorWidget title="Pipeline Diagnostics Telemetry Offline" message={error} />
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">

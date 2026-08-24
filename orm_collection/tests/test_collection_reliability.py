@@ -1,6 +1,7 @@
 import sys
 import os
 import unittest
+import uuid
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from unittest.mock import patch, MagicMock
 from app.workers.collection_tasks import fetch_feed_task
@@ -13,10 +14,15 @@ class TestCollectionReliability(unittest.TestCase):
     @patch('app.workers.collection_tasks.fetch_feed_task.retry')
     def test_rss_404_backoff(self, mock_retry, mock_db, mock_rss):
         # Setup mock db and feed
+        # feed_id must be a real UUID string: the except block's terminal-failure
+        # path (collection_tasks.py) unconditionally does uuid.UUID(feed_id) --
+        # a non-UUID placeholder here raises a ValueError that masks the retry
+        # assertion this test is actually checking.
+        feed_id = str(uuid.uuid4())
         mock_session = MagicMock()
         mock_db.return_value = mock_session
         mock_feed = MagicMock()
-        mock_feed.id = "test-rss"
+        mock_feed.id = feed_id
         mock_feed.feed_url = "http://test.com/404"
         mock_session.query().filter().first.return_value = mock_feed
 
@@ -26,11 +32,11 @@ class TestCollectionReliability(unittest.TestCase):
 
         # Mock request context for retries
         fetch_feed_task.request_stack.push(MagicMock(retries=1))
-        
+
         mock_retry.side_effect = Exception("Retry Triggered")
 
         with self.assertRaises(Exception) as context:
-            fetch_feed_task("test-rss")
+            fetch_feed_task(feed_id)
             
         fetch_feed_task.request_stack.pop()
             

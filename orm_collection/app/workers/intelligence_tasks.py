@@ -1,12 +1,13 @@
 from celery import shared_task
 from app.core.db import SessionLocal
 from app.services.intelligence.topic_classifier import TopicClassifier
-from app.services.intelligence.topic_classification_batch_processor import HardenedTopicClassifier, TopicRetryConfig
+from app.services.intelligence.topic_classification_batch_processor import HardenedTopicClassifier, TopicRetryConfig, logger as topic_batch_logger
 from app.services.intelligence.entity_extractor import EntityExtractor
 from app.services.intelligence.sentiment_analyzer import SentimentAnalyzer
 from app.services.intelligence.entity_discovery import entity_discovery_engine
 import structlog
 import uuid
+from datetime import datetime, timezone, timedelta
 
 logger = structlog.get_logger()
 
@@ -38,6 +39,7 @@ def execute_document_intelligence_sync(document_id: str, client_id: str = None, 
                 logger.info("document_already_processed_skipping", document_id=document_id)
                 return
             doc.processing_status = "PROCESSING"
+            doc.processing_started_at = datetime.now(timezone.utc)
             db.commit()
     except Exception as exc:
         logger.error("failed_to_fetch_document", error=str(exc))
@@ -68,6 +70,14 @@ def execute_document_intelligence_sync(document_id: str, client_id: str = None, 
             logger.error("failed_to_set_failed_status", error=str(e))
         entity_db.close()
         if celery_task:
+            # Retry/backoff pattern 2 of 4 in this codebase: Celery flat
+            # countdown (FINDINGS.md #18) -- same delay regardless of retry
+            # count, unlike document_processor.py/collection_tasks.py's
+            # exponential backoff. The other 2 patterns: in-process retry
+            # classes (RetryConfig/SentimentRetryConfig/TopicRetryConfig) and
+            # evaluate_alerts's transient-error-conditional retry
+            # (aggregation_tasks.py). Intentional per-task variance, not
+            # drift -- not consolidated this phase.
             raise celery_task.retry(exc=exc, countdown=60)
         else:
             raise exc
@@ -77,12 +87,38 @@ def execute_document_intelligence_sync(document_id: str, client_id: str = None, 
     print(f"[TIMING] document_id={document_id} stage=entity_matching duration_ms={duration_matching:.2f}", flush=True)
 
     # 2. Phase 1B: Topic Classification
+    # Uses _process_with_retry (not process_batch) so the classifier's own
+    # transient/permanent retry-with-backoff machinery actually runs instead
+    # of being dead code -- see FINDINGS.md #23. Stage isolation (a topic
+    # failure must never abort entity extraction/sentiment/the pipeline) is
+    # preserved: exceptions are still only caught and logged here, never
+    # re-raised.
     t_topic = time.perf_counter()
     try:
-        hardened_topic_classifier.process_batch(
-            document_ids=[document_id],
+        from app.models.document import Document as _TopicDoc
+        topic_run_id = uuid.uuid4().hex
+        topic_batch_id = uuid.uuid4().hex[:12]
+        topic_retry_db = SessionLocal()
+        try:
+            topic_doc = topic_retry_db.query(_TopicDoc).filter(_TopicDoc.id == document_id).first()
+            topic_retry_count = topic_doc.topic_retry_count if topic_doc else 0
+        finally:
+            topic_retry_db.close()
+
+        topic_doc_logger = topic_batch_logger.bind(
+            run_id=topic_run_id,
+            batch_id=topic_batch_id,
             client_id=client_id,
-            batch_id=uuid.uuid4().hex[:12]
+            worker_id=hardened_topic_classifier.worker_id,
+            document_id=document_id
+        )
+        hardened_topic_classifier._process_with_retry(
+            document_id=document_id,
+            run_id=topic_run_id,
+            batch_id=topic_batch_id,
+            client_id=client_id,
+            current_retry_count=topic_retry_count,
+            doc_logger=topic_doc_logger
         )
     except Exception as topic_exc:
         logger.error("topic_classification_failed_stage_isolated", document_id=document_id, error=str(topic_exc))
@@ -90,14 +126,36 @@ def execute_document_intelligence_sync(document_id: str, client_id: str = None, 
     print(f"[TIMING] document_id={document_id} stage=topic_classification duration_ms={duration_topic:.2f}", flush=True)
 
     # 3. Phase 1C: Sentiment Analysis
+    # Same _process_with_retry wiring as topic classification above.
     t_sentiment = time.perf_counter()
     try:
-        from app.services.intelligence.sentiment_batch_processor import HardenedSentimentProcessor
+        from app.services.intelligence.sentiment_batch_processor import HardenedSentimentProcessor, logger as sentiment_batch_logger
+        from app.models.document import Document as _SentDoc
         hardened_sentiment = HardenedSentimentProcessor(analyzer_instance=sentiment_analyzer)
-        hardened_sentiment.process_batch(
-            document_ids=[document_id],
+
+        sentiment_run_id = uuid.uuid4().hex
+        sentiment_batch_id = uuid.uuid4().hex[:12]
+        sentiment_retry_db = SessionLocal()
+        try:
+            sentiment_doc = sentiment_retry_db.query(_SentDoc).filter(_SentDoc.id == document_id).first()
+            sentiment_retry_count = sentiment_doc.sentiment_retry_count if sentiment_doc else 0
+        finally:
+            sentiment_retry_db.close()
+
+        sentiment_doc_logger = sentiment_batch_logger.bind(
+            run_id=sentiment_run_id,
+            batch_id=sentiment_batch_id,
             client_id=client_id,
-            batch_id=uuid.uuid4().hex[:12]
+            worker_id=hardened_sentiment.worker_id,
+            document_id=document_id
+        )
+        hardened_sentiment._process_with_retry(
+            document_id=document_id,
+            run_id=sentiment_run_id,
+            batch_id=sentiment_batch_id,
+            client_id=client_id,
+            current_retry_count=sentiment_retry_count,
+            doc_logger=sentiment_doc_logger
         )
     except Exception as sent_exc:
         logger.error("sentiment_analysis_failed_stage_isolated", document_id=document_id, error=str(sent_exc))
@@ -235,4 +293,83 @@ def process_document_intelligence(self, document_id: str, client_id: str = None,
         raise exc
 
 
+# ---------------------------------------------------------------------------
+# Document processing watchdog
+# ---------------------------------------------------------------------------
+
+_DOCUMENT_PROCESSING_TIMEOUT_MINUTES = 10
+
+
+@shared_task
+def document_processing_watchdog():
+    """
+    Watchdog for Document.processing_status, mirroring collection_watchdog's
+    (collection_tasks.py) and pipeline_run_watchdog's (aggregation_tasks.py)
+    staleness-sweep pattern. Runs every 15 minutes.
+
+    Root cause this closes: execute_document_intelligence_sync above sets
+    processing_status="PROCESSING" and commits before any real work happens.
+    If the worker process dies anywhere after that commit (OOM kill, forced
+    restart, a native-library crash in torch/spaCy, a redeploy) the document
+    is stuck in PROCESSING forever -- there is no task-level time limit that
+    helps here: this worker runs --pool=solo, where Celery's
+    time_limit/soft_time_limit enforcement is a no-op (BasePool.on_soft_timeout/
+    on_hard_timeout are unimplemented `pass`; only the prefork pool can kill a
+    stuck child process, and solo has no child process to kill -- same reason
+    pipeline_run_watchdog exists instead of a task decorator timeout). A
+    Beat-scheduled sweep works regardless of pool type since it acts from
+    outside the stuck task. Found live: 130 documents stuck up to 11+ days,
+    same failure class CollectionJob and PipelineRun already hit and got a
+    watchdog for -- Document never did, until now.
+
+    Threshold: 10 minutes, derived from live-measured timing under current
+    Render Postgres latency (not the historical *_processing_time_ms columns,
+    which only cover the entity/topic/sentiment sub-stages and predate the
+    Render migration): a cold-start run (first document on a freshly started
+    worker, including one-time model/keyword-cache warm-up) measured ~68-71s
+    end-to-end; steady-state (already-warm worker) measured ~26s. 10 minutes
+    is ~8.5x the observed cold-start worst case, consistent with the same
+    safety-margin convention pipeline_run_watchdog already uses (~7-10 min
+    observed -> 60 min chosen, a similar ~6-8x margin) -- proportionally much
+    shorter here since this is a single-document task, not a full client
+    pipeline run.
+
+    Deliberately excludes rows where processing_started_at IS NULL: that
+    column did not exist before this fix, so every document stuck before
+    this deploy has no value there. Those are a separate, already-identified
+    cleanup (11-day-old stragglers) requiring its own explicit sign-off, not
+    something this sweep should silently touch.
+    """
+    from app.models.document import Document
+
+    log = structlog.get_logger().bind(task="document_processing_watchdog")
+    db = SessionLocal()
+    try:
+        timeout_limit = datetime.now(timezone.utc) - timedelta(minutes=_DOCUMENT_PROCESSING_TIMEOUT_MINUTES)
+
+        stuck_docs = db.query(Document).filter(
+            Document.processing_status == "PROCESSING",
+            Document.processing_started_at.isnot(None),
+            Document.processing_started_at < timeout_limit,
+        ).all()
+
+        if not stuck_docs:
+            log.info("watchdog_no_stuck_documents")
+            return
+
+        log.warning("watchdog_found_stuck_documents", total_stuck=len(stuck_docs))
+
+        for doc in stuck_docs:
+            doc_id_str = str(doc.id)
+            log.warning("watchdog_recovering_document", document_id=doc_id_str,
+                       processing_started_at=str(doc.processing_started_at))
+            doc.processing_status = "PENDING"
+            doc.match_failure_reason = "recovered_from_stuck_processing_by_watchdog"
+            db.commit()
+
+    except Exception as exc:
+        db.rollback()
+        log.error("watchdog_failed", error=str(exc))
+    finally:
+        db.close()
 

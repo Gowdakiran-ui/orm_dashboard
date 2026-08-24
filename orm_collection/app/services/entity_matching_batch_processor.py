@@ -131,6 +131,17 @@ class ProcessingState:
 
 
 # Phase D - Retry configuration
+#
+# Retry/backoff pattern 3 of 4 in this codebase (FINDINGS.md #18): an
+# in-process retry state machine within a single Celery task invocation --
+# a different layer entirely from Celery-level retries. The sibling classes
+# SentimentRetryConfig (sentiment_batch_processor.py) and TopicRetryConfig
+# (topic_classification_batch_processor.py) follow the same shape. The other
+# 3 patterns: Celery exponential backoff (document_processor.py,
+# collection_tasks.py, search_tasks.py), Celery flat countdown
+# (intelligence_tasks.py, aggregation_tasks.py), and evaluate_alerts's
+# transient-error-conditional retry (aggregation_tasks.py). Intentional
+# per-task variance, not drift -- not consolidated this phase.
 @dataclass
 class RetryConfig:
     max_retries: int = 3
@@ -661,7 +672,6 @@ class EntityMatchingBatchProcessor:
         run_id: str,
         batch_id: str,
         client_id: str,
-        current_retry_count: int,
         doc_logger: CorrelatedLogger,
     ) -> DocumentResult:
         """
@@ -674,6 +684,17 @@ class EntityMatchingBatchProcessor:
         )
 
         if result.state == ProcessingState.FAILED:
+            # Only fetched here (not for every document up front) since this
+            # branch is the sole place current_retry_count is used.
+            retry_db = SessionLocal()
+            try:
+                doc = retry_db.query(Document).filter(
+                    Document.id == document_id
+                ).first()
+                current_retry_count = (doc.match_retry_count or 0) if doc else 0
+            finally:
+                retry_db.close()
+
             is_permanent = self.retry_config.is_permanent_failure(
                 result.exception_type or "",
                 result.failure_reason or "",
@@ -777,25 +798,17 @@ class EntityMatchingBatchProcessor:
             )
 
             try:
-                # Read retry count from DB (separate read-only session)
-                retry_db = SessionLocal()
-                try:
-                    doc = retry_db.query(Document).filter(
-                        Document.id == document_id
-                    ).first()
-                    current_retry_count = (
-                        doc.match_retry_count or 0
-                    ) if doc else 0
-                finally:
-                    retry_db.close()
-
                 # CRITICAL: Exception here is caught per-document
+                # retry_count is fetched lazily inside _process_with_retry,
+                # only on the FAILED path -- most documents succeed on the
+                # first attempt, so this avoids an extra DB round trip per
+                # document for the common case (was previously fetched
+                # eagerly here for every document regardless of outcome).
                 result = self._process_with_retry(
                     document_id=document_id,
                     run_id=run_id,
                     batch_id=batch_id,
                     client_id=client_id,
-                    current_retry_count=current_retry_count,
                     doc_logger=doc_logger,
                 )
 
@@ -860,7 +873,22 @@ class EntityMatchingBatchProcessor:
         db = SessionLocal()
         try:
             # W4: Recover documents stuck in PROCESSING
+            # Scoped to this client's own documents only (matches the
+            # client-scoping pattern used by get_documents_for_client below)
+            # -- unscoped, this reset every client's in-flight PROCESSING
+            # documents back to PENDING whenever any one client's pipeline
+            # ran, corrupting concurrently-running clients' work.
+            from app.models.entity import Entity
+            entity_ids = db.query(Entity.id).filter(
+                Entity.client_id == client_id
+            ).scalar_subquery()
+            matched_doc_ids = (
+                db.query(DocumentMatch.document_id)
+                .filter(DocumentMatch.matched_entity_id.in_(entity_ids))
+                .scalar_subquery()
+            )
             stuck_docs = db.query(Document).filter(
+                Document.id.in_(matched_doc_ids),
                 Document.processing_status == ProcessingState.PROCESSING
             ).all()
             if stuck_docs:

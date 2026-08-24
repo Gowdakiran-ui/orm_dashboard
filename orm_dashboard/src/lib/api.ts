@@ -15,80 +15,83 @@ async function fetchWithRetry(
   const isGet = !options.method || options.method.toUpperCase() === "GET";
   if (isGet) {
     const cacheKey = url;
-    const cachedPromise = getCache.get(cacheKey);
-    if (cachedPromise) {
-      try {
-        const res = await cachedPromise;
-        return res.clone();
-      } catch (err) {
-        // If the cached request failed, bypass cache and perform a new fetch
-      }
+    let sharedPromise = getCache.get(cacheKey);
+
+    if (!sharedPromise) {
+      // Deliberately NOT combined with any individual caller's options.signal:
+      // this promise is shared across every concurrent caller for the same
+      // cacheKey (dedup), so tying it to one caller's signal meant that
+      // caller aborting also killed the request for every other unrelated
+      // caller awaiting the same cache entry, and a second caller's own
+      // signal was never wired to anything at all. Each caller's own signal
+      // is instead raced below, so aborting only affects that caller.
+      sharedPromise = (async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        const headers = {
+          "Content-Type": "application/json",
+          "X-API-Key": API_SHARED_SECRET,
+          ...(options.headers || {})
+        };
+
+        const config: RequestInit = { ...options, headers, signal: controller.signal };
+
+        try {
+          const res = await fetch(url, config);
+          clearTimeout(timeoutId);
+
+          // Retry on transient 5xx server errors
+          if (!res.ok && res.status >= 500 && retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, backoff));
+            // This GET's own not-yet-settled promise is still the cache entry for
+            // cacheKey; recursing into fetchWithRetry without clearing it first
+            // makes the recursive call read itself back out of the cache and
+            // await itself, deadlocking forever. Clear it so the retry is a
+            // fresh cache miss.
+            getCache.delete(cacheKey);
+            return fetchWithRetry(url, options, retries - 1, backoff * 2, timeoutMs);
+          }
+          return res;
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          if (err.name === "AbortError") {
+            throw new Error(`Request timed out after ${timeoutMs}ms`);
+          }
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, backoff));
+            getCache.delete(cacheKey);
+            return fetchWithRetry(url, options, retries - 1, backoff * 2, timeoutMs);
+          }
+          throw err;
+        }
+      })();
+
+      getCache.set(cacheKey, sharedPromise);
+
+      // Auto-cleanup from cache immediately after promise completes (resolves or rejects)
+      sharedPromise.then(
+        () => { getCache.delete(cacheKey); },
+        () => { getCache.delete(cacheKey); }
+      );
     }
 
-    const promise = (async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      
-      const headers = {
-        "Content-Type": "application/json",
-        "X-API-Key": API_SHARED_SECRET,
-        ...(options.headers || {})
-      };
+    if (!options.signal) {
+      const res = await sharedPromise;
+      return res.clone();
+    }
 
-      let combinedSignal: CombinedSignal | null = null;
-      if (options.signal) {
-        combinedSignal = anySignal([options.signal, controller.signal]);
-      }
-
-      const config: RequestInit = {
-        ...options,
-        headers,
-        signal: combinedSignal ? combinedSignal.signal : controller.signal
-      };
-
-      try {
-        const res = await fetch(url, config);
-        clearTimeout(timeoutId);
-
-        // Retry on transient 5xx server errors
-        if (!res.ok && res.status >= 500 && retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, backoff));
-          // This GET's own not-yet-settled promise is still the cache entry for
-          // cacheKey; recursing into fetchWithRetry without clearing it first
-          // makes the recursive call read itself back out of the cache and
-          // await itself, deadlocking forever. Clear it so the retry is a
-          // fresh cache miss.
-          getCache.delete(cacheKey);
-          return fetchWithRetry(url, options, retries - 1, backoff * 2, timeoutMs);
-        }
-        return res;
-      } catch (err: any) {
-        clearTimeout(timeoutId);
-        if (err.name === "AbortError" && !options.signal?.aborted) {
-          throw new Error(`Request timed out after ${timeoutMs}ms`);
-        }
-        if (retries > 0 && err.name !== "AbortError") {
-          await new Promise(resolve => setTimeout(resolve, backoff));
-          getCache.delete(cacheKey);
-          return fetchWithRetry(url, options, retries - 1, backoff * 2, timeoutMs);
-        }
-        throw err;
-      } finally {
-        if (combinedSignal) {
-          combinedSignal.cleanup();
-        }
-      }
-    })();
-
-    getCache.set(cacheKey, promise);
-    
-    // Auto-cleanup from cache immediately after promise completes (resolves or rejects)
-    promise.then(
-      () => { getCache.delete(cacheKey); },
-      () => { getCache.delete(cacheKey); }
-    );
-
-    const res = await promise;
+    // Race this specific caller's own signal against the shared request, so
+    // aborting only stops waiting for this caller -- it never cancels the
+    // underlying request for other callers sharing the same cache entry.
+    const res = await new Promise<Response>((resolve, reject) => {
+      const onAbort = () => reject(new DOMException("Aborted", "AbortError"));
+      if (options.signal!.aborted) return onAbort();
+      options.signal!.addEventListener("abort", onAbort);
+      sharedPromise!.then(resolve, reject).finally(() => {
+        options.signal!.removeEventListener("abort", onAbort);
+      });
+    });
     return res.clone();
   }
 
@@ -340,7 +343,11 @@ export async function fetchDocumentDetails(clientId: string, documentId: string,
   return parseOrThrow(res);
 }
 
-export async function fetchSources(clientId: string, signal?: AbortSignal) {
+// Not client-scoped -- /sources/ is a global endpoint. This function has no
+// callers anywhere in the codebase (confirmed via grep); kept as-is pending
+// use, but the clientId param it previously had was removed since it was
+// silently unused and misleadingly implied client scoping that doesn't exist.
+export async function fetchSources(signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/sources/`, { signal });
   return parseOrThrow(res);
 }

@@ -1,3 +1,6 @@
+# Manual accuracy benchmark, not part of the automated pytest suite (loads
+# real HuggingFace models -- FinBERT, hundreds of MB, downloaded on first
+# run if not cached). Run directly: python validate_sentiment_analysis.py
 import time
 import sys
 import os

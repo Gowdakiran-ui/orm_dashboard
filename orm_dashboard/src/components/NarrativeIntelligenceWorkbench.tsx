@@ -28,10 +28,9 @@ export function NarrativeIntelligenceWorkbench({
   clientId,
   onSelectDocument
 }: NarrativeIntelligenceWorkbenchProps) {
-  // State for selected narrative
-  const [selectedNarrativeId, setSelectedNarrativeId] = useState<string | null>(
-    narratives.length > 0 ? narratives[0].id : null
-  );
+  // State for selected narrative -- auto-selected below once real data
+  // arrives (see the effect after narrativeList/activeNarrative), not here.
+  const [selectedNarrativeId, setSelectedNarrativeId] = useState<string | null>(null);
 
   // Filters & Sorting state
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,10 +54,15 @@ export function NarrativeIntelligenceWorkbench({
         .filter(e => supportEntities.includes(e.entity_id))
         .map(e => e.name);
 
-      // Calculate confidence score dynamically
-      const hasTrace = docs.some(d => d.processing_status === "completed" || d.entity_processing_status === "completed");
-      const baseConf = 80 + Math.min(docs.length * 2, 12);
-      const confidence = hasTrace ? Math.min(baseConf + 6, 99) : baseConf;
+      // No honest confidence signal exists for narratives today -- the
+      // /narratives API response has no confidence/confidence_score field
+      // (client_intelligence.py:82-91). Matches useAnalytics.ts's
+      // getConfidenceScore pattern: read the real field if the backend
+      // ever adds one, otherwise null (rendered "Not Available"), not a
+      // fabricated always-≥80% formula (FINDINGS.md #33).
+      const confidence = typeof n.confidence_score === "number" ? n.confidence_score
+        : typeof n.confidence === "number" ? n.confidence
+        : null;
 
       // Status tier
       let status = "Emerging";
@@ -94,6 +98,16 @@ export function NarrativeIntelligenceWorkbench({
     if (!selectedNarrativeId) return null;
     return narrativeList.find(n => n.id === selectedNarrativeId) || null;
   }, [selectedNarrativeId, narrativeList]);
+
+  // Auto-select once real data is available. Keyed on activeNarrative
+  // (not selectedNarrativeId) so this also self-heals a stale selection
+  // left over from a previous client whose narratives no longer match --
+  // not just the initial-load case (FINDINGS.md #32).
+  useEffect(() => {
+    if (!activeNarrative && narrativeList.length > 0) {
+      setSelectedNarrativeId(narrativeList[0].id);
+    }
+  }, [activeNarrative, narrativeList]);
 
   useEffect(() => {
     if (!activeNarrative || !activeNarrative.rawDocs || !clientId) return;
@@ -269,7 +283,7 @@ export function NarrativeIntelligenceWorkbench({
                     </div>
                     <div className="text-right">
                       <span className="block text-[8px] text-slate-600 uppercase">CONFIDENCE</span>
-                      <span className="font-bold text-[#D4AF37]">{n.confidence}%</span>
+                      <span className="font-bold text-[#D4AF37]">{n.confidence !== null ? `${n.confidence}%` : "Not Available"}</span>
                     </div>
                   </div>
 

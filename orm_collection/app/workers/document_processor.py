@@ -67,6 +67,13 @@ def process_document_task(self, job_id: str, source_id: str, raw_document_data_j
     except Exception as exc:
         db.rollback()
         if self.request.retries < self.max_retries:
+            # Retry/backoff pattern 1 of 4 in this codebase: Celery exponential
+            # backoff (FINDINGS.md #18). The other 3: flat Celery countdown
+            # (intelligence_tasks.py, aggregation_tasks.py), in-process retry
+            # classes (RetryConfig/SentimentRetryConfig/TopicRetryConfig), and
+            # evaluate_alerts's own transient-error-conditional pattern
+            # (aggregation_tasks.py). Intentional per-task variance, not drift
+            # -- not consolidated this phase (see FINDINGS.md for why).
             backoff = 60 * (2 ** self.request.retries)
             raise self.retry(exc=exc, countdown=backoff)
             

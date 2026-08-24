@@ -3,6 +3,7 @@ import sys
 import os
 import uuid
 import datetime
+import pytest
 
 # Add the app to path so we can import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -33,7 +34,18 @@ engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-def run_validation():
+@pytest.mark.xfail(
+    reason="Stale scenario: this test expects per-category alert_type values "
+           "('Critical Risk', 'Mention Spike', 'Topic Spike', 'Negative Sentiment "
+           "Surge') but AlertEngine.evaluate_all now generates only 'Multi-Signal "
+           "Incident'/'Executive Risk' via an evidence-score model (see A1/A4/A5 "
+           "comments in alert_engine.py) -- the test predates that redesign and "
+           "was never run to catch the drift (FINDINGS.md Phase 11 #38). Needs a "
+           "scenario rewrite against the current evidence-score contract, out of "
+           "scope for this phase.",
+    strict=False,
+)
+def test_validation():
     print("Setting up mock database for Alert Engine...")
     db = Session()
     try:
@@ -70,34 +82,32 @@ def run_validation():
         db.commit()
 
         engine_svc = AlertEngine()
-        
+
         print("Running Alert Engine Inference...")
         start_time = time.time()
-        
+
         # Test latency and correctness
         engine_svc.evaluate_all(db, client_id)
-        
+
         # 6. Test Deduplication
         # Run again, it should NOT create new alerts, but might update trigger values. Let's create a new worse trend for mention
         t1_worse = TrendEvent(client_id=client_id, entity_id=ent2.id, trend_type="Mention", percentage_change=90.0, severity="CRITICAL")
         db.add(t1_worse)
         db.commit()
-        
+
         engine_svc.evaluate_all(db, client_id)
-        
+
         # Throughput test
         for _ in range(98): # Total 100 iterations
             engine_svc.evaluate_all(db, client_id)
-            
+
         exec_time = time.time() - start_time
         avg_time = exec_time / 100.0
         throughput = 100.0 / exec_time if exec_time > 0 else 0
-        
-        print("\n--- PHASE 2.2 VALIDATION REPORT ---")
-        
-        correct = 0
+        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
+
         alerts = db.query(Alert).filter(Alert.client_id == client_id).all()
-        
+
         # Checks
         has_risk = False
         has_mention = False
@@ -105,7 +115,7 @@ def run_validation():
         has_sentiment = False
         has_exec = False
         dedup_pass = True
-        
+
         counts = {}
         for a in alerts:
             key = (a.alert_type, a.entity_id)
@@ -121,35 +131,16 @@ def run_validation():
         for k, v in counts.items():
             if v > 1:
                 dedup_pass = False
-        
-        if has_risk: correct += 16; print("1. Risk Alert Generation [PASS]")
-        else: print("1. Risk Alert Generation [FAIL]")
-        
-        if has_mention: correct += 16; print("2. Mention Spike Alert [PASS]")
-        else: print("2. Mention Spike Alert [FAIL]")
-        
-        if has_topic: correct += 16; print("3. Topic Spike Alert [PASS]")
-        else: print("3. Topic Spike Alert [FAIL]")
-        
-        if has_sentiment: correct += 16; print("4. Negative Sentiment Surge Alert [PASS]")
-        else: print("4. Negative Sentiment Surge Alert [FAIL]")
-        
-        if has_exec: correct += 16; print("5. Executive Risk Alert [PASS]")
-        else: print("5. Executive Risk Alert [FAIL]")
-        
-        if dedup_pass: correct += 20; print("6. Alert Deduplication [PASS]")
-        else: print("6. Alert Deduplication [FAIL] - Counts: " + str(counts))
 
-        print(f"Classification Accuracy: {correct}%")
-        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
-        
-        if correct == 100:
-            print("Status: PASS")
-        else:
-            print("Status: FAIL")
-            
+        assert has_risk, "Risk Alert Generation: no 'Critical Risk' alert was generated"
+        assert has_mention, "Mention Spike Alert: no 'Mention Spike' alert was generated"
+        assert has_topic, "Topic Spike Alert: no 'Topic Spike' alert was generated"
+        assert has_sentiment, "Negative Sentiment Surge Alert: no 'Negative Sentiment Surge' alert was generated"
+        assert has_exec, "Executive Risk Alert: no 'Executive Risk' alert was generated"
+        assert dedup_pass, f"Alert Deduplication: re-evaluating created duplicates or failed to update trigger_value - counts: {counts}"
+
     finally:
         db.close()
 
 if __name__ == "__main__":
-    run_validation()
+    test_validation()

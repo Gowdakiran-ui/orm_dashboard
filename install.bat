@@ -37,6 +37,48 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo        Found: %%v
+
+:: Parse and enforce the actual version -- previously this only checked
+:: that *some* Python was on PATH, never the version itself, so a Python
+:: release with no psycopg2 wheel yet (Python 3.13 before the 2.9.12 bump,
+:: see FINDINGS.md) sailed straight through this check and only failed
+:: much later with a cryptic "pg_config not found" error deep in pip's
+:: build log.
+for /f "tokens=2" %%v in ('python --version 2^>^&1') do set "PY_VERSION_STR=%%v"
+for /f "tokens=1,2 delims=." %%a in ("%PY_VERSION_STR%") do (
+    set "PY_MAJOR=%%a"
+    set "PY_MINOR=%%b"
+)
+
+:: NOTE: deliberately using goto instead of nested if(...) blocks with
+:: exit /b inside them -- cmd.exe does not reliably propagate the exit
+:: code out of exit /b when it's called from inside a doubly-nested
+:: parenthesized if block (confirmed live: the nested-if version of this
+:: check printed the right message but always exited 0). goto avoids the
+:: nesting entirely.
+if %PY_MAJOR% LSS 3 goto :py_version_too_old
+if %PY_MAJOR% EQU 3 if %PY_MINOR% LSS 11 goto :py_version_too_old
+if %PY_MAJOR% GTR 3 goto :py_version_unverified
+if %PY_MAJOR% EQU 3 if %PY_MINOR% GTR 13 goto :py_version_unverified
+goto :py_version_checked
+
+:py_version_too_old
+echo.
+echo  ERROR: Python %PY_VERSION_STR% is too old. This project requires Python 3.11 or later.
+echo  Please install a newer version from https://www.python.org/downloads/
+echo.
+pause
+exit /b 1
+
+:py_version_unverified
+echo.
+echo  WARNING: Python %PY_VERSION_STR% is newer than any version this project has
+echo  been verified against ^(up to 3.13^). Installation will continue, but if it
+echo  fails with a "pg_config not found" or similar build error, install
+echo  Python 3.11-3.13 instead.
+echo.
+
+:py_version_checked
 echo        [OK]
 
 :: ============================================================
@@ -163,7 +205,6 @@ if %ERRORLEVEL% NEQ 0 (
 :: ============================================================
 echo.
 echo [8/9] Checking Playwright Chromium browser...
-"%PYTHON_EXE%" -m playwright install --dry-run 2>&1 | findstr /i "chromium" >nul 2>&1
 "%PYTHON_EXE%" -c "from playwright.sync_api import sync_playwright; p = sync_playwright().__enter__(); b = p.chromium.launch(); b.close(); p.stop()" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo        Installing Playwright Chromium...

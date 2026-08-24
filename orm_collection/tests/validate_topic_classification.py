@@ -1,3 +1,6 @@
+# Manual accuracy benchmark, not part of the automated pytest suite (loads
+# real HuggingFace models -- BART-large-mnli, ~1.6GB, downloaded on first
+# run if not cached). Run directly: python validate_topic_classification.py
 import time
 import sys
 import os

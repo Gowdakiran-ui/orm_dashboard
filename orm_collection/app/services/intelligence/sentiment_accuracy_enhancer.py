@@ -99,6 +99,22 @@ def preprocess_text(raw_text: str, title: str = "", summary: str = "", matched_k
 NEG_WORDS = ["recall", "recalls", "lawsuit", "lawsuits", "scandal", "investigate", "investigation", "investigations", "probe", "scandal", "breach", "hack", "layoffs", "layoff", "fine", "fines", "bankruptcy", "sued", "court", "fraud", "complaint", "defect", "safety data", "misleading", "fatal", "crash", "accident"]
 POS_WORDS = ["profit", "profits", "beat", "launch", "launches", "innovation", "breakthrough", "partnership", "expansion", "award", "success", "record", "growth"]
 
+# "court" alone is context-free -- common idioms (ball in X's court, food
+# court, courting investors) are not litigation-related. Live-verified
+# false positive (FINDINGS.md #25): "The Ball in OpenAI's court" was scored
+# fully Negative on this word alone. Every genuinely negative "court" hit
+# sampled live was also accompanied by one of these litigation-context
+# words elsewhere in the same text, so gating on co-occurrence doesn't cost
+# real recall.
+LITIGATION_CONTEXT_WORDS = ["ban", "case", "legal", "lawsuit", "sued", "ruling", "judge", "trial", "verdict"]
+
+def _is_neg_word_present(word: str, text_lower: str) -> bool:
+    if word not in text_lower:
+        return False
+    if word == "court":
+        return any(ctx in text_lower for ctx in LITIGATION_CONTEXT_WORDS)
+    return True
+
 def apply_orm_rules(text_content: str, raw_label: str, raw_score: float) -> Dict[str, Any]:
     text_lower = text_content.lower()
     final_label = raw_label
@@ -107,7 +123,7 @@ def apply_orm_rules(text_content: str, raw_label: str, raw_score: float) -> Dict
     trigger_words = []
 
     # Check negative risk matches
-    matched_neg = [w for w in NEG_WORDS if w in text_lower]
+    matched_neg = [w for w in NEG_WORDS if _is_neg_word_present(w, text_lower)]
     matched_pos = [w for w in POS_WORDS if w in text_lower]
 
     if matched_neg:
@@ -135,8 +151,10 @@ def apply_orm_rules(text_content: str, raw_label: str, raw_score: float) -> Dict
     # Calibration gate: if low confidence and no rule matched, default to Neutral
     if final_score < 0.65 and not applied_rule:
         final_label = "neutral"
-        final_score = 1.0
         applied_rule = "Low-Confidence Neutral Calibration"
+        # final_score is intentionally left as the real (low) raw score here,
+        # not forced to 1.0 -- this branch fires precisely because there
+        # ISN'T enough evidence to be confident (FINDINGS.md #24).
 
     return {
         "label": final_label,

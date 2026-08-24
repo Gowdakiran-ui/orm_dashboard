@@ -403,7 +403,7 @@ export function FeedTab({
                   
                   return (
                     <div
-                      key={i}
+                      key={d.id ?? i}
                       onClick={() => setSelectedDocId(d.id)}
                       className={`border rounded-lg p-3 cursor-pointer transition-all duration-200 font-mono text-[10px] space-y-2 ${
                         isSelected 

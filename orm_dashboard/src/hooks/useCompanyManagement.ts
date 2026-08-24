@@ -16,6 +16,7 @@ export function useCompanyManagement(
 
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleAddCompany() {
     if (!addName.trim()) {
@@ -45,6 +46,7 @@ export function useCompanyManagement(
   async function handleDeleteCompany() {
     if (!deleteTarget) return;
     setDeleteLoading(true);
+    setDeleteError(null);
     try {
       if (deleteTarget.id === clientId) {
         abortCurrentFetches();
@@ -64,6 +66,7 @@ export function useCompanyManagement(
       setClientsRefreshKey(k => k + 1);
     } catch (e: any) {
       console.error("Failed to delete company", e);
+      setDeleteError(e.message || "Failed to delete company");
     } finally {
       setDeleteLoading(false);
     }
@@ -82,6 +85,8 @@ export function useCompanyManagement(
     deleteTarget,
     setDeleteTarget,
     deleteLoading,
+    deleteError,
+    setDeleteError,
     handleDeleteCompany,
     handleAddCompany
   };

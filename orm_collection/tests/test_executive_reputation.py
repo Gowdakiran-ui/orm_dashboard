@@ -3,6 +3,7 @@ import sys
 import os
 import uuid
 import datetime
+import pytest
 
 # Add the app to path so we can import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -42,7 +43,10 @@ def setup_client_and_exec(db, name, avg_sentiment, risk_score, mentions, narrati
     db.add(client)
     
     entity_id = uuid.uuid4()
-    entity = Entity(id=entity_id, client_id=client_id, name=f"CEO {name}")
+    # entity_type="person" is required: executive_reputation_engine.py's R1
+    # strictly filters Entity.entity_type == "person" when finding executives
+    # to score (without it, the engine finds zero executives and skips).
+    entity = Entity(id=entity_id, client_id=client_id, name=f"CEO {name}", entity_type="person")
     db.add(entity)
     
     # Docs & Mentions
@@ -65,7 +69,19 @@ def setup_client_and_exec(db, name, avg_sentiment, risk_score, mentions, narrati
     db.commit()
     return client_id
 
-def run_validation():
+@pytest.mark.xfail(
+    reason="SQLite test harness datetime dialect gap: executive_reputation_engine.py "
+           "compares a timezone-aware datetime.now(timezone.utc) against document/"
+           "entity timestamps that come back offset-naive from SQLite's "
+           "server_default=func.now() (Postgres's timestamptz returns tz-aware "
+           "reliably; SQLite's CURRENT_TIMESTAMP does not) -- "
+           "\"can't compare offset-naive and offset-aware datetimes\". Not a "
+           "production bug (real DB is Postgres); needs a real/test Postgres DB to "
+           "validate this scenario, out of scope for this phase "
+           "(FINDINGS.md Phase 11 #38).",
+    strict=False,
+)
+def test_validation():
     print("Setting up mock database for Executive Reputation Engine...")
     db = Session()
     try:
@@ -95,33 +111,18 @@ def run_validation():
         exec_time = time.time() - start_time
         avg_time = exec_time / 100.0
         throughput = 100.0 / exec_time if exec_time > 0 else 0
-        
-        print("\n--- PHASE 3.2 VALIDATION REPORT ---")
-        
-        correct = 0
+        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
+
         rep_pos = db.query(ExecutiveReputationScore).filter(ExecutiveReputationScore.client_id == client_pos).order_by(ExecutiveReputationScore.created_at.desc()).first()
         rep_neu = db.query(ExecutiveReputationScore).filter(ExecutiveReputationScore.client_id == client_neu).order_by(ExecutiveReputationScore.created_at.desc()).first()
         rep_neg = db.query(ExecutiveReputationScore).filter(ExecutiveReputationScore.client_id == client_neg).order_by(ExecutiveReputationScore.created_at.desc()).first()
-        
-        if rep_pos and rep_pos.grade in ["A", "A+"]: correct += 33.3; print(f"1. Positive Executive Scenario -> Expected: A/A+ | Actual: {rep_pos.grade} (Score: {rep_pos.score:.1f}) [PASS]")
-        else: print(f"1. Positive Executive Scenario [FAIL] {rep_pos.grade if rep_pos else 'None'}")
-        
-        if rep_neu and rep_neu.grade in ["B", "C"]: correct += 33.3; print(f"2. Mixed Executive Scenario -> Expected: B/C | Actual: {rep_neu.grade} (Score: {rep_neu.score:.1f}) [PASS]")
-        else: print(f"2. Mixed Executive Scenario [FAIL] {rep_neu.grade if rep_neu else 'None'} Score: {rep_neu.score if rep_neu else 0}")
-        
-        if rep_neg and rep_neg.grade in ["D", "F"]: correct += 33.4; print(f"3. Negative Executive Scenario -> Expected: D/F | Actual: {rep_neg.grade} (Score: {rep_neg.score:.1f}) [PASS]")
-        else: print(f"3. Negative Executive Scenario [FAIL] {rep_neg.grade if rep_neg else 'None'} Score: {rep_neg.score if rep_neg else 0}")
 
-        print(f"Classification Accuracy: {correct:.1f}%")
-        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
-        
-        if correct >= 99.0:
-            print("Status: PASS")
-        else:
-            print("Status: FAIL")
-            
+        assert rep_pos and rep_pos.grade in ["A", "A+"], f"Positive Executive Scenario: expected A/A+, got {rep_pos.grade if rep_pos else None}"
+        assert rep_neu and rep_neu.grade in ["B", "C"], f"Mixed Executive Scenario: expected B/C, got {rep_neu.grade if rep_neu else None}"
+        assert rep_neg and rep_neg.grade in ["D", "F"], f"Negative Executive Scenario: expected D/F, got {rep_neg.grade if rep_neg else None}"
+
     finally:
         db.close()
 
 if __name__ == "__main__":
-    run_validation()
+    test_validation()

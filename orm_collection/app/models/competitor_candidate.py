@@ -19,7 +19,7 @@ class CompetitorCandidate(Base):
     source_documents = Column(JSONB, default=list)
     
     # Promotion tracking
-    promoted_to_competitor_id = Column(UUID(as_uuid=True), ForeignKey("entities.id", ondelete="SET NULL"), nullable=True)
+    promoted_to_competitor_id = Column(UUID(as_uuid=True), ForeignKey("entities.id", ondelete="SET NULL"), nullable=True, index=True)
     promoted_at = Column(DateTime(timezone=True), nullable=True)
     
     # Phase 6 item 32: DB has these NOT NULL with a default; model was

@@ -80,7 +80,7 @@ def setup_mock_data(db):
     db.commit()
     return client_id
 
-def run_validation():
+def test_validation():
     print("Setting up mock database for Trend Detection...")
     db = Session()
     try:
@@ -97,42 +97,28 @@ def run_validation():
         exec_time = time.time() - start_time
         avg_time = exec_time / 100.0
         throughput = 100.0 / exec_time if exec_time > 0 else 0
-        
+        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
+
         # Check generated events
         events = db.query(TrendEvent).filter(TrendEvent.client_id == client_id).all()
         # Since we ran it 100 times, and it creates 3 events per run, we should have 300 events
-        
+
         # Analyze the latest events for accuracy
         mention_events = [e for e in events if e.trend_type == "Mention"]
         topic_events = [e for e in events if e.trend_type == "Topic"]
         sentiment_events = [e for e in events if e.trend_type == "Sentiment"]
-        
-        print("\n--- PHASE 1E VALIDATION REPORT ---")
-        
+
         # Baseline avg should be 1.0, current should be 10.0 -> Percentage change = (10 - 1) / 1 * 100 = 900%
         # Severity should be CRITICAL (>= 500%)
-        accuracy = 0
-        if mention_events and mention_events[0].percentage_change == 900.0 and mention_events[0].severity == "CRITICAL":
-            accuracy += 33.3
-        if topic_events and topic_events[0].percentage_change == 900.0 and topic_events[0].severity == "CRITICAL":
-            accuracy += 33.3
-        if sentiment_events and sentiment_events[0].percentage_change == 900.0 and sentiment_events[0].severity == "CRITICAL":
-            accuracy += 33.4
-            
-        print(f"Mention Spike Detection: {'PASS' if mention_events else 'FAIL'} (Expected +900%)")
-        print(f"Topic Spike Detection: {'PASS' if topic_events else 'FAIL'} (Expected +900%)")
-        print(f"Sentiment Spike Detection: {'PASS' if sentiment_events else 'FAIL'} (Expected +900%)")
-        
-        print(f"Trend Calculation Accuracy: {accuracy:.1f}%")
-        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
-        
-        if accuracy >= 99.0:
-            print("Status: PASS")
-        else:
-            print("Status: FAIL (Logic error in trend calculation)")
-            
+        assert mention_events and mention_events[0].percentage_change == 900.0 and mention_events[0].severity == "CRITICAL", \
+            f"Mention Spike Detection: expected +900%/CRITICAL, got {mention_events[0].percentage_change if mention_events else None}/{mention_events[0].severity if mention_events else None}"
+        assert topic_events and topic_events[0].percentage_change == 900.0 and topic_events[0].severity == "CRITICAL", \
+            f"Topic Spike Detection: expected +900%/CRITICAL, got {topic_events[0].percentage_change if topic_events else None}/{topic_events[0].severity if topic_events else None}"
+        assert sentiment_events and sentiment_events[0].percentage_change == 900.0 and sentiment_events[0].severity == "CRITICAL", \
+            f"Sentiment Spike Detection: expected +900%/CRITICAL, got {sentiment_events[0].percentage_change if sentiment_events else None}/{sentiment_events[0].severity if sentiment_events else None}"
+
     finally:
         db.close()
 
 if __name__ == "__main__":
-    run_validation()
+    test_validation()

@@ -11,7 +11,7 @@ class Topic(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), unique=True, nullable=False)
     description = Column(String(1024))
-    parent_topic_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), nullable=True)
+    parent_topic_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     confidence_threshold = Column(Float, default=0.5, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

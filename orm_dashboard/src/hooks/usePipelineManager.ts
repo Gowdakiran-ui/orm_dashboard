@@ -5,7 +5,9 @@
  *
  * Protocol:
  *   1. POST /clients/{clientId}/pipeline/run → receive { run_id, status, progress_pct, stage }
- *   2. Poll GET /clients/{clientId}/pipeline/status every 2s
+ *   2. Poll GET /clients/{clientId}/pipeline/status every 2s (nominal --
+ *      each cycle waits 2s after the previous poll resolves, so actual
+ *      cadence is closer to ~3-4s under Render's DB round-trip latency)
  *   3. Stop polling when status === "SUCCESS" or "FAILED"
  *   4. Trigger onComplete() exactly once on SUCCESS
  *

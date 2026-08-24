@@ -10,9 +10,16 @@ from app.models.document import Document, DocumentMatch
 router = APIRouter()
 
 @router.get("/", response_model=List[DocumentResponse])
-def read_documents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
-    return db.query(Document).order_by(Document.published_at.desc(), Document.id.desc()).offset(skip).limit(limit).all()
+    # Scoped by client_id (API_FORENSICS.md / FINAL.md #1) — previously
+    # returned every document in the database regardless of caller, unlike
+    # every sibling endpoint in this file. Matches the join pattern already
+    # used correctly in GET /{document_id} and GET /client/{client_id} below.
+    from app.models.entity import Entity
+    return db.query(Document).join(DocumentMatch).join(Entity).filter(
+        Entity.client_id == client_id
+    ).distinct().order_by(Document.published_at.desc(), Document.id.desc()).offset(skip).limit(limit).all()
 
 @router.get("/{document_id}")
 def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_db)):

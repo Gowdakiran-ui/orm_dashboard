@@ -343,14 +343,62 @@ def get_client_sov(client_id: UUID, db: Session = Depends(get_db)):
 @router.get("/{client_id}/competitive-summary", response_model=Dict[str, Any])
 def get_client_competitive_summary(client_id: UUID, db: Session = Depends(get_db)):
     """
-    TODO: Implement competitive summary analytics.
-    Currently a stub returning {"status": "ok"}.
-    Disabled/Unused pending full implementation using existing Postgres data.
+    Compact competitive summary (count, average reputation, top competitor,
+    client's own rank), built from the same latest-per-competitor
+    CompetitorBenchmark query pattern as get_client_benchmark above.
     """
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    return {"status": "ok"}
+    from app.models.entity import Entity
+
+    latest_sub = db.query(
+        CompetitorBenchmark.competitor_entity_id,
+        func.max(CompetitorBenchmark.created_at).label("max_created")
+    ).filter(CompetitorBenchmark.client_id == client_id).group_by(
+        CompetitorBenchmark.competitor_entity_id
+    ).subquery()
+
+    benchmarks = db.query(CompetitorBenchmark, Entity).join(
+        Entity, Entity.id == CompetitorBenchmark.competitor_entity_id
+    ).join(
+        latest_sub,
+        (CompetitorBenchmark.competitor_entity_id == latest_sub.c.competitor_entity_id) &
+        (CompetitorBenchmark.created_at == latest_sub.c.max_created)
+    ).filter(CompetitorBenchmark.client_id == client_id).all()
+
+    if not benchmarks:
+        return {
+            "competitor_count": 0,
+            "avg_competitor_reputation": None,
+            "top_competitor": None,
+            "client_rank": None
+        }
+
+    reps = [b.CompetitorBenchmark.reputation_score for b in benchmarks if b.CompetitorBenchmark.reputation_score is not None]
+    top = max(benchmarks, key=lambda b: b.CompetitorBenchmark.reputation_score or 0)
+
+    # Client's own rank among these competitors -- 1 + count of competitors
+    # with a strictly higher reputation score, matching the frontend's own
+    # definition (useAnalytics.ts's clientRankValue) since CompetitorBenchmark.rank
+    # is a competitor-to-competitor ranking and doesn't include the client itself.
+    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(
+        ReputationScore.created_at.desc(), ReputationScore.id.desc()
+    ).first()
+    client_rank = None
+    if rep and rep.score is not None:
+        higher_count = sum(1 for r in reps if r > rep.score)
+        client_rank = higher_count + 1
+
+    return {
+        "competitor_count": len(benchmarks),
+        "avg_competitor_reputation": sum(reps) / len(reps) if reps else None,
+        "top_competitor": {
+            "name": top.Entity.name,
+            "reputation_score": top.CompetitorBenchmark.reputation_score
+        },
+        "client_rank": client_rank
+    }
 
 @router.get("/{client_id}/executive-candidates", response_model=List[Dict[str, Any]])
 def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_db)):

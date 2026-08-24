@@ -7,21 +7,15 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.services.intelligence.entity_extractor import EntityExtractor
 
-def run_validation():
+def test_validation():
     print("Initializing EntityExtractor...")
     start_time = time.time()
-    try:
-        extractor = EntityExtractor()
-    except Exception as e:
-        print(f"Failed to initialize: {e}")
-        return
-        
+    extractor = EntityExtractor()
+
     init_time = time.time() - start_time
     print(f"Initialized in {init_time:.2f}s")
-    
-    if not extractor.nlp:
-        print("FAIL: spaCy model 'en_core_web_sm' is not available. Please run: python -m spacy download en_core_web_sm")
-        return
+
+    assert extractor.nlp, "spaCy model 'en_core_web_sm' is not available. Run: python -m spacy download en_core_web_sm"
 
     test_cases = [
         {
@@ -67,15 +61,12 @@ def run_validation():
     avg_time = sum(extraction_times) / len(extraction_times) if extraction_times else 0
     throughput = 1 / avg_time if avg_time > 0 else 0
     accuracy = (correct_extracted / total_expected) * 100 if total_expected > 0 else 0
-    
-    print("\n--- PHASE 1A VALIDATION REPORT ---")
+
     print(f"Accuracy Metric: {accuracy:.1f}% ({correct_extracted}/{total_expected} expected entities identified)")
     print(f"Performance Metric: {avg_time:.4f}s avg per document ({throughput:.1f} docs/sec throughput per worker)")
-    
-    if accuracy >= 60.0: # spaCy sm model won't be perfect, but should get most
-        print("Status: PASS")
-    else:
-        print("Status: FAIL (Accuracy below 60%)")
+
+    # spaCy sm model won't be perfect, but should get most
+    assert accuracy >= 60.0, f"Entity extraction accuracy below 60% threshold: {accuracy:.1f}%"
 
 if __name__ == "__main__":
-    run_validation()
+    test_validation()

@@ -62,26 +62,48 @@ wait_for_http() {
 }
 
 check_queues() {
+    # Matches scripts/start_platform.ps1's Check-Queues: queue registration
+    # can lag ping readiness by close to the same order of magnitude as the
+    # worker's own model-load time (a solo-pool worker chewing through a
+    # backlog of overdue periodic tasks can't answer control commands until
+    # it yields), not a few seconds -- so this retries on a real stopwatch
+    # budget instead of a single one-shot inspect call.
     write_log "Verifying Celery queues..." "INFO"
     local prev_dir=$(pwd)
     cd "$ORM_COLLECTION_DIR"
     export PYTHONPATH="$ORM_COLLECTION_DIR"
-    
-    local result=$("$PYTHON_EXE" -m celery -A app.core.celery_app.celery_app inspect active_queues 2>/dev/null || true)
-    
+
+    local required=("io_queue" "cpu_queue" "nlp_queue" "aggregation_queue" "pipeline_queue")
+    local missing=1
+    local result=""
+    local start_time=$(date +%s)
+    while [ $(($(date +%s) - start_time)) -lt 450 ]; do
+        result=$("$PYTHON_EXE" -m celery -A app.core.celery_app.celery_app inspect active_queues --timeout=10 2>/dev/null || true)
+        missing=0
+        for q in "${required[@]}"; do
+            if ! echo "$result" | grep -q "$q"; then
+                missing=1
+            fi
+        done
+        if [ $missing -eq 0 ]; then
+            break
+        fi
+        write_log "Queues not yet fully registered -- retrying..." "WARN"
+        sleep 5
+    done
+
     export PYTHONPATH=""
     cd "$prev_dir"
-    
-    local required=("io_queue" "cpu_queue" "nlp_queue" "aggregation_queue" "pipeline_queue")
-    local missing=0
-    for q in "${required[@]}"; do
-        if ! echo "$result" | grep -q "$q"; then
-            write_log "Queue missing: $q" "ERROR"
-            missing=1
-        fi
-    done
-    
-    if [ $missing -eq 1 ]; then return 1; else return 0; fi
+
+    if [ $missing -eq 1 ]; then
+        for q in "${required[@]}"; do
+            if ! echo "$result" | grep -q "$q"; then
+                write_log "Queue missing: $q" "ERROR"
+            fi
+        done
+        return 1
+    fi
+    return 0
 }
 
 # Directories
@@ -111,7 +133,7 @@ kill_port_processes $FRONTEND_PORT
 write_log "Starting Backend API..." "INFO"
 (cd "$ORM_COLLECTION_DIR" && source venv/bin/activate && python -m uvicorn app.main:app --port 8000) &
 BACKEND_PID=$!
-if ! wait_for_http "$BACKEND_URL/health" 30; then
+if ! wait_for_http "$BACKEND_URL/health" 90; then
     write_log "Backend failed to become healthy." "ERROR"
     exit 1
 fi
@@ -132,7 +154,7 @@ prev_dir=$(pwd)
 cd "$ORM_COLLECTION_DIR"
 export PYTHONPATH="$ORM_COLLECTION_DIR"
 
-while [ $(($(date +%s) - start_time)) -lt 60 ]; do
+while [ $(($(date +%s) - start_time)) -lt 180 ]; do
     ping_result=$("$PYTHON_EXE" -m celery -A app.core.celery_app.celery_app inspect ping 2>/dev/null || true)
     if echo "$ping_result" | grep -q -E "pong|OK"; then
         celery_ping_ok=1
@@ -153,6 +175,18 @@ write_log "Celery Worker is healthy." "SUCCESS"
 write_log "Starting Celery Beat..." "INFO"
 (cd "$ORM_COLLECTION_DIR" && source venv/bin/activate && python -m celery -A app.core.celery_app.celery_app beat --loglevel=info) &
 BEAT_PID=$!
+# Matches start_platform.ps1's beat liveness check: there's no ping-style RPC
+# for beat, so confirm the process is still alive a few seconds after launch
+# -- a beat that failed immediately (bad schedule config, import error)
+# would otherwise still print "OK" below with nothing to back it up.
+sleep 3
+if kill -0 $BEAT_PID 2>/dev/null; then
+    beat_ok=1
+    write_log "Celery Beat is running." "SUCCESS"
+else
+    beat_ok=0
+    write_log "Celery Beat exited shortly after launch - check its output for errors." "ERROR"
+fi
 
 write_log "Starting Frontend..." "INFO"
 (cd "$ORM_DASHBOARD_DIR" && npm run dev) &
@@ -178,9 +212,13 @@ echo ""
 echo -e "\e[32m+ PostgreSQL       : OK\e[0m"
 echo -e "\e[32m+ Redis            : OK\e[0m"
 echo -e "\e[32m+ Environment      : OK\e[0m"
-echo -e "\e[32m+ Database         : OK (Migrations applied)\e[0m"
+echo -e "\e[32m+ Database         : OK (schema up to date)\e[0m"
 echo -e "\e[32m+ Celery Worker    : OK\e[0m"
-echo -e "\e[32m+ Celery Beat      : OK\e[0m"
+if [ "$beat_ok" -eq 1 ]; then
+    echo -e "\e[32m+ Celery Beat      : OK\e[0m"
+else
+    echo -e "\e[31m+ Celery Beat      : FAILED\e[0m"
+fi
 echo -e "\e[32m+ Backend API      : OK\e[0m"
 echo -e "\e[32m+ Frontend         : OK\e[0m"
 echo -e "\e[32m+ Pipeline Queue   : OK\e[0m"

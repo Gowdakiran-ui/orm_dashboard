@@ -444,7 +444,7 @@ export function ExecutivesTab({
                 </TableHeader>
                 <TableBody>
                   {executives.map((e, i) => (
-                    <TableRow key={i} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors">
+                    <TableRow key={e.id ?? i} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors">
                       <TableCell className="font-mono text-xs font-bold text-slate-200">{e.name}</TableCell>
                       <TableCell className="text-center font-mono text-xs font-black text-[#D4AF37]">
                         {e.score !== undefined && e.score !== null ? e.score.toFixed(1) : 'N/A'}
@@ -523,7 +523,7 @@ export function ExecutivesTab({
             </TableHeader>
             <TableBody>
               {execEvents.map((doc, idx) => (
-                <TableRow key={idx} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
+                <TableRow key={doc.id} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
                   <TableCell className="font-mono text-xs text-slate-200 font-bold">{doc.matchedExecutive}</TableCell>
                   <TableCell className="font-mono text-xs text-slate-300 max-w-[240px] truncate">{doc.title}</TableCell>
                   <TableCell className="text-center">

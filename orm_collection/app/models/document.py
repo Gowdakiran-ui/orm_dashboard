@@ -23,6 +23,7 @@ class Document(Base):
     # Processing State Machine — Phase C
     processing_status = Column(String(20), default="PENDING")
     # Valid states: PENDING | PROCESSING | MATCHED | FAILED | SKIPPED | RETRYING
+    processing_started_at = Column(DateTime(timezone=True))  # set when processing_status -> PROCESSING; staleness clock for document_processing_watchdog
 
     # Reliability Metadata — Phases D, E, F
     match_retry_count = Column(Integer, default=0)        # Retry attempt counter

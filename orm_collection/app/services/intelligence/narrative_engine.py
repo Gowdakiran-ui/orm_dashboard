@@ -345,7 +345,7 @@ class NarrativeEngine:
                 continue
 
             # Sort documents by publication date to ensure identical incident grouping order
-            docs.sort(key=lambda d: d.published_at or d.created_at)
+            docs.sort(key=lambda d: d.published_at or d.collected_at)
 
             # P4 — Incident Cluster Optimization: Time-window and Jaccard similarity clustering using cached tokens
             incident_clusters = []
@@ -355,7 +355,7 @@ class NarrativeEngine:
                 
                 for cluster in incident_clusters:
                     ref_doc = cluster["ref_doc"]
-                    time_diff = abs((doc.published_at or doc.created_at) - (ref_doc.published_at or ref_doc.created_at)).days
+                    time_diff = abs((doc.published_at or doc.collected_at) - (ref_doc.published_at or ref_doc.collected_at)).days
                     
                     if time_diff <= 3:
                         ref_tokens = token_cache.get(ref_doc.id, set())

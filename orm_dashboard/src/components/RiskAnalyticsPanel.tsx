@@ -7,19 +7,24 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 
 export interface RiskAnalyticsPanelProps {
   riskMatrixData: any[];
   alertSeverityData: any[];
   riskHeatmapData: any;
   alertTimelineData: any[];
+  loading?: boolean;
+  error?: string | null;
 }
 
 export function RiskAnalyticsPanel({
   riskMatrixData = [],
   alertSeverityData = [],
   riskHeatmapData = { categories: [], severities: [], grid: {} },
-  alertTimelineData = []
+  alertTimelineData = [],
+  loading = false,
+  error = null
 }: RiskAnalyticsPanelProps) {
   const [selectedCell, setSelectedCell] = useState<{ impact: string; likelihood: string } | null>(null);
 
@@ -131,6 +136,24 @@ export function RiskAnalyticsPanel({
   };
 
   const cardStyle = "bg-[#060B18]/60 border-[#1F2937]/70 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.06)] hover:border-[#D4AF37]/35 hover:shadow-[0_0_20px_rgba(212,175,55,0.12)] hover:-translate-y-0.5 transition-all duration-300 rounded-xl";
+
+  if (loading) {
+    return (
+      <div className="grid gap-6 md:grid-cols-2 animate-pulse">
+        {[1, 2].map(x => (
+          <div key={x} className="h-[300px] bg-[#060B18]/40 border border-[#1F2937]/60 rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+        <TelemetryErrorWidget title="Risk Analytics Telemetry Offline" message={error} />
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">

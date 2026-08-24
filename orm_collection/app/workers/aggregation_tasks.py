@@ -309,7 +309,19 @@ alert_engine = AlertEngine()
 
 @shared_task(bind=True, max_retries=3)
 def evaluate_alerts(self):
-    """Alert Engine batch task — runs on schedule for ALL clients."""
+    """
+    Alert Engine batch task — runs on schedule for ALL clients.
+
+    Retry/backoff pattern 4 of 4 in this codebase (FINDINGS.md #18): the only
+    task that inspects *why* a client failed (_is_transient_error below)
+    before deciding to retry at all, using its own exponential formula
+    (30 * 2**retries), distinct from every other task's unconditional retry.
+    The other 3 patterns: Celery exponential backoff (document_processor.py,
+    collection_tasks.py, search_tasks.py), Celery flat countdown (this file's
+    other tasks, intelligence_tasks.py), and in-process retry classes
+    (RetryConfig/SentimentRetryConfig/TopicRetryConfig). Intentional
+    per-task variance, not drift -- not consolidated this phase.
+    """
     from celery.exceptions import Retry
     run_id = uuid.uuid4().hex
     batch_id = uuid.uuid4().hex[:12]

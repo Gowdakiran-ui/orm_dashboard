@@ -3,6 +3,7 @@ import sys
 import os
 import uuid
 import datetime
+import pytest
 
 # Add the app to path so we can import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -80,7 +81,17 @@ def setup_entities(db):
     db.commit()
     return client_id, e_brand.id, e_comp1.id, e_comp2.id
 
-def run_validation():
+@pytest.mark.xfail(
+    reason="SQLite test harness incompatible with benchmark_engine.py's real "
+           "Postgres-specific upsert: it compiles ON CONFLICT (uq_competitor_benchmark_run) "
+           "using a named constraint, which SQLite's ON CONFLICT only accepts as a "
+           "column list, not a constraint name -- sqlite3.OperationalError: 'no such "
+           "column: uq_competitor_benchmark_run'. Not a production bug (real DB is "
+           "Postgres); needs a real/test Postgres DB to validate this scenario, out "
+           "of scope for this phase (FINDINGS.md Phase 11 #38).",
+    strict=False,
+)
+def test_validation():
     print("Setting up mock database for Benchmark Engine...")
     db = Session()
     try:
@@ -101,44 +112,27 @@ def run_validation():
         exec_time = time.time() - start_time
         avg_time = exec_time / 100.0
         throughput = 100.0 / exec_time if exec_time > 0 else 0
-        
-        print("\n--- PHASE 3.3 VALIDATION REPORT ---")
-        
-        correct = 0
+        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
+
         benchmarks = db.query(CompetitorBenchmark).filter(CompetitorBenchmark.client_id == client_id).all()
-        
+
         b_comp1 = next((b for b in benchmarks if b.competitor_entity_id == e_comp1), None)
         b_comp2 = next((b for b in benchmarks if b.competitor_entity_id == e_comp2), None)
-        
+
         # Brand: Rep=90, Mentions=500, SOV=50%
         # Comp1: Rep=72.5, Mentions=300, SOV=30%
         # Comp2: Rep=10, Mentions=200, SOV=20%
-        
-        if b_comp1 and b_comp2 and b_comp1.rank < b_comp2.rank: correct += 20; print("1. Reputation Ranking [PASS]")
-        else: print("1. Reputation Ranking [FAIL]")
-        
-        if b_comp1 and b_comp2 and b_comp1.sentiment_score > b_comp2.sentiment_score: correct += 20; print("2. Sentiment Ranking [PASS]")
-        else: print("2. Sentiment Ranking [FAIL]")
-        
-        if b_comp1 and b_comp2 and b_comp1.risk_score < b_comp2.risk_score: correct += 20; print("3. Risk Ranking [PASS]")
-        else: print("3. Risk Ranking [FAIL]")
-        
-        if b_comp1 and b_comp2 and abs(b_comp1.share_of_voice - 30.0) < 1.0 and abs(b_comp2.share_of_voice - 20.0) < 1.0: correct += 20; print("4. Share Of Voice Calculation [PASS]")
-        else: print(f"4. Share Of Voice Calculation [FAIL] comp1 sov: {b_comp1.share_of_voice if b_comp1 else 0}, comp2 sov: {b_comp2.share_of_voice if b_comp2 else 0}")
-        
-        if b_comp1 and b_comp2 and b_comp1.top_narrative is not None: correct += 20; print("5. Narrative Comparison [PASS]")
-        else: print("5. Narrative Comparison [FAIL]")
 
-        print(f"Classification Accuracy: {correct:.1f}%")
-        print(f"Performance Metric: {avg_time:.4f}s avg per client ({throughput:.1f} clients/sec throughput per worker)")
-        
-        if correct >= 99.0:
-            print("Status: PASS")
-        else:
-            print("Status: FAIL")
-            
+        assert b_comp1 and b_comp2, "Both competitor benchmarks must exist"
+        assert b_comp1.rank < b_comp2.rank, f"Reputation Ranking: comp1.rank ({b_comp1.rank}) should be < comp2.rank ({b_comp2.rank})"
+        assert b_comp1.sentiment_score > b_comp2.sentiment_score, "Sentiment Ranking: comp1 should rank above comp2"
+        assert b_comp1.risk_score < b_comp2.risk_score, "Risk Ranking: comp1 should have lower risk than comp2"
+        assert abs(b_comp1.share_of_voice - 30.0) < 1.0 and abs(b_comp2.share_of_voice - 20.0) < 1.0, \
+            f"Share Of Voice Calculation: comp1 sov={b_comp1.share_of_voice}, comp2 sov={b_comp2.share_of_voice}"
+        assert b_comp1.top_narrative is not None, "Narrative Comparison: comp1.top_narrative should not be None"
+
     finally:
         db.close()
 
 if __name__ == "__main__":
-    run_validation()
+    test_validation()

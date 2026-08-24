@@ -5,17 +5,21 @@ import { Badge } from "@/components/ui/badge";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 
 export interface PipelineStatusPanelProps {
-  breakdownLoading: boolean;
-  breakdownError: string | null;
+  // Renamed from breakdownLoading/breakdownError -- this panel renders
+  // engineDiagnosticsList, which is derived from documents/telemetry/alerts/
+  // narratives/etc (see useAnalytics.ts), not from the reputation breakdown
+  // fetch. The old names gated on the wrong fetch's state (FINDINGS.md #30).
+  loading: boolean;
+  error: string | null;
   engineDiagnosticsList: any[];
 }
 
 export function PipelineStatusPanel({
-  breakdownLoading,
-  breakdownError,
+  loading,
+  error,
   engineDiagnosticsList
 }: PipelineStatusPanelProps) {
-  if (breakdownLoading) {
+  if (loading) {
     return (
       <Card className="bg-[#060B18]/60 border-[#1F2937]/60 col-span-4 h-96 animate-pulse">
         <CardHeader className="space-y-2">
@@ -34,10 +38,10 @@ export function PipelineStatusPanel({
     );
   }
 
-  if (breakdownError) {
+  if (error) {
     return (
       <Card className="bg-[#060B18]/60 border-red-500/20 col-span-4 h-96">
-        <TelemetryErrorWidget title="Breakdown Telemetry Offline" message={breakdownError} />
+        <TelemetryErrorWidget title="Pipeline Telemetry Offline" message={error} />
       </Card>
     );
   }

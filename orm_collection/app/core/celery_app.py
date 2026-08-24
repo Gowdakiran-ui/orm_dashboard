@@ -46,8 +46,10 @@ celery_app.conf.update(
         'app.workers.collection_tasks.flush_metrics_task':{'queue': 'io_queue'},
         'app.workers.collection_tasks.collection_watchdog':{'queue': 'io_queue'},
         'app.workers.aggregation_tasks.pipeline_run_watchdog':{'queue': 'io_queue'},
+        'app.workers.intelligence_tasks.document_processing_watchdog':{'queue': 'io_queue'},
         'app.workers.search_tasks.execute_search_task':   {'queue': 'io_queue'},
         'app.workers.search_tasks.schedule_searches':     {'queue': 'io_queue'},
+        'app.workers.search_tasks.search_job_watchdog':   {'queue': 'io_queue'},
         # CPU-bound NLP tasks
         'app.workers.document_processor.process_document_task': {'queue': 'cpu_queue'},
         'app.workers.intelligence_tasks.process_document_intelligence': {'queue': 'nlp_queue'},
@@ -94,6 +96,25 @@ celery_app.conf.update(
         # worker itself is the one that died.
         'pipeline-run-watchdog-every-15-minutes': {
             'task': 'app.workers.aggregation_tasks.pipeline_run_watchdog',
+            'schedule': crontab(minute='*/15'),
+        },
+
+        # Document.processing_status had the same stuck-forever failure mode
+        # as CollectionJob and PipelineRun above, just never got a watchdog.
+        # Found live: 130 documents stuck up to 11+ days. Routed to io_queue,
+        # not nlp_queue, so it still runs even if the nlp_queue worker itself
+        # is the one that died -- same reasoning as pipeline_run_watchdog.
+        'document-processing-watchdog-every-15-minutes': {
+            'task': 'app.workers.intelligence_tasks.document_processing_watchdog',
+            'schedule': crontab(minute='*/15'),
+        },
+
+        # SearchJob.status had the same stuck-forever failure mode as
+        # CollectionJob/PipelineRun/Document above, just never got a
+        # watchdog (FINAL.md #14). Routed to io_queue, same reasoning as
+        # the other three watchdogs.
+        'search-job-watchdog-every-15-minutes': {
+            'task': 'app.workers.search_tasks.search_job_watchdog',
             'schedule': crontab(minute='*/15'),
         },
 

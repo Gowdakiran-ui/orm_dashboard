@@ -16,7 +16,7 @@ class Source(Base):
     __tablename__ = "sources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    category_id = Column(UUID(as_uuid=True), ForeignKey("source_categories.id"))
+    category_id = Column(UUID(as_uuid=True), ForeignKey("source_categories.id"), index=True)
     name = Column(String(255), nullable=False)
     source_type = Column(String(50), nullable=False) # rss, reddit, etc.
     url = Column(String(1024), unique=True)

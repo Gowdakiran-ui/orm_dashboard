@@ -105,7 +105,7 @@ function Check-Queues {
     $missing = $true
     $missingThisAttempt = $required
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    while ($sw.Elapsed.TotalSeconds -lt 180) {
+    while ($sw.Elapsed.TotalSeconds -lt 450) {
         $result = & $PythonExe -m celery -A app.core.celery_app.celery_app inspect active_queues --timeout=10 | Out-String
         $missingThisAttempt = @($required | Where-Object { $result -notmatch $_ })
         if ($missingThisAttempt.Count -eq 0) {
@@ -163,7 +163,7 @@ Kill-PortProcesses -Port $FrontendPort
 Write-Log "Starting Backend API..." -Type INFO
 $BackendProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/k cd /d ""$OrmCollectionDir"" && .\venv\Scripts\activate && python -m uvicorn app.main:app --port $BackendPort" -WindowStyle Normal -PassThru
 Save-PlatformPid -Name "backend" -ProcessId $BackendProcess.Id
-if (-not (Wait-ForHttp -Url "$BackendUrl/health" -TimeoutSeconds 30)) {
+if (-not (Wait-ForHttp -Url "$BackendUrl/health" -TimeoutSeconds 90)) {
     Write-Log "Backend failed to become healthy." -Type ERROR
     exit 1
 }

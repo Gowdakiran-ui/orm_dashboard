@@ -660,7 +660,7 @@ export function CompetitorsTab({
             </TableHeader>
             <TableBody>
               {competitorEvents.map((doc, idx) => (
-                <TableRow key={idx} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
+                <TableRow key={doc.id} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
                   <TableCell className="font-mono text-xs text-slate-200 font-bold">{doc.matchedCompetitor}</TableCell>
                   <TableCell className="font-mono text-xs text-slate-300 max-w-[280px] truncate">{doc.title}</TableCell>
                   <TableCell className="text-center">

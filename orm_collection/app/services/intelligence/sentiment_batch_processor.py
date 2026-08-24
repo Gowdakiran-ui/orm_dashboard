@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
 from app.core.db import SessionLocal
-from app.models.document import Document, DocumentMatch
-from app.models.entity import Entity
+from app.models.document import Document
+from app.models.entity import Entity, EntityMention
 from app.models.sentiment import DocumentSentiment, EntitySentiment
 from app.models.system import ModelRun
 from app.models.source import Source, SourceCategory
@@ -97,6 +97,11 @@ class SentimentProcessingState:
 
 # ─────────────────────────────────────────────────────────────
 # RETRY CONFIGURATION — Phase R2
+#
+# See RetryConfig's comment in entity_matching_batch_processor.py for the
+# full 4-pattern retry/backoff inventory (FINDINGS.md #18). This is pattern
+# 3 of 4 -- an in-process retry state machine, mirrored by RetryConfig and
+# TopicRetryConfig.
 # ─────────────────────────────────────────────────────────────
 
 @dataclass
@@ -349,11 +354,13 @@ class HardenedSentimentProcessor:
                 get_dynamic_source_reliability
             )
 
-            # Query matched entity keywords for smart content extraction
-            matches = db.query(DocumentMatch).filter(DocumentMatch.document_id == document_id).all()
+            # Query matched entity keywords for smart content extraction.
+            # Reads from EntityMention (accuracy-gated, per evaluate_match_accuracy)
+            # rather than the ungated DocumentMatch table -- see FINDINGS.md.
+            matches = db.query(EntityMention).filter(EntityMention.document_id == document_id).all()
             matched_keywords = set()
             for m in matches:
-                ent = db.query(Entity).filter(Entity.id == m.matched_entity_id).first()
+                ent = db.query(Entity).filter(Entity.id == m.entity_id).first()
                 if ent:
                     matched_keywords.add(ent.name)
 
@@ -439,7 +446,7 @@ class HardenedSentimentProcessor:
 
             # 6. Localized Entity-Level Sentiment (A7)
             for m in matches:
-                ent = db.query(Entity).filter(Entity.id == m.matched_entity_id).first()
+                ent = db.query(Entity).filter(Entity.id == m.entity_id).first()
                 if not ent:
                     continue
                 
@@ -573,6 +580,76 @@ class HardenedSentimentProcessor:
                 stack_trace=stack
             )
 
+    def _process_with_retry(
+        self,
+        document_id: str,
+        run_id: str,
+        batch_id: str,
+        client_id: str,
+        current_retry_count: int,
+        doc_logger: CorrelatedLogger
+    ) -> SentimentDocumentResult:
+        result = self._process_single_document_in_transaction(
+            document_id, run_id, batch_id, client_id, doc_logger
+        )
+
+        if result.state == SentimentProcessingState.FAILED:
+            is_permanent = self.retry_config.is_permanent_failure(
+                result.exception_type or "",
+                result.failure_reason or ""
+            )
+            can_retry = (
+                not is_permanent
+                and current_retry_count < self.retry_config.max_retries
+            )
+
+            if can_retry:
+                new_retry_count = current_retry_count + 1
+                backoff = self.retry_config.backoff_seconds(current_retry_count)
+
+                doc_logger.info("document_retry_scheduled",
+                                retry_attempt=new_retry_count,
+                                max_retries=self.retry_config.max_retries,
+                                backoff_seconds=round(backoff, 2),
+                                failure_reason=result.failure_reason)
+
+                # Persist RETRYING state in a separate session
+                SentimentDocumentStateMachine.transition_and_commit(
+                    document_id, SentimentProcessingState.RETRYING,
+                    run_id=run_id, batch_id=batch_id,
+                    failure_reason=result.failure_reason,
+                    retry_count=new_retry_count
+                )
+
+                if backoff > 0:
+                    time.sleep(min(backoff, 5.0))  # Cap sleep at 5s in worker loop
+
+                retry_logger = doc_logger.bind(retry_count=new_retry_count)
+                retry_logger.info("document_retry_attempt_started", retry_attempt=new_retry_count)
+
+                # Run retry inside transaction
+                retried_result = self._process_single_document_in_transaction(
+                    document_id, run_id, batch_id, client_id, retry_logger
+                )
+                retried_result.retry_count = new_retry_count
+                return retried_result
+
+            else:
+                doc_logger.error("document_permanently_failed",
+                                 retry_count=current_retry_count,
+                                 is_permanent=is_permanent,
+                                 failure_reason=result.failure_reason)
+
+                # Persist terminal FAILED state in a separate session
+                SentimentDocumentStateMachine.transition_and_commit(
+                    document_id, SentimentProcessingState.FAILED,
+                    run_id=run_id, batch_id=batch_id,
+                    failure_reason=result.failure_reason,
+                    retry_count=current_retry_count
+                )
+
+        return result
+
     def process_batch(
         self,
         document_ids: List[str],
@@ -644,19 +721,21 @@ class HardenedSentimentProcessor:
                         result.skipped += 1
                         continue
 
-                    # Bulk fetch matches and their entities to avoid N+1 queries
-                    matches = db.query(DocumentMatch).filter(DocumentMatch.document_id == doc_id).all()
+                    # Bulk fetch matches and their entities to avoid N+1 queries.
+                    # Reads from EntityMention (accuracy-gated) rather than the
+                    # ungated DocumentMatch table -- see FINDINGS.md.
+                    matches = db.query(EntityMention).filter(EntityMention.document_id == doc_id).all()
                     matched_keywords = set()
                     entity_details = []
                     if matches:
-                        entity_ids = [m.matched_entity_id for m in matches]
+                        entity_ids = [m.entity_id for m in matches]
                         entities = db.query(Entity).filter(Entity.id.in_(entity_ids)).all()
                         entity_map = {e.id: e.name for e in entities}
                         for m in matches:
-                            ent_name = entity_map.get(m.matched_entity_id)
+                            ent_name = entity_map.get(m.entity_id)
                             if ent_name:
                                 matched_keywords.add(ent_name)
-                                entity_details.append({"id": m.matched_entity_id, "name": ent_name})
+                                entity_details.append({"id": m.entity_id, "name": ent_name})
 
                     db.commit()
 

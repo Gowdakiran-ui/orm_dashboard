@@ -76,6 +76,8 @@ export function useDashboardData() {
   const [telemetryLoading, setTelemetryLoading] = useState(true);
   const [telemetryError, setTelemetryError] = useState<string | null>(null);
 
+  const [livePollDegraded, setLivePollDegraded] = useState(false);
+
   const [selectedNarrative, setSelectedNarrative] = useState<string | null>(null);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [clientsRefreshKey, setClientsRefreshKey] = useState(0);
@@ -144,6 +146,7 @@ export function useDashboardData() {
 
   const lastClientIdRef = useRef<string | null>(null);
   const activeFetchController = useRef<AbortController | null>(null);
+  const pollFailureStreakRef = useRef(0);
 
   // Helper to check if state has actually changed to prevent redundant re-renders
   const hasChanged = (prev: any, next: any): boolean => {
@@ -449,24 +452,27 @@ export function useDashboardData() {
   // LIVE Refresh Polling Hook
   useEffect(() => {
     if (!clientId) return;
-    
+
+    pollFailureStreakRef.current = 0;
+    setLivePollDegraded(false);
+
     let isActive = true;
     let timeoutId: NodeJS.Timeout;
     let currentController: AbortController | null = null;
 
     const poll = async () => {
       if (!isActive) return;
-      
+
       currentController = new AbortController();
       const signal = currentController.signal;
-      
+
       try {
-        await Promise.allSettled([
+        const results = await Promise.allSettled([
           fetchReputation(clientId, signal).then(data => { if (!signal.aborted) setReputation(data); }),
           fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) setAlerts(data || []); }),
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) setTelemetry(data); }), // Poll telemetry
-          fetchNarratives(clientId, signal).then(data => { 
+          fetchNarratives(clientId, signal).then(data => {
             if (!signal.aborted && data) {
               const seen = new Set<string>();
               setNarratives(data.filter((n: any) => { if (n?.id && !seen.has(n.id)) { seen.add(n.id); return true; } return false; }));
@@ -476,6 +482,26 @@ export function useDashboardData() {
           fetchIntelligenceFeed(clientId, signal).then(data => { if (!signal.aborted) setTrendEvents(data || []); }),
           fetchSystemStatus(signal).then(data => { if (!signal.aborted) setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); })
         ]);
+
+        // FINDINGS.md #36: an extended outage after initial load previously had
+        // no signal at all -- every fetch here had no .catch, so a dead backend
+        // just left the UI on stale data forever. A cycle only counts as failed
+        // when a MAJORITY of these 7 fetches reject (one flaky endpoint isn't a
+        // real outage); each fetch already retries transient failures internally
+        // (fetchWithRetry in api.ts) before ever rejecting, so this only needs to
+        // count failed cycles, not retry again itself. 3 consecutive failed
+        // cycles (~135s) before surfacing degraded, and a single successful
+        // cycle immediately clears it.
+        if (!signal.aborted) {
+          const failedCount = results.filter(r => r.status === "rejected").length;
+          if (failedCount > results.length / 2) {
+            pollFailureStreakRef.current += 1;
+          } else {
+            pollFailureStreakRef.current = 0;
+          }
+          const nowDegraded = pollFailureStreakRef.current >= 3;
+          setLivePollDegraded((prev) => (prev !== nowDegraded ? nowDegraded : prev));
+        }
       } finally {
         currentController = null;
         if (isActive) {
@@ -610,6 +636,7 @@ export function useDashboardData() {
     telemetry,
     telemetryLoading,
     telemetryError,
+    livePollDegraded,
     selectedNarrative,
     setSelectedNarrative,
     dashboardRefreshKey,

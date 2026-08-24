@@ -91,7 +91,9 @@ CREATE TABLE public.alerts (
     lifecycle_status character varying(30) DEFAULT 'NEW'::character varying NOT NULL,
     lifecycle_history json,
     escalation_history json,
-    human_summary character varying
+    human_summary character varying,
+    CONSTRAINT ck_alerts_confidence_score CHECK (((confidence_score IS NULL) OR ((confidence_score >= (0)::double precision) AND (confidence_score <= (100)::double precision)))),
+    CONSTRAINT ck_alerts_evidence_score CHECK (((evidence_score IS NULL) OR ((evidence_score >= (0)::double precision) AND (evidence_score <= (100)::double precision))))
 );
 
 
@@ -199,7 +201,8 @@ CREATE TABLE public.competitor_benchmarks (
     evidence_metadata jsonb,
     health_status character varying(50),
     confidence_score double precision,
-    data_coverage double precision DEFAULT 0.40
+    data_coverage double precision DEFAULT 0.40,
+    CONSTRAINT ck_competitor_benchmarks_confidence_score CHECK (((confidence_score IS NULL) OR ((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))))
 );
 
 
@@ -253,7 +256,10 @@ CREATE TABLE public.document_sentiments (
     source_reliability double precision,
     weighted_sentiment_score double precision NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    explainability_metadata json
+    explainability_metadata json,
+    CONSTRAINT ck_document_sentiments_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision))),
+    CONSTRAINT ck_document_sentiments_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
+    CONSTRAINT ck_document_sentiments_weighted_score CHECK (((weighted_sentiment_score >= ('-1'::integer)::double precision) AND (weighted_sentiment_score <= (1)::double precision)))
 );
 
 
@@ -267,7 +273,8 @@ CREATE TABLE public.document_topics (
     topic_id uuid NOT NULL,
     confidence_score double precision NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    explainability_metadata jsonb
+    explainability_metadata jsonb,
+    CONSTRAINT ck_document_topics_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
 );
 
 
@@ -289,6 +296,7 @@ CREATE TABLE public.documents (
     language character varying(10),
     raw_storage_path character varying(1024),
     processing_status character varying(20),
+    processing_started_at timestamp with time zone,
     match_retry_count integer DEFAULT 0,
     match_failed_at timestamp with time zone,
     match_failure_reason text,
@@ -370,7 +378,8 @@ CREATE TABLE public.entity_mentions (
     role character varying(50),
     mention_count integer,
     confidence_score double precision,
-    created_at timestamp with time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT ck_entity_mentions_confidence_score CHECK (((confidence_score IS NULL) OR ((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))))
 );
 
 
@@ -386,7 +395,9 @@ CREATE TABLE public.entity_sentiments (
     sentiment_score double precision NOT NULL,
     confidence_score double precision NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    explainability_metadata json
+    explainability_metadata json,
+    CONSTRAINT ck_entity_sentiments_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision))),
+    CONSTRAINT ck_entity_sentiments_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
 );
 
 
@@ -440,7 +451,9 @@ CREATE TABLE public.executive_reputation_scores (
     evidence_metadata jsonb,
     calculation_lineage jsonb,
     health_status character varying(50),
-    data_coverage double precision DEFAULT 0.40
+    data_coverage double precision DEFAULT 0.40,
+    CONSTRAINT ck_exec_reputation_scores_score CHECK (((score >= (0)::double precision) AND (score <= (100)::double precision))),
+    CONSTRAINT ck_exec_reputation_scores_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
 );
 
 
@@ -494,7 +507,10 @@ CREATE TABLE public.narratives (
     retry_count integer,
     summary_text character varying(4000),
     confidence_score double precision DEFAULT 1.0 NOT NULL,
-    evidence_metadata jsonb
+    evidence_metadata jsonb,
+    CONSTRAINT ck_narratives_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision))),
+    CONSTRAINT ck_narratives_risk_score CHECK (((risk_score >= (0)::double precision) AND (risk_score <= (100)::double precision))),
+    CONSTRAINT ck_narratives_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
 );
 
 
@@ -548,7 +564,9 @@ CREATE TABLE public.reputation_scores (
     evidence_metadata jsonb,
     calculation_lineage jsonb,
     health_status character varying(50),
-    data_coverage double precision DEFAULT 0.40
+    data_coverage double precision DEFAULT 0.40,
+    CONSTRAINT ck_reputation_scores_score CHECK (((score IS NULL) OR ((score >= (0)::double precision) AND (score <= (100)::double precision)))),
+    CONSTRAINT ck_reputation_scores_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
 );
 
 
@@ -592,7 +610,9 @@ CREATE TABLE public.risk_events (
     latency_ms double precision,
     retry_count integer DEFAULT 0,
     source_reliability double precision,
-    explainability json
+    explainability json,
+    CONSTRAINT ck_risk_events_risk_score CHECK (((risk_score >= (0)::double precision) AND (risk_score <= (100)::double precision))),
+    CONSTRAINT ck_risk_events_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
 );
 
 

@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 
 export interface NarrativeAnalyticsPanelProps {
   narrativeBubbleData: any[];
@@ -20,6 +21,8 @@ export interface NarrativeAnalyticsPanelProps {
   normalizedBenchmarks: any[];
   execHistory: any;
   documents?: any[];
+  loading?: boolean;
+  error?: string | null;
 }
 
 export function NarrativeAnalyticsPanel({
@@ -31,7 +34,9 @@ export function NarrativeAnalyticsPanel({
   activeClientName,
   normalizedBenchmarks = [],
   execHistory,
-  documents = []
+  documents = [],
+  loading = false,
+  error = null
 }: NarrativeAnalyticsPanelProps) {
 
   // 1. KPI Summaries based on live data
@@ -188,6 +193,24 @@ export function NarrativeAnalyticsPanel({
     const max = Math.min(100, maxRisk + 5);
     return [min, max];
   }, [minRisk, maxRisk]);
+
+  if (loading) {
+    return (
+      <div className="grid gap-6 md:grid-cols-2 animate-pulse">
+        {[1, 2, 3, 4].map(x => (
+          <div key={x} className="h-[280px] bg-[#060B18]/40 border border-[#1F2937]/60 rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+        <TelemetryErrorWidget title="Narrative Analytics Telemetry Offline" message={error} />
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">

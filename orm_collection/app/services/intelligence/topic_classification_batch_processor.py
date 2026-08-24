@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
 from app.core.db import SessionLocal
-from app.models.document import Document, DocumentMatch
-from app.models.entity import Entity
+from app.models.document import Document
+from app.models.entity import Entity, EntityMention
 from app.models.topic import Topic, DocumentTopic
 from app.models.system import ModelRun
 from app.utils.text_processing import canonicalize_url
@@ -171,6 +171,11 @@ class TopicProcessingState:
 
 # ─────────────────────────────────────────────────────────────
 # RETRY CONFIGURATION
+#
+# See RetryConfig's comment in entity_matching_batch_processor.py for the
+# full 4-pattern retry/backoff inventory (FINDINGS.md #18). This is pattern
+# 3 of 4 -- an in-process retry state machine, mirrored by RetryConfig and
+# SentimentRetryConfig.
 # ─────────────────────────────────────────────────────────────
 
 @dataclass
@@ -405,11 +410,13 @@ class HardenedTopicClassifier:
                     failure_reason="no_content"
                 )
 
-            # Query matched entity keywords for smart content extraction
-            matches = db.query(DocumentMatch).filter(DocumentMatch.document_id == document_id).all()
+            # Query matched entity keywords for smart content extraction.
+            # Reads from EntityMention (accuracy-gated) rather than the
+            # ungated DocumentMatch table -- see FINDINGS.md.
+            matches = db.query(EntityMention).filter(EntityMention.document_id == document_id).all()
             matched_keywords = set()
             for m in matches:
-                ent = db.query(Entity).filter(Entity.id == m.matched_entity_id).first()
+                ent = db.query(Entity).filter(Entity.id == m.entity_id).first()
                 if ent:
                     matched_keywords.add(ent.name)
 
@@ -724,11 +731,13 @@ class HardenedTopicClassifier:
                     batch_result.skipped += 1
                     continue
 
-                # Query matched entity keywords for smart content extraction
-                matches = db.query(DocumentMatch).filter(DocumentMatch.document_id == document_id).all()
+                # Query matched entity keywords for smart content extraction.
+                # Reads from EntityMention (accuracy-gated) rather than the
+                # ungated DocumentMatch table -- see FINDINGS.md.
+                matches = db.query(EntityMention).filter(EntityMention.document_id == document_id).all()
                 matched_keywords = set()
                 for m in matches:
-                    ent = db.query(Entity).filter(Entity.id == m.matched_entity_id).first()
+                    ent = db.query(Entity).filter(Entity.id == m.entity_id).first()
                     if ent:
                         matched_keywords.add(ent.name)
 

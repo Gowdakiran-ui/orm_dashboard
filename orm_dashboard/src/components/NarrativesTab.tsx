@@ -384,7 +384,7 @@ export function NarrativesTab({
                 const statusColor = sentimentScore >= 0.25 ? "text-emerald-400" : sentimentScore <= -0.25 ? "text-red-400" : "text-amber-400";
                 
                 return (
-                  <TableRow key={idx} className="border-b border-[#1F2937]/30 hover:bg-[#060B18]/30 transition-all duration-150">
+                  <TableRow key={n.id ?? idx} className="border-b border-[#1F2937]/30 hover:bg-[#060B18]/30 transition-all duration-150">
                     <TableCell className="font-bold text-slate-200 truncate max-w-[200px]">{n.name}</TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="text-[9px] font-normal uppercase tracking-wider bg-slate-900/40 border-slate-800 text-slate-350">{n.type || "General"}</Badge></TableCell>
                     <TableCell className="text-center font-bold">{n.mentions || 0}</TableCell>

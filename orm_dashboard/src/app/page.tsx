@@ -164,6 +164,7 @@ export default function Home() {
           activeClientName={activeClientName}
           activeTab={activeTab}
           currentTime={currentTime}
+          liveDegraded={data.livePollDegraded}
         />
 
         {/* Dashboard View Container */}
@@ -213,8 +214,8 @@ export default function Home() {
                     {/* 2. Component Metrics List */}
                     <ErrorBoundary fallback={<TelemetryErrorWidget title="Breakdown Error" />}>
                       <PipelineStatusPanel
-                        breakdownLoading={data.breakdownLoading}
-                        breakdownError={data.breakdownError}
+                        loading={data.documentsLoading || data.telemetryLoading || data.alertsLoading || data.narrativesLoading}
+                        error={data.documentsError || data.telemetryError || data.alertsError || data.narrativesError}
                         engineDiagnosticsList={analytics.engineDiagnosticsList}
                       />
                     </ErrorBoundary>
@@ -242,46 +243,62 @@ export default function Home() {
 
                   {/* Sub-tab 1: Overview (Reputation & Sentiment) */}
                   {analyticsSubTab === "overview" && (
-                    <OverviewAnalyticsPanel
-                      sentimentDistData={analytics.sentimentDistData}
-                      topicDistData={analytics.topicDistData}
-                      repHistory={data.repHistory}
-                      sentimentTrendData={analytics.sentimentTrendData}
-                    />
+                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Overview Analytics Error" />}>
+                      <OverviewAnalyticsPanel
+                        sentimentDistData={analytics.sentimentDistData}
+                        topicDistData={analytics.topicDistData}
+                        repHistory={data.repHistory}
+                        sentimentTrendData={analytics.sentimentTrendData}
+                        loading={data.documentsLoading || data.historyLoading}
+                        error={data.documentsError || data.historyError}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {/* Sub-tab 2: Risk & Alerts */}
                   {analyticsSubTab === "risk" && (
-                    <RiskAnalyticsPanel
-                      riskMatrixData={analytics.riskMatrixData}
-                      alertSeverityData={analytics.alertSeverityData}
-                      riskHeatmapData={analytics.riskHeatmapData}
-                      alertTimelineData={analytics.alertTimelineData}
-                    />
+                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Risk Analytics Error" />}>
+                      <RiskAnalyticsPanel
+                        riskMatrixData={analytics.riskMatrixData}
+                        alertSeverityData={analytics.alertSeverityData}
+                        riskHeatmapData={analytics.riskHeatmapData}
+                        alertTimelineData={analytics.alertTimelineData}
+                        loading={data.documentsLoading || data.alertsLoading}
+                        error={data.documentsError || data.alertsError}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {/* Sub-tab 3: Narratives & Ingestion */}
                   {analyticsSubTab === "narratives" && (
-                    <NarrativeAnalyticsPanel
-                      narrativeBubbleData={analytics.narrativeBubbleData}
-                      competitorRadarData={analytics.competitorRadarData}
-                      execTrendChartData={analytics.execTrendChartData}
-                      pipelineTimelineData={analytics.pipelineTimelineData}
-                      sourceContData={analytics.sourceContData}
-                      activeClientName={activeClientName}
-                      normalizedBenchmarks={analytics.normalizedBenchmarks}
-                      execHistory={data.execHistory}
-                      documents={data.documents}
-                    />
+                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Narrative Analytics Error" />}>
+                      <NarrativeAnalyticsPanel
+                        narrativeBubbleData={analytics.narrativeBubbleData}
+                        competitorRadarData={analytics.competitorRadarData}
+                        execTrendChartData={analytics.execTrendChartData}
+                        pipelineTimelineData={analytics.pipelineTimelineData}
+                        sourceContData={analytics.sourceContData}
+                        activeClientName={activeClientName}
+                        normalizedBenchmarks={analytics.normalizedBenchmarks}
+                        execHistory={data.execHistory}
+                        documents={data.documents}
+                        loading={data.narrativesLoading || data.benchmarksLoading || data.documentsLoading}
+                        error={data.narrativesError || data.benchmarksError || data.documentsError}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {/* Sub-tab 4: AI Ingestion Pipeline Diagnostics */}
                   {analyticsSubTab === "pipeline" && (
-                    <PipelineDiagnosticsPanel
-                      pipelineDiagnostics={analytics.engineDiagnosticsList}
-                      documents={data.documents}
-                      lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
-                    />
+                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Pipeline Diagnostics Error" />}>
+                      <PipelineDiagnosticsPanel
+                        pipelineDiagnostics={analytics.engineDiagnosticsList}
+                        documents={data.documents}
+                        lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
+                        loading={data.documentsLoading || data.telemetryLoading || data.alertsLoading || data.narrativesLoading}
+                        error={data.documentsError || data.telemetryError || data.alertsError || data.narrativesError}
+                      />
+                    </ErrorBoundary>
                   )}
                 </div>
               )}
@@ -445,7 +462,7 @@ export default function Home() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={company.deleteTarget !== null} onOpenChange={(open) => !open && company.setDeleteTarget(null)}>
+      <Dialog open={company.deleteTarget !== null} onOpenChange={(open) => { if (!open) { company.setDeleteTarget(null); company.setDeleteError(null); } }}>
         <DialogContent className="bg-[#060B18] border-[#1F2937] text-slate-100">
           <DialogHeader>
             <DialogTitle className="font-mono text-red-500">Decommission Enterprise Telemetry</DialogTitle>
@@ -454,9 +471,12 @@ export default function Home() {
               <span className="text-slate-200 font-bold">{company.deleteTarget?.name}</span>? This action is permanent and deletes all historical indices.
             </DialogDescription>
           </DialogHeader>
+          {company.deleteError && (
+            <p className="text-red-500 text-[11px]">{company.deleteError}</p>
+          )}
           <DialogFooter>
             <button
-              onClick={() => company.setDeleteTarget(null)}
+              onClick={() => { company.setDeleteTarget(null); company.setDeleteError(null); }}
               className="font-mono text-xs px-4 py-2 text-slate-300 hover:text-white"
             >
               Cancel

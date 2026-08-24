@@ -1,20 +1,14 @@
 version: '3.8'
 
 services:
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-your_password_here}
-      POSTGRES_DB: ${DB_NAME:-postgres}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
+  # NOTE (dev-review variant, see TASK.md — Dockerize for Frictionless
+  # Reviewer Handoff): the local `db` (Postgres) service that used to be
+  # here has been deliberately dropped. orm_collection/.env's
+  # DATABASE_URL override already points every backend-family service at
+  # the live Render Postgres — nothing in the app ever queried this local
+  # container, so it only cost reviewer wait time via depends_on/healthcheck.
+  # If you need a real local Postgres again (e.g. offline dev, not
+  # pointed at Render), re-add it and the matching depends_on entries.
   redis:
     image: redis:7
     ports:
@@ -30,11 +24,11 @@ services:
   backend:
     build:
       context: ./orm_collection
+    image: orm-platform-backend:dev-review
     ports:
       - "8000:8000"
     env_file: .env
     environment:
-      - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
     volumes:
       # database/ lives at the repo root, outside this service's build
@@ -43,8 +37,6 @@ services:
       # duplicating the file into the image. See TASK.md (Remove Alembic).
       - ./database:/app/database:ro
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -56,13 +48,11 @@ services:
   celery-worker-general:
     build:
       context: ./orm_collection
+    image: orm-platform-backend:dev-review
     env_file: .env
     environment:
-      - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
       backend:
@@ -72,13 +62,11 @@ services:
   celery-worker-pipeline:
     build:
       context: ./orm_collection
+    image: orm-platform-backend:dev-review
     env_file: .env
     environment:
-      - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
       backend:
@@ -88,13 +76,11 @@ services:
   celery-beat:
     build:
       context: ./orm_collection
+    image: orm-platform-backend:dev-review
     env_file: .env
     environment:
-      - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
       backend:
@@ -106,15 +92,17 @@ services:
       context: ./orm_dashboard
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        - NEXT_PUBLIC_API_SHARED_SECRET=${NEXT_PUBLIC_API_SHARED_SECRET:?NEXT_PUBLIC_API_SHARED_SECRET must be set in .env before building the frontend image}
+    image: orm-platform-frontend:dev-review
     ports:
       - "3000:3000"
     env_file: .env
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_API_SHARED_SECRET=${NEXT_PUBLIC_API_SHARED_SECRET:?NEXT_PUBLIC_API_SHARED_SECRET must be set in .env before building the frontend image}
     depends_on:
       backend:
         condition: service_healthy
 
 volumes:
-  postgres_data:
   redis_data:

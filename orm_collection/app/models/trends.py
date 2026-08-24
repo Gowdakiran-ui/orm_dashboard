@@ -89,8 +89,9 @@ class TrendEvent(Base):
 # string sentinels for uniqueness evaluation.
 #
 # This is a functional index and is defined outside the model as a module-level
-# DDL object, applied via the migration. The Index below uses server_default
-# expressions and is referenced in the migration.
+# DDL object. The Index below is a declarative placeholder only -- the real
+# DDL (with the COALESCE expressions) lives in database/schema.sql, the
+# project's source of truth for DB structure (see CLAUDE.md — Remove Alembic).
 #
 # Effective constraint:
 #   UNIQUE (client_id, trend_type, COALESCE(entity_id::text,''),
@@ -102,7 +103,7 @@ uq_trend_events_daily = Index(
     TrendEvent.trend_type,
     TrendEvent.trend_date,
     # Functional expression columns are not directly supported in SQLAlchemy
-    # ORM Index() for COALESCE. The equivalent DDL is in the Alembic migration:
-    # phase_4_1_trend_hardening.py
-    unique=False  # uniqueness enforced by migration's functional index
+    # ORM Index() for COALESCE. The actual DDL is in database/schema.sql's
+    # uq_trend_events_daily definition.
+    unique=False  # uniqueness enforced by schema.sql's functional index
 )

@@ -190,6 +190,56 @@ export function RiskTab({
         ))}
       </div>
 
+      {/* 1b. Active Alerts */}
+      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+        <CardHeader>
+          <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
+            <span className="flex items-center">
+              <AlertTriangle className="h-4 w-4 text-orange-500 mr-2" />
+              ACTIVE ALERTS
+            </span>
+            {!alertsLoading && !alertsError && (
+              <Badge className="bg-orange-500/10 text-orange-400 border border-orange-500/30 font-mono text-[9px]">{alerts.length} Active</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {alertsLoading ? (
+            <div className="space-y-2 animate-pulse">
+              {[1, 2, 3].map(x => (
+                <div key={x} className="h-10 bg-[#1E293B]/20 border border-[#1F2937]/60 rounded-lg" />
+              ))}
+            </div>
+          ) : alertsError ? (
+            <TelemetryErrorWidget title="Alert Feed Offline" message={alertsError} />
+          ) : alerts.length === 0 ? (
+            <div className="text-center py-6 text-slate-500 font-mono text-xs">No active alerts.</div>
+          ) : (
+            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              {alerts.map((alert) => (
+                <div key={alert.id} className="flex items-center justify-between bg-[#030712] border border-[#1F2937]/50 rounded p-3 font-mono text-xs">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <Badge className={`font-mono text-[8px] shrink-0 ${
+                      alert.severity === "CRITICAL" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                      alert.severity === "HIGH" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
+                      alert.severity === "WARNING" ? "bg-yellow-500/10 text-yellow-550 border border-yellow-500/20" :
+                      "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                    }`}>
+                      {alert.severity}
+                    </Badge>
+                    <span className="text-slate-200 font-bold truncate">{alert.title}</span>
+                    <span className="text-slate-500 text-[10px] shrink-0 hidden sm:inline">{alert.alert_type}</span>
+                  </div>
+                  <span className="text-slate-500 text-[10px] shrink-0 ml-3">
+                    {alert.created_at ? new Date(alert.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Grid containing Severity pie & Likelihood Matrix */}
       <div className="grid gap-6 md:grid-cols-12">
         
@@ -403,7 +453,7 @@ export function RiskTab({
             </TableHeader>
             <TableBody>
               {riskDocs.map((doc, idx) => (
-                <TableRow key={idx} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
+                <TableRow key={doc.id} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
                   <TableCell className="font-mono text-xs font-bold text-slate-200 max-w-[320px] truncate">
                     {doc.title}
                   </TableCell>
@@ -598,7 +648,7 @@ export function RiskTab({
                     return <div className="text-center py-10 text-slate-500 text-xs">No incidents in this cell.</div>;
                   }
                   return cellDocs.map((doc, idx) => (
-                    <div key={idx} className="bg-[#030712] p-4 rounded border border-[#1F2937]/65 space-y-3 hover:border-[#D4AF37]/45 transition-colors">
+                    <div key={doc.id ?? idx} className="bg-[#030712] p-4 rounded border border-[#1F2937]/65 space-y-3 hover:border-[#D4AF37]/45 transition-colors">
                       <div className="flex justify-between items-start">
                         <span className="text-[10px] text-slate-500">Source: {doc.source}</span>
                         <Badge className={`font-mono text-[8px] ${
