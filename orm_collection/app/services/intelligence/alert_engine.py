@@ -237,7 +237,10 @@ class AlertEngine:
             existing.article_count = len(merged_docs)
 
             # Update scores & metadata
-            existing.evidence_score = max(existing.evidence_score or 0.0, new_evidence)
+            # Defensive clamp mirrors the compute-site clamp above -- new_evidence should
+            # already be <=100 by the time it reaches here, but this guards the same
+            # ck_alerts_evidence_score bound against any other caller of this upsert.
+            existing.evidence_score = min(max(existing.evidence_score or 0.0, new_evidence), 100.0)
             existing.confidence_score = max(existing.confidence_score or 0.0, new_confidence)
             existing.trigger_value = kwargs.get("trigger_value", existing.trigger_value)
             existing.run_id = kwargs.get("run_id", existing.run_id)
@@ -425,6 +428,12 @@ class AlertEngine:
                     evidence_score += min(doc_count * 4.0, 20.0)  # Document weight
                     if is_exec:
                         evidence_score += 15.0  # Executive weight
+                    # Components can sum above 100 (max risk 45 + trend 20 + correlation 15
+                    # + doc weight 20 + exec weight 15 = 115) -- clamp to match
+                    # ck_alerts_evidence_score's 0-100 bound (database/schema.sql). No floor
+                    # needed here (unlike confidence_score's 10.0 floor): every term above is
+                    # a non-negative additive contribution, so evidence_score can't go below 0.
+                    evidence_score = min(evidence_score, 100.0)
 
                     # A4: Calculate confidence score
                     agreement = 1.0 if (len(data["risks"]) > 0 and len(data["trends"]) > 0) else 0.5

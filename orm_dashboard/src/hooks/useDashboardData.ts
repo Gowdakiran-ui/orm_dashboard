@@ -467,20 +467,30 @@ export function useDashboardData() {
       const signal = currentController.signal;
 
       try {
+        // Each success handler below also clears its own resource's *Error
+        // state (mirroring the initial-load effect's reset at ~212-225).
+        // Previously only setX(data) ran here, so a resource whose error was
+        // set during initial load (or would be set below on rejection) never
+        // got cleared by a later successful poll -- its TelemetryErrorWidget
+        // banner stayed stuck showing "offline" even once real data was
+        // flowing again on every subsequent 200. #36's aggregate
+        // livePollDegraded signal already self-heals independently of this;
+        // this is the separate per-resource-level fix (FINDINGS.md).
         const results = await Promise.allSettled([
-          fetchReputation(clientId, signal).then(data => { if (!signal.aborted) setReputation(data); }),
-          fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) setAlerts(data || []); }),
-          fetchRisks(clientId, signal).then(data => { if (!signal.aborted) setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); }),
-          fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) setTelemetry(data); }), // Poll telemetry
+          fetchReputation(clientId, signal).then(data => { if (!signal.aborted) { setReputation(data); setReputationError(null); } }),
+          fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) { setAlerts(data || []); setAlertsError(null); } }),
+          fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
+          fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
           fetchNarratives(clientId, signal).then(data => {
             if (!signal.aborted && data) {
               const seen = new Set<string>();
               setNarratives(data.filter((n: any) => { if (n?.id && !seen.has(n.id)) { seen.add(n.id); return true; } return false; }));
+              setNarrativesError(null);
             }
           }),
-          fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) setDocuments(data || []); }),
-          fetchIntelligenceFeed(clientId, signal).then(data => { if (!signal.aborted) setTrendEvents(data || []); }),
-          fetchSystemStatus(signal).then(data => { if (!signal.aborted) setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); })
+          fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
+          fetchIntelligenceFeed(clientId, signal).then(data => { if (!signal.aborted) setTrendEvents(data || []); }), // no matching error state -- see initial-load effect's own untracked .catch for this fetch
+          fetchSystemStatus(signal).then(data => { if (!signal.aborted) { setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); setSystemStatusError(null); } })
         ]);
 
         // FINDINGS.md #36: an extended outage after initial load previously had

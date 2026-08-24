@@ -60,14 +60,28 @@ def execute_document_intelligence_sync(document_id: str, client_id: str = None, 
     except Exception as exc:
         entity_db.rollback()
         logger.error("entity_extraction_failed_rolling_back", document_id=document_id, error=str(exc))
-        try:
-            from app.models.document import Document
-            doc = entity_db.query(Document).filter(Document.id == document_id).first()
-            if doc:
-                doc.processing_status = "FAILED"
-                entity_db.commit()
-        except Exception as e:
-            logger.error("failed_to_set_failed_status", error=str(e))
+        # Only write the terminal FAILED status once retries are actually
+        # exhausted -- matching the pattern already used correctly in
+        # execute_search_task (#15) and fetch_feed_task. Writing FAILED here
+        # unconditionally used to neuter every Celery-level retry: the next
+        # attempt's top-of-function guard (`processing_status in [...,
+        # "FAILED"]`) would see FAILED and skip all real work, so a
+        # transient failure never actually got retried, only silently
+        # abandoned. Leaving processing_status at "PROCESSING" between
+        # retries (its value since the top of this function) lets the next
+        # attempt through; document_processing_watchdog already recovers a
+        # document that's genuinely stuck in PROCESSING past its own
+        # 10-minute timeout, so this doesn't create a new orphan risk.
+        retries_exhausted = celery_task is None or celery_task.request.retries >= celery_task.max_retries
+        if retries_exhausted:
+            try:
+                from app.models.document import Document
+                doc = entity_db.query(Document).filter(Document.id == document_id).first()
+                if doc:
+                    doc.processing_status = "FAILED"
+                    entity_db.commit()
+            except Exception as e:
+                logger.error("failed_to_set_failed_status", error=str(e))
         entity_db.close()
         if celery_task:
             # Retry/backoff pattern 2 of 4 in this codebase: Celery flat
