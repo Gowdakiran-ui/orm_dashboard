@@ -243,14 +243,20 @@ def delete_client(db: Session, client_id: UUID) -> dict:
             EntityMention.entity_id.in_(entity_ids)
         ).distinct().all()
         doc_ids_with_mentions = {m.document_id for m in client_doc_mentions}
-        
-        for doc_id in doc_ids_with_mentions:
-            other_mentions_count = db.query(EntityMention).join(Entity).filter(
-                EntityMention.document_id == doc_id,
-                Entity.client_id != client_id
-            ).count()
-            if other_mentions_count == 0:
-                doc_ids_to_delete.add(doc_id)
+
+        if doc_ids_with_mentions:
+            # Single set-based query instead of one query per document (was
+            # O(n) round trips -- with real clients running 300-470+ mentioned
+            # documents, this alone caused the delete endpoint to exceed the
+            # frontend's 15s timeout, especially over Render's WAN latency).
+            other_client_doc_ids = {
+                row.document_id
+                for row in db.query(EntityMention.document_id).join(Entity).filter(
+                    EntityMention.document_id.in_(doc_ids_with_mentions),
+                    Entity.client_id != client_id
+                ).distinct().all()
+            }
+            doc_ids_to_delete |= (doc_ids_with_mentions - other_client_doc_ids)
 
     # Perform Deletion of Documents
     deleted_docs_count = 0
@@ -277,16 +283,30 @@ def delete_client(db: Session, client_id: UUID) -> dict:
     db.query(AlertClientState).filter(AlertClientState.client_id == client_id).delete(synchronize_session=False)
     db.query(ClientProcessingSummary).filter(ClientProcessingSummary.client_id == client_id).delete(synchronize_session=False)
 
-    # Snapshot counts before deletion for the audit trail
+    # Snapshot counts before deletion for the audit trail.
+    # Combined into a single round trip (was 7 separate queries) -- each
+    # round trip to Render's WAN-latency DB adds up fast, and this endpoint
+    # already had one timeout bug from too many sequential queries.
+    audit_counts = db.execute(text("""
+        SELECT
+            (SELECT COUNT(*) FROM narratives WHERE client_id=:cid) AS narratives,
+            (SELECT COUNT(*) FROM risk_events WHERE client_id=:cid) AS risk_events,
+            (SELECT COUNT(*) FROM alerts WHERE client_id=:cid) AS alerts,
+            (SELECT COUNT(*) FROM reputation_scores WHERE client_id=:cid) AS reputation_scores,
+            (SELECT COUNT(*) FROM competitor_benchmarks WHERE client_id=:cid) AS competitor_benchmarks,
+            (SELECT COUNT(*) FROM executive_reputation_scores WHERE client_id=:cid) AS executive_reputation_scores,
+            (SELECT COUNT(*) FROM trend_events WHERE client_id=:cid) AS trend_events
+    """), {"cid": str(client_id)}).one()
+
     pre_counts = {
         "entities":                  len(entities),
-        "narratives":                db.execute(text("SELECT COUNT(*) FROM narratives WHERE client_id=:cid"), {"cid": str(client_id)}).scalar(),
-        "risk_events":               db.execute(text("SELECT COUNT(*) FROM risk_events WHERE client_id=:cid"), {"cid": str(client_id)}).scalar(),
-        "alerts":                    db.execute(text("SELECT COUNT(*) FROM alerts WHERE client_id=:cid"), {"cid": str(client_id)}).scalar(),
-        "reputation_scores":         db.execute(text("SELECT COUNT(*) FROM reputation_scores WHERE client_id=:cid"), {"cid": str(client_id)}).scalar(),
-        "competitor_benchmarks":     db.execute(text("SELECT COUNT(*) FROM competitor_benchmarks WHERE client_id=:cid"), {"cid": str(client_id)}).scalar(),
-        "executive_reputation_scores": db.execute(text("SELECT COUNT(*) FROM executive_reputation_scores WHERE client_id=:cid"), {"cid": str(client_id)}).scalar(),
-        "trend_events":              db.execute(text("SELECT COUNT(*) FROM trend_events WHERE client_id=:cid"), {"cid": str(client_id)}).scalar(),
+        "narratives":                audit_counts.narratives,
+        "risk_events":               audit_counts.risk_events,
+        "alerts":                    audit_counts.alerts,
+        "reputation_scores":         audit_counts.reputation_scores,
+        "competitor_benchmarks":     audit_counts.competitor_benchmarks,
+        "executive_reputation_scores": audit_counts.executive_reputation_scores,
+        "trend_events":              audit_counts.trend_events,
         "deleted_feeds":             deleted_feeds_count,
         "deleted_sources":           deleted_sources_count,
         "deleted_documents":         deleted_docs_count,
