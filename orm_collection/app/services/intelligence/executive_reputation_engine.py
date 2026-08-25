@@ -85,6 +85,15 @@ class ExecutiveReputationStateMachine:
 
 
 class ExecutiveReputationEngine:
+    # E14-F1 — mirrors ReputationEngine/BenchmarkEngine's coverage rule: below
+    # this share of the total weight mass, there is not enough signal to
+    # state a real grade. Unlike ReputationScore, executive_reputation_scores'
+    # score/grade/component columns are NOT NULL (see schema.sql), so a
+    # no-evidence executive is written with the BenchmarkEngine pattern
+    # instead (honest 0.0 sentinel + health_status="INSUFFICIENT_EVIDENCE"),
+    # not an actual NULL.
+    MIN_ACTIVE_WEIGHT = 0.20
+
     def __init__(self):
         self.weights = {
             "sentiment": 0.35,
@@ -104,7 +113,9 @@ class ExecutiveReputationEngine:
         return "F"
 
 
-    def _determine_trend(self, current_score: float, previous_score: float) -> str:
+    def _determine_trend(self, current_score: Optional[float], previous_score: Optional[float]) -> str:
+        if current_score is None:
+            return "INSUFFICIENT_DATA"
         if previous_score is None:
             return "STABLE"
         diff = current_score - previous_score
@@ -283,9 +294,9 @@ class ExecutiveReputationEngine:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         one_day_ago = now_utc - datetime.timedelta(days=1)
 
-        # 1. Executive Sentiment
-        sentiment_component = 50.0
-        avg_sentiment = 0.0
+        # 1. Executive Sentiment (None when there's no evidence to compute it from)
+        sentiment_component = None
+        avg_sentiment = None
         if doc_ids:
             sent_scores = [sentiment_map[did] for did in doc_ids if did in sentiment_map]
             if sent_scores:
@@ -293,8 +304,10 @@ class ExecutiveReputationEngine:
                 sentiment_component = ((avg_sentiment + 1.0) / 2.0) * 100.0
 
         # 2. Executive Risk
-        avg_risk = sum(r.risk_score for r in supporting_risks) / len(supporting_risks) if supporting_risks else 0.0
-        risk_component = 100.0 - avg_risk
+        risk_component = None
+        if supporting_risks:
+            avg_risk = sum(r.risk_score for r in supporting_risks) / len(supporting_risks)
+            risk_component = 100.0 - avg_risk
 
         # 3. Executive Narratives
         supporting_narratives = []
@@ -313,7 +326,7 @@ class ExecutiveReputationEngine:
                     narrative_penalty += 20
                 elif n.sentiment_score > 0 and n.status in ["GROWING", "PEAK"]:
                     narrative_penalty -= 10
-                
+
                 if n.sentiment_score > max_pos:
                     max_pos = n.sentiment_score
                     top_positive = n.narrative_name
@@ -321,25 +334,46 @@ class ExecutiveReputationEngine:
                     min_neg = n.sentiment_score
                     top_negative = n.narrative_name
 
-        narrative_component = max(0.0, min(100.0, 100.0 - narrative_penalty))
+        narrative_component = None
+        if supporting_narratives:
+            narrative_component = max(0.0, min(100.0, 100.0 - narrative_penalty))
 
         # 4. Executive Trend
-        trend_component = 50.0
+        trend_component = None
         # Sort preloaded trends by date and limit to 10
         sorted_trends = sorted(supporting_trends, key=lambda x: x.created_at, reverse=True)[:10]
-        for t in sorted_trends:
-            if t.severity in ["HIGH", "CRITICAL"]:
-                if avg_sentiment < 0:
-                    trend_component -= 15
-                else:
-                    trend_component += 15
-        trend_component = max(0.0, min(100.0, trend_component))
+        if sorted_trends:
+            trend_val = 50.0
+            for t in sorted_trends:
+                if t.severity in ["HIGH", "CRITICAL"]:
+                    if (avg_sentiment or 0.0) < 0:
+                        trend_val -= 15
+                    else:
+                        trend_val += 15
+            trend_component = max(0.0, min(100.0, trend_val))
 
         # 5. Executive Visibility
-        # Count mentions in-memory
+        # Count mentions in-memory (E14-F3: no floor -- 0 mentions means the
+        # component is simply unavailable, same as every other component
+        # above, instead of outscoring a barely-covered executive)
         total_mentions = len(doc_ids) # Or sum mention_counts if available. Let's use doc_ids count for consistency
-        visibility_component = min(100.0, (total_mentions / 500.0) * 100.0)
-        if visibility_component == 0: visibility_component = 50.0
+        visibility_component = None
+        if total_mentions > 0:
+            visibility_component = min(100.0, (total_mentions / 500.0) * 100.0)
+
+        # E14-F1: Dynamic Weight Normalization -- components that could not be
+        # computed are dropped and the remaining weights renormalized, same
+        # rule ReputationEngine/BenchmarkEngine already use. has_evidence
+        # gates whether a real score/grade is produced at all.
+        components = {
+            "sentiment": sentiment_component,
+            "risk": risk_component,
+            "narrative": narrative_component,
+            "trend": trend_component,
+            "visibility": visibility_component,
+        }
+        active_weight = sum(self.weights[k] for k, v in components.items() if v is not None)
+        has_evidence = active_weight >= self.MIN_ACTIVE_WEIGHT
 
         # A3: Dynamic Source Reliability
         source_reliability = 1.0
@@ -347,51 +381,62 @@ class ExecutiveReputationEngine:
             reliabilities = [self._calculate_source_reliability(url) for url in doc_urls]
             source_reliability = sum(reliabilities) / len(reliabilities)
 
-        # Apply source reliability multiplier
-        base_score = (
-            sentiment_component * self.weights["sentiment"] +
-            risk_component * self.weights["risk"] +
-            narrative_component * self.weights["narrative"] +
-            trend_component * self.weights["trend"] +
-            visibility_component * self.weights["visibility"]
-        )
-        final_score = min(100.0, base_score * source_reliability)
+        if has_evidence:
+            weighted_sum = sum(v * self.weights[k] for k, v in components.items() if v is not None)
+            base_score = weighted_sum / active_weight
+            final_score = max(0.0, min(100.0, base_score * source_reliability))
+            grade = self._determine_grade(final_score)
+        else:
+            # No plausible-looking number without evidence (E14-F1). Mirrors
+            # BenchmarkEngine's zero-evidence handling: executive_reputation_scores'
+            # score/grade columns are NOT NULL (unlike reputation_scores), so
+            # this is an honest 0.0 sentinel + health_status flag below, not a
+            # fabricated grade -- "NA" is not one of the real A+/A/B/C/D/F values.
+            final_score = 0.0
+            grade = "NA"
 
         # Get previous score
         prev_reputation = db.query(ExecutiveReputationScore).filter(
             ExecutiveReputationScore.entity_id == exec_entity.id
         ).order_by(ExecutiveReputationScore.created_at.desc()).first()
-        
+
         prev_score = prev_reputation.score if prev_reputation else None
-        rep_trend = self._determine_trend(final_score, prev_score)
+        rep_trend = self._determine_trend(final_score if has_evidence else None, prev_score)
 
         # A7: Upstream Health Status Checking
-        health_status = "COMPLETE"
         has_recent_risk = any(r.created_at >= one_day_ago for r in supporting_risks)
         has_recent_trend = any(t.created_at >= one_day_ago for t in sorted_trends)
 
-        if not (has_recent_risk and has_recent_trend):
+        if not has_evidence:
+            health_status = "INSUFFICIENT_EVIDENCE"
+        elif not (has_recent_risk and has_recent_trend):
             health_status = "PARTIAL"
+        else:
+            health_status = "COMPLETE"
 
-        # A6: Executive Confidence Score
+        # A6: Executive Confidence Score (E14-F2: already genuinely scoped to
+        # this executive's own doc_ids/supporting_risks/supporting_trends --
+        # see data_coverage_val below, which now reuses this instead of an
+        # unrelated client-wide constant)
         doc_confidence = min(len(doc_ids) / 10.0, 1.0)
         signal_completeness = (1.0 if has_recent_risk else 0.5) * 0.5 + (1.0 if has_recent_trend else 0.5) * 0.5
-        confidence_score = round(doc_confidence * 0.6 + signal_completeness * 0.4, 4)
+        confidence_score = round(doc_confidence * 0.6 + signal_completeness * 0.4, 4) if has_evidence else 0.0
 
         # A4: Mathematical Lineage
         calculation_lineage = {
-            "formula": "min(100.0, (0.35*Sentiment + 0.30*Risk + 0.15*Narrative + 0.10*Trend + 0.10*Visibility) * SourceReliability)",
+            "formula": "Weighted Sum of Available Components / Total Available Weights, then * SourceReliability",
             "component_scores": {
-                "sentiment": round(sentiment_component, 2),
-                "risk": round(risk_component, 2),
-                "narrative": round(narrative_component, 2),
-                "trend": round(trend_component, 2),
-                "visibility": round(visibility_component, 2)
+                "sentiment": round(sentiment_component, 2) if sentiment_component is not None else None,
+                "risk": round(risk_component, 2) if risk_component is not None else None,
+                "narrative": round(narrative_component, 2) if narrative_component is not None else None,
+                "trend": round(trend_component, 2) if trend_component is not None else None,
+                "visibility": round(visibility_component, 2) if visibility_component is not None else None
             },
             "component_weights": self.weights,
+            "active_weight_sum": round(active_weight, 4),
             "source_reliability": round(source_reliability, 4),
             "raw_values": {
-                "avg_sentiment": round(avg_sentiment, 4),
+                "avg_sentiment": round(avg_sentiment, 4) if avg_sentiment is not None else None,
                 "total_mentions": total_mentions,
                 "document_count": len(doc_ids)
             },
@@ -399,7 +444,12 @@ class ExecutiveReputationEngine:
                 "doc_confidence": round(doc_confidence, 4),
                 "signal_completeness": round(signal_completeness, 4)
             },
-            "decision_reason": f"Executive reputation calculated dynamically over 30-day window with health state: {health_status}."
+            "decision_reason": (
+                f"Insufficient evidence: active weight {active_weight:.2f} < "
+                f"{self.MIN_ACTIVE_WEIGHT:.2f}; no grade stated."
+                if not has_evidence else
+                f"Executive reputation calculated dynamically over 30-day window with health state: {health_status}."
+            )
         }
 
         # A5: Evidence Metadata
@@ -411,23 +461,26 @@ class ExecutiveReputationEngine:
             "supporting_narratives": [str(n.id) for n in supporting_narratives],
             "supporting_executive_entity": str(exec_entity.id)
         }
-        
+
         latency_ms = (time.perf_counter() - t_start) * 1000
 
-        # Calculate data coverage
-        data_coverage_val = 0.40
-        try:
-            from app.models.source import Source
-            active_sources = db.query(Source).filter(Source.is_active == True).all()
-            source_types = {s.source_type.lower() for s in active_sources}
-            if "reddit" in source_types and ("google" in source_types or "youtube" in source_types or "news" in source_types):
-                data_coverage_val = 0.75
-            elif "reddit" in source_types:
-                data_coverage_val = 0.58
-            elif "rss" in source_types:
-                data_coverage_val = 0.40
-        except Exception:
-            pass
+        # E14-F2: real per-executive coverage instead of a client-wide
+        # constant derived from which source *types* are active platform-wide
+        # (identical for every executive of every client). Mirrors
+        # ReputationEngine/BenchmarkEngine, which both set data_coverage to
+        # their own confidence_score.
+        data_coverage_val = confidence_score
+
+        # executive_reputation_scores' component columns are NOT NULL
+        # (schema.sql), unlike reputation_scores'. 0.0 here means "component
+        # unavailable" for storage purposes only -- the true None is what
+        # calculation_lineage's component_scores dict records, and is what
+        # active_weight/has_evidence above were computed from.
+        sentiment_component_db = sentiment_component if sentiment_component is not None else 0.0
+        risk_component_db = risk_component if risk_component is not None else 0.0
+        narrative_component_db = narrative_component if narrative_component is not None else 0.0
+        trend_component_db = trend_component if trend_component is not None else 0.0
+        visibility_component_db = visibility_component if visibility_component is not None else 0.0
 
         # R7: Duplicate protection using ON CONFLICT DO UPDATE on uq_exec_reputation_run
         stmt = insert(ExecutiveReputationScore).values(
@@ -436,12 +489,12 @@ class ExecutiveReputationEngine:
             entity_id=exec_entity.id,
             executive_name=exec_entity.name,
             score=final_score,
-            grade=self._determine_grade(final_score),
-            sentiment_component=sentiment_component,
-            risk_component=risk_component,
-            narrative_component=narrative_component,
-            trend_component=trend_component,
-            visibility_component=visibility_component,
+            grade=grade,
+            sentiment_component=sentiment_component_db,
+            risk_component=risk_component_db,
+            narrative_component=narrative_component_db,
+            trend_component=trend_component_db,
+            visibility_component=visibility_component_db,
             confidence_score=confidence_score,
             reputation_trend=rep_trend,
             top_positive_narrative=top_positive,
@@ -459,12 +512,12 @@ class ExecutiveReputationEngine:
             constraint="uq_exec_reputation_run",
             set_={
                 "score": final_score,
-                "grade": self._determine_grade(final_score),
-                "sentiment_component": sentiment_component,
-                "risk_component": risk_component,
-                "narrative_component": narrative_component,
-                "trend_component": trend_component,
-                "visibility_component": visibility_component,
+                "grade": grade,
+                "sentiment_component": sentiment_component_db,
+                "risk_component": risk_component_db,
+                "narrative_component": narrative_component_db,
+                "trend_component": trend_component_db,
+                "visibility_component": visibility_component_db,
                 "confidence_score": confidence_score,
                 "reputation_trend": rep_trend,
                 "top_positive_narrative": top_positive,
