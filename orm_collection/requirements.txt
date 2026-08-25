@@ -15,8 +15,8 @@ flashtext==2.7
 boto3==1.34.34
 python-dotenv==1.0.1
 torch==2.12.0
-spacy
-structlog
+spacy==3.8.14
+structlog==26.1.0
 transformers==5.12.1
-pytest
-psutil
+pytest==9.1.0
+psutil==7.2.2

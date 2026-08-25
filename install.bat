@@ -141,10 +141,36 @@ echo        [OK]
 :: ============================================================
 echo.
 echo [5/9] Installing Python dependencies from orm_collection\requirements.txt...
+
+:: An outdated pip can fail to resolve a package's prebuilt wheel for the
+:: installed Python version (it only recognizes wheel tags it shipped
+:: after), silently falling back to building from source instead -- the
+:: same failure class as the psycopg2/pg_config issue below, just
+:: triggered by pip's own age instead of the package's version. Upgrading
+:: first removes that as a variable before the real install runs.
+echo        Upgrading pip...
+python -m pip install --upgrade pip >nul
+if %ERRORLEVEL% NEQ 0 (
+    echo        WARNING: Failed to upgrade pip -- continuing with the existing version.
+)
+
 pip install -r "%ORM_COLLECTION%\requirements.txt"
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo  ERROR: pip install failed. Check the output above for details.
+    echo.
+    echo  If the error above mentions a missing compiler, "Microsoft Visual
+    echo  C++ 14.0 or greater is required", "error: command 'cl.exe' failed",
+    echo  or similar -- pip fell back to building a package from source
+    echo  because it could not find a prebuilt wheel for your Python
+    echo  version. Install "Build Tools for Visual Studio" ^(the C++ build
+    echo  tools workload^) from:
+    echo    https://visualstudio.microsoft.com/visual-cpp-build-tools/
+    echo  then re-run install.bat. Alternatively, install Python 3.11-3.13
+    echo  ^(the range every dependency in this project has a verified
+    echo  prebuilt Windows wheel for^) instead of the version currently on
+    echo  your PATH.
+    echo.
     pause
     exit /b 1
 )
