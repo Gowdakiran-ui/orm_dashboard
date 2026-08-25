@@ -99,19 +99,21 @@ def preprocess_text(raw_text: str, title: str = "", summary: str = "", matched_k
 NEG_WORDS = ["recall", "recalls", "lawsuit", "lawsuits", "scandal", "investigate", "investigation", "investigations", "probe", "scandal", "breach", "hack", "layoffs", "layoff", "fine", "fines", "bankruptcy", "sued", "court", "fraud", "complaint", "defect", "safety data", "misleading", "fatal", "crash", "accident"]
 POS_WORDS = ["profit", "profits", "beat", "launch", "launches", "innovation", "breakthrough", "partnership", "expansion", "award", "success", "record", "growth"]
 
-# "court" alone is context-free -- common idioms (ball in X's court, food
-# court, courting investors) are not litigation-related. Live-verified
-# false positive (FINDINGS.md #25): "The Ball in OpenAI's court" was scored
-# fully Negative on this word alone. Every genuinely negative "court" hit
-# sampled live was also accompanied by one of these litigation-context
-# words elsewhere in the same text, so gating on co-occurrence doesn't cost
-# real recall.
+# "court" and "fine" alone are context-free -- common idioms (ball in X's
+# court, food court, courting investors; "I'm fine", "fine dining", "fine
+# print", "a fine year") are not litigation-related. Live-verified false
+# positive for "court" (FINDINGS.md #25): "The Ball in OpenAI's court" was
+# scored fully Negative on this word alone. Every genuinely negative
+# "court"/"fine" hit sampled live was also accompanied by one of these
+# litigation-context words elsewhere in the same text (e.g. a regulatory
+# "fine" co-occurs with "case"/"legal"/"ruling"), so gating on co-occurrence
+# doesn't cost real recall. SA9-F1.
 LITIGATION_CONTEXT_WORDS = ["ban", "case", "legal", "lawsuit", "sued", "ruling", "judge", "trial", "verdict"]
 
 def _is_neg_word_present(word: str, text_lower: str) -> bool:
     if word not in text_lower:
         return False
-    if word == "court":
+    if word in ("court", "fine"):
         return any(ctx in text_lower for ctx in LITIGATION_CONTEXT_WORDS)
     return True
 

@@ -190,75 +190,69 @@ def validate_crisis_response(response_dict: Dict[str, Any], context: Dict[str, A
     alert_map = {str(a["id"]): a for a in context.get("alerts", [])}
     trend_map = {str(t["id"]): t for t in context.get("trends", [])}
 
-    def filter_and_get_cited_objects(citations_obj) -> List[Dict[str, Any]]:
+    # C5-F1: reject-and-fallback on a hallucinated citation ID, aligned with
+    # the Advisor's get_cited_objects (advisor_validation.py) -- previously
+    # this silently stripped the bad ID and logged a warning instead of
+    # rejecting, inconsistent with the Advisor for the same failure mode.
+    # crisis_planner.py's caller already has a safe "Insufficient evidence"
+    # fallback on any CrisisValidationException (see its except Exception
+    # block), so rejecting here does not leave a crisis call with no
+    # response -- it degrades to that honest fallback instead of a plan
+    # built on citations that don't actually exist.
+    def get_cited_objects(citations_obj) -> List[Dict[str, Any]]:
         objs = []
-        
-        valid_docs = []
+
         for did in getattr(citations_obj, "document_ids", []):
-            if did in doc_map:
-                objs.append(doc_map[did])
-                valid_docs.append(did)
-            else:
-                logger.warning("crisis_validation_hallucinated_document_id_removed", id=did)
-        citations_obj.document_ids = valid_docs
+            if did not in doc_map:
+                logger.error("crisis_validation_hallucinated_document_id", id=did)
+                raise CrisisValidationException(f"Hallucinated document ID cited: {did}")
+            objs.append(doc_map[did])
 
-        valid_narratives = []
         for nid in getattr(citations_obj, "narrative_ids", []):
-            if nid in narrative_map:
-                objs.append(narrative_map[nid])
-                valid_narratives.append(nid)
-            else:
-                logger.warning("crisis_validation_hallucinated_narrative_id_removed", id=nid)
-        citations_obj.narrative_ids = valid_narratives
+            if nid not in narrative_map:
+                logger.error("crisis_validation_hallucinated_narrative_id", id=nid)
+                raise CrisisValidationException(f"Hallucinated narrative ID cited: {nid}")
+            objs.append(narrative_map[nid])
 
-        valid_risks = []
         for rid in getattr(citations_obj, "risk_ids", []):
-            if rid in risk_map:
-                objs.append(risk_map[rid])
-                valid_risks.append(rid)
-            else:
-                logger.warning("crisis_validation_hallucinated_risk_id_removed", id=rid)
-        citations_obj.risk_ids = valid_risks
+            if rid not in risk_map:
+                logger.error("crisis_validation_hallucinated_risk_id", id=rid)
+                raise CrisisValidationException(f"Hallucinated risk ID cited: {rid}")
+            objs.append(risk_map[rid])
 
-        valid_alerts = []
         for aid in getattr(citations_obj, "alert_ids", []):
-            if aid in alert_map:
-                objs.append(alert_map[aid])
-                valid_alerts.append(aid)
-            else:
-                logger.warning("crisis_validation_hallucinated_alert_id_removed", id=aid)
-        citations_obj.alert_ids = valid_alerts
+            if aid not in alert_map:
+                logger.error("crisis_validation_hallucinated_alert_id", id=aid)
+                raise CrisisValidationException(f"Hallucinated alert ID cited: {aid}")
+            objs.append(alert_map[aid])
 
-        valid_trends = []
         for tid in getattr(citations_obj, "trend_ids", []):
-            if tid in trend_map:
-                objs.append(trend_map[tid])
-                valid_trends.append(tid)
-            else:
-                logger.warning("crisis_validation_hallucinated_trend_id_removed", id=tid)
-        citations_obj.trend_ids = valid_trends
+            if tid not in trend_map:
+                logger.error("crisis_validation_hallucinated_trend_id", id=tid)
+                raise CrisisValidationException(f"Hallucinated trend ID cited: {tid}")
+            objs.append(trend_map[tid])
 
         return objs
 
-    # Filter citations on all items and verify semantic grounding
+    # Verify citations on all items and verify semantic grounding
     for list_name in ["immediate_actions_24h", "short_term_actions_72h", "medium_term_actions_7d"]:
         items = getattr(validated_response, list_name, [])
         for i, item in enumerate(items):
-            cited_objs = filter_and_get_cited_objects(item.citations)
+            cited_objs = get_cited_objects(item.citations)
             if cited_objs:
                 text_to_ground = f"{item.action} {item.evidence_backing}"
                 if not verify_semantic_grounding(text_to_ground, cited_objs):
                     logger.error("crisis_validation_semantic_grounding_failed", list=list_name, index=i, text=text_to_ground)
                     raise CrisisValidationException(f"Recommendation at {list_name}[{i}] fails semantic grounding.")
 
-    # Filter remaining lists
+    # Verify remaining lists
     for list_name in ["key_drivers", "stakeholder_actions"]:
         items = getattr(validated_response, list_name, [])
         for item in items:
-            filter_and_get_cited_objects(item.citations)
+            get_cited_objects(item.citations)
 
-    # Filter global citations
-    filter_and_get_cited_objects(validated_response.citations)
+    # Verify global citations
+    get_cited_objects(validated_response.citations)
 
     # Prune items with empty citations
     for list_name in ["immediate_actions_24h", "short_term_actions_72h", "medium_term_actions_7d", "key_drivers", "stakeholder_actions"]:

@@ -306,7 +306,11 @@ class GlobalMatchingEngine:
         if "tata" in entity_key:
             # E.g., "tata power", "tata consultancy", "tata steel" when matching "Tata Motors" specifically,
             # unless automotive keywords are present in the text
-            other_tata_companies = ["consultancy", "tcs", "steel", "power", "communications", "chemicals", "capital", "tea", "starbucks", "elxsi", "sky"]
+            # M6-F2: "starbucks" removed -- Tata Starbucks is a real, legitimate
+            # Tata Consumer Products joint venture (India), not an unrelated
+            # Tata Group company being confused for the tracked entity, so
+            # penalizing it here was suppressing genuine Tata coverage.
+            other_tata_companies = ["consultancy", "tcs", "steel", "power", "communications", "chemicals", "capital", "tea", "elxsi", "sky"]
             if any(company in doc_text_lower for company in other_tata_companies):
                 if not any(auto_kw in doc_text_lower for auto_kw in ["motor", "car", "ev", "harrier", "altroz", "nexon", "safari", "vehicle"]):
                     confidence -= 0.50

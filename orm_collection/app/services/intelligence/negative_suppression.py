@@ -34,7 +34,13 @@ def apply_negative_suppression(text: str, detected_topics: List[str]) -> List[st
     # Rule 4: Ford (Actor/Harrison) -> Suppress Automotive / Electric Vehicles
     if "ford" in text_lower:
         actor_keywords = ["harrison", "actor", "movie", "star", "film", "hollywood", "indiana jones", "star wars"]
-        if any(kw in text_lower for kw in actor_keywords):
+        # NS8-F2: "star" alone is a bare substring match that also fires
+        # inside ordinary words ("startup", "restart", "Ford's EV lineup
+        # starts...") and was suppressing genuine Ford EV coverage. Gate on
+        # the same pattern Rule 1 (Nikola Tesla) already uses: only suppress
+        # if no automotive/EV context is present alongside the actor cue.
+        automotive_keywords = ["ev", "electric", "car", "vehicle", "motor", "truck", "suv", "mustang", "f-150", "bronco", "quarterly", "stock"]
+        if any(kw in text_lower for kw in actor_keywords) and not any(kw in text_lower for kw in automotive_keywords):
             suppressed.add("Automotive")
             suppressed.add("Electric Vehicles")
             suppressed.add("Autonomous Driving")

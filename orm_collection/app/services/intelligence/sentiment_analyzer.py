@@ -49,8 +49,14 @@ class SentimentAnalyzer:
             return {"label": random.choice(labels), "score": random.uniform(0.6, 0.99)}
             
         if text is None:
-            # Return neutral for empty text
-            return {"label": "neutral", "score": 1.0}
+            # C2-F1: honest zero-confidence error state, not a fabricated
+            # 100%-confidence neutral result -- text was never actually
+            # analyzed. "label" stays "neutral" so existing callers that
+            # index result["label"]/result["score"] directly (process_document
+            # above, sentiment_batch_processor.py) don't break; "error" lets
+            # any caller that wants to distinguish "never analyzed" from a
+            # genuine neutral FinBERT result do so.
+            return {"label": "neutral", "score": 0.0, "error": "no_text_provided"}
             
         # Truncate text to fit model max length (usually 512 tokens)
         truncated_text = text[:1500] 
