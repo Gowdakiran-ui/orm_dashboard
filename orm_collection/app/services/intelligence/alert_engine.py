@@ -369,7 +369,7 @@ class AlertEngine:
 
             # Map executive risks
             for r, ent in exec_risks:
-                is_exec = "CEO" in ent.name.upper() or "EXECUTIVE" in ent.name.upper()
+                is_exec = ent.entity_type == "person"
                 if is_exec:
                     eid = r.entity_id
                     if eid not in groups:
