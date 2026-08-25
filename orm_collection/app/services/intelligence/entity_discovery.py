@@ -148,9 +148,28 @@ class EntityDiscoveryConfig:
     # bottling franchisee, not a person named "Varun" with surname
     # "Beverages"). Checked against all live person-entity names in the DB
     # first — none use any of these words, so this is a zero-risk addition.
+    # E7-F3: added "foods", "chemicals", "energy", "international", "financial",
+    # "capital", "ventures", "consulting", "pharmaceuticals" -- the same
+    # Varun-Beverages class of gap persisted for these ("Varun Foods", "Priya
+    # Capital", "Raj Chemicals" all still passed every person-name layer).
     CORPORATE_ENTITY_NOUNS = {
         "beverages", "industries", "motors", "systems", "technologies",
         "enterprises", "partners", "solutions", "labs",
+        "foods", "chemicals", "energy", "international", "financial",
+        "capital", "ventures", "consulting", "pharmaceuticals",
+    }
+
+    # Phase 5 (TASK.md 9-phase) — placeholder/example text that should never
+    # reach promotion regardless of shape. "Example Corp." was confirmed live
+    # as a promoted Tesla competitor: it passes every existing layer purely on
+    # shape (2 title-case tokens, a legal suffix) because no layer checks
+    # *content* for "this is a stand-in name, not a real one." Scoped to
+    # unambiguous placeholder markers only — deliberately excludes words like
+    # "test"/"na"/"xyz" that have real collision risk with legitimate short
+    # names or acronyms.
+    PLACEHOLDER_TERMS = {
+        "example", "sample", "placeholder", "dummy", "lorem", "ipsum",
+        "acme", "foo", "bar", "baz", "n/a", "tbd",
     }
 
     # Near-duplicate guard for executive promotion (E2). Ratio from
@@ -307,10 +326,20 @@ class EntityDiscoveryEngine:
                 if self._normalize_name(alias.alias_text) == normalized_name:
                     matched_executive = exec_entity
                     break
-            # Check last name / first name match if unique/specific
+            # Check last-name-only match (E7-F1: previously matched a single
+            # token against ANY part of the executive's name -- including
+            # the FIRST name -- so a candidate token like "Tim" or "Mark"
+            # incorrectly matched a tracked executive's given name and
+            # created an EntityMention for the wrong person ("Tim Hortons
+            # coffee" -> Tim Cook, "Mark your calendar" -> Mark Zuckerberg).
+            # Restricting to the executive's own surname preserves the
+            # legitimate journalism pattern of referring to someone by last
+            # name alone ("Musk announced...", "Cook said...") while
+            # eliminating the cited false positives, which were all first
+            # names.
             exec_parts = [p.lower() for p in exec_entity.name.split()]
             cand_parts = [p.lower() for p in person_name.split()]
-            if len(cand_parts) == 1 and cand_parts[0] in exec_parts:
+            if len(cand_parts) == 1 and len(exec_parts) > 1 and cand_parts[0] == exec_parts[-1]:
                 matched_executive = exec_entity
                 break
                 
@@ -779,21 +808,33 @@ class EntityDiscoveryEngine:
         confidence += min(0.20, (doc_count - 1) * 0.05)
         
         # Context quality boost: +0.15 if title keywords appear nearby
-        if self._has_executive_context(db, person_name, doc_ids):
+        has_exec_context = self._has_executive_context(db, person_name, doc_ids)
+        if has_exec_context:
             confidence += 0.15
-            
+
         # Existing verified executive alias boost: +0.20
-        verified_execs = db.query(Entity).filter(
-            Entity.client_id == client_id,
-            Entity.entity_type == "person"
-        ).all()
-        for ve in verified_execs:
-            ve_parts = ve.name.split()
-            if len(ve_parts) >= 2 and len(parts) >= 2:
-                if ve_parts[-1].lower() == parts[-1].lower():
-                    confidence += 0.20
-                    break
-                    
+        # E7-F2: previously fired on last-name coincidence ALONE -- any
+        # candidate sharing a verified executive's surname (e.g. "Emily
+        # Huang" vs. a tracked "Jensen Huang") got +0.20 regardless of
+        # context, which combined with the boosts above could push an
+        # unrelated same-surname person over the promotion threshold on just
+        # 2 document appearances. Now also requires the same executive-
+        # relevant context signal already checked above as corroboration --
+        # a same-surname mention with no executive context nearby is far
+        # more likely to be an unrelated person than a real alias of the
+        # tracked executive.
+        if has_exec_context:
+            verified_execs = db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.entity_type == "person"
+            ).all()
+            for ve in verified_execs:
+                ve_parts = ve.name.split()
+                if len(ve_parts) >= 2 and len(parts) >= 2:
+                    if ve_parts[-1].lower() == parts[-1].lower():
+                        confidence += 0.20
+                        break
+
         return min(1.0, confidence)
 
     # Legal suffixes that indicate a corporate name *when they terminate it*.
@@ -1007,6 +1048,17 @@ class EntityDiscoveryEngine:
         if not re.search(r'[A-Za-z]', normalized):
             return False, "Layer O1 — Shape Validation", "No alphabetic content"
 
+        # ── Layer O1b — Placeholder / example text ─────────────────────────
+        # A literal stand-in name ("Example Corp.") passes O1's shape check
+        # cleanly -- this rejects on content, not shape. Whole-token match
+        # only (never substring), same discipline as O5's per-token check
+        # below, so a real name that merely contains these letters as part
+        # of a longer word is never caught.
+        raw_tokens = {t.lower().rstrip(".,") for t in re.split(r'[\s,.\-]+', raw) if t}
+        placeholder_hit = raw_tokens & EntityDiscoveryConfig.PLACEHOLDER_TERMS
+        if placeholder_hit:
+            return False, "Layer O1b — Placeholder / Example Text", f"Contains placeholder/example marker: {sorted(placeholder_hit)}"
+
         # ── Layer O2 — Client self-reference ───────────────────────────────
         # Fixes the prefix-only bug: for a multi-token client name like
         # "Apple Inc", the old single-token rule at the end was skipped
@@ -1024,9 +1076,21 @@ class EntityDiscoveryEngine:
                 return False, "Layer O2 — Client Self-Reference", f"Matches the client's own identity term '{term}'"
             if normalized_lower.startswith(term + " "):
                 return False, "Layer O2 — Client Self-Reference", f"Sub-brand/department of the client ('{term}')"
-            # "Pepsi" for client "PepsiCo", "Tata" for client "Tata Motors" —
-            # the candidate is a proper prefix of the client's own name.
-            if len(normalized_lower) >= 4 and term.startswith(normalized_lower):
+            # "Tata" for client "Tata Motors" — the candidate is a proper
+            # WORD prefix of the client's own name. Requires a space after
+            # the candidate inside the term (word-boundary aligned), not a
+            # bare character-level startswith: the old check
+            # (`term.startswith(normalized_lower)`) matched "pepsi" against
+            # "pepsico" too, since "pepsico" literally starts with the
+            # characters "pepsi" -- but "PepsiCo" is one fused word with no
+            # internal space, so "Pepsi" is a genuinely distinct sub-brand
+            # name there, not a shortened way of saying "PepsiCo" the way
+            # "Tata" is a shortened way of saying "Tata Motors". Confirmed
+            # live: this wrongly rejected "Pepsi", an already-promoted real
+            # PepsiCo competitor (FINDINGS.md Phase 6). The space-boundary
+            # version still catches "Tata"/"Tata Motors" (term "tata motors"
+            # starts with "tata ") while no longer catching "Pepsi"/"PepsiCo".
+            if len(normalized_lower) >= 4 and term.startswith(normalized_lower + " "):
                 return False, "Layer O2 — Client Self-Reference", f"Prefix of the client's own name '{term}'"
 
         # ── Layer O3 — Publisher / source registry ─────────────────────────

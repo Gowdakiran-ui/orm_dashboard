@@ -452,7 +452,13 @@ class TrendDetector:
                 latency_ms=round(latency_ms, 2)
             )
 
-            if abs(percent_change) >= 50.0:
+            # T11-F1: gate firing on is_established, mirroring the Sentiment
+            # trend types below (lines ~703, ~806) which already correctly
+            # require this. Without it, an entity's first-ever single
+            # mention hardcodes percent_change=100.0 (>=50.0 MEDIUM
+            # threshold) and fires a spurious trend spike alert for a
+            # newly-tracked entity that has no real baseline yet.
+            if abs(percent_change) >= 50.0 and is_established:
                 severity = self.calculate_severity(percent_change)
 
                 # Fetch triggering documents in last 24h for explainability
@@ -580,7 +586,8 @@ class TrendDetector:
                 latency_ms=round(latency_ms, 2)
             )
 
-            if abs(percent_change) >= 50.0:
+            # T11-F1: same is_established gate as the Mention trend type above.
+            if abs(percent_change) >= 50.0 and is_established:
                 severity = self.calculate_severity(percent_change)
 
                 # Fetch triggering documents

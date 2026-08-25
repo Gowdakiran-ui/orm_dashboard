@@ -84,6 +84,20 @@ class NarrativeStateMachine:
 
 class NarrativeEngine:
     def __init__(self):
+        # N15-F1: previously only 4 keys, and 3 of those 4 ("Layoffs",
+        # "Customer Complaints", "Regulatory Action") don't match any name in
+        # the actual production taxonomy (TOPIC_KEYWORDS in
+        # topic_classification_batch_processor.py -- the only other place
+        # these 17 topic names are declared in the codebase; topic.name here
+        # comes from the same Topic table that taxonomy classifies into). So
+        # in practice only "Cybersecurity" was ever really mapped -- the
+        # other 16 production topics all fell through to the generic
+        # "{topic.name} Narrative" / "General" fallback, not the 13-of-17
+        # gap the original finding described. Now maps all 17 production
+        # topics; the original 3 non-taxonomy keys are kept too (not
+        # removed) since test_narrative_engine.py's fixtures construct Topic
+        # rows under those exact names and Topic is otherwise
+        # admin-configurable, not necessarily hard-limited to the 17.
         self.narrative_mapping = {
             "Layoffs": {
                 "name": "Layoff Narrative",
@@ -93,13 +107,77 @@ class NarrativeEngine:
                 "name": "Customer Dissatisfaction Narrative",
                 "type": "Reputational"
             },
+            "Regulatory Action": {
+                "name": "Regulatory Scrutiny Narrative",
+                "type": "Legal"
+            },
+            "Financial Results": {
+                "name": "Financial Performance Narrative",
+                "type": "Financial"
+            },
+            "Executive Leadership": {
+                "name": "Executive Leadership Narrative",
+                "type": "Reputational"
+            },
+            "Product Launch": {
+                "name": "Product Launch Narrative",
+                "type": "Operational"
+            },
+            "Legal Risk": {
+                "name": "Legal Risk Narrative",
+                "type": "Legal"
+            },
+            "Regulatory Risk": {
+                "name": "Regulatory Scrutiny Narrative",
+                "type": "Legal"
+            },
+            "Environmental": {
+                "name": "Environmental & ESG Narrative",
+                "type": "Reputational"
+            },
             "Cybersecurity": {
                 "name": "Cybersecurity Risk Narrative",
                 "type": "Risk"
             },
-            "Regulatory Action": {
-                "name": "Regulatory Scrutiny Narrative",
-                "type": "Legal"
+            "Labor Relations": {
+                "name": "Labor Relations Narrative",
+                "type": "Operational"
+            },
+            "Mergers & Acquisitions": {
+                "name": "M&A Narrative",
+                "type": "Financial"
+            },
+            "Market Share": {
+                "name": "Market Position Narrative",
+                "type": "Competitive"
+            },
+            "Innovation": {
+                "name": "Innovation Narrative",
+                "type": "Reputational"
+            },
+            "Customer Satisfaction": {
+                "name": "Customer Sentiment Narrative",
+                "type": "Reputational"
+            },
+            "Safety Recall": {
+                "name": "Safety Recall Narrative",
+                "type": "Risk"
+            },
+            "Competition": {
+                "name": "Competitive Landscape Narrative",
+                "type": "Competitive"
+            },
+            "Electric Vehicles": {
+                "name": "Electric Vehicle Narrative",
+                "type": "Operational"
+            },
+            "Autonomous Driving": {
+                "name": "Autonomous Driving Narrative",
+                "type": "Operational"
+            },
+            "Energy Storage": {
+                "name": "Energy Storage Narrative",
+                "type": "Operational"
             }
         }
 

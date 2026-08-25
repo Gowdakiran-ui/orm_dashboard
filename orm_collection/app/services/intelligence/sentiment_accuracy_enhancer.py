@@ -30,7 +30,17 @@ def remove_boilerplate(text: str) -> str:
         r"(?i)share this article on (facebook|twitter|linkedin|reddit)",
         r"(?i)subscribe to our newsletter for more updates.*?\.",
         r"(?i)advertisement\b",
-        r"(?i)click here to read more.*?\."
+        r"(?i)click here to read more.*?\.",
+        # SA9-F5: "Related articles:"/"Also read:" are the dangerous ones --
+        # they're followed by unrelated headlines whose words (e.g. "Tesla
+        # lawsuit", "Apple investigation") get scanned as if they were part
+        # of the real article, contaminating NEG_WORDS matches for articles
+        # that have no actual relationship to the client.
+        r"(?i)sign up to receive breaking news alerts from.*",
+        r"(?i)get the app for more updates.*",
+        r"(?i)related articles:.*",
+        r"(?i)also read:.*",
+        r"(?i)follow us on (twitter|x)\b.*"
     ]
     cleaned_text = text
     for pattern in boilerplate_patterns:
@@ -108,13 +118,49 @@ POS_WORDS = ["profit", "profits", "beat", "launch", "launches", "innovation", "b
 # litigation-context words elsewhere in the same text (e.g. a regulatory
 # "fine" co-occurs with "case"/"legal"/"ruling"), so gating on co-occurrence
 # doesn't cost real recall. SA9-F1.
-LITIGATION_CONTEXT_WORDS = ["ban", "case", "legal", "lawsuit", "sued", "ruling", "judge", "trial", "verdict"]
+# SA9-F9: added "injunction", "damages", "charges", "settlement" -- real
+# litigation events ("court dismissed the charges", "court issued an
+# injunction", "court ordered $50M in damages", "reached a court
+# settlement") were previously scored neutral because none of these
+# co-occurrence words existed yet to let the "court"/"fine" gate fire.
+LITIGATION_CONTEXT_WORDS = ["ban", "case", "legal", "lawsuit", "sued", "ruling", "judge", "trial", "verdict", "injunction", "damages", "charges", "settlement"]
+
+# SA9-F2: "crash course on AI" / "crash test results show improvement" are
+# not accident/incident news -- "crash" paired with "course" or "test" is
+# almost always this benign idiomatic usage, not a literal crash.
+CRASH_BENIGN_PHRASES = ["crash course", "crash test"]
+
+# SA9-F3: "Safety data confirms vaccine is effective" / "Annual safety data
+# review shows improvements" are positive safety news, not incidents --
+# "safety data" alone doesn't indicate a problem; it needs to co-occur with
+# an actual concern word to be a genuine negative signal.
+SAFETY_DATA_CONCERN_WORDS = ["concern", "issue", "problem", "incident", "recall", "warning", "risk", "defect", "failure"]
 
 def _is_neg_word_present(word: str, text_lower: str) -> bool:
     if word not in text_lower:
         return False
     if word in ("court", "fine"):
         return any(ctx in text_lower for ctx in LITIGATION_CONTEXT_WORDS)
+    if word == "crash":
+        return not any(phrase in text_lower for phrase in CRASH_BENIGN_PHRASES)
+    if word == "safety data":
+        return any(ctx in text_lower for ctx in SAFETY_DATA_CONCERN_WORDS)
+    return True
+
+# SA9-F4: "Stock beat a new 52-week low" / "Apple's record debt reached
+# $50B" are negative news that happen to contain a POS_WORD -- "beat"/
+# "record" paired with one of these negative-outcome words is not a genuine
+# positive milestone.
+BEAT_NEGATIVE_CONTEXT = ["low", "loss", "miss", "decline", "worst", "plunge", "slump"]
+RECORD_NEGATIVE_CONTEXT = ["debt", "loss", "layoffs", "low", "worst", "deficit", "fine", "decline"]
+
+def _is_pos_word_present(word: str, text_lower: str) -> bool:
+    if word not in text_lower:
+        return False
+    if word == "beat":
+        return not any(ctx in text_lower for ctx in BEAT_NEGATIVE_CONTEXT)
+    if word == "record":
+        return not any(ctx in text_lower for ctx in RECORD_NEGATIVE_CONTEXT)
     return True
 
 def apply_orm_rules(text_content: str, raw_label: str, raw_score: float) -> Dict[str, Any]:
@@ -126,7 +172,7 @@ def apply_orm_rules(text_content: str, raw_label: str, raw_score: float) -> Dict
 
     # Check negative risk matches
     matched_neg = [w for w in NEG_WORDS if _is_neg_word_present(w, text_lower)]
-    matched_pos = [w for w in POS_WORDS if w in text_lower]
+    matched_pos = [w for w in POS_WORDS if _is_pos_word_present(w, text_lower)]
 
     if matched_neg:
         trigger_words = matched_neg[:3]
@@ -166,8 +212,14 @@ def apply_orm_rules(text_content: str, raw_label: str, raw_score: float) -> Dict
     }
 
 def get_dynamic_source_reliability(db: Session, source_id: str, url: str) -> float:
-    # Default fallback
-    reliability = 1.0
+    # SA9-F7: an unknown/missing source previously defaulted to 1.0 --
+    # maximum reliability for a source we know nothing about. 0.65 is below
+    # the RSS-with-unverified-domain floor (0.80) but above the confirmed
+    # low-reliability social/forum floor (0.60): genuinely unknown is less
+    # trustworthy than a known-but-generic RSS feed, but not as confidently
+    # low-reliability as a verified social/forum source.
+    UNKNOWN_SOURCE_RELIABILITY = 0.65
+    reliability = UNKNOWN_SOURCE_RELIABILITY
     if not source_id:
         return reliability
 

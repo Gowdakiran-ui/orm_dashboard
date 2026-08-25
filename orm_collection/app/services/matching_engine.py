@@ -129,6 +129,23 @@ class GlobalMatchingEngine:
         text = re.sub(r'\bchief\s+operating\s+officer\b', 'COO', text, flags=re.IGNORECASE)
         # Co-Founder / Co Founder -> FOUNDER
         text = re.sub(r'\bco[- ]founder\b', 'FOUNDER', text, flags=re.IGNORECASE)
+        # M6-F4: CFO, CRO, CMO, EVP, SVP, VP, CPO were missing -- if entity
+        # keywords include the abbreviation but the document spells the title
+        # out, FlashText never matched and the Executive Match Boost silently
+        # never fired for these roles. Chief X Officer -> CFO/CRO/CMO/CPO
+        text = re.sub(r'\bchief\s+financial\s+officer\b', 'CFO', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bchief\s+risk\s+officer\b', 'CRO', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bchief\s+revenue\s+officer\b', 'CRO', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bchief\s+marketing\s+officer\b', 'CMO', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bchief\s+product\s+officer\b', 'CPO', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bchief\s+people\s+officer\b', 'CPO', text, flags=re.IGNORECASE)
+        # Executive/Senior Vice President -> EVP/SVP (must run before the
+        # generic Vice President -> VP rule below, or they'd match that
+        # instead and produce "Executive VP"/"Senior VP" rather than EVP/SVP)
+        text = re.sub(r'\bexecutive\s+vice\s+president\b', 'EVP', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bsenior\s+vice\s+president\b', 'SVP', text, flags=re.IGNORECASE)
+        # Vice President -> VP
+        text = re.sub(r'\bvice\s+president\b', 'VP', text, flags=re.IGNORECASE)
         return text
 
     def find_matches(self, text: str) -> List[Dict[str, Any]]:
@@ -277,10 +294,15 @@ class GlobalMatchingEngine:
 
         # 7. Nearby Context Boost (+0.15)
         # General positive business indicators like company, corporation, stock, shares, ticker symbol, etc.
+        # M6-F3: was checking doc_text_lower (the FULL document), so this
+        # fired on ~100% of business news regardless of proximity to the
+        # actual match -- "Nearby" was not enforced. Now checks the 150-char
+        # context_window already extracted at step 1, so the boost actually
+        # requires the indicator to be near the matched keyword.
         positive_context_indicators = ["company", "corp", "inc", "ltd", "stock", "shares", "nasdaq", "nyse", "quarter", "revenue", "earnings"]
-        if any(indicator in doc_text_lower for indicator in positive_context_indicators):
+        if any(indicator in context_window for indicator in positive_context_indicators):
             confidence += 0.15
-            bonuses.append({"type": "nearby_context_boost", "value": 0.15, "reason": "Business context indicators found in document"})
+            bonuses.append({"type": "nearby_context_boost", "value": 0.15, "reason": "Business context indicators found near the match"})
 
         # 8. Negative Context Penalty (-0.50)
         # E.g., "Nikola Tesla" in non-EV context, "meta-analysis" for Meta, "tata" in unrelated language or contexts
@@ -296,8 +318,12 @@ class GlobalMatchingEngine:
                 has_negative_context = True
         
         if "meta" in entity_key:
-            # Common dictionary/prefix usage of "meta" (e.g. meta-analysis, metadata, meta-programming)
-            meta_patterns = [r'\bmeta-analysis\b', r'\bmetadata\b', r'\bmeta-description\b', r'\bmeta-programming\b', r'\bmeta tag\b', r'\bmeta-review\b']
+            # Common dictionary/prefix usage of "meta" (e.g. meta-analysis, meta-programming).
+            # M6-F7: "metadata" removed -- unlike the other patterns here,
+            # "metadata" is ordinary tech vocabulary with no signal that the
+            # article is NOT about the company Meta; genuine Meta company
+            # articles routinely discuss ad/image/Instagram metadata.
+            meta_patterns = [r'\bmeta-analysis\b', r'\bmeta-description\b', r'\bmeta-programming\b', r'\bmeta tag\b', r'\bmeta-review\b']
             if any(re.search(pat, doc_text_lower) for pat in meta_patterns):
                 confidence -= 0.50
                 penalties.append({"type": "negative_context_penalty", "value": -0.50, "reason": "Found prefix/generic linguistic usage of 'meta' (e.g. metadata, meta-analysis)"})

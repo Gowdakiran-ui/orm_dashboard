@@ -14,8 +14,12 @@ def apply_negative_suppression(text: str, detected_topics: List[str]) -> List[st
 
     # Rule 1: Nikola Tesla (historical/physics context) -> Suppress Electric Vehicles / Autonomous Driving
     if "nikola tesla" in text_lower or "tesla coil" in text_lower:
-        # Check if it's about the company or the person. If it mentions "Nikola Tesla" but NOT "Elon Musk", "EV", "stock", "TSLA", or "car"
-        company_keywords = ["musk", "ev", "stock", "tsla", "car", "vehicle", "model 3", "model y", "model s", "model x", "gigafactory", "quarterly"]
+        # Check if it's about the company or the person. If it mentions "Nikola Tesla" but NOT "Elon Musk", "EV", "stock", "TSLA", "car", or "battery"
+        # NS8-F3: added "battery" -- e.g. "The Nikola Tesla Award for Battery
+        # Innovation Goes to Tesla Inc." previously had no company keyword to
+        # match on, so a genuine Tesla battery-technology article got its EV
+        # classification stripped just for referencing "Nikola Tesla".
+        company_keywords = ["musk", "ev", "stock", "tsla", "car", "vehicle", "model 3", "model y", "model s", "model x", "gigafactory", "quarterly", "battery"]
         if not any(kw in text_lower for kw in company_keywords):
             suppressed.add("Electric Vehicles")
             suppressed.add("Autonomous Driving")
