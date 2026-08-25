@@ -1,4 +1,5 @@
 import os
+import structlog
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.document import Document
@@ -6,13 +7,29 @@ from app.models.topic import Topic, DocumentTopic
 from app.models.system import ModelRun
 from transformers import pipeline
 
+logger = structlog.get_logger()
+
 class TopicClassifier:
     def __init__(self, use_mock=False):
         # Using distilled BART MNLI for significantly faster CPU inference
         self.model_name = "valhalla/distilbart-mnli-12-3"
         self.model_version = "1.0"
-        self.use_mock = use_mock
-        
+
+        # Production Mock Protection Guard (C3-F1 / XC-F2), mirrors
+        # SentimentAnalyzer's (R6): mock topic classification is strictly
+        # forbidden in production to prevent silent random labels.
+        is_mock_allowed = os.getenv("TOPIC_MOCK_ALLOWED", "false").lower() == "true"
+
+        if use_mock:
+            if not is_mock_allowed:
+                raise RuntimeError(
+                    "Production Guard Violation: use_mock=True is requested but mock mode is forbidden "
+                    "unless the environment variable TOPIC_MOCK_ALLOWED=true is explicitly set."
+                )
+            self.use_mock = True
+        else:
+            self.use_mock = False
+
         if not self.use_mock:
             # In a real production scenario, this might run on a GPU or a dedicated inference server.
             # Using device=-1 for CPU, device=0 for GPU if available.
@@ -21,8 +38,13 @@ class TopicClassifier:
                 device = 0 if torch.cuda.is_available() else -1
                 self.classifier = pipeline("zero-shot-classification", model=self.model_name, device=device)
             except Exception as e:
-                print(f"Warning: Failed to load BART model, falling back to mock: {e}")
-                self.use_mock = True
+                # If loading fails in production/non-mock mode, we do NOT fallback to mock!
+                # We raise a hard failure so that the reliability mechanism (retries, state machine) can capture it.
+                if not is_mock_allowed:
+                    raise RuntimeError(f"Fatal error: Failed to load BART topic classification model in production/hard mode: {e}") from e
+                else:
+                    logger.critical("topic_classifier_model_load_failed_falling_back_to_mock", error=str(e))
+                    self.use_mock = True
 
     def classify_text(self, text: str, candidate_labels: List[str]) -> Dict[str, Any]:
         if self.use_mock:
