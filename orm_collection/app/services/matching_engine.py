@@ -2,10 +2,68 @@ import time
 import re
 from sqlalchemy.orm import Session
 from flashtext import KeywordProcessor
-from app.models.entity import EntityKeyword, Entity
+from app.models.entity import EntityKeyword, Entity, EntityAlias
 from app.models.document import DocumentMatch
 from app.models.metrics import MatchingMetrics
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
+
+def get_client_boost_terms(db: Session, client_id) -> Dict[str, Set[str]]:
+    """
+    M6-F1: per-client executive/product terms for evaluate_match_accuracy's
+    boost logic, sourced from the same data model entity_discovery.py already
+    reads for the equivalent product-blocklist problem (see its "HONEST
+    LIMITATION" comment there) instead of a hardcoded tesla/meta/tata dict.
+
+    Executives are real Entity(entity_type="person") rows for this client
+    (as executive_reputation_engine.py already relies on) plus their
+    name/alias/EXECUTIVE-keyword text. Products are Entity(entity_type=
+    "product") rows plus PRODUCT-category keywords -- honestly inert for any
+    client that hasn't had product entities populated yet, same limitation
+    entity_discovery.py already documents, not a new one introduced here.
+    """
+    executive_terms: Set[str] = set()
+    person_entities = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "person"
+    ).all()
+    for p in person_entities:
+        if p.name:
+            executive_terms.add(p.name.lower())
+        for alias in p.aliases:
+            if alias.alias_text:
+                executive_terms.add(alias.alias_text.lower())
+
+    exec_keywords = db.query(EntityKeyword).join(Entity, Entity.id == EntityKeyword.entity_id).filter(
+        Entity.client_id == client_id,
+        EntityKeyword.category == "EXECUTIVE",
+        EntityKeyword.is_active == True
+    ).all()
+    for kw in exec_keywords:
+        if kw.keyword_text:
+            executive_terms.add(kw.keyword_text.lower())
+
+    product_terms: Set[str] = set()
+    product_entities = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "product"
+    ).all()
+    for prod in product_entities:
+        if prod.name:
+            product_terms.add(prod.name.lower())
+        for alias in prod.aliases:
+            if alias.alias_text:
+                product_terms.add(alias.alias_text.lower())
+
+    product_keywords = db.query(EntityKeyword).join(Entity, Entity.id == EntityKeyword.entity_id).filter(
+        Entity.client_id == client_id,
+        EntityKeyword.category == "PRODUCT",
+        EntityKeyword.is_active == True
+    ).all()
+    for kw in product_keywords:
+        if kw.keyword_text:
+            product_terms.add(kw.keyword_text.lower())
+
+    return {"executive_terms": executive_terms, "product_terms": product_terms}
 
 class MatchingEngineConfig:
     """
@@ -120,7 +178,10 @@ class GlobalMatchingEngine:
         doc_text: str,
         match: Dict[str, Any],
         entity_domain: Optional[str] = None,
-        entity_name: Optional[str] = None
+        entity_name: Optional[str] = None,
+        executive_terms: Optional[Set[str]] = None,
+        product_terms: Optional[Set[str]] = None,
+        entity_industry: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Performs context proximity & evidence accumulator logic for a single match.
@@ -178,52 +239,41 @@ class GlobalMatchingEngine:
             confidence += 0.25
             bonuses.append({"type": "domain_match_boost", "value": 0.25, "reason": f"Entity domain '{entity_domain}' found in document"})
 
-        # 4. Apply Executive Match Boost (+0.20)
-        # Look for executive names or titles in the document
-        executive_patterns = {
-            "elon musk": ["elon", "musk", "ceo of tesla"],
-            "mark zuckerberg": ["zuckerberg", "mark zuckerberg", "ceo of meta", "zuck"],
-            "tata": ["chandrasekaran", "ratan tata", "chairman of tata"]
-        }
-        
-        found_executive = False
         entity_key = (entity_name or "").lower()
-        for key, keywords in executive_patterns.items():
-            if key in entity_key or (entity_name and entity_name.lower() in key):
-                if any(kw in doc_text_lower for kw in keywords):
-                    confidence += 0.20
-                    bonuses.append({"type": "executive_match_boost", "value": 0.20, "reason": "Executive mention found in document"})
-                    found_executive = True
-                    break
+
+        # 4. Apply Executive Match Boost (+0.20)
+        # M6-F1: generalized from a tesla/meta/tata-only hardcoded dict to
+        # whichever executives are actually tracked (real person entities +
+        # EXECUTIVE-category keywords) for this entity's client -- see
+        # get_client_boost_terms above.
+        found_executive = False
+        if executive_terms:
+            matched_exec_term = next((t for t in executive_terms if t in doc_text_lower), None)
+            if matched_exec_term:
+                confidence += 0.20
+                bonuses.append({"type": "executive_match_boost", "value": 0.20, "reason": f"Executive mention found in document ('{matched_exec_term}')"})
+                found_executive = True
 
         # 5. Apply Product Match Boost (+0.20)
-        product_patterns = {
-            "tesla": ["model y", "model 3", "model s", "model x", "cybertruck", "powerwall", "supercharger", "fsd", "autopilot", "ev", "gigafactory"],
-            "meta": ["facebook", "instagram", "whatsapp", "quest", "threads", "llama", "metaverse"],
-            "tata": ["harrier", "altroz", "avinya", "ev", "safari", "nexon", "tiago"]
-        }
-        
+        # M6-F1: generalized the same way -- product entities + PRODUCT
+        # keywords for this entity's client, instead of a tesla/meta/tata-only
+        # hardcoded dict.
         found_product = False
-        for key, keywords in product_patterns.items():
-            if key in entity_key or (entity_name and entity_name.lower() in key):
-                if any(kw in doc_text_lower for kw in keywords):
-                    confidence += 0.20
-                    bonuses.append({"type": "product_match_boost", "value": 0.20, "reason": "Product or technology mention found in document"})
-                    found_product = True
-                    break
+        if product_terms:
+            matched_product_term = next((t for t in product_terms if t in doc_text_lower), None)
+            if matched_product_term:
+                confidence += 0.20
+                bonuses.append({"type": "product_match_boost", "value": 0.20, "reason": f"Product or technology mention found in document ('{matched_product_term}')"})
+                found_product = True
 
         # 6. Apply Industry Match Boost (+0.10)
-        industry_keywords = {
-            "tesla": ["automotive", "electric vehicle", "energy", "battery", "self-driving", "autonomous"],
-            "meta": ["social media", "technology", "vr", "ai", "artificial intelligence", "advertising"],
-            "tata": ["automotive", "car", "suv", "truck", "commercial vehicle"]
-        }
-        for key, keywords in industry_keywords.items():
-            if key in entity_key or (entity_name and entity_name.lower() in key):
-                if any(kw in doc_text_lower for kw in keywords):
-                    confidence += 0.10
-                    bonuses.append({"type": "industry_match_boost", "value": 0.10, "reason": "Industry context terms found in document"})
-                    break
+        # M6-F1: uses this entity's own Entity.industry field (set at client
+        # onboarding) instead of a hardcoded tesla/meta/tata term list. Weaker
+        # signal than a curated multi-term list -- a single industry label --
+        # but it is the per-client industry data that actually exists today.
+        if entity_industry and entity_industry.lower() in doc_text_lower:
+            confidence += 0.10
+            bonuses.append({"type": "industry_match_boost", "value": 0.10, "reason": f"Industry context term '{entity_industry}' found in document"})
 
         # 7. Nearby Context Boost (+0.15)
         # General positive business indicators like company, corporation, stock, shares, ticker symbol, etc.

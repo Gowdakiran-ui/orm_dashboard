@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.models.document import Document, DocumentMatch
 from app.models.entity import Entity
-from app.services.matching_engine import engine_instance
+from app.services.matching_engine import engine_instance, get_client_boost_terms
 
 
 # Phase G - Structured correlated logger
@@ -523,12 +523,31 @@ class EntityMatchingBatchProcessor:
                 db_entities = db.query(Entity).filter(Entity.id.in_(entity_ids_in_matches)).all()
                 entities_by_id = {str(e.id): e for e in db_entities}
 
+            # M6-F1: per-client executive/product boost terms, batched once
+            # per client_id (not per match) to avoid N+1 queries -- a single
+            # document's matches can span entities from more than one client
+            # since the global processor matches against all active keywords.
+            boost_terms_by_client = {}
+
             evaluated_matches = []
             for m in matches:
                 entity = entities_by_id.get(m["entity_id"])
                 domain = entity.domain if entity else None
                 name = entity.name if entity else None
-                metadata = engine_instance.evaluate_match_accuracy(content, m, entity_domain=domain, entity_name=name)
+                industry = entity.industry if entity else None
+
+                boost_terms = {"executive_terms": set(), "product_terms": set()}
+                if entity:
+                    if entity.client_id not in boost_terms_by_client:
+                        boost_terms_by_client[entity.client_id] = get_client_boost_terms(db, entity.client_id)
+                    boost_terms = boost_terms_by_client[entity.client_id]
+
+                metadata = engine_instance.evaluate_match_accuracy(
+                    content, m, entity_domain=domain, entity_name=name,
+                    executive_terms=boost_terms["executive_terms"],
+                    product_terms=boost_terms["product_terms"],
+                    entity_industry=industry
+                )
                 
                 # Copy match dict and attach evaluated confidence and metadata
                 m_copy = dict(m)

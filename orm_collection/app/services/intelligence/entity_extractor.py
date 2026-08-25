@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.entity import Entity, EntityMention
 from app.models.document import Document
-from app.services.matching_engine import engine_instance
+from app.services.matching_engine import engine_instance, get_client_boost_terms
 from app.services.intelligence.entity_discovery import entity_discovery_engine
 
 logger = structlog.get_logger()
@@ -66,6 +66,9 @@ class EntityExtractor:
         
         unique_entities = set()
         matched_client_ids = set()
+        # M6-F1: per-client executive/product boost terms, batched once per
+        # client_id (not per match) -- see get_client_boost_terms.
+        boost_terms_by_client = {}
         for m in matches:
             entity_id = m["entity_id"]
             if entity_id not in unique_entities:
@@ -73,12 +76,19 @@ class EntityExtractor:
                 entity = db.query(Entity).filter(Entity.id == entity_id).first()
                 if not entity:
                     continue
-                
+
                 matched_client_ids.add(entity.client_id)
-                
+
+                if entity.client_id not in boost_terms_by_client:
+                    boost_terms_by_client[entity.client_id] = get_client_boost_terms(db, entity.client_id)
+                boost_terms = boost_terms_by_client[entity.client_id]
+
                 # Evaluate match accuracy
                 accuracy_meta = engine_instance.evaluate_match_accuracy(
-                    document.normalized_content, m, entity.domain, entity.name
+                    document.normalized_content, m, entity.domain, entity.name,
+                    executive_terms=boost_terms["executive_terms"],
+                    product_terms=boost_terms["product_terms"],
+                    entity_industry=entity.industry
                 )
                 
                 if accuracy_meta["status"] == "accepted":
