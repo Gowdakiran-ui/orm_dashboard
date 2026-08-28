@@ -2,24 +2,26 @@
 -- PostgreSQL database dump
 --
 -- This file is the authoritative schema source of truth for this project
--- (see TASK.md — Remove Alembic, Adopt schema.sql as Source of Truth).
--- Regenerated via `pg_dump --schema-only` against the local dev DB.
+-- (see TASK.md -- Remove Alembic, Adopt schema.sql as Source of Truth).
+-- Regenerated via `pg_dump --schema-only` directly against the live Render
+-- Postgres instance (the actual database this app runs against -- see
+-- DATABASE_URL in orm_collection/.env), so this file matches exactly what
+-- is really deployed, not a point-in-time snapshot from local dev.
 --
--- Two things were stripped from the raw pg_dump output before committing:
---  1. `\restrict`/`\unrestrict` — pg_dump 18 wraps dumps in these psql-only
---     meta-commands. They are not valid SQL and this project applies schema
---     via psycopg2/SQLAlchemy, not the psql CLI, so left in they would break
---     any programmatic apply.
---  2. The `pgagent` schema/extension (CREATE SCHEMA pgagent, CREATE
---     EXTENSION pgagent, and their COMMENT ON statements) — this is local
---     pgAdmin job-scheduler tooling that leaked into the local dev DB, not
---     part of the application's own schema. It is not referenced by any
---     model or migration and would likely fail to install on a hosted
---     provider (e.g. Render) that doesn't ship the pgagent extension.
+-- One thing was stripped from the raw pg_dump output before committing:
+--  `\restrict`/`\unrestrict` -- pg_dump 18 wraps dumps in these psql-only
+--  meta-commands. They are not valid SQL and this project applies schema
+--  via psycopg2/SQLAlchemy, not the psql CLI, so left in they would break
+--  any programmatic apply.
+--
+-- The boilerplate "public schema already exists" COMMENT ON SCHEMA block
+-- pg_dump always emits was also dropped -- not part of the application's
+-- own schema, and the public schema always exists already on any fresh
+-- Postgres instance.
 --
 
--- Dumped from database version 18.4
--- Dumped by pg_dump version 18.4
+-- Dumped from database version 18.4 (Debian 18.4-1.pgdg12+1)
+-- Dumped by pg_dump version 18.6 (Debian 18.6-1.pgdg13+2)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -257,8 +259,8 @@ CREATE TABLE public.document_sentiments (
     weighted_sentiment_score double precision NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     explainability_metadata json,
-    CONSTRAINT ck_document_sentiments_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision))),
     CONSTRAINT ck_document_sentiments_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
+    CONSTRAINT ck_document_sentiments_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision))),
     CONSTRAINT ck_document_sentiments_weighted_score CHECK (((weighted_sentiment_score >= ('-1'::integer)::double precision) AND (weighted_sentiment_score <= (1)::double precision)))
 );
 
@@ -296,7 +298,6 @@ CREATE TABLE public.documents (
     language character varying(10),
     raw_storage_path character varying(1024),
     processing_status character varying(20),
-    processing_started_at timestamp with time zone,
     match_retry_count integer DEFAULT 0,
     match_failed_at timestamp with time zone,
     match_failure_reason text,
@@ -317,7 +318,8 @@ CREATE TABLE public.documents (
     sentiment_run_id character varying(64),
     sentiment_batch_id character varying(64),
     sentiment_processing_time_ms double precision,
-    CONSTRAINT documents_processing_status_check CHECK (((processing_status)::text = ANY ((ARRAY['PENDING'::character varying, 'PROCESSING'::character varying, 'MATCHED'::character varying, 'FAILED'::character varying, 'SKIPPED'::character varying, 'RETRYING'::character varying, 'COMPLETED'::character varying])::text[])))
+    processing_started_at timestamp with time zone,
+    CONSTRAINT documents_processing_status_check CHECK (((processing_status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PROCESSING'::character varying)::text, ('MATCHED'::character varying)::text, ('FAILED'::character varying)::text, ('SKIPPED'::character varying)::text, ('RETRYING'::character varying)::text, ('COMPLETED'::character varying)::text])))
 );
 
 
@@ -396,8 +398,8 @@ CREATE TABLE public.entity_sentiments (
     confidence_score double precision NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     explainability_metadata json,
-    CONSTRAINT ck_entity_sentiments_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision))),
-    CONSTRAINT ck_entity_sentiments_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
+    CONSTRAINT ck_entity_sentiments_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
+    CONSTRAINT ck_entity_sentiments_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision)))
 );
 
 
@@ -452,8 +454,8 @@ CREATE TABLE public.executive_reputation_scores (
     calculation_lineage jsonb,
     health_status character varying(50),
     data_coverage double precision DEFAULT 0.40,
-    CONSTRAINT ck_exec_reputation_scores_score CHECK (((score >= (0)::double precision) AND (score <= (100)::double precision))),
-    CONSTRAINT ck_exec_reputation_scores_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
+    CONSTRAINT ck_exec_reputation_scores_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
+    CONSTRAINT ck_exec_reputation_scores_score CHECK (((score >= (0)::double precision) AND (score <= (100)::double precision)))
 );
 
 
@@ -508,9 +510,9 @@ CREATE TABLE public.narratives (
     summary_text character varying(4000),
     confidence_score double precision DEFAULT 1.0 NOT NULL,
     evidence_metadata jsonb,
-    CONSTRAINT ck_narratives_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision))),
+    CONSTRAINT ck_narratives_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
     CONSTRAINT ck_narratives_risk_score CHECK (((risk_score >= (0)::double precision) AND (risk_score <= (100)::double precision))),
-    CONSTRAINT ck_narratives_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
+    CONSTRAINT ck_narratives_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision)))
 );
 
 
@@ -565,8 +567,8 @@ CREATE TABLE public.reputation_scores (
     calculation_lineage jsonb,
     health_status character varying(50),
     data_coverage double precision DEFAULT 0.40,
-    CONSTRAINT ck_reputation_scores_score CHECK (((score IS NULL) OR ((score >= (0)::double precision) AND (score <= (100)::double precision)))),
-    CONSTRAINT ck_reputation_scores_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
+    CONSTRAINT ck_reputation_scores_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
+    CONSTRAINT ck_reputation_scores_score CHECK (((score IS NULL) OR ((score >= (0)::double precision) AND (score <= (100)::double precision))))
 );
 
 
@@ -611,8 +613,8 @@ CREATE TABLE public.risk_events (
     retry_count integer DEFAULT 0,
     source_reliability double precision,
     explainability json,
-    CONSTRAINT ck_risk_events_risk_score CHECK (((risk_score >= (0)::double precision) AND (risk_score <= (100)::double precision))),
-    CONSTRAINT ck_risk_events_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision)))
+    CONSTRAINT ck_risk_events_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
+    CONSTRAINT ck_risk_events_risk_score CHECK (((risk_score >= (0)::double precision) AND (risk_score <= (100)::double precision)))
 );
 
 
@@ -636,8 +638,8 @@ CREATE TABLE public.rss_feeds (
     client_id uuid,
     source_type character varying(20) DEFAULT 'entity_search'::character varying NOT NULL,
     source_format character varying(20) DEFAULT 'rss'::character varying NOT NULL,
-    CONSTRAINT ck_rss_feeds_source_format CHECK (((source_format)::text = ANY ((ARRAY['rss'::character varying, 'gdelt_json'::character varying, 'hn_algolia_json'::character varying])::text[]))),
-    CONSTRAINT ck_rss_feeds_source_type CHECK (((source_type)::text = ANY ((ARRAY['entity_search'::character varying, 'topical_global'::character varying, 'json_api'::character varying])::text[])))
+    CONSTRAINT ck_rss_feeds_source_format CHECK (((source_format)::text = ANY (ARRAY[('rss'::character varying)::text, ('gdelt_json'::character varying)::text, ('hn_algolia_json'::character varying)::text]))),
+    CONSTRAINT ck_rss_feeds_source_type CHECK (((source_type)::text = ANY (ARRAY[('entity_search'::character varying)::text, ('topical_global'::character varying)::text, ('json_api'::character varying)::text])))
 );
 
 
@@ -785,6 +787,33 @@ CREATE TABLE public.trend_events (
     decision_reason text,
     triggering_documents json,
     time_window character varying(50) DEFAULT '24h_vs_7d'::character varying
+);
+
+
+--
+-- Name: user_client_access; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_client_access (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.users (
+    id uuid NOT NULL,
+    email character varying(255) NOT NULL,
+    password_hash character varying(255) NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    role character varying(20) DEFAULT 'client_user'::character varying NOT NULL,
+    CONSTRAINT ck_users_role CHECK (((role)::text = ANY ((ARRAY['super_admin'::character varying, 'client_user'::character varying])::text[])))
 );
 
 
@@ -1149,14 +1178,6 @@ ALTER TABLE ONLY public.reputation_scores
 
 
 --
--- Name: clients uq_clients_name; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.clients
-    ADD CONSTRAINT uq_clients_name UNIQUE (name);
-
-
---
 -- Name: competitor_candidates uq_comp_cand_client_name; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1234,6 +1255,38 @@ ALTER TABLE ONLY public.sources
 
 ALTER TABLE ONLY public.trend_client_states
     ADD CONSTRAINT uq_trend_client_states_client_id UNIQUE (client_id);
+
+
+--
+-- Name: user_client_access uq_user_client_access; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_client_access
+    ADD CONSTRAINT uq_user_client_access UNIQUE (user_id, client_id);
+
+
+--
+-- Name: user_client_access user_client_access_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_client_access
+    ADD CONSTRAINT user_client_access_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_key UNIQUE (email);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
 
 --
@@ -1605,6 +1658,20 @@ CREATE INDEX ix_trend_events_topic_id ON public.trend_events USING btree (topic_
 --
 
 CREATE INDEX ix_trend_events_trend_date ON public.trend_events USING btree (trend_date);
+
+
+--
+-- Name: ix_user_client_access_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_client_access_client_id ON public.user_client_access USING btree (client_id);
+
+
+--
+-- Name: ix_user_client_access_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_client_access_user_id ON public.user_client_access USING btree (user_id);
 
 
 --
@@ -1981,6 +2048,23 @@ ALTER TABLE ONLY public.trend_events
 
 
 --
+-- Name: user_client_access user_client_access_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_client_access
+    ADD CONSTRAINT user_client_access_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_client_access user_client_access_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_client_access
+    ADD CONSTRAINT user_client_access_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --
+
 

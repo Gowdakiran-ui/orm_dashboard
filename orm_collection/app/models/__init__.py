@@ -24,3 +24,4 @@ from app.models.client_processing_summary import ClientProcessingSummary
 from app.models.executive_candidate import ExecutiveCandidate
 from app.models.competitor_candidate import CompetitorCandidate
 from app.models.pipeline_run import PipelineRun
+from app.models.user import User, UserClientAccess

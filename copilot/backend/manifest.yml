@@ -1,0 +1,73 @@
+# The FastAPI backend (app/main.py) -- public-facing, needs an ALB, hence
+# Load Balanced Web Service (the other public-facing service is `frontend`;
+# every celery-* service below is internal-only and uses Backend Service).
+name: backend
+type: Load Balanced Web Service
+
+http:
+  path: '/'
+  healthcheck:
+    path: /health
+    healthy_threshold: 2
+    unhealthy_threshold: 3
+    interval: 15s
+    timeout: 5s
+    grace_period: 60s
+
+image:
+  build:
+    dockerfile: ../../orm_collection/Dockerfile
+    context: ../../orm_collection
+  port: 8000
+
+cpu: 512
+memory: 1024
+count: 2
+exec: true
+
+# database/ is bind-mounted read-only in docker-compose so
+# scripts/bootstrap_schema.py can apply schema.sql on first boot without
+# duplicating it into the image. Fargate has no host bind mounts -- the
+# schema is instead baked into the image the same way the rest of the app
+# code is (see COPY . . in the Dockerfile, which already includes the
+# repo-root-relative ../database path is NOT copied by that Dockerfile's
+# build context of ./orm_collection). Before the first `copilot svc deploy`
+# for backend, copy database/ into orm_collection/database/ (or adjust
+# bootstrap_schema.py's path) so schema.sql ships inside the image -- see
+# docs/AWS_DEPLOYMENT.md prerequisites.
+
+variables:
+  REDIS_URL:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-RedisURL
+  DB_HOST:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresEndpointAddress
+  DB_PORT:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPort
+  DB_NAME:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresDBName
+  S3_BUCKET_NAME:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-BackupBucketName
+  ENABLE_S3_STORAGE: "true"
+  S3_ENDPOINT_URL: https://s3.amazonaws.com # <-- adjust to https://s3.<region>.amazonaws.com if not us-east-1
+  AI_PROVIDER: groq
+  AI_MODEL: llama-3.3-70b-versatile
+  SESSION_COOKIE_SECURE: "true"
+  # Placeholder -- set to the real dashboard domain before deploying (a
+  # wrong value here silently breaks every fetch from the browser via CORS,
+  # same failure mode documented in next.config.ts/CORS_ALLOWED_ORIGINS).
+  CORS_ALLOWED_ORIGINS: https://app.example.com
+
+secrets:
+  DB_USER:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresUsernameSecretArn
+  DB_PASSWORD:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPasswordSecretArn
+  # Set with: copilot secret init --name S3_ACCESS_KEY (etc.) -- see
+  # docs/AWS_DEPLOYMENT.md. Never given a value in this repo.
+  S3_ACCESS_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/S3_ACCESS_KEY
+  S3_SECRET_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/S3_SECRET_KEY
+  GROQ_API_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/GROQ_API_KEY
+
+environments:
+  production:
+    count: 2

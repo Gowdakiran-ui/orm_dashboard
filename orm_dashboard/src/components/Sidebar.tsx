@@ -1,10 +1,12 @@
 import React from "react";
-import { 
-  Shield, Search, Plus, Trash2, Loader2, Play, Radio, Award, 
-  ShieldAlert, Users, BarChart3, LineChart, FileText, Cpu, Server, 
-  BarChart as BarChartIcon 
+import { useRouter } from "next/navigation";
+import {
+  Shield, Search, Plus, Trash2, Loader2, Play, Radio, Award,
+  ShieldAlert, Users, BarChart3, LineChart, FileText, Cpu, Server,
+  BarChart as BarChartIcon, LogOut, ShieldCheck, X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { logout } from "@/lib/api";
 
 export interface SidebarProps {
   clientId: string | null;
@@ -15,6 +17,7 @@ export interface SidebarProps {
   derivedPipelineHealth: { documents: number; entity_mentions: number };
   documentsLoading: boolean;
   pipelineRunning: boolean;
+  pipelineStatus?: string;
   clients: any[];
   onSelectCompany: (id: string) => void;
   onSearchChange: (val: string) => void;
@@ -23,6 +26,9 @@ export interface SidebarProps {
   onRunPipeline: () => void;
   onSelectTab: (tab: string) => void;
   pipelineError?: string | null;
+  isSuperAdmin?: boolean;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 export function Sidebar({
@@ -34,6 +40,7 @@ export function Sidebar({
   derivedPipelineHealth,
   documentsLoading,
   pipelineRunning,
+  pipelineStatus,
   clients,
   onSelectCompany,
   onSearchChange,
@@ -41,18 +48,43 @@ export function Sidebar({
   onDeleteCompanyClick,
   onRunPipeline,
   onSelectTab,
-  pipelineError
+  pipelineError,
+  isSuperAdmin,
+  isOpen = false,
+  onClose
 }: SidebarProps) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    await logout();
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
-    <aside className="w-80 border-r border-[#1F2937]/40 bg-[#060B18]/90 backdrop-blur-md flex flex-col justify-between sticky top-0 h-screen z-50 shrink-0">
+    <>
+      {/* Mobile backdrop — dims content and closes the drawer on tap */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 w-80 border-r border-[#1F2937]/40 bg-[#060B18]/95 backdrop-blur-md flex flex-col justify-between h-screen z-50 shrink-0 transform transition-transform duration-300 ease-in-out ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0 md:sticky md:top-0`}
+      >
       <div className="flex flex-col h-full overflow-y-auto no-scrollbar">
-        
+
         {/* Logo Section */}
         <div className="p-6 border-b border-[#1F2937]/40 flex items-center space-x-3">
           <div className="bg-[#D4AF37]/10 p-2 rounded-lg border border-[#D4AF37]/30 text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.15)]">
             <Shield className="h-6 w-6" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-md font-mono font-extrabold tracking-wider text-slate-100 uppercase">
               ORM COMMAND
             </h1>
@@ -60,6 +92,21 @@ export function Sidebar({
               AI Threat Shield v1.2
             </p>
           </div>
+          <button
+            onClick={onClose}
+            title="Close Menu"
+            aria-label="Close navigation menu"
+            className="md:hidden text-slate-500 hover:text-slate-200 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleLogout}
+            title="Sign Out"
+            className="text-slate-500 hover:text-red-400 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Client Control */}
@@ -110,7 +157,9 @@ export function Sidebar({
               title="Run Pipeline"
             >
               {pipelineRunning ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Play className="h-3 w-3 mr-1" />}
-              Run Pipeline
+              {pipelineRunning
+                ? (pipelineStatus === "queued" ? "Queued (waiting for a worker)..." : "Running Pipeline...")
+                : "Run Pipeline"}
             </button>
           </div>
           {pipelineError && (
@@ -144,7 +193,8 @@ export function Sidebar({
             { id: "analytics", label: "Executive Analytics", icon: BarChartIcon },
             { id: "narratives", label: "Narrative Cluster", icon: LineChart },
             { id: "feed", label: "Intelligence Stream", icon: FileText },
-            { id: "pipeline", label: "AI Pipeline Health", icon: Cpu }
+            { id: "pipeline", label: "AI Pipeline Health", icon: Cpu },
+            ...(isSuperAdmin ? [{ id: "admin", label: "Access Control", icon: ShieldCheck }] : [])
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -187,6 +237,7 @@ export function Sidebar({
           </div>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

@@ -1,0 +1,67 @@
+# Environment-level Copilot addon: a single ElastiCache Redis node, shared
+# by all 8 services as the Celery broker/result backend and app cache (see
+# redis_client.py, celery_app.py's CELERY_BROKER_URL/CELERY_RESULT_BACKEND).
+#
+# Sizing for ~100 concurrent users, no existing traffic data: cache.t4g.micro
+# (single node, no cluster mode, no read replica). This is a single point of
+# failure for the whole pipeline (Celery has nothing to enqueue/dequeue
+# against if it's down) -- acceptable for a fresh, low-traffic launch, but
+# revisit (multi-node with automatic failover) once uptime requirements are
+# clearer. Same reasoning for skipping in-transit encryption/AUTH token for
+# v1: the cluster only accepts connections from inside the private VPC via
+# the security group below (no public endpoint), so plaintext-within-VPC is
+# a deliberate, documented scope cut, not an oversight -- see
+# docs/AWS_DEPLOYMENT.md.
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Default: orm-platform
+    Description: The name of the service, job, or workflow being deployed.
+
+Resources:
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub 'Subnet group for ${App}-${Env} Redis'
+      SubnetIds:
+        !Split [',', { 'Fn::ImportValue': !Sub '${App}-${Env}-PrivateSubnets' }]
+
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Allow Redis access from ${App}-${Env} services'
+      VpcId:
+        Fn::ImportValue: !Sub '${App}-${Env}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub '${App}-${Env}-EnvironmentSecurityGroup'
+
+  RedisCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      Engine: redis
+      EngineVersion: '7.1'
+      CacheNodeType: cache.t4g.micro
+      NumCacheNodes: 1
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      VpcSecurityGroupIds: [!GetAtt RedisSecurityGroup.GroupId]
+
+Outputs:
+  # Full connection URL, matching the REDIS_URL env var every service
+  # already reads (config.py, docker-compose.yml) -- no manifest-side string
+  # interpolation needed.
+  RedisURL:
+    Description: Full Redis connection URL
+    Value: !Sub
+      - 'redis://${Address}:${Port}/0'
+      - Address: !GetAtt RedisCluster.RedisEndpoint.Address
+        Port: !GetAtt RedisCluster.RedisEndpoint.Port

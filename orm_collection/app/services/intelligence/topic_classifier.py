@@ -2,6 +2,7 @@ import os
 import structlog
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
+from app.core import nlp_cache
 from app.models.document import Document
 from app.models.topic import Topic, DocumentTopic
 from app.models.system import ModelRun
@@ -59,8 +60,19 @@ class TopicClassifier:
         if not text or not candidate_labels:
             return {"sequence": text, "labels": [], "scores": []}
 
+        # Section 6: result depends on both text and the candidate label set
+        # (a taxonomy change must miss, not serve a stale label set), so both
+        # go into the key -- sorted so label order doesn't affect the hash.
+        cache_key = nlp_cache.make_key(
+            "topic", self.model_name, text, "|".join(sorted(candidate_labels))
+        )
+        cached = nlp_cache.get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         # The pipeline supports multi_label=True so a document can have multiple independent topics
         result = self.classifier(text, candidate_labels, multi_label=True)
+        nlp_cache.set_cached(cache_key, result)
         return result
 
     def classify_batch(self, texts: List[str], candidate_labels: List[str], batch_size: int = 16) -> List[Dict[str, Any]]:

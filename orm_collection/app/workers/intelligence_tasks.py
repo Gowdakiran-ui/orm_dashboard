@@ -361,11 +361,14 @@ def document_processing_watchdog():
     try:
         timeout_limit = datetime.now(timezone.utc) - timedelta(minutes=_DOCUMENT_PROCESSING_TIMEOUT_MINUTES)
 
+        # skip_locked guards against two overlapping watchdog runs (or a
+        # watchdog run overlapping a worker that's mid-recovery) both trying
+        # to reset/requeue the same row.
         stuck_docs = db.query(Document).filter(
             Document.processing_status == "PROCESSING",
             Document.processing_started_at.isnot(None),
             Document.processing_started_at < timeout_limit,
-        ).all()
+        ).with_for_update(skip_locked=True).all()
 
         if not stuck_docs:
             log.info("watchdog_no_stuck_documents")
@@ -373,13 +376,31 @@ def document_processing_watchdog():
 
         log.warning("watchdog_found_stuck_documents", total_stuck=len(stuck_docs))
 
+        recovered_ids = []
         for doc in stuck_docs:
             doc_id_str = str(doc.id)
             log.warning("watchdog_recovering_document", document_id=doc_id_str,
                        processing_started_at=str(doc.processing_started_at))
             doc.processing_status = "PENDING"
             doc.match_failure_reason = "recovered_from_stuck_processing_by_watchdog"
-            db.commit()
+            recovered_ids.append(doc_id_str)
+
+        # Single commit after every row in the batch is updated: committing
+        # inside the loop released the FOR UPDATE lock on the still-pending
+        # rows after each iteration, letting a second, overlapping watchdog
+        # run's SKIP LOCKED select grab and redispatch the same document.
+        # Holding the lock for the whole batch closes that race.
+        db.commit()
+
+        for doc_id_str in recovered_ids:
+            # Recovering the status alone doesn't resume processing -- nothing
+            # else scans for PENDING documents, so without this the document
+            # stayed PENDING forever (BUG 2). Re-dispatch the same task the
+            # normal collection path uses (document_processor.py); once it
+            # picks the document up it resets processing_started_at itself
+            # (execute_document_intelligence_sync, top of function), which is
+            # what keeps this watchdog from re-requeuing it again next run.
+            process_document_intelligence.delay(doc_id_str)
 
     except Exception as exc:
         db.rollback()

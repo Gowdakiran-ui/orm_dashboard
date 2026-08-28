@@ -1,17 +1,18 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  AlertTriangle, Shield, ShieldAlert, X, ExternalLink, 
+import {
+  AlertTriangle, Shield, ShieldAlert, X, ExternalLink,
   TrendingUp, Calendar, AlertOctagon, Info
 } from "lucide-react";
-import { 
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line 
+import {
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
 } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { fetchDocumentDetails } from "@/lib/api";
 
 export interface RiskTabProps {
   alertsLoading: boolean;
@@ -20,6 +21,7 @@ export interface RiskTabProps {
   documentsLoading: boolean;
   documentsError: string | null;
   documents: any[];
+  clientId?: string | null;
 }
 
 export function RiskTab({
@@ -28,10 +30,27 @@ export function RiskTab({
   alerts,
   documentsLoading,
   documentsError,
-  documents
+  documents,
+  clientId
 }: RiskTabProps) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ impact: string; likelihood: string } | null>(null);
+  // The /documents/client/{id} list (source of `documents`) doesn't include
+  // `url` -- fetch it per-selection the same way FeedTab does, since the
+  // single-document detail endpoint does return it.
+  const [selectedDocUrl, setSelectedDocUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedDocId || !clientId) {
+      setSelectedDocUrl(null);
+      return;
+    }
+    let cancelled = false;
+    fetchDocumentDetails(clientId, selectedDocId)
+      .then(details => { if (!cancelled) setSelectedDocUrl(details?.url || null); })
+      .catch(() => { if (!cancelled) setSelectedDocUrl(null); });
+    return () => { cancelled = true; };
+  }, [selectedDocId, clientId]);
 
   // Filter out documents with valid risk scores
   const riskDocs = useMemo(() => {
@@ -596,9 +615,9 @@ export function RiskTab({
 
               {/* Drawer Footer */}
               <div className="p-4 border-t border-[#1F2937]/80 bg-[#030712]/50 flex justify-end space-x-3">
-                {selectedDoc.url && (
-                  <a 
-                    href={selectedDoc.url} 
+                {selectedDocUrl && (
+                  <a
+                    href={selectedDocUrl}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="flex items-center space-x-1.5 bg-[#D4AF37] hover:bg-[#bfa032] text-black font-bold font-mono text-[10px] rounded px-4 py-2"

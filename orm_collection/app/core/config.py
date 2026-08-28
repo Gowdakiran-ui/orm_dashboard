@@ -43,9 +43,16 @@ class Settings(BaseSettings):
     ADVISOR_CACHE_MAX_SIZE: int = 500
     ADVISOR_CACHE_TTL_SECONDS: int = 600
 
-    # Shared-secret API gate (Phase 1 of API_FORENSICS.md fixes) — every
-    # non-health route requires this value in the X-API-Key header.
-    API_SHARED_SECRET: str = ""
+    # Session auth (replaces the platform-wide shared-secret gate — see
+    # auth.py / TASK_AUTH.md, API_FORENSICS.md Section 1). Sessions are
+    # opaque tokens stored in Redis (core/security.py), handed to the
+    # browser as an httpOnly cookie -- never readable by client-side JS.
+    SESSION_TTL_SECONDS: int = 4 * 60 * 60  # 4 hours; re-login required after
+
+    # Must be True in any deployment served over HTTPS -- browsers refuse to
+    # send a Secure cookie over plain HTTP, so this needs to be False only
+    # for local http://localhost dev (docker-compose's .env can override).
+    SESSION_COOKIE_SECURE: bool = True
 
     # CORS — comma-separated list of allowed origins. Override with
     # CORS_ALLOWED_ORIGINS env var in production (e.g. the real dashboard

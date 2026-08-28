@@ -1,0 +1,110 @@
+# Environment-level Copilot addon: a single Postgres RDS instance shared by
+# all 8 services (backend + 6 celery services + celery-beat all read/write
+# the same database -- see docker-compose.yml's dropped local `db` service
+# and db.py's shared engine). Environment-level (not per-service) addons are
+# the correct Copilot placement for a resource multiple services consume.
+#
+# Sizing for a fresh deployment at ~500 users / ~100 concurrent, no existing
+# traffic data: db.t4g.micro (2 vCPU burstable, 1 GiB RAM), 20 GiB gp3,
+# single-AZ. This is intentionally the smallest practical instance, not a
+# permanent choice -- revisit once real query load/connection-count data
+# exists (see docs/AWS_DEPLOYMENT.md). db.py's engine already caps each of
+# the 7 backend-family processes at pool_size=3 + max_overflow=2 (35
+# connections total), comfortably under db.t4g.micro's default max_connections.
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Default: orm-platform
+    Description: The name of the service, job, or workflow being deployed.
+
+Resources:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub 'Subnet group for ${App}-${Env} Postgres'
+      SubnetIds:
+        !Split [',', { 'Fn::ImportValue': !Sub '${App}-${Env}-PrivateSubnets' }]
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Allow Postgres access from ${App}-${Env} services'
+      VpcId:
+        Fn::ImportValue: !Sub '${App}-${Env}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub '${App}-${Env}-EnvironmentSecurityGroup'
+
+  # Auto-generated username/password, stored only here -- never written to
+  # this repo. Read by services at runtime via the Outputs below (ARN +
+  # JSON-key suffix), which ECS resolves into the actual value at container
+  # start.
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: !Sub 'Postgres master credentials for ${App}-${Env}'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "orm_app"}'
+        GenerateStringKey: password
+        ExcludePunctuation: true
+        PasswordLength: 24
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: postgres
+      EngineVersion: '16.4'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      DBName: orm_production
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: [!GetAtt DBSecurityGroup.GroupId]
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+
+  DBSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBSecret
+      TargetId: !Ref DBInstance
+      TargetType: AWS::RDS::DBInstance
+
+Outputs:
+  # Plain (non-secret) topology -- consumed via `variables: {from_cfn: ...}`
+  # in each service manifest.
+  PostgresEndpointAddress:
+    Description: RDS endpoint hostname
+    Value: !GetAtt DBInstance.Endpoint.Address
+  PostgresPort:
+    Description: RDS endpoint port
+    Value: !GetAtt DBInstance.Endpoint.Port
+  PostgresDBName:
+    Description: Database name
+    Value: orm_production
+  # Secret values -- an ARN with a JSON-key suffix, which is a real ECS
+  # `secrets:` valueFrom form: ECS resolves it to just that one field of the
+  # secret's JSON at container start, not the whole blob. Consumed via
+  # `secrets: {from_cfn: ...}` in each service manifest.
+  PostgresUsernameSecretArn:
+    Description: Secrets Manager ARN resolving to the DB username
+    Value: !Sub '${DBSecret}:username::'
+  PostgresPasswordSecretArn:
+    Description: Secrets Manager ARN resolving to the DB password
+    Value: !Sub '${DBSecret}:password::'

@@ -36,23 +36,6 @@ Rules for these zones:
 - Never change config to hide a failure instead of fixing the cause.
 - State *why* a change in these zones is safe before making it.
 
-## DATABASE STATE — never assume, always verify
-**Alembic has been removed from this project** (see `TASK.md` — Remove
-Alembic, Adopt schema.sql as Source of Truth). Root cause: the local DB had
-drifted 92 columns + 1 table away from what the migration chain actually
-described, applied out-of-band and never captured as migrations — alembic's
-history stopped being a trustworthy record of reality. `schema.sql`
-(`database/schema.sql`) is now the single source of truth for DB structure,
-applied to a fresh DB via `orm_collection/scripts/bootstrap_schema.py`
-(idempotent — only applies when the DB has no existing tables).
-
-`SQLAlchemy models` ≠ `schema.sql` ≠ `actual DB`. These three can still
-disagree — **any schema change must update `schema.sql` in the same
-change**, this is the replacement discipline for what alembic was supposed
-to enforce and didn't. Before any DB change:
-- Inspect models and `schema.sql` independently.
-- If DB credentials/access are available, check actual DB state — don't take any one artifact as ground truth.
-- `schema.sql` is for building fresh environments cleanly. A DB that already holds real client data needs hand-written `ALTER` statements, not a `schema.sql` re-apply — `bootstrap_schema.py` deliberately no-ops against a non-empty DB rather than attempting one.
 
 ## COLLECTION & PROCESSING PIPELINE
 This is an async pipeline. Before changing any stage, trace the full path,

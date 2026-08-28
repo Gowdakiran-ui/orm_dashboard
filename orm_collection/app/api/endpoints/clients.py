@@ -29,18 +29,21 @@ Frontend polling contract:
 import uuid as _uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
 
+from app.core.auth import get_current_user, require_client_access
 from app.core.db import get_db
 from app.core.celery_app import celery_app
+from app.core.rate_limit import limiter, STRICT_RATE_LIMIT
 from app.workers.aggregation_tasks import run_client_pipeline
 from app.schemas.client import ClientOnboarding, ClientResponse
 from app.services.client_service import onboard_client, get_clients, delete_client
 from app.models.client import Client
 from app.models.pipeline_run import PipelineRun
+from app.models.user import ROLE_SUPER_ADMIN, User, UserClientAccess
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -57,12 +60,23 @@ _ACTIVE_STATUSES = {
 # ---------------------------------------------------------------------------
 
 @router.post("/onboard", response_model=ClientResponse)
-def onboard_new_client(onboarding_data: ClientOnboarding, db: Session = Depends(get_db)):
+def onboard_new_client(
+    onboarding_data: ClientOnboarding,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Onboard a new client. Automates creation of the client,
     its primary entity, aliases, and generates an initial suite of keywords.
+
+    The onboarding user is automatically granted access to the new client
+    (TASK_AUTH.md fix #1/#4) -- otherwise nobody could see a client they just
+    created.
     """
-    return onboard_client(db, onboarding_data)
+    client = onboard_client(db, onboarding_data)
+    db.add(UserClientAccess(user_id=current_user.id, client_id=client.id))
+    db.commit()
+    return client
 
 
 @router.get("/", response_model=List[ClientResponse])
@@ -71,12 +85,33 @@ def read_clients(
     limit: int = 100,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    return get_clients(db, skip, limit, search=search)
+    # super_admin sees every client (TASK_ROLES.md -- same bypass as
+    # require_client_access) -- they hold no user_client_access rows by
+    # design, so without this bypass they'd see zero clients everywhere,
+    # including their own admin-panel client picker for inviting users.
+    if current_user.role == ROLE_SUPER_ADMIN:
+        return get_clients(db, skip, limit, search=search)
+
+    # Only clients this user is explicitly granted (TASK_AUTH.md fix #4) --
+    # the tenant dropdown must never show a client the caller isn't
+    # authorized for, even in a list endpoint with no single client_id param.
+    accessible_ids = [
+        row.client_id
+        for row in db.query(UserClientAccess.client_id).filter(UserClientAccess.user_id == current_user.id).all()
+    ]
+    if not accessible_ids:
+        return []
+    return get_clients(db, skip, limit, search=search, client_ids=accessible_ids)
 
 
 @router.delete("/{client_id}")
-def delete_client_endpoint(client_id: UUID, db: Session = Depends(get_db)):
+def delete_client_endpoint(
+    client_id: UUID,
+    db: Session = Depends(get_db),
+    _access: UUID = Depends(require_client_access),
+):
     """
     Permanently delete a client and ALL associated intelligence data.
     This operation is irreversible.
@@ -89,7 +124,14 @@ def delete_client_endpoint(client_id: UUID, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/{client_id}/pipeline/run", status_code=202)
-def trigger_client_pipeline(client_id: UUID, db: Session = Depends(get_db)):
+@limiter.limit(STRICT_RATE_LIMIT)
+def trigger_client_pipeline(
+    request: Request,
+    response: Response,
+    client_id: UUID,
+    db: Session = Depends(get_db),
+    _access: UUID = Depends(require_client_access),
+):
     """
     Queue the intelligence pipeline for a single client.
 
@@ -174,7 +216,11 @@ def trigger_client_pipeline(client_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{client_id}/pipeline/status")
-def get_client_pipeline_status(client_id: UUID, db: Session = Depends(get_db)):
+def get_client_pipeline_status(
+    client_id: UUID,
+    db: Session = Depends(get_db),
+    _access: UUID = Depends(require_client_access),
+):
     """
     Return current pipeline execution status for a client.
 
@@ -246,7 +292,12 @@ def get_client_pipeline_status(client_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{client_id}/pipeline/{run_id}")
-def get_pipeline_run_by_id(client_id: UUID, run_id: str, db: Session = Depends(get_db)):
+def get_pipeline_run_by_id(
+    client_id: UUID,
+    run_id: str,
+    db: Session = Depends(get_db),
+    _access: UUID = Depends(require_client_access),
+):
     """
     Return a specific pipeline run by run_id.
     Useful when the frontend tracks a specific run_id from the POST /run response.

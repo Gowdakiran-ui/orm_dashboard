@@ -6,7 +6,6 @@ import {
   Search, ShieldAlert, Sparkles, TrendingUp, Calendar, 
   Users, Layers, ExternalLink, RefreshCw, BarChart2, CheckCircle2, AlertTriangle
 } from "lucide-react";
-import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import { fetchDocumentDetails } from "@/lib/api";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
@@ -54,13 +53,11 @@ export function NarrativeIntelligenceWorkbench({
         .filter(e => supportEntities.includes(e.entity_id))
         .map(e => e.name);
 
-      // No honest confidence signal exists for narratives today -- the
-      // /narratives API response has no confidence/confidence_score field
-      // (client_intelligence.py:82-91). Matches useAnalytics.ts's
-      // getConfidenceScore pattern: read the real field if the backend
-      // ever adds one, otherwise null (rendered "Not Available"), not a
-      // fabricated always-≥80% formula (FINDINGS.md #33).
-      const confidence = typeof n.confidence_score === "number" ? n.confidence_score
+      // confidence_score is stored 0-1 (narrative_engine.py's final_score);
+      // scale to a percentage like ExecutivesTab/NarrativesTab do. Fall back
+      // to null (rendered "Not Available") when the backend has no score,
+      // not a fabricated always-≥80% formula (FINDINGS.md #33).
+      const confidence = typeof n.confidence_score === "number" ? Math.round(n.confidence_score * 100)
         : typeof n.confidence === "number" ? n.confidence
         : null;
 
@@ -161,24 +158,6 @@ export function NarrativeIntelligenceWorkbench({
   const handleSelectNarrative = (id: string) => {
     setSelectedNarrativeId(id);
   };
-
-  // Sparkline generator helper
-  const sparklineData = useMemo(() => {
-    if (!activeNarrative) return [];
-    // Generate static mockup trend data points for the details visualizer
-    const baseVal = activeNarrative.mentions || 10;
-    const trend = activeNarrative.trend || 0;
-    const pts = 8;
-    
-    return Array.from({ length: pts }).map((_, idx) => {
-      const scale = 1 + (idx / (pts - 1)) * (trend / 100);
-      const val = Math.max(2, Math.round(baseVal * scale + Math.sin(idx) * (baseVal * 0.15)));
-      return {
-        name: `Day ${idx + 1}`,
-        Volume: val
-      };
-    });
-  }, [activeNarrative]);
 
   return (
     <div className="grid grid-cols-12 gap-6 w-full text-slate-200">
@@ -329,34 +308,23 @@ export function NarrativeIntelligenceWorkbench({
                 <span className="text-[9px] text-slate-500 block mt-1">LAST AUDITED: {activeNarrative.lastDetected || "TODAY"}</span>
               </div>
 
-              {/* Sparkline trend view */}
-              <div className="bg-[#030712]/50 border border-[#1F2937]/70 rounded-lg p-2.5">
-                <span className="text-[8px] text-slate-500 uppercase font-bold block mb-2 tracking-wider">Historical Mentions Index</span>
-                <div className="h-20 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={sparklineData}>
-                      <defs>
-                        <linearGradient id="colorSparkline" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#A855F7" stopOpacity={0.25}/>
-                          <stop offset="95%" stopColor="#A855F7" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff', fontSize: 8 }} />
-                      <Area type="monotone" dataKey="Volume" stroke="#A855F7" strokeWidth={1.5} fillOpacity={1} fill="url(#colorSparkline)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
               {/* AI generated Narrative Executive Summary */}
               <div className="space-y-1.5">
                 <span className="text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block border-b border-[#1F2937]/30 pb-1">AI Executive Summary</span>
-                <p className="text-[10px] text-slate-350 leading-relaxed font-mono">
-                  This reputation coordinate outlines media anomalies targeting public profiles connected to {clientName}. Public traction focuses on {activeNarrative.name.toLowerCase()} with an index intensity rating of {activeNarrative.risk} pts.
-                </p>
-                <p className="text-[10px] text-slate-400 leading-relaxed font-mono mt-1 border-t border-dashed border-[#1F2937]/20 pt-1.5">
-                  {activeNarrative.description || "Initial media collection traces narrative volume across digital profiles, indicating low structural risk but high volatile trend vectors in forum discussion boards."}
-                </p>
+                {activeNarrative.summary_text ? (
+                  <p className="text-[10px] text-slate-350 leading-relaxed font-mono">
+                    {activeNarrative.summary_text}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-[10px] text-slate-350 leading-relaxed font-mono">
+                      This reputation coordinate outlines media anomalies targeting public profiles connected to {clientName}. Public traction focuses on {activeNarrative.name.toLowerCase()} with an index intensity rating of {activeNarrative.risk} pts.
+                    </p>
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-mono mt-1 border-t border-dashed border-[#1F2937]/20 pt-1.5">
+                      {activeNarrative.description || "Initial media collection traces narrative volume across digital profiles, indicating low structural risk but high volatile trend vectors in forum discussion boards."}
+                    </p>
+                  </>
+                )}
               </div>
 
               {/* Metrics Breakdown Grid */}

@@ -1,0 +1,52 @@
+# The scheduler (celery beat) -- schedules tasks in beat_schedule, doesn't
+# execute them itself. count MUST stay at 1: two beat processes would each
+# independently fire every scheduled task on its own timer, double-running
+# hourly aggregation, alerts, the daily backup, etc. Do not add autoscaling
+# or raise `count` for this service.
+name: celery-beat
+type: Backend Service
+
+image:
+  build:
+    dockerfile: ../../orm_collection/Dockerfile
+    context: ../../orm_collection
+  # celery-beat has no worker to `inspect ping` -- it schedules, it doesn't
+  # consume. Its beat_schedule (celery_app.py) has multiple per-minute
+  # crontabs, and beat rewrites its persistent schedule file
+  # (celerybeat-schedule, WORKDIR /app per the Dockerfile) on every wakeup,
+  # so a live process touches this file at least once a minute -- a stale
+  # mtime means the scheduler loop has stopped ticking. Identical to
+  # docker-compose.yml's celery-beat healthcheck.
+  healthcheck:
+    command: ["CMD-SHELL", "find /app/celerybeat-schedule* -mmin -2 | grep -q ."]
+    interval: 30s
+    retries: 5
+    timeout: 10s
+    start_period: 40s
+
+command: python -m celery -A app.core.celery_app.celery_app beat --loglevel=info
+
+cpu: 256
+memory: 512
+count: 1
+exec: true
+
+variables:
+  REDIS_URL:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-RedisURL
+  DB_HOST:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresEndpointAddress
+  DB_PORT:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPort
+  DB_NAME:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresDBName
+
+secrets:
+  DB_USER:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresUsernameSecretArn
+  DB_PASSWORD:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPasswordSecretArn
+
+environments:
+  production:
+    count: 1

@@ -1,12 +1,21 @@
 import { useEffect, useState, useRef } from "react";
 import { 
-  fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown,
+  fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
   fetchActiveAlerts, fetchNarratives, fetchCompetitorBenchmarks, fetchRisks, 
   fetchExecutives, fetchExecutiveHistory, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed,
   fetchCommandCenterStats,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
 } from "@/lib/api";
 import { formatChartDate } from "@/utils/formatChartDate";
+
+const DEFAULT_REPUTATION_SUMMARY = {
+  reputation: { score: null, grade: null, trend: 'STABLE', status: 'no_data' },
+  risk: { total: 0, critical: 0, high: 0, medium: 0, low: 0, most_severe: null },
+  sentiment: { positive: 0, neutral: 0, negative: 0, dominant: null },
+  narratives: { active_count: 0, top: null },
+  trends: { total: 0, growing: 0, declining: 0 },
+  executive_alert: { open: false, alert: null }
+};
 
 export function useDashboardData() {
   const [clients, setClients] = useState<any[]>([]);
@@ -18,6 +27,10 @@ export function useDashboardData() {
   const [reputation, setReputation] = useState<any>({ score: 0, grade: 'N/A', trend: 'STABLE' });
   const [reputationLoading, setReputationLoading] = useState(true);
   const [reputationError, setReputationError] = useState<string | null>(null);
+
+  const [reputationSummary, setReputationSummary] = useState<any>(DEFAULT_REPUTATION_SUMMARY);
+  const [reputationSummaryLoading, setReputationSummaryLoading] = useState(true);
+  const [reputationSummaryError, setReputationSummaryError] = useState<string | null>(null);
 
   const [repHistory, setRepHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -177,6 +190,7 @@ export function useDashboardData() {
       
       // Clear stale data immediately when switching companies
       setReputation({ score: 0, grade: 'N/A', trend: 'STABLE' });
+      setReputationSummary(DEFAULT_REPUTATION_SUMMARY);
       setRepHistory([]);
       setRepBreakdown({ sentiment: 0, risk: 0, narrative: 0, trend: 0, source: 0, visibility: 0 });
       setAlerts([]);
@@ -194,6 +208,7 @@ export function useDashboardData() {
 
     // Reset Loading & Error States for Asynchronous Fetching
     setReputationLoading(true);
+    setReputationSummaryLoading(true);
     setHistoryLoading(true);
     setBreakdownLoading(true);
     setAlertsLoading(true);
@@ -210,6 +225,7 @@ export function useDashboardData() {
     setTelemetryLoading(true);
 
     setReputationError(null);
+    setReputationSummaryError(null);
     setHistoryError(null);
     setBreakdownError(null);
     setAlertsError(null);
@@ -238,7 +254,7 @@ export function useDashboardData() {
             .catch(() => { if (!signal.aborted) { setTelemetry(null); setTelemetryError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setTelemetryLoading(false); }),
           
-          fetchSystemStatus(signal)
+          fetchSystemStatus(activeClientId, signal)
             .then(data => {
               if (!signal.aborted && hasChanged(systemStatus, data)) {
                 setSystemStatus(data);
@@ -277,6 +293,18 @@ export function useDashboardData() {
             })
             .catch(() => { if (!signal.aborted) { setReputation(null); setReputationError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setReputationLoading(false); }),
+
+          fetchReputationSummary(activeClientId, signal)
+            .then(data => {
+              if (!signal.aborted) {
+                const nextVal = data || DEFAULT_REPUTATION_SUMMARY;
+                if (hasChanged(reputationSummary, nextVal)) {
+                  setReputationSummary(nextVal);
+                }
+              }
+            })
+            .catch(() => { if (!signal.aborted) { setReputationSummary(null); setReputationSummaryError("Telemetry Offline"); } })
+            .finally(() => { if (!signal.aborted) setReputationSummaryLoading(false); }),
 
           fetchNarratives(activeClientId, signal)
             .then(data => {
@@ -478,6 +506,7 @@ export function useDashboardData() {
         // this is the separate per-resource-level fix (FINDINGS.md).
         const results = await Promise.allSettled([
           fetchReputation(clientId, signal).then(data => { if (!signal.aborted) { setReputation(data); setReputationError(null); } }),
+          fetchReputationSummary(clientId, signal).then(data => { if (!signal.aborted) { setReputationSummary(data || DEFAULT_REPUTATION_SUMMARY); setReputationSummaryError(null); } }),
           fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) { setAlerts(data || []); setAlertsError(null); } }),
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
@@ -490,7 +519,7 @@ export function useDashboardData() {
           }),
           fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
           fetchIntelligenceFeed(clientId, signal).then(data => { if (!signal.aborted) setTrendEvents(data || []); }), // no matching error state -- see initial-load effect's own untracked .catch for this fetch
-          fetchSystemStatus(signal).then(data => { if (!signal.aborted) { setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); setSystemStatusError(null); } })
+          fetchSystemStatus(clientId, signal).then(data => { if (!signal.aborted) { setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); setSystemStatusError(null); } })
         ]);
 
         // FINDINGS.md #36: an extended outage after initial load previously had
@@ -534,6 +563,7 @@ export function useDashboardData() {
   const handleSelectCompany = (id: string | null) => {
     // Clear all dashboard data states BEFORE setting loading or clientId
     setReputation(null);
+    setReputationSummary(null);
     setRepHistory([]);
     setRepBreakdown(null);
     setAlerts([]);
@@ -553,6 +583,7 @@ export function useDashboardData() {
     // Reset loading states AFTER clearing data
     const isLoading = id !== null;
     setReputationLoading(isLoading);
+    setReputationSummaryLoading(isLoading);
     setHistoryLoading(isLoading);
     setBreakdownLoading(isLoading);
     setAlertsLoading(isLoading);
@@ -570,6 +601,7 @@ export function useDashboardData() {
     
     // Reset error states
     setReputationError(null);
+    setReputationSummaryError(null);
     setHistoryError(null);
     setBreakdownError(null);
     setAlertsError(null);
@@ -604,6 +636,9 @@ export function useDashboardData() {
     reputation,
     reputationLoading,
     reputationError,
+    reputationSummary,
+    reputationSummaryLoading,
+    reputationSummaryError,
     repHistory,
     historyLoading,
     historyError,
@@ -656,6 +691,7 @@ export function useDashboardData() {
     handleSelectCompany,
     
     setReputation,
+    setReputationSummary,
     setRepHistory,
     setRepBreakdown,
     setAlerts,
@@ -668,6 +704,7 @@ export function useDashboardData() {
     setTrendEvents,
     setTelemetry,
     setReputationLoading,
+    setReputationSummaryLoading,
     setHistoryLoading,
     setBreakdownLoading,
     setAlertsLoading,
@@ -682,6 +719,7 @@ export function useDashboardData() {
     setExecutiveCandidatesLoading,
     setCompetitorCandidatesLoading,
     setReputationError,
+    setReputationSummaryError,
     setHistoryError,
     setBreakdownError,
     setAlertsError,

@@ -2,11 +2,7 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.env
 .env.*
-# Dev-review image only (TASK.md — Dockerize for Frictionless Reviewer
-# Handoff): the dev .env is deliberately baked into this image so a
-# reviewer needs zero local .env setup. Never do this for a real
-# production image — see the LABEL/README note next to it.
-!.env
 scratch/
 sentiment_audit_results/

@@ -1,0 +1,66 @@
+# NLP queue: sentiment/topic transformer inference (process_document_
+# intelligence, nlp_queue -- see intelligence_tasks.py / celery_app.py
+# task_routes). Each worker process loads its own full copy of both models
+# (FinBERT sentiment + distilbart-mnli-12-3 topic).
+#
+# Real measured footprint (docs/AWS_DEPLOYMENT.md Section 6, scripts/
+# profile_nlp_memory.py): ~1.8GB RSS per process at steady state (both
+# models loaded + warmed up on a realistic document batch, plateaus within
+# the first ~10 documents and stays flat regardless of document length up
+# to the 2000-char preprocessing ceiling). This replaces the previous
+# unmeasured ~1.6GB-parameter-count estimate.
+#
+# 8192 MiB / concurrency=3 gives ~30% memory headroom above 3 processes
+# (3 * 1.8GB = 5.4GB of 8GB) -- see docs/AWS_DEPLOYMENT.md Section 6 for
+# the 4GB/8GB/16GB tradeoff table and the reasoning for this pick. Swap to
+# a different tier from that table if cost or the ~20-concurrent-client
+# target changes.
+name: celery-worker-nlp
+type: Backend Service
+
+image:
+  build:
+    dockerfile: ../../orm_collection/Dockerfile
+    context: ../../orm_collection
+  healthcheck:
+    command: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d nlp@$(hostname) --timeout 10 | grep -q OK"]
+    interval: 15s
+    retries: 5
+    timeout: 20s
+    start_period: 40s
+
+command: python -m celery -A app.core.celery_app.celery_app worker --loglevel=info --hostname=nlp@%h --pool=prefork --concurrency=3 -Q nlp_queue
+
+cpu: 2048
+memory: 8192
+count: 1
+exec: true
+
+variables:
+  REDIS_URL:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-RedisURL
+  DB_HOST:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresEndpointAddress
+  DB_PORT:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPort
+  DB_NAME:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresDBName
+  ENABLE_S3_STORAGE: "true"
+  S3_BUCKET_NAME:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-BackupBucketName
+  S3_ENDPOINT_URL: https://s3.amazonaws.com
+  AI_PROVIDER: groq
+  AI_MODEL: llama-3.3-70b-versatile
+
+secrets:
+  DB_USER:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresUsernameSecretArn
+  DB_PASSWORD:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPasswordSecretArn
+  S3_ACCESS_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/S3_ACCESS_KEY
+  S3_SECRET_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/S3_SECRET_KEY
+  GROQ_API_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/GROQ_API_KEY
+
+environments:
+  production:
+    count: 1

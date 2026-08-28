@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +14,7 @@ import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
+import { fetchDocumentDetails } from "@/lib/api";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -26,6 +27,7 @@ export interface CompetitorsTabProps {
   repBreakdown: any;
   clientRank: string;
   documents: any[]; // Pipe documents list for dynamic register calculations
+  clientId?: string | null;
 }
 
 export function CompetitorsTab({
@@ -38,9 +40,26 @@ export function CompetitorsTab({
   reputation,
   repBreakdown,
   clientRank,
-  documents
+  documents,
+  clientId
 }: CompetitorsTabProps) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  // The /documents/client/{id} list (source of `documents`) doesn't include
+  // `url` -- fetch it per-selection the same way FeedTab does, since the
+  // single-document detail endpoint does return it.
+  const [selectedDocUrl, setSelectedDocUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedDocId || !clientId) {
+      setSelectedDocUrl(null);
+      return;
+    }
+    let cancelled = false;
+    fetchDocumentDetails(clientId, selectedDocId)
+      .then(details => { if (!cancelled) setSelectedDocUrl(details?.url || null); })
+      .catch(() => { if (!cancelled) setSelectedDocUrl(null); });
+    return () => { cancelled = true; };
+  }, [selectedDocId, clientId]);
 
   // 1. COMPREHENSIVE BRAND LIST FOR DISPLAY
   // C3: rank is no longer computed here. There were three independent,
@@ -783,9 +802,9 @@ export function CompetitorsTab({
 
               {/* Drawer Footer */}
               <div className="p-4 border-t border-[#1F2937]/80 bg-[#030712]/50 flex justify-end space-x-3">
-                {selectedDoc.url && (
-                  <a 
-                    href={selectedDoc.url} 
+                {selectedDocUrl && (
+                  <a
+                    href={selectedDocUrl}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="flex items-center space-x-1.5 bg-[#D4AF37] hover:bg-[#bfa032] text-black font-bold font-mono text-[10px] rounded px-4 py-2"

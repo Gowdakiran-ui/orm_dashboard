@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
+from app.core import nlp_cache
 from app.models.document import Document
 from app.models.entity import EntityMention
 from app.models.sentiment import DocumentSentiment, EntitySentiment
@@ -59,8 +60,17 @@ class SentimentAnalyzer:
             return {"label": "neutral", "score": 0.0, "error": "no_text_provided"}
             
         # Truncate text to fit model max length (usually 512 tokens)
-        truncated_text = text[:1500] 
+        truncated_text = text[:1500]
+
+        # Section 6: same text always produces the same FinBERT output for a
+        # given model version -- check Redis before paying for inference.
+        cache_key = nlp_cache.make_key("sentiment", self.model_name, truncated_text)
+        cached = nlp_cache.get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         result = self.sentiment_pipeline(truncated_text)[0]
+        nlp_cache.set_cached(cache_key, result)
         return result
 
     def analyze_batch(self, texts: List[str], batch_size: int = 16) -> List[Dict[str, Any]]:

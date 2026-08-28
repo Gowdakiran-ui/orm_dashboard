@@ -1,5 +1,7 @@
 fastapi==0.109.2
 uvicorn==0.27.1
+slowapi==0.1.9
+prometheus-fastapi-instrumentator==6.1.0
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.12
 celery==5.3.6
@@ -20,3 +22,4 @@ structlog==26.1.0
 transformers==5.12.1
 pytest==9.1.0
 psutil==7.2.2
+bcrypt==4.2.0

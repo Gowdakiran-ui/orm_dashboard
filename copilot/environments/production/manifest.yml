@@ -1,0 +1,16 @@
+# The environment layer for the ORM Intelligence Platform.
+#
+# Left at Copilot's defaults deliberately for a fresh, ~500-user/~100-
+# concurrent deployment: a new 2-AZ VPC (public + private subnets, one NAT
+# gateway) that every service and addon (RDS, ElastiCache) below attaches to.
+# Revisit (e.g. az_count, a second NAT gateway for AZ-redundant egress) once
+# real traffic/cost data exists -- see docs/AWS_DEPLOYMENT.md.
+name: production
+type: Environment
+
+network:
+  vpc:
+    enable_logs: false
+
+http:
+  public:

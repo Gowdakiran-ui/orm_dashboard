@@ -70,6 +70,13 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     } if alert_rec else None
     
     narrative_name = "General Narrative"
+    # Authoritative mention count: Narrative.mention_count, the same column
+    # get_client_narratives (client_intelligence.py) reports as "mentions" --
+    # not the EntityMention row count queried above (that's per-document
+    # entity extraction, a different concept). Defaults to 0 when no
+    # narrative record matches this document's topic, same as the "General
+    # Narrative" placeholder name it pairs with.
+    narrative_mentions = 0
     if doc_topic and doc_topic.topic:
         t_name = getattr(doc_topic.topic, "name", None)
         if t_name:
@@ -79,8 +86,9 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
             ).first()
             if narr_rec:
                 narrative_name = getattr(narr_rec, "narrative_name", "General Narrative")
-            
-    narrative_data = {"name": narrative_name, "mentions": 1}
+                narrative_mentions = getattr(narr_rec, "mention_count", 0) or 0
+
+    narrative_data = {"name": narrative_name, "mentions": narrative_mentions}
     rep_impact = f"{'+' if sentiment_val >= 0 else ''}{sentiment_val * 10:.1f}"
     
     return {

@@ -29,10 +29,11 @@ def _diff_schema(settings, schema_sql_path):
     aren't this check's concern."""
     import psycopg2
     expected = _expected_schema(schema_sql_path)
-    conn = psycopg2.connect(
-        host=settings.DB_HOST, port=settings.DB_PORT, user=settings.DB_USER,
-        password=settings.DB_PASSWORD, dbname=settings.DB_NAME, connect_timeout=5,
-    )
+    # Same fix as the PostgreSQL reachability check above -- must use
+    # settings.DATABASE_URL (honors DATABASE_URL_OVERRIDE) so this diffs
+    # the actual database the app connects to at runtime, not whatever
+    # happens to be reachable on the discrete DB_HOST/DB_PORT fields.
+    conn = psycopg2.connect(settings.DATABASE_URL, connect_timeout=5)
     try:
         cur = conn.cursor()
         cur.execute(
@@ -82,19 +83,26 @@ def main():
     # 3. Check PostgreSQL
     try:
         import psycopg2
-        # Phase 5 item 24: 3s covers localhost fine but not a real network
-        # round-trip + TLS handshake + hosted-provider cold start (Neon/
-        # Supabase free tier). Scale by whether this looks like a local host.
-        is_local_host = settings.DB_HOST in ("localhost", "127.0.0.1", "::1")
+        from urllib.parse import urlparse
+
+        # Bug fix: this used to connect via the discrete DB_HOST/DB_PORT/
+        # DB_USER/DB_PASSWORD/DB_NAME fields directly, which silently
+        # ignores DATABASE_URL_OVERRIDE (config.py) whenever it's set --
+        # exactly the case for this project's real deployment (DATABASE_URL
+        # in .env points at the hosted Render Postgres; app/core/db.py's
+        # actual engine already connects via settings.DATABASE_URL, which
+        # resolves the override). With the old code, if a stale/unrelated
+        # local Postgres also happens to be reachable on DB_HOST/DB_PORT
+        # with matching credentials, this check (and the schema diff below)
+        # silently validates that WRONG database instead of the one the app
+        # will actually use at runtime -- confirmed live: a leftover local
+        # Postgres from before this project removed Alembic (still has an
+        # alembic_version table) was being checked here, while the app
+        # itself talks to Render. Connecting via settings.DATABASE_URL
+        # (the same property db.py's engine uses) fixes that divergence.
+        is_local_host = urlparse(settings.DATABASE_URL).hostname in ("localhost", "127.0.0.1", "::1")
         pg_connect_timeout = 3 if is_local_host else 10
-        conn = psycopg2.connect(
-            host=settings.DB_HOST,
-            port=settings.DB_PORT,
-            user=settings.DB_USER,
-            password=settings.DB_PASSWORD,
-            dbname=settings.DB_NAME,
-            connect_timeout=pg_connect_timeout
-        )
+        conn = psycopg2.connect(settings.DATABASE_URL, connect_timeout=pg_connect_timeout)
         conn.close()
         print_status("PostgreSQL is reachable")
     except Exception as e:

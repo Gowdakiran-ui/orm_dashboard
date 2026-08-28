@@ -283,11 +283,6 @@ if exist "%ORM_COLLECTION%\.env" (
 )
 
 :: Frontend .env.local (orm_dashboard\.env.local)
-REM Both .env files use a shared secret (NEXT_PUBLIC_API_SHARED_SECRET must
-REM match the backend's API_SHARED_SECRET) -- left as the .env.example
-REM placeholder, the dashboard fails every API call with 401 "Invalid or
-REM missing API key" (confirmed via a clean-room install test). Syncing it
-REM automatically here means a fresh install works without a manual step.
 if exist "%ORM_DASHBOARD%\.env.local" (
     echo        Frontend .env.local already exists -- not overwriting.
 ) else (
@@ -295,7 +290,7 @@ if exist "%ORM_DASHBOARD%\.env.local" (
         copy /Y "%ORM_DASHBOARD%\.env.example" "%ORM_DASHBOARD%\.env.local" >nul
         echo        Frontend .env.local created from .env.example.
         echo        Update NEXT_PUBLIC_API_URL if the backend is not on localhost:8000.
-        powershell -NoProfile -Command "$b = Get-Content '%ORM_COLLECTION%\.env' -Raw; if ($b -match '(?m)^API_SHARED_SECRET=(.*)$') { $s = $matches[1].Trim() }; if ($s) { (Get-Content '%ORM_DASHBOARD%\.env.local') -replace '^NEXT_PUBLIC_API_SHARED_SECRET=.*$', \"NEXT_PUBLIC_API_SHARED_SECRET=$s\" | Set-Content '%ORM_DASHBOARD%\.env.local'; Write-Host '       Synced NEXT_PUBLIC_API_SHARED_SECRET from backend .env.' } else { Write-Host '       WARNING: could not read API_SHARED_SECRET from backend .env -- update NEXT_PUBLIC_API_SHARED_SECRET manually.' }"
+        echo        Provision a login user with: python scripts\seed_user.py --email you@example.com --password change-me --all-clients
     ) else (
         echo  WARNING: %ORM_DASHBOARD%\.env.example not found -- skipping frontend env setup.
     )

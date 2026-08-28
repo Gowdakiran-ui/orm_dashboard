@@ -11,6 +11,7 @@ services:
   # pointed at Render), re-add it and the matching depends_on entries.
   redis:
     image: redis:7
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -25,11 +26,17 @@ services:
     build:
       context: ./orm_collection
     image: orm-platform-backend:dev-review
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      # Local dev/review runs the frontend and backend over plain HTTP --
+      # browsers refuse to send a Secure cookie over HTTP, so the session
+      # cookie (core/security.py) would silently never reach the backend.
+      # Override to true (or unset) for any real HTTPS deployment.
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
     volumes:
       # database/ lives at the repo root, outside this service's build
       # context (./orm_collection) -- bind-mounted read-only so
@@ -45,10 +52,53 @@ services:
       timeout: 5s
       retries: 5
 
-  celery-worker-general:
+  # celery-worker-general was split into celery-worker-io, celery-worker-cpu,
+  # celery-worker-nlp, and celery-worker-aggregation below. It ran all four
+  # queues (io/cpu/nlp/aggregation) in one --pool=solo --concurrency=1
+  # process, so a slow NLP inference call blocked feed collection and vice
+  # versa -- see forensic audit §5/§11. Each queue now gets its own process.
+  celery-worker-io:
     build:
       context: ./orm_collection
     image: orm-platform-backend:dev-review
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      # app.workers.backup_tasks.run_backup (Section 10) is routed to
+      # io_queue and writes its pg_dump output here. Named volume, not a
+      # bind mount -- offsite/cloud replication of this volume's contents
+      # is a follow-up, not done here (see docs/BACKUP.md).
+      - backup_data:/backups
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    # I/O-bound (feed fetches, search calls) -- threads/greenlets aren't
+    # available without extra deps, so prefork concurrency=4 is a
+    # conservative default to get overlap on network-wait-bound tasks
+    # without assuming a particular core count.
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=io@%h", "--pool=prefork", "--concurrency=4", "-Q", "io_queue"]
+    healthcheck:
+      # Mirrors backend's healthcheck: ["CMD", "curl", "-f", ...]. Uses
+      # CMD-SHELL (not CMD) because it needs shell command substitution to
+      # target this container's own worker (`io@$(hostname)`) --
+      # `inspect ping` with no destination replies from every worker
+      # reachable via the shared Redis broker, which would report this
+      # container healthy even if this worker specifically had died.
+      test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d io@$(hostname) --timeout 10 | grep -q OK"]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 40s
+
+  celery-worker-cpu:
+    build:
+      context: ./orm_collection
+    image: orm-platform-backend:dev-review
+    restart: unless-stopped
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -57,12 +107,76 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
-    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=general@%h", "--pool=solo", "--concurrency=1", "-Q", "io_queue,cpu_queue,nlp_queue,aggregation_queue"]
+    # CPU-bound entity matching -- concurrency=2 leaves headroom alongside
+    # the other worker processes on a single host rather than saturating it.
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=cpu@%h", "--pool=prefork", "--concurrency=2", "-Q", "cpu_queue"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d cpu@$(hostname) --timeout 10 | grep -q OK"]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 40s
+
+  celery-worker-nlp:
+    build:
+      context: ./orm_collection
+    image: orm-platform-backend:dev-review
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    # Sentiment/topic transformer models: measured at ~1.9GB RSS per worker
+    # process at steady state, not the earlier ~1.6GB parameter-count guess
+    # (docs/AWS_DEPLOYMENT.md Section 6, orm_collection/scripts/
+    # profile_nlp_memory.py). Stays --pool=solo --concurrency=1 here on
+    # purpose: local dev machines aren't sized against the ~20-concurrent-
+    # client production target this profiling was done for, and a
+    # concurrency bump only pays off if the host actually has the multiple
+    # GB of headroom per extra process that requires -- assume it doesn't.
+    # Production's celery-worker-nlp (copilot/celery-worker-nlp/manifest.yml)
+    # runs concurrency=3 on an 8192 MiB Fargate task; see
+    # docs/AWS_DEPLOYMENT.md Section 6 for the full sizing table.
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=nlp@%h", "--pool=solo", "--concurrency=1", "-Q", "nlp_queue"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d nlp@$(hostname) --timeout 10 | grep -q OK"]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 40s
+
+  celery-worker-aggregation:
+    build:
+      context: ./orm_collection
+    image: orm-platform-backend:dev-review
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    # Hourly trend/risk/alert/narrative/reputation aggregation across all
+    # clients -- concurrency=2 for the same headroom reasoning as cpu_queue.
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=aggregation@%h", "--pool=prefork", "--concurrency=2", "-Q", "aggregation_queue"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d aggregation@$(hostname) --timeout 10 | grep -q OK"]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 40s
 
   celery-worker-pipeline:
     build:
       context: ./orm_collection
     image: orm-platform-backend:dev-review
+    restart: unless-stopped
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -72,11 +186,18 @@ services:
       backend:
         condition: service_healthy
     command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=pipeline@%h", "--pool=solo", "--concurrency=1", "-Q", "pipeline_queue"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d pipeline@$(hostname) --timeout 10 | grep -q OK"]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 40s
 
   celery-beat:
     build:
       context: ./orm_collection
     image: orm-platform-backend:dev-review
+    restart: unless-stopped
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -86,23 +207,36 @@ services:
       backend:
         condition: service_healthy
     command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "beat", "--loglevel=info"]
+    healthcheck:
+      # celery-beat has no worker to `inspect ping` -- it schedules, it
+      # doesn't consume. Its beat_schedule (app/core/celery_app.py) has
+      # multiple per-minute crontabs, and beat rewrites its persistent
+      # schedule file (celerybeat-schedule, default location, in WORKDIR
+      # /app per the Dockerfile) on every wakeup, so a live process
+      # touches this file at least once a minute. A stale mtime means the
+      # scheduler loop has stopped ticking.
+      test: ["CMD-SHELL", "find /app/celerybeat-schedule* -mmin -2 | grep -q ."]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   frontend:
     build:
       context: ./orm_dashboard
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        - NEXT_PUBLIC_API_SHARED_SECRET=${NEXT_PUBLIC_API_SHARED_SECRET:?NEXT_PUBLIC_API_SHARED_SECRET must be set in .env before building the frontend image}
     image: orm-platform-frontend:dev-review
+    restart: unless-stopped
     ports:
       - "3000:3000"
     env_file: .env
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-      - NEXT_PUBLIC_API_SHARED_SECRET=${NEXT_PUBLIC_API_SHARED_SECRET:?NEXT_PUBLIC_API_SHARED_SECRET must be set in .env before building the frontend image}
     depends_on:
       backend:
         condition: service_healthy
 
 volumes:
   redis_data:
+  backup_data:

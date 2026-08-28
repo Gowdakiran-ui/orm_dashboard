@@ -12,3 +12,18 @@ scripts/.platform_pids.json
 orm_collection/scratch/
 orm_collection/celerybeat-schedule.*
 orm_collection/sentiment_audit_results/
+VERIFICATION_RESULTS.md
+
+# Internal audit/task-tracking docs -- not for the public repo
+FINAL.md
+FINAL_V2.md
+FORENSICS.md
+TASK.md
+reports/
+
+# Scratch/log artifacts from local dev sessions
+enter_stdin.txt
+start_run*.log
+orm_collection/backend_test.log
+orm_collection/scratch_*.db
+orm_collection/scratch_timing_test*.py

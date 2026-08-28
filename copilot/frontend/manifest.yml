@@ -1,0 +1,36 @@
+# The Next.js dashboard (orm_dashboard) -- public-facing, needs an ALB.
+name: frontend
+type: Load Balanced Web Service
+
+http:
+  path: '/'
+  healthcheck:
+    path: /
+    healthy_threshold: 2
+    unhealthy_threshold: 3
+    interval: 15s
+    timeout: 5s
+    grace_period: 60s
+
+image:
+  build:
+    dockerfile: ../../orm_dashboard/Dockerfile
+    context: ../../orm_dashboard
+    args:
+      # NEXT_PUBLIC_API_URL is baked in at build time (Next.js NEXT_PUBLIC_
+      # prefix), not injected at container start -- must be the backend's
+      # public ALB/domain URL as seen by the browser, not an internal
+      # service-discovery name. Set this to the real backend domain before
+      # deploying; a placeholder here will build correctly but every fetch
+      # from the browser will silently fail.
+      NEXT_PUBLIC_API_URL: https://api.example.com
+  port: 3000
+
+cpu: 256
+memory: 512
+count: 2
+exec: true
+
+environments:
+  production:
+    count: 2

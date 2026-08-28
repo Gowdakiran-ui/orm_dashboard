@@ -78,4 +78,11 @@ class RedisClientWrapper:
             logger.exception("Redis pipeline failed")
             raise
 
+    def scan_iter(self, match=None):
+        try:
+            return self.client.scan_iter(match=match)
+        except Exception:
+            logger.exception(f"Redis scan_iter failed for match {match}")
+            raise
+
 redis_client = RedisClientWrapper(settings.REDIS_URL)

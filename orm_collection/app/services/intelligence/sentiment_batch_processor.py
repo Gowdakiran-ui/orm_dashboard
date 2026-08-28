@@ -304,10 +304,32 @@ class HardenedSentimentProcessor:
             local_retry_count = doc_check.sentiment_retry_count if doc_check else 0
 
             # STEP 1: Set state to PROCESSING (atomic, locks row)
-            transition_ok = SentimentDocumentStateMachine.transition(
-                db, document_id, SentimentProcessingState.PROCESSING,
-                run_id=run_id, batch_id=batch_id
-            )
+            try:
+                transition_ok = SentimentDocumentStateMachine.transition(
+                    db, document_id, SentimentProcessingState.PROCESSING,
+                    run_id=run_id, batch_id=batch_id
+                )
+            except ValueError:
+                # Orphan recovery: PROCESSING has no self-transition, so a
+                # document already sitting in PROCESSING here means a prior
+                # worker committed PROCESSING and then died before finishing
+                # (BUG 1). Route it through the existing RETRYING state --
+                # RETRYING->PROCESSING is already a valid transition -- rather
+                # than adding a new one to the FSM.
+                db.rollback()
+                recovered = SentimentDocumentStateMachine.transition(
+                    db, document_id, SentimentProcessingState.RETRYING,
+                    run_id=run_id, batch_id=batch_id,
+                    failure_reason="recovered_from_stale_sentiment_processing"
+                )
+                if recovered:
+                    db.commit()
+                    transition_ok = SentimentDocumentStateMachine.transition(
+                        db, document_id, SentimentProcessingState.PROCESSING,
+                        run_id=run_id, batch_id=batch_id
+                    )
+                else:
+                    transition_ok = False
             if not transition_ok:
                 doc_logger.warning("document_not_found_skipping", document_id=document_id)
                 db.close()

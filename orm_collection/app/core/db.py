@@ -7,7 +7,18 @@ from app.core.config import settings
 # SQLAlchemy hands out a dead connection and the next query fails with
 # "server closed the connection unexpectedly". pool_recycle forces
 # reconnection before providers close them from their side.
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, pool_recycle=1800)
+# 7 independent processes share this Postgres instance (backend + 5 split
+# Celery workers + celery-beat); pool_size=3, max_overflow=2 caps each at 5
+# connections (35 total across all 7) to leave headroom under small hosted-
+# Postgres connection limits. Tune here if the actual provisioned limit
+# (check the live instance's plan) demands otherwise.
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_size=3,
+    max_overflow=2,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

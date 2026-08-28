@@ -1,0 +1,58 @@
+# I/O-bound queue: feed fetches, search calls, watchdogs, and the daily
+# S3-uploading backup job (run_backup, io_queue -- see celery_app.py
+# task_routes and app/workers/backup_tasks.py). Internal only -- no ALB --
+# hence Backend Service, matching celery-worker-cpu/nlp/aggregation/pipeline
+# and celery-beat below.
+name: celery-worker-io
+type: Backend Service
+
+image:
+  build:
+    dockerfile: ../../orm_collection/Dockerfile
+    context: ../../orm_collection
+  # Mirrors docker-compose.yml's CMD-SHELL healthcheck exactly: `inspect
+  # ping` with no destination replies from every worker reachable via the
+  # shared Redis broker, so it must target this container's own worker
+  # (`io@$(hostname)`) to actually detect *this* worker being dead.
+  healthcheck:
+    command: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d io@$(hostname) --timeout 10 | grep -q OK"]
+    interval: 15s
+    retries: 5
+    timeout: 20s
+    start_period: 40s
+
+command: python -m celery -A app.core.celery_app.celery_app worker --loglevel=info --hostname=io@%h --pool=prefork --concurrency=4 -Q io_queue
+
+cpu: 512
+memory: 1024
+count: 1
+exec: true
+
+variables:
+  REDIS_URL:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-RedisURL
+  DB_HOST:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresEndpointAddress
+  DB_PORT:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPort
+  DB_NAME:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresDBName
+  S3_BUCKET_NAME:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-BackupBucketName
+  ENABLE_S3_STORAGE: "true"
+  S3_ENDPOINT_URL: https://s3.amazonaws.com # <-- adjust to https://s3.<region>.amazonaws.com if not us-east-1
+  AI_PROVIDER: groq
+  AI_MODEL: llama-3.3-70b-versatile
+
+secrets:
+  DB_USER:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresUsernameSecretArn
+  DB_PASSWORD:
+    from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPasswordSecretArn
+  S3_ACCESS_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/S3_ACCESS_KEY
+  S3_SECRET_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/S3_SECRET_KEY
+  GROQ_API_KEY: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/GROQ_API_KEY
+
+environments:
+  production:
+    count: 1

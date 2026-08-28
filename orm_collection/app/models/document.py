@@ -1,6 +1,7 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Float, Integer, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.db import Base
 
@@ -51,6 +52,8 @@ class Document(Base):
     sentiment_batch_id = Column(String(64))
     sentiment_processing_time_ms = Column(Float)
 
+    matches = relationship("DocumentMatch", back_populates="document", cascade="all, delete-orphan")
+
 class DocumentMatch(Base):
     __tablename__ = "document_matches"
 
@@ -66,3 +69,5 @@ class DocumentMatch(Base):
     # the ORM.
     match_metadata = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    document = relationship("Document", back_populates="matches")

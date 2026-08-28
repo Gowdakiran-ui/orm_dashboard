@@ -1,7 +1,6 @@
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from uuid import UUID
 from app.models.client import Client
@@ -15,43 +14,20 @@ from app.models.rss_feed import RSSFeed
 
 logger = structlog.get_logger()
 
-import re
-
-def normalize_client_name(name: str) -> str:
-    # Lowercase and strip whitespace
-    n = name.lower().strip()
-    # Remove punctuation
-    n = re.sub(r'[^\w\s]', '', n)
-    # Remove common corporate suffixes (word bounded)
-    n = re.sub(r'\b(inc|ltd|llc|corp|corporation|co)\b', '', n)
-    # Normalize internal whitespace
-    n = re.sub(r'\s+', ' ', n).strip()
-    return n
-
 def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
-    # 0. Check for Client Uniqueness (Phase 6.4)
-    normalized_new = normalize_client_name(onboarding_data.name)
-    existing_clients = db.query(Client).all()
-    for c in existing_clients:
-        if normalize_client_name(c.name) == normalized_new:
-            raise HTTPException(status_code=400, detail="Client with a similar name already exists.")
-
+    # Client name is deliberately NOT unique (TASK_CLIENT_NAME.md) --
+    # isolation in this system is per client_id via user_client_access, not
+    # per name. Two different users each onboarding a company called
+    # "Anthropic" are two unrelated tenants that happen to share a display
+    # name; rejecting the second one as "already exists" was wrong (it was
+    # checking every OTHER user's clients too, not just the caller's own).
     # 1. Create the Client
     db_client = Client(
         name=onboarding_data.name,
         industry=onboarding_data.industry
     )
     db.add(db_client)
-    try:
-        db.commit()
-    except IntegrityError:
-        # The normalized-name check above has a check-then-insert race gap
-        # (same class of bug as D4's sources.url race) — a concurrent
-        # onboarding request for the exact same name can slip past it and
-        # hit the DB-level uq_clients_name constraint instead. Surface the
-        # same clean 400 rather than a raw 500.
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Client with a similar name already exists.")
+    db.commit()
     db.refresh(db_client)
 
     # Steps 2-8 create the entity/keywords/feeds/source for the client just
@@ -151,15 +127,26 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
             db.commit()
             db.refresh(cat)
 
-        db_source = Source(
-            category_id=cat.id,
-            name=f"{onboarding_data.primary_entity_name} RSS Source",
-            source_type="rss",
-            url=google_news_url,
-            schedule_cron="0 * * * *",
-            is_active=True
-        )
-        db.add(db_source)
+        # Check if this source url already exists before adding -- same
+        # reasoning as the RSSFeed checks above: sources has no client_id at
+        # all (it's shared reference data, like SourceCategory just above),
+        # so it was always meant to be deduplicated by url. This particular
+        # insert was the one spot that skipped that check, which stayed
+        # unreachable while client names were globally unique (the url is
+        # built from the entity name) -- surfaced as a hard uq_sources_url
+        # crash the moment two differently-owned clients share a name
+        # (TASK_CLIENT_NAME.md; confirmed live).
+        existing_source = db.query(Source).filter(Source.url == google_news_url).first()
+        if not existing_source:
+            db_source = Source(
+                category_id=cat.id,
+                name=f"{onboarding_data.primary_entity_name} RSS Source",
+                source_type="rss",
+                url=google_news_url,
+                schedule_cron="0 * * * *",
+                is_active=True
+            )
+            db.add(db_source)
 
         # 7. Create real competitors if provided in onboarding data
         if hasattr(onboarding_data, 'competitors') and onboarding_data.competitors:
@@ -200,8 +187,14 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
 
     return db_client
 
-def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None):
+def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None, client_ids=None):
     query = db.query(Client)
+    if client_ids is not None:
+        # Tenant-authorization scoping (TASK_AUTH.md fix #4) -- callers pass
+        # the requesting user's granted client_ids; None (not an empty list)
+        # means "no scoping requested", used only by internal/administrative
+        # callers, if any are ever added.
+        query = query.filter(Client.id.in_(client_ids))
     if search:
         query = query.filter(Client.name.ilike(f"%{search}%"))
     return query.order_by(Client.name, Client.id).offset(skip).limit(limit).all()

@@ -1,5 +1,4 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
-const API_SHARED_SECRET = process.env.NEXT_PUBLIC_API_SHARED_SECRET ?? "";
 
 
 const getCache = new Map<string, Promise<Response>>();
@@ -31,11 +30,14 @@ async function fetchWithRetry(
 
         const headers = {
           "Content-Type": "application/json",
-          "X-API-Key": API_SHARED_SECRET,
           ...(options.headers || {})
         };
 
-        const config: RequestInit = { ...options, headers, signal: controller.signal };
+        // credentials: "include" -- auth is now an httpOnly session cookie
+        // (core/security.py) set by /auth/login, not a header the client
+        // attaches itself. Without this, fetch() silently omits the cookie
+        // on the cross-origin (different port) call to the backend.
+        const config: RequestInit = { ...options, headers, credentials: "include", signal: controller.signal };
 
         try {
           const res = await fetch(url, config);
@@ -101,7 +103,6 @@ async function fetchWithRetry(
   
   const headers = {
     "Content-Type": "application/json",
-    "X-API-Key": API_SHARED_SECRET,
     ...(options.headers || {})
   };
 
@@ -113,6 +114,7 @@ async function fetchWithRetry(
   const config: RequestInit = {
     ...options,
     headers,
+    credentials: "include",
     signal: combinedSignal ? combinedSignal.signal : controller.signal
   };
 
@@ -191,10 +193,119 @@ function anySignal(signals: AbortSignal[]): CombinedSignal {
 }
 
 
+// Backend now scopes this to only the clients the logged-in user is
+// granted (TASK_AUTH.md fix #4/#5) -- no separate client-side filtering
+// needed for the tenant dropdown to show only authorized clients.
 export async function fetchClients(search?: string, signal?: AbortSignal) {
   const url = search ? `${API_BASE}/clients?search=${encodeURIComponent(search)}` : `${API_BASE}/clients`;
   const res = await fetchWithRetry(url, { signal });
   return parseOrThrow(res);
+}
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+  role: string;
+  client_ids: string[];
+}
+
+export async function login(email: string, password: string): Promise<CurrentUser> {
+  const res = await fetchWithRetry(`${API_BASE}/auth/login`, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  }, 0);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(typeof err.detail === "string" ? err.detail : "Login failed");
+  }
+  return res.json();
+}
+
+export async function logout(): Promise<void> {
+  await fetchWithRetry(`${API_BASE}/auth/logout`, { method: "POST" }, 0);
+}
+
+export async function fetchCurrentUser(signal?: AbortSignal): Promise<CurrentUser | null> {
+  const res = await fetchWithRetry(`${API_BASE}/auth/me`, { signal }, 0);
+  if (res.status === 401) return null;
+  return parseOrThrow(res);
+}
+
+// --- Admin: user management (super_admin only; backend enforces via
+// require_super_admin -- these calls 403 for any other role) ---
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  client_ids: string[];
+}
+
+export async function fetchAdminUsers(signal?: AbortSignal): Promise<AdminUser[]> {
+  const res = await fetchWithRetry(`${API_BASE}/admin/users/`, { signal });
+  return parseOrThrow(res);
+}
+
+export interface CreateUserPayload {
+  email: string;
+  role: "super_admin" | "client_user";
+  client_ids: string[];
+}
+
+export interface PasswordReveal {
+  id: string;
+  email: string;
+  // Plaintext -- returned exactly once by the backend, never persisted or
+  // logged anywhere (TASK_ONBOARDING.md). Show it to the admin and discard.
+  password: string;
+}
+
+export async function createUser(payload: CreateUserPayload, signal?: AbortSignal): Promise<PasswordReveal> {
+  const res = await fetchWithRetry(`${API_BASE}/admin/users`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(typeof err.detail === "string" ? err.detail : "Failed to create user");
+  }
+  return res.json();
+}
+
+export async function resetUserPassword(userId: string, signal?: AbortSignal): Promise<PasswordReveal> {
+  const res = await fetchWithRetry(`${API_BASE}/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(typeof err.detail === "string" ? err.detail : "Failed to reset password");
+  }
+  return res.json();
+}
+
+export async function deleteAdminUser(userId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/admin/users/${userId}`, { method: "DELETE", signal });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(typeof err.detail === "string" ? err.detail : "Failed to delete user");
+  }
+  return res.json();
+}
+
+export async function updateAdminUserClients(userId: string, clientIds: string[], signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/admin/users/${userId}/clients`, {
+    method: "PATCH",
+    body: JSON.stringify({ client_ids: clientIds }),
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(typeof err.detail === "string" ? err.detail : "Failed to update client access");
+  }
+  return res.json();
 }
 
 export interface ClientOnboardingPayload {
@@ -267,6 +378,11 @@ export async function fetchReputationBreakdown(clientId: string, signal?: AbortS
   return parseOrThrow(res);
 }
 
+export async function fetchReputationSummary(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/reputation-summary`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function fetchActiveAlerts(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/active-alerts`, { signal });
   return parseOrThrow(res);
@@ -317,8 +433,8 @@ export async function fetchExecutiveHistory(clientId: string, signal?: AbortSign
   return parseOrThrow(res);
 }
 
-export async function fetchSystemStatus(signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/collection/status`, { signal });
+export async function fetchSystemStatus(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/collection/status?client_id=${encodeURIComponent(clientId)}`, { signal });
   return parseOrThrow(res);
 }
 
@@ -358,7 +474,7 @@ export async function fetchIntelligenceFeed(clientId: string, signal?: AbortSign
 }
 
 export async function fetchCommandCenterStats(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/collection/status`, { signal });
+  const res = await fetchWithRetry(`${API_BASE}/collection/status?client_id=${encodeURIComponent(clientId)}`, { signal });
   return parseOrThrow(res);
 }
 

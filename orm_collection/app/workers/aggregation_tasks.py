@@ -17,11 +17,25 @@ This module contains two categories of tasks:
    - calculate_executive_reputation
    - calculate_competitor_benchmarks
 
-2. PIPELINE ORCHESTRATOR TASK (Phase 13 rewrite):
-   run_client_pipeline — single Celery task that executes the full
-   intelligence pipeline for one client, triggered manually by the API.
-   This task NEVER calls scheduler tasks and scheduler tasks NEVER
-   call this task.
+2. PIPELINE ORCHESTRATOR (Phase 14 rewrite — stage delegation):
+   run_client_pipeline — lightweight Celery task, triggered manually by
+   the API, that creates no real work itself. It acquires the per-client
+   lock and kicks off a Celery `chain` of per-stage tasks, each routed to
+   the queue matching its resource profile (io/nlp/aggregation), then
+   returns. This task NEVER calls scheduler tasks and scheduler tasks
+   NEVER call this task.
+
+   Phase 13 ran every stage inline inside run_client_pipeline itself, on
+   celery-worker-pipeline (--pool=solo --concurrency=1). That meant two
+   different clients' manual runs were strictly serialized through one
+   process platform-wide, and it duplicated intelligence_tasks.py's
+   ~1.6GB transformer model load into the pipeline worker (the exact
+   memory-isolation problem celery-worker-nlp was split out to solve —
+   see FORENSICS/diagnosis: "Concurrent Pipeline Runs Across Users Don't
+   Work"). Phase 14 fixes this by delegating each stage to its own task
+   on its own queue, so celery-worker-pipeline goes back to being pure
+   orchestration and stages for different clients can run concurrently
+   on the shared io/nlp/aggregation worker pools.
 
 Pipeline Execution Model
 ========================
@@ -30,23 +44,30 @@ Pipeline Execution Model
         ↓ dispatches run_client_pipeline.delay(run_id, client_id)
         ↓ returns HTTP 202 immediately
 
-    Worker executes run_client_pipeline:
+    Worker executes run_client_pipeline (pipeline_queue, orchestration only):
         Acquire Redis lock (NX, 2h TTL)
-        ↓ COLLECTING   (5%  → 20%)
-        ↓ PROCESSING   (20% → 40%)
-        ↓ TREND        (40% → 50%)
-        ↓ RISK         (50% → 60%)
-        ↓ ALERT        (60% → 70%)
-        ↓ NARRATIVE    (70% → 80%)
-        ↓ REPUTATION   (80% → 85%)
-        ↓ EXECUTIVE    (85% → 90%)
-        ↓ BENCHMARK    (90% → 95%)
-        ↓ FINALIZING   (95% → 100%)
-        ↓ SUCCESS
-        Release Redis lock
+        ↓ build chain(...) and apply_async(link_error=...)
+        ↓ returns immediately — does NOT wait for the chain
 
-    On any stage failure:
-        → FAILED, persist error, release lock, stop
+    Chain (each link is its own Celery task on its own queue; each link
+    performs its own PipelineRun FSM transition/progress update on entry,
+    since no single process spans the whole run anymore):
+        ↓ COLLECTING   (io_queue)           (5%  → 20%)
+        ↓ PROCESSING   (nlp_queue)          (20% → 40%)
+        ↓ TREND        (aggregation_queue)  (40% → 50%)
+        ↓ RISK         (aggregation_queue)  (50% → 60%)
+        ↓ ALERT        (aggregation_queue)  (60% → 70%)
+        ↓ NARRATIVE    (aggregation_queue)  (70% → 80%)
+        ↓ REPUTATION   (aggregation_queue)  (80% → 85%)
+        ↓ EXECUTIVE    (aggregation_queue)  (85% → 90%)
+        ↓ BENCHMARK    (aggregation_queue)  (90% → 95%)
+        ↓ FINALIZING   (pipeline_queue)     (95% → 100%)
+        ↓ SUCCESS, release Redis lock
+
+    On any stage failure (Celery aborts the chain automatically):
+        → link_error callback fires (pipeline_queue) → FAILED, persist
+          error, release Redis lock, stop. Fires exactly once, since a
+          chain runs at most one failing task before aborting.
 
 State is stored in PipelineRun (PostgreSQL).
 Status endpoint reads only PipelineRun — never Redis, never AsyncResult.
@@ -59,6 +80,14 @@ Locking
     Mode:   SET NX (atomic, race-condition safe)
     Release: GET → verify owner_id → DELETE
 
+    Acquired exactly once, in run_client_pipeline, before the chain is
+    dispatched. owner_id is threaded through every stage task's args (not
+    stored on PipelineRun — no schema change) so whichever task ends the
+    run — pipeline_stage_finalize on success, or
+    pipeline_stage_error_handler on failure/dispatch-failure — can
+    release it with the same owner_id. Exactly one of those three paths
+    runs per pipeline execution, so release happens exactly once.
+
 No heartbeat thread. 2h TTL is sufficient for any realistic pipeline run.
 """
 from __future__ import annotations
@@ -67,14 +96,13 @@ import json
 import math
 import os
 import time
-import traceback
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List
 
 import structlog
-from celery import shared_task
+from celery import shared_task, chain
 
 from app.core.db import SessionLocal
 from app.models.client import Client
@@ -1152,16 +1180,205 @@ def _stage_finalize(ctx: PipelineContext, db) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main pipeline task — the single orchestrator entry point
+# Stage task helpers (Phase 14)
+# ---------------------------------------------------------------------------
+
+def _load_context(db, run_id: str, client_id: str, worker_id: str) -> PipelineContext:
+    """Rebuild the immutable per-stage context from the DB. Cheap (one PK
+    lookup) — each stage now runs in its own process/task, so there is no
+    single long-lived ctx to pass through anymore."""
+    pipeline_run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+    return PipelineContext(
+        pipeline_run_id=str(pipeline_run.id) if pipeline_run else "",
+        client_id=client_id,
+        run_id=run_id,
+        started_at=pipeline_run.started_at if pipeline_run else None,
+        worker_id=worker_id,
+        execution_mode="async",
+        correlation_id=run_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-stage tasks — each is a real Celery task on the queue matching its
+# resource profile, chained together by run_client_pipeline below. Every
+# task raises on failure (no self.retry — matches Phase 13's single-attempt
+# semantics) so Celery aborts the chain and fires the link_error callback.
+# ---------------------------------------------------------------------------
+
+@shared_task(bind=True, queue="io_queue", max_retries=0)
+def pipeline_stage_collect(self, run_id: str, client_id: str, owner_id: str) -> List[str]:
+    worker_id = f"worker-{os.getpid()}"
+    log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task="pipeline_stage_collect")
+    db = SessionLocal()
+    try:
+        ctx = _load_context(db, run_id, client_id, worker_id)
+        _update_run(db, run_id, "COLLECTING", "Starting document collection")
+        doc_ids = _stage_collect(ctx, db)
+        run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
+        if run:
+            run.progress_pct = 20
+            run.log_tail = f"Collected {len(doc_ids)} documents"
+            run.current_worker = worker_id
+            db.commit()
+        return doc_ids
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, queue="nlp_queue", max_retries=0)
+def pipeline_stage_process(self, doc_ids: List[str], run_id: str, client_id: str, owner_id: str) -> None:
+    worker_id = f"worker-{os.getpid()}"
+    log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task="pipeline_stage_process")
+    db = SessionLocal()
+    try:
+        ctx = _load_context(db, run_id, client_id, worker_id)
+        _update_run(db, run_id, "PROCESSING", f"Running NLP on {len(doc_ids)} documents")
+        _stage_process(ctx, db, doc_ids)
+        run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
+        if run:
+            run.current_worker = worker_id
+            db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def _make_aggregation_stage_task(stage_name: str, stage_fn, log_line: str, task_name: str):
+    """
+    Factory for the five identically-shaped aggregation stages (TREND, RISK,
+    ALERT, NARRATIVE, REPUTATION, EXECUTIVE, BENCHMARK all follow the same
+    pattern: load ctx, transition FSM, call the stage function, done). Avoids
+    seven copy-pasted task bodies that all differ only in stage name/fn/log.
+    """
+    @shared_task(bind=True, queue="aggregation_queue", max_retries=0, name=task_name)
+    def _task(self, run_id: str, client_id: str, owner_id: str) -> None:
+        worker_id = f"worker-{os.getpid()}"
+        log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task=task_name)
+        db = SessionLocal()
+        try:
+            ctx = _load_context(db, run_id, client_id, worker_id)
+            _update_run(db, run_id, stage_name, log_line)
+            stage_fn(ctx, db)
+            run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
+            if run:
+                run.current_worker = worker_id
+                db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+    return _task
+
+
+pipeline_stage_trend = _make_aggregation_stage_task(
+    "TREND", _stage_trend, "Running trend detection",
+    "app.workers.aggregation_tasks.pipeline_stage_trend")
+pipeline_stage_risk = _make_aggregation_stage_task(
+    "RISK", _stage_risk, "Running risk engine",
+    "app.workers.aggregation_tasks.pipeline_stage_risk")
+pipeline_stage_alert = _make_aggregation_stage_task(
+    "ALERT", _stage_alert, "Evaluating alerts",
+    "app.workers.aggregation_tasks.pipeline_stage_alert")
+pipeline_stage_narrative = _make_aggregation_stage_task(
+    "NARRATIVE", _stage_narrative, "Generating narratives",
+    "app.workers.aggregation_tasks.pipeline_stage_narrative")
+pipeline_stage_reputation = _make_aggregation_stage_task(
+    "REPUTATION", _stage_reputation, "Calculating reputation scores",
+    "app.workers.aggregation_tasks.pipeline_stage_reputation")
+pipeline_stage_executive = _make_aggregation_stage_task(
+    "EXECUTIVE", _stage_executive, "Processing executive reputation",
+    "app.workers.aggregation_tasks.pipeline_stage_executive")
+pipeline_stage_benchmark = _make_aggregation_stage_task(
+    "BENCHMARK", _stage_benchmark, "Running competitor benchmarks",
+    "app.workers.aggregation_tasks.pipeline_stage_benchmark")
+
+
+@shared_task(bind=True, queue="pipeline_queue", max_retries=0)
+def pipeline_stage_finalize(self, run_id: str, client_id: str, owner_id: str) -> None:
+    """
+    Last link in the chain on success. Transitions FINALIZING → SUCCESS
+    (PipelineRun.transition() computes duration_s/execution_duration_s
+    automatically on entering a terminal state) and releases the lock —
+    the one and only lock-release point on the success path.
+    """
+    from app.utils.redis_client import redis_client
+
+    worker_id = f"worker-{os.getpid()}"
+    log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task="pipeline_stage_finalize")
+    db = SessionLocal()
+    try:
+        ctx = _load_context(db, run_id, client_id, worker_id)
+        _update_run(db, run_id, "FINALIZING", "Finalizing pipeline run")
+        _stage_finalize(ctx, db)
+
+        run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
+        if run:
+            run.current_worker = worker_id
+        db.commit()
+
+        _update_run(db, run_id, "SUCCESS", "Pipeline completed")
+
+        run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
+        log.info("pipeline_task_succeeded",
+                 execution_duration_s=run.execution_duration_s if run else None,
+                 duration_s=run.duration_s if run else None)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        _release_lock(redis_client, client_id, owner_id, log)
+        db.close()
+        log.info("pipeline_task_finished")
+
+
+@shared_task(queue="pipeline_queue")
+def pipeline_stage_error_handler(request, exc, tb, run_id: str, client_id: str, owner_id: str) -> None:
+    """
+    Celery `link_error` callback, attached to every task in the chain via
+    chain.apply_async(link_error=...). A chain aborts at the first failing
+    task and never runs the rest, so this fires at most once per pipeline
+    execution — the one and only lock-release point on the failure path.
+
+    Celery calls error callbacks as (request, exc, traceback, *bound_args) —
+    request/exc/tb describe whichever stage task actually failed; run_id/
+    client_id/owner_id are the bound args passed via .s(...) at dispatch time.
+    """
+    from app.utils.redis_client import redis_client
+
+    log = logger.bind(run_id=run_id, client_id=client_id, task="pipeline_stage_error_handler",
+                       failed_celery_task_id=getattr(request, "id", "unknown"))
+    error_detail = f"{exc!r}\n{tb}"
+    log.error("pipeline_chain_stage_failed", error=str(exc))
+
+    db = SessionLocal()
+    try:
+        _fail_run(db, run_id, error_detail, log)
+    finally:
+        _release_lock(redis_client, client_id, owner_id, log)
+        db.close()
+        log.info("pipeline_task_finished")
+
+
+# ---------------------------------------------------------------------------
+# Main pipeline task — lightweight orchestrator entry point (Phase 14)
 # ---------------------------------------------------------------------------
 
 @shared_task(bind=True, queue="pipeline_queue", max_retries=0, acks_late=True)
 def run_client_pipeline(self, run_id: str, client_id: str):
     """
-    Phase 13 Pipeline Orchestrator.
+    Phase 14 Pipeline Orchestrator.
 
-    ONE execution path. No recursion. No nested orchestration.
-    No Celery chaining needed — stages execute sequentially in this one task.
+    Does no pipeline work itself. Acquires the per-client lock, builds a
+    Celery chain of per-stage tasks (each on its own queue — see module
+    docstring), dispatches it, and returns. celery-worker-pipeline's job is
+    now just this: create/lock/dispatch, nothing CPU- or NLP-heavy.
 
     This task NEVER:
     - calls scheduler tasks
@@ -1169,12 +1386,16 @@ def run_client_pipeline(self, run_id: str, client_id: str):
     - spawns threads
     - uses heartbeat threads
 
-    State is stored in PipelineRun (PostgreSQL) at each stage boundary.
-    The API status endpoint reads only PipelineRun.
+    State is stored in PipelineRun (PostgreSQL) at each stage boundary,
+    written by the stage tasks themselves. The API status endpoint reads
+    only PipelineRun.
 
     Lock lifecycle:
-        Acquire (SET NX) → ... stages ... → Release (compare-and-delete)
-        Lock is ALWAYS released in the finally block.
+        Acquire (SET NX) here → chain executes across queues →
+        Release (compare-and-delete) in pipeline_stage_finalize (success)
+        or pipeline_stage_error_handler (failure), or right here if the
+        chain itself never made it to the broker. Exactly one of these
+        three release points fires per run.
     """
     from app.utils.redis_client import redis_client
 
@@ -1188,7 +1409,7 @@ def run_client_pipeline(self, run_id: str, client_id: str):
         task="run_client_pipeline",
         celery_task_id=self.request.id or "unknown",
     )
-    log.info("pipeline_task_started")
+    log.info("pipeline_orchestrator_started")
 
     # ── Load PipelineRun ───────────────────────────────────────────────────
     db = SessionLocal()
@@ -1218,89 +1439,50 @@ def run_client_pipeline(self, run_id: str, client_id: str):
 
     log.info("pipeline_lock_acquired", client_id=client_id)
 
-    # Build the immutable context once
-    ctx = PipelineContext(
-        pipeline_run_id=str(pipeline_run.id),
-        client_id=client_id,
-        run_id=run_id,
-        started_at=pipeline_run.started_at,
-        worker_id=worker_id,
-        execution_mode="async",
-        correlation_id=run_id,
-    )
-
-    t_pipeline = time.perf_counter()
-
-    # Item 18: mark when execution actually begins (lock held, about to run
-    # stages), separately from started_at (set at row-creation/QUEUED time,
-    # before this task was necessarily even picked up by a worker) so
-    # execution_duration_s can be computed independent of queue wait.
+    # Item 18: mark when execution actually begins (lock held, about to
+    # dispatch stages), separately from started_at (set at row-creation/
+    # QUEUED time, before this task was necessarily even picked up by a
+    # worker) so execution_duration_s can be computed independent of queue
+    # wait. This now covers the whole chain's wall-clock time, not just this
+    # orchestrator task's — pipeline_stage_finalize reads it back via
+    # PipelineRun.transition()'s automatic terminal-state computation.
     pipeline_run.processing_started_at = datetime.now(timezone.utc)
     db.commit()
+    db.close()
+
+    # ── Build and dispatch the stage chain ─────────────────────────────────
+    # .s() for the two links that carry real data forward (doc_ids from
+    # COLLECTING into PROCESSING); .si() (immutable) for every stage after
+    # that, since they only need run_id/client_id/owner_id, not each other's
+    # return values, and must ignore whatever the previous task returned.
+    pipeline_chain = chain(
+        pipeline_stage_collect.s(run_id, client_id, owner_id),
+        pipeline_stage_process.s(run_id, client_id, owner_id),
+        pipeline_stage_trend.si(run_id, client_id, owner_id),
+        pipeline_stage_risk.si(run_id, client_id, owner_id),
+        pipeline_stage_alert.si(run_id, client_id, owner_id),
+        pipeline_stage_narrative.si(run_id, client_id, owner_id),
+        pipeline_stage_reputation.si(run_id, client_id, owner_id),
+        pipeline_stage_executive.si(run_id, client_id, owner_id),
+        pipeline_stage_benchmark.si(run_id, client_id, owner_id),
+        pipeline_stage_finalize.si(run_id, client_id, owner_id),
+    )
 
     try:
-        # ── Stage: COLLECTING (5% → 20%) ──────────────────────────────────
-        _update_run(db, run_id, "COLLECTING", "Starting document collection")
-        doc_ids = _stage_collect(ctx, db)
-
-        # Update to 20% manually after collection completes
-        run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
-        if run:
-            run.progress_pct = 20
-            run.log_tail = f"Collected {len(doc_ids)} documents"
-            db.commit()
-
-        # ── Stage: PROCESSING (20% → 40%) ─────────────────────────────────
-        _update_run(db, run_id, "PROCESSING", f"Running NLP on {len(doc_ids)} documents")
-        _stage_process(ctx, db, doc_ids)
-
-        # ── Stage: TREND (40% → 50%) ──────────────────────────────────────
-        _update_run(db, run_id, "TREND", "Running trend detection")
-        _stage_trend(ctx, db)
-
-        # ── Stage: RISK (50% → 60%) ───────────────────────────────────────
-        _update_run(db, run_id, "RISK", "Running risk engine")
-        _stage_risk(ctx, db)
-
-        # ── Stage: ALERT (60% → 70%) ──────────────────────────────────────
-        _update_run(db, run_id, "ALERT", "Evaluating alerts")
-        _stage_alert(ctx, db)
-
-        # ── Stage: NARRATIVE (70% → 80%) ──────────────────────────────────
-        _update_run(db, run_id, "NARRATIVE", "Generating narratives")
-        _stage_narrative(ctx, db)
-
-        # ── Stage: REPUTATION (80% → 85%) ─────────────────────────────────
-        _update_run(db, run_id, "REPUTATION", "Calculating reputation scores")
-        _stage_reputation(ctx, db)
-
-        # ── Stage: EXECUTIVE (85% → 90%) ──────────────────────────────────
-        _update_run(db, run_id, "EXECUTIVE", "Processing executive reputation")
-        _stage_executive(ctx, db)
-
-        # ── Stage: BENCHMARK (90% → 95%) ──────────────────────────────────
-        _update_run(db, run_id, "BENCHMARK", "Running competitor benchmarks")
-        _stage_benchmark(ctx, db)
-
-        # ── Stage: FINALIZING (95% → 100%) ────────────────────────────────
-        _update_run(db, run_id, "FINALIZING", "Finalizing pipeline run")
-        _stage_finalize(ctx, db)
-
-        # ── SUCCESS ───────────────────────────────────────────────────────
-        total_s = time.perf_counter() - t_pipeline
-        _update_run(db, run_id, "SUCCESS", f"Pipeline completed in {total_s:.1f}s")
-
-        log.info("pipeline_task_succeeded",
-                 documents=len(doc_ids),
-                 duration_s=round(total_s, 2))
-
+        pipeline_chain.apply_async(
+            link_error=pipeline_stage_error_handler.s(run_id, client_id, owner_id)
+        )
+        log.info("pipeline_chain_dispatched")
     except Exception as exc:
-        error_detail = traceback.format_exc()
-        log.error("pipeline_task_failed", error=str(exc), exc_info=True)
-        _fail_run(db, run_id, error_detail, log)
-
-    finally:
-        # ── Always release the lock ────────────────────────────────────────
-        _release_lock(redis_client, client_id, owner_id, log)
-        db.close()
-        log.info("pipeline_task_finished")
+        # The chain never reached the broker (e.g. Redis unreachable at this
+        # exact moment) -- no stage task exists to ever release the lock we
+        # already hold, so release it here. This is the third and last of
+        # the three mutually-exclusive release points.
+        error_detail = f"Failed to dispatch pipeline stage chain: {exc}"
+        log.error("pipeline_chain_dispatch_failed", error=str(exc), exc_info=True)
+        fail_db = SessionLocal()
+        try:
+            _fail_run(fail_db, run_id, error_detail, log)
+        finally:
+            _release_lock(redis_client, client_id, owner_id, log)
+            fail_db.close()

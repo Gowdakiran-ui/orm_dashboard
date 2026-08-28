@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List, Dict, Any
+from app.core.dashboard_cache import cached_by_client
 from app.core.db import get_db
 from app.models.client import Client
 from app.models.trends import TrendEvent
@@ -87,7 +88,10 @@ def get_client_narratives(client_id: UUID, db: Session = Depends(get_db)):
         "sentiment": n.sentiment_score,
         "risk": n.risk_score,
         "trend": n.trend_strength,
-        "status": n.status
+        "status": n.status,
+        "summary_text": n.summary_text,
+        "confidence_score": n.confidence_score,
+        "evidence_metadata": n.evidence_metadata
     } for n in narratives]
     return results
 
@@ -475,12 +479,146 @@ def promote_executive_candidates(client_id: UUID, db: Session = Depends(get_db))
     
     return result
 
-@router.get("/{client_id}/telemetry", response_model=Dict[str, Any])
-def get_client_telemetry(client_id: UUID, db: Session = Depends(get_db)):
+@router.get("/{client_id}/reputation-summary", response_model=Dict[str, Any])
+@cached_by_client("reputation_summary")
+def get_client_reputation_summary(client_id: UUID, response: Response, db: Session = Depends(get_db)):
+    """
+    Deterministic aggregation for the Brand Equity summary panel (replaces
+    the Tactical Reputation Radar dial). Pure read of already-computed data
+    from each engine's stored output -- no engine is invoked synchronously
+    here, and no LLM calls are made. Returns structured fields; the frontend
+    owns final copy/wording.
+
+    Cached (dashboard_cache.py) -- 7 separate grouped/joined aggregate
+    queries on every 45s poll otherwise. See alerts.py's acknowledge_alert
+    for the one explicit invalidation this cache needs (executive_alert).
+    """
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-        
+
+    from app.models.entity import Entity
+    from app.models.sentiment import EntitySentiment
+
+    # 1. Reputation -- read latest stored ReputationScore row (same source as
+    # get_client_reputation above), never recompute synchronously.
+    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(
+        ReputationScore.created_at.desc(), ReputationScore.id.desc()
+    ).first()
+    if not rep:
+        reputation = {"score": None, "grade": None, "trend": "INSUFFICIENT_DATA", "status": "no_data"}
+    elif rep.score is None:
+        reputation = {"score": None, "grade": None, "trend": rep.reputation_trend, "status": "insufficient_evidence"}
+    else:
+        reputation = {"score": rep.score, "grade": rep.grade, "trend": rep.reputation_trend, "status": "ok"}
+
+    # 2. Risk -- full count by severity (not last-50-limited like get_client_risks),
+    # plus the single most severe CRITICAL/HIGH event if one exists.
+    risk_counts_raw = db.query(RiskEvent.risk_level, func.count(RiskEvent.id)).filter(
+        RiskEvent.client_id == client_id
+    ).group_by(RiskEvent.risk_level).all()
+    risk_counts = {level: count for level, count in risk_counts_raw}
+    risk_total = sum(risk_counts.values())
+
+    most_severe_risk = None
+    top_risk = db.query(RiskEvent, Entity).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
+        RiskEvent.client_id == client_id,
+        RiskEvent.risk_level.in_(["CRITICAL", "HIGH"])
+    ).order_by(RiskEvent.risk_score.desc(), RiskEvent.created_at.desc()).first()
+    if top_risk:
+        event, entity = top_risk
+        top_factor = None
+        if event.risk_factors:
+            top_factor = max(event.risk_factors, key=lambda f: f.get("weight", 0)).get("factor")
+        most_severe_risk = {
+            "level": event.risk_level,
+            "score": event.risk_score,
+            "entity_name": entity.name if entity else None,
+            "factor": top_factor
+        }
+
+    risk = {
+        "total": risk_total,
+        "critical": risk_counts.get("CRITICAL", 0),
+        "high": risk_counts.get("HIGH", 0),
+        "medium": risk_counts.get("MEDIUM", 0),
+        "low": risk_counts.get("LOW", 0),
+        "most_severe": most_severe_risk
+    }
+
+    # 3. Sentiment -- per-entity sentiment labels scoped to this client's entities.
+    sentiment_counts_raw = db.query(EntitySentiment.sentiment_label, func.count(EntitySentiment.id)).join(
+        Entity, Entity.id == EntitySentiment.entity_id
+    ).filter(Entity.client_id == client_id).group_by(EntitySentiment.sentiment_label).all()
+    sentiment_counts = {label: count for label, count in sentiment_counts_raw}
+    positive = sentiment_counts.get("Positive", 0)
+    neutral = sentiment_counts.get("Neutral", 0)
+    negative = sentiment_counts.get("Negative", 0)
+    dominant = max(
+        [("positive", positive), ("neutral", neutral), ("negative", negative)],
+        key=lambda x: x[1]
+    )[0] if (positive or neutral or negative) else None
+
+    sentiment = {"positive": positive, "neutral": neutral, "negative": negative, "dominant": dominant}
+
+    # 4. Narratives -- "active" = not DECLINING (EMERGING/GROWING/PEAK), top by confidence.
+    active_narratives = db.query(Narrative).filter(
+        Narrative.client_id == client_id,
+        Narrative.status != "DECLINING"
+    ).order_by(Narrative.confidence_score.desc(), Narrative.id.desc()).all()
+    top_narrative = None
+    if active_narratives:
+        top_narrative = {"name": active_narratives[0].narrative_name, "confidence": active_narratives[0].confidence_score}
+
+    narratives = {"active_count": len(active_narratives), "top": top_narrative}
+
+    # 5. Trends -- direction values differ by trend_type (RISING/FALLING for
+    # Mention/Topic, positive/negative for Sentiment), so both sets are handled.
+    trend_total = db.query(func.count(TrendEvent.id)).filter(TrendEvent.client_id == client_id).scalar() or 0
+    growing = db.query(func.count(TrendEvent.id)).filter(
+        TrendEvent.client_id == client_id, TrendEvent.trend_direction.in_(["RISING", "positive"])
+    ).scalar() or 0
+    declining = db.query(func.count(TrendEvent.id)).filter(
+        TrendEvent.client_id == client_id, TrendEvent.trend_direction.in_(["FALLING", "negative"])
+    ).scalar() or 0
+
+    trends = {"total": trend_total, "growing": growing, "declining": declining}
+
+    # 6. Executive Risk alerts -- open (unacknowledged) alerts of type "Executive Risk"
+    # (A12-F1: entity_type == "person" gate, commit 1ceca4f).
+    exec_alert_row = db.query(Alert, Entity).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
+        Alert.client_id == client_id,
+        Alert.alert_type == "Executive Risk",
+        Alert.is_acknowledged == False
+    ).order_by(Alert.created_at.desc()).first()
+    executive_alert = {"open": False, "alert": None}
+    if exec_alert_row:
+        alert, entity = exec_alert_row
+        executive_alert = {
+            "open": True,
+            "alert": {"title": alert.title, "entity_name": entity.name if entity else None, "severity": alert.severity}
+        }
+
+    return {
+        "reputation": reputation,
+        "risk": risk,
+        "sentiment": sentiment,
+        "narratives": narratives,
+        "trends": trends,
+        "executive_alert": executive_alert
+    }
+
+@router.get("/{client_id}/telemetry", response_model=Dict[str, Any])
+@cached_by_client("telemetry")
+def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depends(get_db)):
+    # Cached (dashboard_cache.py) -- loads every document for the client
+    # plus 9 more full-table scans on every 45s poll otherwise. Populated
+    # entirely by async Celery engines, so plain TTL is sufficient (no
+    # synchronous write path needs explicit invalidation here).
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
     from app.models.document import Document, DocumentMatch
     from app.models.entity import Entity, EntityMention
     from app.models.topic import DocumentTopic

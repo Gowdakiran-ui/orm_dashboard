@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.db import get_db
+from app.core.rate_limit import limiter, STRICT_RATE_LIMIT
 from app.models.search import SearchJob, SearchSourceConfiguration
 from app.schemas.search import SearchJobResponse, SearchStatusResponse, SearchTriggerRequest
 from app.workers.search_tasks import execute_search_task
@@ -10,7 +11,8 @@ from app.workers.search_tasks import execute_search_task
 router = APIRouter()
 
 @router.post("/{source_type}")
-def trigger_search(source_type: str, request: SearchTriggerRequest, db: Session = Depends(get_db)):
+@limiter.limit(STRICT_RATE_LIMIT)
+def trigger_search(request: Request, response: Response, source_type: str, body: SearchTriggerRequest, db: Session = Depends(get_db)):
     # Validate source_type
     if source_type not in ['reddit', 'youtube']:
         raise HTTPException(status_code=400, detail="Invalid source_type. Must be 'reddit' or 'youtube'")
@@ -24,12 +26,12 @@ def trigger_search(source_type: str, request: SearchTriggerRequest, db: Session 
     import uuid
     dummy_keyword_id = str(uuid.uuid4())
 
-    execute_search_task.delay(source_type, request.keyword, dummy_keyword_id)
-    return {"status": "queued", "source_type": source_type, "keyword": request.keyword}
+    execute_search_task.delay(source_type, body.keyword, dummy_keyword_id)
+    return {"status": "queued", "source_type": source_type, "keyword": body.keyword}
 
 @router.get("/jobs", response_model=List[SearchJobResponse])
 def get_search_jobs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(SearchJob).order_by(SearchJob.started_at.desc(), SearchJob.id.desc()).offset(skip).limit(limit).all()
+    return db.query(SearchJob).order_by(SearchJob.started_at.desc(), SearchJob.job_id.desc()).offset(skip).limit(limit).all()
 
 @router.get("/status", response_model=SearchStatusResponse)
 def get_search_status(db: Session = Depends(get_db)):

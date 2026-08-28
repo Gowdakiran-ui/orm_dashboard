@@ -30,6 +30,7 @@ celery_app = Celery(
         'app.workers.search_tasks',
         'app.workers.intelligence_tasks',
         'app.workers.aggregation_tasks',   # R1: explicitly included for beat
+        'app.workers.backup_tasks',
     ]
 )
 
@@ -50,6 +51,9 @@ celery_app.conf.update(
         'app.workers.search_tasks.execute_search_task':   {'queue': 'io_queue'},
         'app.workers.search_tasks.schedule_searches':     {'queue': 'io_queue'},
         'app.workers.search_tasks.search_job_watchdog':   {'queue': 'io_queue'},
+        # Backups (Section 10) -- lightweight periodic I/O work, same
+        # category as the watchdogs above, not worth a dedicated queue.
+        'app.workers.backup_tasks.run_backup':            {'queue': 'io_queue'},
         # CPU-bound NLP tasks
         'app.workers.document_processor.process_document_task': {'queue': 'cpu_queue'},
         'app.workers.intelligence_tasks.process_document_intelligence': {'queue': 'nlp_queue'},
@@ -167,14 +171,35 @@ celery_app.conf.update(
             'task': 'app.workers.aggregation_tasks.calculate_competitor_benchmarks',
             'schedule': crontab(minute='30', hour='*/4'),
         },
+
+        # --- Database Backup (Section 10) — runs daily at 02:00 UTC ---
+        # Off-peak relative to the hourly/every-2h/every-4h aggregation jobs
+        # above. See app/workers/backup_tasks.py and docs/BACKUP.md.
+        'run-backup-daily': {
+            'task': 'app.workers.backup_tasks.run_backup',
+            'schedule': crontab(minute='0', hour='2'),
+        },
     }
 )
 
 
-from celery.signals import worker_process_init, task_failure
+from celery.signals import worker_process_init, task_failure, task_success
 import structlog
 
 logger = structlog.get_logger()
+
+
+def _incr_task_counter(prefix: str, task_name: str) -> None:
+    """Best-effort Redis INCR backing the /metrics celery_task_{failed,success}_total
+    gauges (API_FORENSICS.md Section 3, app/core/metrics.py). Metrics must
+    never break task completion handling, so a Redis hiccup here is
+    swallowed, not raised.
+    """
+    try:
+        from app.utils.redis_client import redis_client
+        redis_client.incrby(f"metrics:celery:{prefix}:{task_name}")
+    except Exception as e:
+        logger.warning("celery_metrics_incr_failed", prefix=prefix, task_name=task_name, error=str(e))
 
 
 @task_failure.connect
@@ -182,14 +207,21 @@ def handle_task_failure(
     sender=None, task_id=None, exception=None,
     args=None, kwargs=None, traceback=None, einfo=None, **other
 ):
+    task_name = sender.name if sender else "Unknown"
     logger.error(
         "celery_task_failed",
         task_id=task_id,
-        task_name=sender.name if sender else "Unknown",
+        task_name=task_name,
         exception=str(exception),
         args=args,
         kwargs=kwargs
     )
+    _incr_task_counter("failed", task_name)
+
+
+@task_success.connect
+def handle_task_success(sender=None, result=None, **other):
+    _incr_task_counter("success", sender.name if sender else "Unknown")
 
 
 @worker_process_init.connect
