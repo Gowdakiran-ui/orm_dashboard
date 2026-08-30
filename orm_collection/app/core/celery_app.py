@@ -226,6 +226,17 @@ def handle_task_success(sender=None, result=None, **other):
 
 @worker_process_init.connect
 def init_celery_worker(**kwargs):
+    import os
+
+    # celery-worker-io consumes io_queue only (feed fetches, search calls,
+    # watchdogs -- grep-confirmed none of those tasks touch engine_instance),
+    # so loading and pubsub-refreshing the matching engine there is pure
+    # waste: a ~10s+ DB round trip per prefork child (concurrency=4 = 4x),
+    # for a cache this worker never reads. Set only on that service in
+    # docker-compose.yml; every other worker keeps today's behavior.
+    if os.environ.get("CELERY_SKIP_MATCHING_ENGINE", "false").lower() == "true":
+        return
+
     from app.core.db import SessionLocal
     from app.services.matching_engine import engine_instance
     from app.core.pubsub import start_pubsub_listener

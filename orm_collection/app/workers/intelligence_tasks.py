@@ -1,29 +1,58 @@
 from celery import shared_task
 from app.core.db import SessionLocal
-from app.services.intelligence.topic_classifier import TopicClassifier
 from app.services.intelligence.topic_classification_batch_processor import HardenedTopicClassifier, TopicRetryConfig, logger as topic_batch_logger
-from app.services.intelligence.entity_extractor import EntityExtractor
-from app.services.intelligence.sentiment_analyzer import SentimentAnalyzer
 from app.services.intelligence.entity_discovery import entity_discovery_engine
 import structlog
+import threading
 import uuid
 from datetime import datetime, timezone, timedelta
 
 logger = structlog.get_logger()
 
-# Initialize models globally for the worker process to avoid reloading per task
-raw_topic_classifier = TopicClassifier(use_mock=False)
-hardened_topic_classifier = HardenedTopicClassifier(
-    classifier_instance=raw_topic_classifier,
-    retry_config=TopicRetryConfig(max_retries=2, base_backoff_seconds=0.1)
-)
-entity_extractor = EntityExtractor()
-sentiment_analyzer = SentimentAnalyzer(use_mock=False)
+# Lazy-loaded: TopicClassifier/EntityExtractor/SentimentAnalyzer pull in
+# spaCy + transformers (FinBERT, a zero-shot classifier) and are only ever
+# used inside execute_document_intelligence_sync below (nlp_queue's
+# process_document_intelligence task, and pipeline_stage_process in
+# aggregation_tasks.py, also nlp_queue). This module itself, however, is
+# imported by every celery process regardless of queue -- celery_app.py's
+# include=[...] runs unconditionally for every worker AND `celery beat`, so
+# io/cpu/aggregation/pipeline workers and beat (none of which ever call
+# these models) were all paying the multi-hundred-MB-to-GB HF Hub
+# download/model-load cost at container startup, once per prefork child.
+# Deferring instantiation to first real use confines that cost to
+# nlp_queue's worker, on its first task. (HardenedTopicClassifier/
+# TopicRetryConfig above are cheap to import -- only TopicClassifier's own
+# __init__ loads a model -- so those stay top-level.)
+_intelligence_models_lock = threading.Lock()
+_intelligence_models = {}
+
+
+def _get_intelligence_models():
+    if not _intelligence_models:
+        with _intelligence_models_lock:
+            if not _intelligence_models:
+                from app.services.intelligence.topic_classifier import TopicClassifier
+                from app.services.intelligence.entity_extractor import EntityExtractor
+                from app.services.intelligence.sentiment_analyzer import SentimentAnalyzer
+
+                raw_topic_classifier = TopicClassifier(use_mock=False)
+                _intelligence_models["hardened_topic_classifier"] = HardenedTopicClassifier(
+                    classifier_instance=raw_topic_classifier,
+                    retry_config=TopicRetryConfig(max_retries=2, base_backoff_seconds=0.1)
+                )
+                _intelligence_models["entity_extractor"] = EntityExtractor()
+                _intelligence_models["sentiment_analyzer"] = SentimentAnalyzer(use_mock=False)
+    return _intelligence_models
 
 def execute_document_intelligence_sync(document_id: str, client_id: str = None, celery_task=None):
     import time
     t0 = time.perf_counter()
     logger.info("pipeline_stage_started", stage="process_document_intelligence", document_id=document_id, client_id=client_id)
+
+    models = _get_intelligence_models()
+    entity_extractor = models["entity_extractor"]
+    hardened_topic_classifier = models["hardened_topic_classifier"]
+    sentiment_analyzer = models["sentiment_analyzer"]
 
     # Retrieve client_id for logging if possible
     db = SessionLocal()

@@ -12,6 +12,7 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    mem_limit: 512m
     ports:
       - "6379:6379"
     volumes:
@@ -27,6 +28,7 @@ services:
       context: ./orm_collection
     image: orm-platform-backend:dev-review
     restart: unless-stopped
+    mem_limit: 1g
     ports:
       - "8000:8000"
     env_file: .env
@@ -58,13 +60,15 @@ services:
   # process, so a slow NLP inference call blocked feed collection and vice
   # versa -- see forensic audit §5/§11. Each queue now gets its own process.
   celery-worker-io:
-    build:
-      context: ./orm_collection
     image: orm-platform-backend:dev-review
     restart: unless-stopped
+    mem_limit: 1.5g
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      # io_queue tasks (feed fetches, search, watchdogs) never touch the
+      # matching engine -- see app/core/celery_app.py's worker_process_init.
+      - CELERY_SKIP_MATCHING_ENGINE=true
     volumes:
       # app.workers.backup_tasks.run_backup (Section 10) is routed to
       # io_queue and writes its pg_dump output here. Named volume, not a
@@ -95,10 +99,9 @@ services:
       start_period: 40s
 
   celery-worker-cpu:
-    build:
-      context: ./orm_collection
     image: orm-platform-backend:dev-review
     restart: unless-stopped
+    mem_limit: 1g
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -118,10 +121,9 @@ services:
       start_period: 40s
 
   celery-worker-nlp:
-    build:
-      context: ./orm_collection
     image: orm-platform-backend:dev-review
     restart: unless-stopped
+    mem_limit: 4g
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -150,10 +152,9 @@ services:
       start_period: 40s
 
   celery-worker-aggregation:
-    build:
-      context: ./orm_collection
     image: orm-platform-backend:dev-review
     restart: unless-stopped
+    mem_limit: 1.5g
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -173,10 +174,9 @@ services:
       start_period: 40s
 
   celery-worker-pipeline:
-    build:
-      context: ./orm_collection
     image: orm-platform-backend:dev-review
     restart: unless-stopped
+    mem_limit: 1g
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -194,10 +194,9 @@ services:
       start_period: 40s
 
   celery-beat:
-    build:
-      context: ./orm_collection
     image: orm-platform-backend:dev-review
     restart: unless-stopped
+    mem_limit: 512m
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -228,6 +227,7 @@ services:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     image: orm-platform-frontend:dev-review
     restart: unless-stopped
+    mem_limit: 1g
     ports:
       - "3000:3000"
     env_file: .env

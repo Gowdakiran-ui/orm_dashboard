@@ -835,11 +835,39 @@ def _update_run(db, pipeline_run_id: str, new_stage: str, log_line: str = "") ->
     """
     Advance FSM state in the DB. Uses a fresh session to avoid holding
     a long-lived transaction across slow engine calls.
+
+    Real-run verification of the timeout fix (see _PIPELINE_RUN_TIMEOUT_MINUTES
+    above) hit this live: nlp_queue's --pool=solo worker freezes the whole
+    process for a long PROCESSING stage's entire duration (no other thread
+    can service the Redis connection); a ~2min host network interruption
+    during that window caused the connection to drop, and Celery redelivered
+    the same already-completed task once it reconnected. The redelivered
+    task called _update_run(..., "PROCESSING", ...) a second time while the
+    run was already sitting in "PROCESSING" from the first (genuine, already
+    succeeded) delivery -- an illegal X->X self-transition that used to crash
+    the redelivered task, which then marked an otherwise fully-successful
+    89-document run FAILED via the link_error handler, and cascaded into
+    every legitimate downstream stage task also failing against the
+    now-terminal row.
+
+    Guarding the exact same-stage case as a harmless no-op closes that
+    specific, evidenced crash. It is not a complete fix for message
+    redelivery in general (e.g. a redelivery landing after the real chain
+    has moved *past* this stage would still hit transition()'s existing
+    illegal-transition/terminal-state guards below, same as before) --
+    building full exactly-once chain semantics is a larger change than is
+    safe to make this close to deploy without dedicated testing time; this
+    guard only closes the one failure mode actually observed and reproduced.
     """
     run = db.query(PipelineRun).filter(PipelineRun.run_id == pipeline_run_id).with_for_update().first()
-    if run:
-        run.transition(new_stage, log_line)
-        db.commit()
+    if not run:
+        return
+    if run.status == new_stage:
+        logger.warning("pipeline_duplicate_stage_transition_ignored",
+                        run_id=pipeline_run_id, stage=new_stage)
+        return
+    run.transition(new_stage, log_line)
+    db.commit()
 
 
 def _fail_run(db, pipeline_run_id: str, error_detail: str, log) -> None:
@@ -888,7 +916,36 @@ def _update_progress(db, pipeline_run_id: str, progress_pct: int, log_line: str)
 # ---------------------------------------------------------------------------
 
 _PIPELINE_RUN_TERMINAL = {"SUCCESS", "FAILED"}
-_PIPELINE_RUN_TIMEOUT_MINUTES = 60
+# Readiness-report incident: a real 89-document onboarding batch took ~70min
+# on nlp_queue's single-concurrency (--pool=solo) worker and got marked
+# FAILED at the old 60min threshold despite completing normally -- the old
+# comment's "~7-10 min observed" / "591s wall for an 88-doc run" figure was
+# from a much lighter/cached test run, not representative of real NLP
+# throughput under solo concurrency. Do not raise celery-worker-nlp's
+# concurrency to fix this: task-level time_limit is a documented no-op
+# under --pool=solo (BasePool.on_soft_timeout/on_hard_timeout are
+# unimplemented `pass`), so this watchdog's periodic sweep is the *only*
+# real enforcement mechanism for a hung run -- widening it, not narrowing
+# it, is the safe direction.
+#
+# Recalculated from the real measurement, not the stale one:
+#   throughput  = 70 min / 89 docs = ~0.79 min/doc
+#   design load = 3x today's batch = ~267 docs (a meaningfully larger first
+#                 onboarding, not just today's exact size)
+#   projected   = 267 * 0.79 ≈ 210 min of real NLP processing time
+#   margin      = 1.4x on top of the linear projection, for retry backoff,
+#                 DB/Redis latency variance, and the non-NLP stages
+#                 (COLLECTING/TREND/RISK/.../FINALIZING) riding on the same
+#                 clock ≈ 294 min
+#   -> rounded up to 300 min (5h)
+#
+# This is a fixed constant, not a per-run-document-count formula: PipelineRun
+# has no document-count column today (see app/models/pipeline_run.py), and
+# adding one is a schema.sql change -- a high-risk-zone edit this close to
+# deploy that needs its own fresh-Postgres verification pass. A raised,
+# real-margin constant closes the actual incident without that risk; revisit
+# true per-document scaling as separate follow-up work, not part of this fix.
+_PIPELINE_RUN_TIMEOUT_MINUTES = 300
 
 
 @shared_task
@@ -907,9 +964,10 @@ def pipeline_run_watchdog():
     A Beat-scheduled sweep works regardless of pool type since it acts from
     outside the stuck task.
 
-    Threshold: 60 minutes, chosen against the live-measured real-world
-    duration of ~7-10 minutes (431s worker / 591s wall for an 88-document
-    run) plus generous headroom for larger clients.
+    Threshold: 300 minutes (5h), recalculated after a real 89-document
+    onboarding batch took ~70min and was wrongly marked FAILED at the old
+    60min threshold. See _PIPELINE_RUN_TIMEOUT_MINUTES above for the full
+    math (throughput -> 3x-batch projection -> margin).
     """
     from datetime import datetime, timezone, timedelta
     import structlog
