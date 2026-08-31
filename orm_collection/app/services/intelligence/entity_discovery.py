@@ -140,6 +140,19 @@ class EntityDiscoveryConfig:
     # Maximum length for person names
     MAX_PERSON_NAME_LENGTH = 100
 
+    # Round 3, Fix 3 — a candidate is a price/currency string, not an
+    # organization name, only when a currency symbol or a short (<=3-letter)
+    # currency-code/country prefix is immediately followed by digits, anchored
+    # to the whole string. Deliberately does NOT match on "contains a digit"
+    # alone, which would wrongly reject real company names like "3M" or
+    # "7-Eleven". Verified live against "HK$205,000" (see
+    # NLP_AUDIT_FIX_VERIFICATION.md round 3).
+    _PRICE_PATTERN = re.compile(
+        r'^[A-Za-z]{0,3}[$€£¥₹]\s?\d[\d,]*(\.\d+)?$'
+        r'|^(USD|EUR|GBP|INR|HKD|JPY|CNY|AUD|CAD)\s?\d[\d,]*(\.\d+)?$',
+        re.IGNORECASE,
+    )
+
     # A2.1 — corporate-descriptor nouns that disqualify a candidate from
     # being a person name (Layer 7 of _is_valid_person_name_layered), for
     # names that aren't caught by strict legal suffixes (_LEGAL_SUFFIXES,
@@ -268,7 +281,8 @@ class EntityDiscoveryEngine:
             
             if entity_label == "PERSON":
                 result = self._process_person_entity(
-                    db, client_id, entity_name, document_id
+                    db, client_id, entity_name, document_id,
+                    source_text=document.normalized_content,
                 )
                 if result == "candidate_created":
                     results["executive_candidates_created"] += 1
@@ -282,6 +296,7 @@ class EntityDiscoveryEngine:
                     db, client_id, entity_name, document_id, client_brand,
                     self_reference_terms=org_self_reference_terms,
                     source_terms=org_source_terms,
+                    source_text=document.normalized_content,
                 )
                 if result == "candidate_created":
                     results["competitor_candidates_created"] += 1
@@ -298,7 +313,8 @@ class EntityDiscoveryEngine:
         db: Session,
         client_id: str,
         person_name: str,
-        document_id: str
+        document_id: str,
+        source_text: Optional[str] = None,
     ) -> str:
         """
         Process a PERSON entity:
@@ -408,7 +424,7 @@ class EntityDiscoveryEngine:
             return "candidate_updated"
         
         # Layered validation of the candidate
-        is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(person_name, db, client_id)
+        is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(person_name, db, client_id, source_text=source_text)
         if not is_valid:
             logger.info(
                 "executive_candidate_rejected",
@@ -457,6 +473,7 @@ class EntityDiscoveryEngine:
         client_brand: Optional[Entity],
         self_reference_terms: Optional[set] = None,
         source_terms: Optional[set] = None,
+        source_text: Optional[str] = None,
     ) -> str:
         """
         Process an ORG entity:
@@ -552,6 +569,7 @@ class EntityDiscoveryEngine:
             client_name=client_brand.name if client_brand else "",
             self_reference_terms=self_reference_terms,
             source_terms=source_terms,
+            source_text=source_text,
         )
         if not is_valid:
             logger.info(
@@ -651,39 +669,51 @@ class EntityDiscoveryEngine:
             
         return True
 
-    def _span_verb_token(self, text: str) -> Optional[str]:
+    def _span_verb_token(self, text: str, source_text: Optional[str] = None) -> Optional[str]:
         """
         Real POS-based verb detection, replacing the old hand-maintained
         action-verb denylists on both the person and org validation paths.
-        Runs the same spaCy pipeline already loaded (self.nlp) over the
-        candidate span alone and returns the first token spaCy's tagger
-        marks pos_=="VERB" (any inflected form -- VBZ/VBD/VBP/VBG/VB),
-        or None if no token in the span is a verb.
+
+        NLP audit round 3, Fix 1: tagging the candidate span alone is why
+        spaCy misreads "Locks" (from "Trump Locks Down") and "Frames" (from
+        "Frames Autonomy") as PROPN instead of VERB -- with no surrounding
+        sentence, a capitalized word at the start of a short Title-Case span
+        looks exactly like a proper noun to the tagger. When the original
+        headline/title the span was extracted from is available
+        (`source_text`), this now tags the FULL text instead and checks
+        whether the tokens at the candidate's character offsets are VERB in
+        that real context -- live-verified this correctly flips both
+        examples above to VERB (see NLP_AUDIT_FIX_VERIFICATION.md round 3).
+        Falls back to isolated-span tagging (the original behavior) if
+        `source_text` is not supplied or the span can't be located inside it
+        verbatim (case-insensitive), so callers that don't have the source
+        text yet (e.g. offline re-validation tooling) are unaffected.
 
         Deliberately excludes pos_=="AUX" (modal/auxiliary verbs like
         "Will", "Is", "Was") -- verified live against real first names
         ("Will Smith", "May Wong") that spaCy tags as AUX in a short
         Title-Case span, not VERB; excluding AUX avoids rejecting those.
-
-        Honest limitation, verified live: spaCy's tagger loses accuracy on
-        a short 2-4 word span taken out of its original sentence context.
-        "Trump Locks Down" tags "Locks" as PROPN (not VERB) in isolation,
-        and "Frames Autonomy" tags "Frames" as PROPN too -- both still slip
-        past this check, same as they did past the old denylist, since
-        neither contained a word on that list either. This check is a real
-        improvement (catches "Deletes", "Acquires", "Boycotting" without
-        needing them hand-added to a list) but is not a complete fix for
-        context-free NER spans; see NLP_AUDIT_REPORT.md.
         """
         if not text or not self.nlp:
             return None
+
+        if source_text:
+            idx = source_text.lower().find(text.lower())
+            if idx != -1:
+                span_start, span_end = idx, idx + len(text)
+                doc = self.nlp(source_text)
+                for tok in doc:
+                    if tok.idx >= span_start and tok.idx < span_end and tok.pos_ == "VERB":
+                        return tok.text
+                return None
+
         doc = self.nlp(text)
         for tok in doc:
             if tok.pos_ == "VERB":
                 return tok.text
         return None
 
-    def _is_valid_person_name_layered(self, name: str, db: Session, client_id: str) -> tuple[bool, str, str]:
+    def _is_valid_person_name_layered(self, name: str, db: Session, client_id: str, source_text: Optional[str] = None) -> tuple[bool, str, str]:
         """
         Validate candidate name across 5 layers.
         Returns: (is_valid, validation_layer, reason)
@@ -741,7 +771,7 @@ class EntityDiscoveryEngine:
         # action-verb denylist -- see _span_verb_token()'s docstring for why
         # this is real grammatical detection instead of a word list, and its
         # known limitation on context-free spans).
-        verb_hit = self._span_verb_token(name_clean)
+        verb_hit = self._span_verb_token(name_clean, source_text=source_text)
         if verb_hit:
             return False, "Layer 3 — Verb Filter", f"Contains a verb: '{verb_hit}'"
 
@@ -830,8 +860,21 @@ class EntityDiscoveryEngine:
     def _normalize_name(self, name: str) -> str:
         """Normalize entity name for matching, stripping corporate suffixes"""
         cleaned = name.strip().lower()
+
+        # Fix 2 (round 3): strip a possessive 's from ANY token, not just a
+        # trailing suffix on the whole string. "Tesla's Autopilot" only had
+        # its possessive removed if the whole candidate ended in "'s" -- a
+        # possessive on an internal token ("tesla's" followed by more words)
+        # was left untouched, so it normalized to "tesla's autopilot", which
+        # the Layer O2 self-reference check's `normalized_lower.startswith(
+        # term + " ")` never matches against the self-reference term "tesla"
+        # (it starts with "tesla's ", not "tesla "). Live-verified this was
+        # why "Tesla's Autopilot" reached CompetitorCandidate as a real row
+        # instead of being recognized as the client's own product.
+        cleaned = re.sub(r"(\w)[’']s\b", r"\1", cleaned)
+
         cleaned = re.sub(r'[,.\s\-\/]+$', '', cleaned)
-        
+
         # Regex to strip common corporate suffixes at the end of name
         pattern = r'\b(inc|corp|corporation|ltd|limited|llc|co|company|holdings|group)\b$'
         
@@ -842,6 +885,17 @@ class EntityDiscoveryEngine:
             cleaned = re.sub(r'[,.\s\-\/]+$', '', cleaned)
             
         return cleaned or name.strip().lower()
+
+    def _first_source_document_text(self, db: Session, doc_ids: Optional[List[str]]) -> Optional[str]:
+        """Fix 1 (round 3) helper for the promotion paths, which only have a
+        candidate's stored `source_documents` id list, not the document text
+        creation-time validation already had in hand. Returns the first
+        source document's normalized_content, or None (falls back to the
+        original isolated-span verb tagging) if there is none."""
+        if not doc_ids:
+            return None
+        doc = db.query(Document).filter(Document.id == doc_ids[0]).first()
+        return doc.normalized_content if doc else None
 
     def _has_executive_context(self, db: Session, name: str, doc_ids: List[str]) -> bool:
         """Helper to scan documents for executive context near the mention"""
@@ -1047,6 +1101,7 @@ class EntityDiscoveryEngine:
         client_name: str = "",
         self_reference_terms: Optional[set] = None,
         source_terms: Optional[set] = None,
+        source_text: Optional[str] = None,
     ) -> tuple:
         """
         Layered organization-name classifier. Returns (is_valid, layer, reason),
@@ -1135,9 +1190,18 @@ class EntityDiscoveryEngine:
         # company name is never a verb phrase. Catches "AMG National Trust
         # Bank Acquires New Shares" (Acquires) and "Boycotting American"
         # (Boycotting), which the old org path had no verb check for at all.
-        verb_hit = self._span_verb_token(raw)
+        verb_hit = self._span_verb_token(raw, source_text=source_text)
         if verb_hit:
             return False, "Layer O1c — Verb Filter", f"Contains a verb: '{verb_hit}'"
+
+        # ── Layer O1d — Price / currency filter (round 3, Fix 3) ────────────
+        # spaCy occasionally tags a price string as ORG ("HK$205,000" from
+        # "...starting at HK$205,000..."). Scoped narrowly to an (optional
+        # short currency-code prefix or symbol) immediately followed by
+        # digits, anchored to the whole candidate -- not "contains a digit",
+        # which would wrongly reject real names like "3M" or "7-Eleven".
+        if EntityDiscoveryConfig._PRICE_PATTERN.match(raw.strip()):
+            return False, "Layer O1d — Price / Currency Filter", f"Candidate is a price/currency string: '{raw.strip()}'"
 
         # ── Layer O2 — Client self-reference ───────────────────────────────
         # Fixes the prefix-only bug: for a multi-token client name like
@@ -1172,6 +1236,17 @@ class EntityDiscoveryEngine:
             # starts with "tata ") while no longer catching "Pepsi"/"PepsiCo".
             if len(normalized_lower) >= 4 and term.startswith(normalized_lower + " "):
                 return False, "Layer O2 — Client Self-Reference", f"Prefix of the client's own name '{term}'"
+            # Round 3, Fix 4 — the three checks above only catch the
+            # self-reference term at the START of the candidate. A term can
+            # just as easily be modified by a leading noise token instead
+            # ("K Cybertruck" from "...$40K Cybertruck...", "New Autopilot").
+            # Live-verified: registering "cybertruck" as a product term alone
+            # did NOT reject "K Cybertruck" until this suffix check was added
+            # -- a real gap in the matching logic, not just missing data.
+            # Symmetric with the prefix check's length guard, to avoid a
+            # short/coincidental term matching an unrelated real name.
+            if len(term) >= 4 and normalized_lower.endswith(" " + term):
+                return False, "Layer O2 — Client Self-Reference", f"Suffix matches the client's own identity term '{term}'"
 
         # ── Layer O3 — Publisher / source registry ─────────────────────────
         # Grounded in the platform's own `sources` table rather than a curated
@@ -1221,6 +1296,7 @@ class EntityDiscoveryEngine:
         client_name: str = "",
         self_reference_terms: Optional[set] = None,
         source_terms: Optional[set] = None,
+        source_text: Optional[str] = None,
     ) -> bool:
         """Boolean wrapper over _is_valid_org_name_layered() — signature kept
         backwards-compatible so existing call sites and the audit's direct-invoke
@@ -1230,6 +1306,7 @@ class EntityDiscoveryEngine:
             client_name=client_name,
             self_reference_terms=self_reference_terms,
             source_terms=source_terms,
+            source_text=source_text,
         )
         return is_valid
 
@@ -1352,6 +1429,11 @@ class EntityDiscoveryEngine:
         source_terms = self._registered_source_terms(db)
 
         for candidate in candidates:
+            # Fix 1 (round 3): give the verb filter the same full-sentence
+            # context creation-time validation now has, using the first
+            # source document this candidate was actually seen in.
+            source_text = self._first_source_document_text(db, candidate.source_documents)
+
             # Gate: must look like a real company, not a publisher, market
             # instrument, generic term, or the client's own brand/sub-brand.
             is_valid, reject_layer, reject_reason = self._is_valid_org_name_layered(
@@ -1359,6 +1441,7 @@ class EntityDiscoveryEngine:
                 client_name=client.name if client else "",
                 self_reference_terms=self_reference_terms,
                 source_terms=source_terms,
+                source_text=source_text,
             )
             if not is_valid:
                 logger.info(
@@ -1503,8 +1586,11 @@ class EntityDiscoveryEngine:
         promoted_executives = []
         
         for candidate in candidates:
-            # 1. Validation Layers check
-            is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(candidate.name, db, client_id)
+            # 1. Validation Layers check. Fix 1 (round 3): same full-sentence
+            # context creation-time validation now has, from this candidate's
+            # first source document.
+            source_text = self._first_source_document_text(db, candidate.source_documents)
+            is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(candidate.name, db, client_id, source_text=source_text)
             if not is_valid:
                 logger.info(
                     "executive_candidate_rejected",
