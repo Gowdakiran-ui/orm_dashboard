@@ -2,6 +2,7 @@ import spacy
 import uuid
 import structlog
 import re
+from collections import OrderedDict
 from difflib import SequenceMatcher
 from typing import List, Dict, Any, Optional, Set
 from sqlalchemy.orm import Session
@@ -197,6 +198,26 @@ class EntityDiscoveryConfig:
 
 
 class EntityDiscoveryEngine:
+    # Round-3 regression fix: promote_executive_candidates() /
+    # promote_competitor_candidates() re-validate EVERY not-yet-promoted
+    # candidate on EVERY document processed (intelligence_tasks.py calls
+    # both once per document, and each queries `.all()` pending candidates
+    # -- see docs/collection.md-adjacent forensic timing run). Round 3 gave
+    # _span_verb_token() a full self.nlp(source_text) parse of the
+    # candidate's source document instead of parsing the short span alone.
+    # Most candidates never reach promotion threshold, so the SAME
+    # candidate (and the SAME source_text) gets re-validated -- and
+    # re-parsed from scratch -- on every subsequent document indefinitely.
+    # Measured live (repro_pipeline_promotion.py against 200 real Tesla
+    # documents, throwaway local DB): promotion cost per document grew from
+    # ~40ms at a 0-candidate backlog to ~380ms at a 32-candidate backlog,
+    # i.e. linear in backlog size with a growing backlog -> O(documents^2)
+    # cumulative cost. Caching the parsed Doc by source_text turns repeated
+    # re-validation of an unchanged candidate into a cache hit instead of a
+    # fresh spaCy parse. Bounded (not unbounded dict) because celery-worker-nlp
+    # runs --pool=solo (one long-lived process) -- see docker-compose.yml.
+    _DOC_PARSE_CACHE_MAXSIZE = 256
+
     def __init__(self):
         try:
             self.nlp = spacy.load("en_core_web_sm")
@@ -208,6 +229,21 @@ class EntityDiscoveryEngine:
                 reason=str(e),
                 effect="Executive/competitor discovery will return empty candidates silently."
             )
+        self._doc_parse_cache: "OrderedDict[str, Any]" = OrderedDict()
+
+    def _get_parsed_doc(self, source_text: str):
+        """Bounded LRU cache around self.nlp(source_text) -- see the cache
+        comment on _DOC_PARSE_CACHE_MAXSIZE above for why this exists."""
+        cached = self._doc_parse_cache.get(source_text)
+        if cached is not None:
+            self._doc_parse_cache.move_to_end(source_text)
+            return cached
+        doc = self.nlp(source_text)
+        self._doc_parse_cache[source_text] = doc
+        self._doc_parse_cache.move_to_end(source_text)
+        if len(self._doc_parse_cache) > self._DOC_PARSE_CACHE_MAXSIZE:
+            self._doc_parse_cache.popitem(last=False)
+        return doc
 
     def extract_ner_entities(self, text: str) -> List[Dict[str, Any]]:
         """Extract PERSON and ORG entities using spaCy NER"""
@@ -701,7 +737,7 @@ class EntityDiscoveryEngine:
             idx = source_text.lower().find(text.lower())
             if idx != -1:
                 span_start, span_end = idx, idx + len(text)
-                doc = self.nlp(source_text)
+                doc = self._get_parsed_doc(source_text)
                 for tok in doc:
                     if tok.idx >= span_start and tok.idx < span_end and tok.pos_ == "VERB":
                         return tok.text
