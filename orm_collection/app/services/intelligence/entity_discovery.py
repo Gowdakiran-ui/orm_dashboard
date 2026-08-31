@@ -253,7 +253,14 @@ class EntityDiscoveryEngine:
             Entity.client_id == client_id,
             Entity.entity_type == "brand"
         ).first()
-        
+
+        # Built once per document (whole-table reads), not per ORG entity --
+        # same reuse discipline promote_competitor_candidates() already
+        # applies per-batch. Needed now that _process_org_entity validates
+        # candidates before insertion instead of only at promotion time.
+        org_self_reference_terms = self._client_self_reference_terms(db, client_id)
+        org_source_terms = self._registered_source_terms(db)
+
         # Process each extracted entity
         for entity_data in ner_entities:
             entity_name = entity_data["name"]
@@ -272,7 +279,9 @@ class EntityDiscoveryEngine:
                     
             elif entity_label == "ORG":
                 result = self._process_org_entity(
-                    db, client_id, entity_name, document_id, client_brand
+                    db, client_id, entity_name, document_id, client_brand,
+                    self_reference_terms=org_self_reference_terms,
+                    source_terms=org_source_terms,
                 )
                 if result == "candidate_created":
                     results["competitor_candidates_created"] += 1
@@ -445,12 +454,25 @@ class EntityDiscoveryEngine:
         client_id: str,
         org_name: str,
         document_id: str,
-        client_brand: Optional[Entity]
+        client_brand: Optional[Entity],
+        self_reference_terms: Optional[set] = None,
+        source_terms: Optional[set] = None,
     ) -> str:
         """
         Process an ORG entity:
         - Check if known competitor exists
-        - If not and meets criteria, create or update CompetitorCandidate
+        - If not and passes _is_valid_org_name_layered, create or update
+          CompetitorCandidate
+
+        Candidates are now pre-filtered on this path the same way person
+        candidates already were (previously this table was intentionally
+        unfiltered at creation -- "we create candidates for all ORG
+        entities... re-gated at promotion time instead", see
+        _calculate_org_confidence()'s docstring). Measured live at 34%
+        precision before this change (NLP_AUDIT_REPORT.md Part 1); the
+        promotion-time gate (_is_valid_org_name_layered, still called from
+        promote_competitor_candidates()) is unchanged and still runs as a
+        second check for any pre-existing candidate created before this fix.
         """
         normalized_name = self._normalize_name(org_name)
         org_name_lower = normalized_name.lower()
@@ -520,11 +542,32 @@ class EntityDiscoveryEngine:
                 )
             
             return "candidate_updated"
-        
-        # Create new candidate - we create candidates for all ORG entities
-        # Promotion to verified competitor happens later based on thresholds
+
+        # Layered validation of the candidate, mirroring
+        # _process_person_entity()'s existing gate. Runs the same
+        # promotion-time check (_is_valid_org_name_layered) here instead,
+        # before a new row is ever inserted.
+        is_valid, reject_layer, reject_reason = self._is_valid_org_name_layered(
+            org_name,
+            client_name=client_brand.name if client_brand else "",
+            self_reference_terms=self_reference_terms,
+            source_terms=source_terms,
+        )
+        if not is_valid:
+            logger.info(
+                "competitor_candidate_rejected_at_creation",
+                client_id=client_id,
+                candidate=org_name,
+                reason=reject_reason,
+                layer=reject_layer,
+                confidence=0.0,
+                mention_count=1,
+                documents=[document_id],
+            )
+            return "skipped"
+
         confidence = self._calculate_org_confidence(org_name)
-        
+
         candidate = CompetitorCandidate(
             client_id=client_id,
             organization_name=org_name,
@@ -608,6 +651,38 @@ class EntityDiscoveryEngine:
             
         return True
 
+    def _span_verb_token(self, text: str) -> Optional[str]:
+        """
+        Real POS-based verb detection, replacing the old hand-maintained
+        action-verb denylists on both the person and org validation paths.
+        Runs the same spaCy pipeline already loaded (self.nlp) over the
+        candidate span alone and returns the first token spaCy's tagger
+        marks pos_=="VERB" (any inflected form -- VBZ/VBD/VBP/VBG/VB),
+        or None if no token in the span is a verb.
+
+        Deliberately excludes pos_=="AUX" (modal/auxiliary verbs like
+        "Will", "Is", "Was") -- verified live against real first names
+        ("Will Smith", "May Wong") that spaCy tags as AUX in a short
+        Title-Case span, not VERB; excluding AUX avoids rejecting those.
+
+        Honest limitation, verified live: spaCy's tagger loses accuracy on
+        a short 2-4 word span taken out of its original sentence context.
+        "Trump Locks Down" tags "Locks" as PROPN (not VERB) in isolation,
+        and "Frames Autonomy" tags "Frames" as PROPN too -- both still slip
+        past this check, same as they did past the old denylist, since
+        neither contained a word on that list either. This check is a real
+        improvement (catches "Deletes", "Acquires", "Boycotting" without
+        needing them hand-added to a list) but is not a complete fix for
+        context-free NER spans; see NLP_AUDIT_REPORT.md.
+        """
+        if not text or not self.nlp:
+            return None
+        doc = self.nlp(text)
+        for tok in doc:
+            if tok.pos_ == "VERB":
+                return tok.text
+        return None
+
     def _is_valid_person_name_layered(self, name: str, db: Session, client_id: str) -> tuple[bool, str, str]:
         """
         Validate candidate name across 5 layers.
@@ -662,17 +737,13 @@ class EntityDiscoveryEngine:
                 if not sp.replace("'", "").replace(".", "").replace("-", "").isalpha():
                     return False, "Layer 2 — Human Name Validation", f"Part '{part}' contains invalid characters"
 
-        # Layer 3 — Action Phrase Filter
-        action_verbs = {
-            "buy", "sell", "invest", "watch", "read", "see", "compare", "review",
-            "drive", "want", "learn", "get", "upgrade", "join", "stock", "earning",
-            "earnings", "dividend", "dividends", "price", "share", "shares", "target",
-            "rally", "drop", "plunge", "climb", "short", "news", "report", "update"
-        }
-        for part in parts:
-            p_lower = part.lower().rstrip(".,")
-            if p_lower in action_verbs:
-                return False, "Layer 3 — Action Phrase Filter", f"Contains action/marketing verb: '{p_lower}'"
+        # Layer 3 — Verb Filter (POS-based, replaces the old hardcoded
+        # action-verb denylist -- see _span_verb_token()'s docstring for why
+        # this is real grammatical detection instead of a word list, and its
+        # known limitation on context-free spans).
+        verb_hit = self._span_verb_token(name_clean)
+        if verb_hit:
+            return False, "Layer 3 — Verb Filter", f"Contains a verb: '{verb_hit}'"
 
         # Layer 4 — Publisher / Organization Filter
         publishers = {
@@ -1058,6 +1129,15 @@ class EntityDiscoveryEngine:
         placeholder_hit = raw_tokens & EntityDiscoveryConfig.PLACEHOLDER_TERMS
         if placeholder_hit:
             return False, "Layer O1b — Placeholder / Example Text", f"Contains placeholder/example marker: {sorted(placeholder_hit)}"
+
+        # ── Layer O1c — Verb Filter (POS-based) ─────────────────────────────
+        # Same detector the person path uses (_span_verb_token) -- a real
+        # company name is never a verb phrase. Catches "AMG National Trust
+        # Bank Acquires New Shares" (Acquires) and "Boycotting American"
+        # (Boycotting), which the old org path had no verb check for at all.
+        verb_hit = self._span_verb_token(raw)
+        if verb_hit:
+            return False, "Layer O1c — Verb Filter", f"Contains a verb: '{verb_hit}'"
 
         # ── Layer O2 — Client self-reference ───────────────────────────────
         # Fixes the prefix-only bug: for a multi-token client name like

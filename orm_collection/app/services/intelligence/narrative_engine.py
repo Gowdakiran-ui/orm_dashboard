@@ -223,6 +223,20 @@ class NarrativeEngine:
             evidence_score += 1.5
         if has_alert:
             evidence_score += 1.5
+        # Multi-document corroboration bonus. A cluster of >=2 documents that
+        # independent processing (title similarity or shared entities, see
+        # the clustering step above) judged to be about the same real event
+        # is itself real evidence, in the same spirit as the trend/risk/alert
+        # bonuses above -- it just comes from document agreement rather than
+        # a separate aggregation engine. Without this, a genuine 2-document
+        # cluster with 1 source (0.4*2 + 0.2*1 = 1.0, sitting exactly on the
+        # boundary) or 0 sources (0.8, below it) could never pass without one
+        # of those three unrelated signals also firing. Singleton clusters
+        # (doc_count == 1, evidence_score == 0.6 unless boosted) are
+        # deliberately left ungated by this bonus -- weak, single-document
+        # "narratives" should still fail evidence, same as before.
+        if doc_count >= 2:
+            evidence_score += 1.0
 
         is_emerging = not (has_trend or has_risk or has_alert)
 
@@ -417,6 +431,25 @@ class NarrativeEngine:
         for d in documents:
             token_cache[d.id] = set(w.lower() for w in (d.title or "").split() if len(w) > 3)
 
+        # Entity-overlap clustering signal, supplementing the title-Jaccard
+        # check below. Two real news articles about the same event rarely
+        # share 25% of their title words verbatim (confirmed live — with
+        # only the title check, 108 real Tesla documents produced almost
+        # entirely singleton clusters and zero narratives ever cleared the
+        # evidence gate; see NLP_AUDIT_REPORT.md Part 4), but they do tend to
+        # mention the same specific people/companies. The client's own brand
+        # entity is excluded from this signal: since every document here was
+        # matched to this client via that exact entity, it is present on
+        # ~100% of documents and would collapse an entire topic into one
+        # mega-cluster rather than distinguishing real events.
+        brand_entity_id = next((e.id for e in client_entities if e.entity_type == "brand"), None)
+        entity_cache = {}
+        for d in documents:
+            entity_cache[d.id] = {
+                m.entity_id for m in mention_map.get(d.id, [])
+                if m.entity_id != brand_entity_id
+            }
+
         for topic_id, docs in topic_docs_map.items():
             topic = topic_map.get(topic_id)
             if not topic or not docs:
@@ -425,26 +458,36 @@ class NarrativeEngine:
             # Sort documents by publication date to ensure identical incident grouping order
             docs.sort(key=lambda d: d.published_at or d.collected_at)
 
-            # P4 — Incident Cluster Optimization: Time-window and Jaccard similarity clustering using cached tokens
+            # P4 — Incident Cluster Optimization: Time-window clustering using
+            # cached title tokens AND shared (non-brand) matched entities.
+            # Either signal alone is enough to cluster two documents together
+            # -- title-Jaccard for cases with near-identical headlines,
+            # entity-overlap for cases (the common real-world one) where
+            # different outlets cover the same event with unrelated wording
+            # but name the same person/competitor.
             incident_clusters = []
             for doc in docs:
                 matched_cluster = None
                 doc_tokens = token_cache.get(doc.id, set())
-                
+                doc_entities = entity_cache.get(doc.id, set())
+
                 for cluster in incident_clusters:
                     ref_doc = cluster["ref_doc"]
                     time_diff = abs((doc.published_at or doc.collected_at) - (ref_doc.published_at or ref_doc.collected_at)).days
-                    
+
                     if time_diff <= 3:
                         ref_tokens = token_cache.get(ref_doc.id, set())
                         intersection = doc_tokens.intersection(ref_tokens)
                         union = doc_tokens.union(ref_tokens)
                         similarity = len(intersection) / len(union) if union else 0.0
-                        
-                        if similarity >= 0.25 or (not doc_tokens and not ref_tokens):
+
+                        ref_entities = entity_cache.get(ref_doc.id, set())
+                        shares_entity = bool(doc_entities and ref_entities and (doc_entities & ref_entities))
+
+                        if similarity >= 0.25 or shares_entity or (not doc_tokens and not ref_tokens):
                             matched_cluster = cluster
                             break
-                            
+
                 if matched_cluster:
                     matched_cluster["documents"].append(doc)
                 else:
