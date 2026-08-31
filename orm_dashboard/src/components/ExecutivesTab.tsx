@@ -26,6 +26,9 @@ export interface ExecutivesTabProps {
   documents: any[];
   narratives: any[];
   clientId?: string | null;
+  executiveCandidates?: any[];
+  onPromoteExecutives?: () => void;
+  promotingExecutives?: boolean;
 }
 
 export function ExecutivesTab({
@@ -38,7 +41,10 @@ export function ExecutivesTab({
   lastProcessedTimestamp,
   documents,
   narratives,
-  clientId
+  clientId,
+  executiveCandidates = [],
+  onPromoteExecutives,
+  promotingExecutives = false
 }: ExecutivesTabProps) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
@@ -431,6 +437,42 @@ export function ExecutivesTab({
         </Card>
 
       </div>
+
+      {/* 3b. EXECUTIVE CANDIDATES AWAITING PROMOTION */}
+      {executiveCandidates.length > 0 && (
+        <Card className="bg-[#060B18]/60 border-[#D4AF37]/30 shadow-2xl">
+          <CardHeader className="pb-3 border-b border-[#1F2937]/40">
+            <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <span className="flex items-center">
+                <AlertTriangle className="h-4 w-4 text-[#D4AF37] mr-2" />
+                Executive Candidates Awaiting Promotion
+              </span>
+              <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-[9px]">
+                {executiveCandidates.length} Pending
+              </Badge>
+            </CardTitle>
+            <CardDescription className="text-[10px] font-mono text-slate-500">
+              Discovered via NER on ingested documents but not yet promoted to tracked executives. Promotion applies confidence/mention thresholds automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {executiveCandidates.slice(0, 20).map((c) => (
+                <Badge key={c.id} variant="outline" className="border-[#1F2937]/60 text-slate-300 font-mono text-[9px] bg-[#030712]">
+                  {c.name} · {c.mention_count} mentions · {(c.confidence * 100).toFixed(0)}% conf.
+                </Badge>
+              ))}
+            </div>
+            <button
+              onClick={onPromoteExecutives}
+              disabled={!onPromoteExecutives || promotingExecutives}
+              className="bg-[#D4AF37] hover:bg-[#bfa032] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2"
+            >
+              {promotingExecutives ? "Promoting..." : "Run Promotion Check"}
+            </button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 4. LEADERSHIP FIGURES REPUTATION SCORECARD */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Executives Error" />}>

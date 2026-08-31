@@ -28,6 +28,9 @@ export interface CompetitorsTabProps {
   clientRank: string;
   documents: any[]; // Pipe documents list for dynamic register calculations
   clientId?: string | null;
+  competitorCandidates?: any[];
+  onPromoteCompetitors?: () => void;
+  promotingCompetitors?: boolean;
 }
 
 export function CompetitorsTab({
@@ -41,7 +44,10 @@ export function CompetitorsTab({
   repBreakdown,
   clientRank,
   documents,
-  clientId
+  clientId,
+  competitorCandidates = [],
+  onPromoteCompetitors,
+  promotingCompetitors = false
 }: CompetitorsTabProps) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
@@ -516,6 +522,33 @@ export function CompetitorsTab({
                 COMPETITIVE LANDSCAPE INDEX
               </CardTitle>
             </CardHeader>
+            {competitorCandidates.length > 0 && (
+              <CardContent className="pt-0 pb-4 border-b border-[#1F2937]/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#D4AF37] flex items-center">
+                    <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                    Competitor Candidates Awaiting Promotion
+                  </span>
+                  <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-[9px]">
+                    {competitorCandidates.length} Pending
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {competitorCandidates.slice(0, 20).map((c) => (
+                    <Badge key={c.id} variant="outline" className="border-[#1F2937]/60 text-slate-300 font-mono text-[9px] bg-[#030712]">
+                      {c.organization_name} · {c.mention_count} mentions · {(c.confidence * 100).toFixed(0)}% conf.
+                    </Badge>
+                  ))}
+                </div>
+                <button
+                  onClick={onPromoteCompetitors}
+                  disabled={!onPromoteCompetitors || promotingCompetitors}
+                  className="bg-[#D4AF37] hover:bg-[#bfa032] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2"
+                >
+                  {promotingCompetitors ? "Promoting..." : "Run Promotion Check"}
+                </button>
+              </CardContent>
+            )}
             <CardContent>
               <Table>
                 <TableHeader className="border-[#1F2937]/40 bg-[#030712]/40">

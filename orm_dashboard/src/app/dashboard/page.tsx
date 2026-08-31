@@ -355,6 +355,9 @@ export default function Home() {
                     clientRank={analytics.clientRank}
                     documents={data.documents}
                     clientId={data.clientId}
+                    competitorCandidates={data.competitorCandidates}
+                    onPromoteCompetitors={exec.handlePromoteCompetitors}
+                    promotingCompetitors={exec.promotingCompetitors}
                   />
                 </ErrorBoundary>
               )}
@@ -373,6 +376,9 @@ export default function Home() {
                     documents={data.documents}
                     narratives={data.narratives}
                     clientId={data.clientId}
+                    executiveCandidates={data.executiveCandidates}
+                    onPromoteExecutives={exec.handlePromoteExecutives}
+                    promotingExecutives={exec.promotingExecutives}
                   />
                 </ErrorBoundary>
               )}
