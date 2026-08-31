@@ -154,10 +154,20 @@ def _is_neg_word_present(word: str, text_lower: str) -> bool:
 BEAT_NEGATIVE_CONTEXT = ["low", "loss", "miss", "decline", "worst", "plunge", "slump"]
 RECORD_NEGATIVE_CONTEXT = ["debt", "loss", "layoffs", "low", "worst", "deficit", "fine", "decline"]
 
+# SA-PART3-F1: "beat" was matching as a bare substring inside the publisher
+# attribution "MarketBeat" -- live-verified on the real Tesla corpus (see
+# NLP_AUDIT_FIX_VERIFICATION.md), 10/10 "beat" matches on MarketBeat wire
+# briefs ("X Acquires Shares in Tesla... - MarketBeat") had zero relation to
+# beating any milestone. Needs a real word boundary, unlike the other
+# POS_WORDS which don't collide with any brand/publisher name in real data.
+_BEAT_WORD_RE = re.compile(r'\bbeat\b')
+
 def _is_pos_word_present(word: str, text_lower: str) -> bool:
     if word not in text_lower:
         return False
     if word == "beat":
+        if not _BEAT_WORD_RE.search(text_lower):
+            return False
         return not any(ctx in text_lower for ctx in BEAT_NEGATIVE_CONTEXT)
     if word == "record":
         return not any(ctx in text_lower for ctx in RECORD_NEGATIVE_CONTEXT)
@@ -187,7 +197,15 @@ def apply_orm_rules(text_content: str, raw_label: str, raw_score: float) -> Dict
             applied_rule = "Negative-Risk Boost"
     elif matched_pos:
         trigger_words = matched_pos[:3]
-        if raw_label == "neutral" and raw_score < 0.65:
+        # SA-PART3-F2: this used to require raw_score < 0.65, unlike the
+        # mirror Negative-Risk Upgrade branch above which has no such
+        # condition -- live-verified on the real Tesla corpus (see
+        # NLP_AUDIT_FIX_VERIFICATION.md) that this asymmetry was suppressing
+        # genuine positive product/launch signals (e.g. "Tesla launches
+        # cheaper Model 3...", "Tesla's Cybercab Launch...") specifically
+        # BECAUSE FinBERT was confident in its (wrong) neutral call --
+        # confidence was disqualifying the upgrade instead of supporting it.
+        if raw_label == "neutral":
             # Calibrate positive
             final_label = "positive"
             final_score = min(raw_score + 0.10, 1.0)

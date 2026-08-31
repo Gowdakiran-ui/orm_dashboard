@@ -171,8 +171,8 @@ class NarrativeEngine:
                 "name": "Electric Vehicle Narrative",
                 "type": "Operational"
             },
-            "Autonomous Driving": {
-                "name": "Autonomous Driving Narrative",
+            "Full Self-Driving / Autopilot": {
+                "name": "Full Self-Driving / Autopilot Narrative",
                 "type": "Operational"
             },
             "Energy Storage": {

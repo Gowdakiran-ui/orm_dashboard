@@ -36,5 +36,8 @@ INSERT INTO topics (id, name, description, is_active) VALUES ('ca23009c-968b-44d
 INSERT INTO topics (id, name, description, is_active) VALUES ('5cc2f789-43e8-4197-b78d-99649357c8a5', 'Safety Recall', NULL, true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO topics (id, name, description, is_active) VALUES ('a74832d4-8628-4a1e-a309-864fe5dc2fb7', 'Competition', NULL, true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO topics (id, name, description, is_active) VALUES ('5fa14fa1-36d6-4cbb-97d6-1dce5eb24733', 'Electric Vehicles', NULL, true) ON CONFLICT (id) DO NOTHING;
-INSERT INTO topics (id, name, description, is_active) VALUES ('0d900b05-aec2-4ea8-8f8f-628f84598e19', 'Autonomous Driving', NULL, true) ON CONFLICT (id) DO NOTHING;
+INSERT INTO topics (id, name, description, is_active) VALUES ('0d900b05-aec2-4ea8-8f8f-628f84598e19', 'Full Self-Driving / Autopilot', NULL, true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO topics (id, name, description, is_active) VALUES ('2faa9f2a-b639-40f7-b9ee-4524649d8a03', 'Energy Storage', NULL, true) ON CONFLICT (id) DO NOTHING;
+
+-- See seed_dev.sql for the rationale behind this rename (NLP audit Part 2);
+-- a threshold raise was tried and reverted there, kept at the platform default.

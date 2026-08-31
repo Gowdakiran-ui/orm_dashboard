@@ -20,6 +20,10 @@ FINAL_V2.md
 FORENSICS.md
 TASK.md
 reports/
+NLP_AUDIT_REPORT.md
+NLP_AUDIT_FIX_VERIFICATION.md
+docker-compose.override.local.yml
+.build-*.log
 
 # Scratch/log artifacts from local dev sessions
 enter_stdin.txt

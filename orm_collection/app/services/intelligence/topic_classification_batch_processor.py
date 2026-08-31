@@ -38,7 +38,7 @@ TOPIC_KEYWORDS = {
     "Safety Recall": ["recall", "defect"],
     "Competition": ["rivian says", "competitor", "tore apart", "launches cheaper"],
     "Electric Vehicles": ["tore apart", "secures over", "electric cv", "wins etauto", "ev technology"],
-    "Autonomous Driving": ["self-driving", "self driving", "fsd", "autopilot", "robotaxi", "autonomous driving"],
+    "Full Self-Driving / Autopilot": ["self-driving", "self driving", "fsd", "autopilot", "robotaxi", "autonomous driving"],
     "Energy Storage": ["megapack", "powerwall"]
 }
 

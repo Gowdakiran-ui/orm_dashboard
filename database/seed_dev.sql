@@ -16,5 +16,18 @@ INSERT INTO topics (id, name, description, is_active) VALUES ('ca23009c-968b-44d
 INSERT INTO topics (id, name, description, is_active) VALUES ('5cc2f789-43e8-4197-b78d-99649357c8a5', 'Safety Recall', NULL, true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO topics (id, name, description, is_active) VALUES ('a74832d4-8628-4a1e-a309-864fe5dc2fb7', 'Competition', NULL, true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO topics (id, name, description, is_active) VALUES ('5fa14fa1-36d6-4cbb-97d6-1dce5eb24733', 'Electric Vehicles', NULL, true) ON CONFLICT (id) DO NOTHING;
-INSERT INTO topics (id, name, description, is_active) VALUES ('0d900b05-aec2-4ea8-8f8f-628f84598e19', 'Autonomous Driving', NULL, true) ON CONFLICT (id) DO NOTHING;
+INSERT INTO topics (id, name, description, is_active) VALUES ('0d900b05-aec2-4ea8-8f8f-628f84598e19', 'Full Self-Driving / Autopilot', NULL, true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO topics (id, name, description, is_active) VALUES ('2faa9f2a-b639-40f7-b9ee-4524649d8a03', 'Energy Storage', NULL, true) ON CONFLICT (id) DO NOTHING;
+
+-- NLP audit Part 2: "Autonomous Driving" over-triggered on 76-87% of a real
+-- Tesla corpus because zero-shot entailment scored the label broadly
+-- entailed by almost any short Tesla-branded text, not because of literal
+-- "driving" token overlap (verified directly -- see NLP_AUDIT_FIX_VERIFICATION.md).
+-- Renaming to the more specific product-name phrasing above is the primary
+-- fix. A higher per-topic confidence_threshold was tried and reverted: it
+-- pushed precision to 100% but collapsed recall to 23% against the real
+-- production preprocessing path (which wraps content as "Title: X\n\nX",
+-- measurably suppressing entailment scores for genuine FSD/robotaxi content)
+-- -- missing real stories like the NHTSA Autopilot investigation and most
+-- Cybercab-launch coverage. Left at the platform default (0.5); see
+-- NLP_AUDIT_FIX_VERIFICATION.md for the full precision/recall tradeoff data.
