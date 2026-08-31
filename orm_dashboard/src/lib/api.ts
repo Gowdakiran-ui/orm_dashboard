@@ -197,7 +197,7 @@ function anySignal(signals: AbortSignal[]): CombinedSignal {
 // granted (TASK_AUTH.md fix #4/#5) -- no separate client-side filtering
 // needed for the tenant dropdown to show only authorized clients.
 export async function fetchClients(search?: string, signal?: AbortSignal) {
-  const url = search ? `${API_BASE}/clients?search=${encodeURIComponent(search)}` : `${API_BASE}/clients`;
+  const url = search ? `${API_BASE}/clients/?search=${encodeURIComponent(search)}` : `${API_BASE}/clients/`;
   const res = await fetchWithRetry(url, { signal });
   return parseOrThrow(res);
 }

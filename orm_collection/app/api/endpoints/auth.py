@@ -21,6 +21,9 @@ def _set_session_cookie(response: Response, token: str) -> None:
         secure=settings.SESSION_COOKIE_SECURE,
         samesite="lax",
         path="/",
+        # Hardcoded for now -- should become a COOKIE_DOMAIN setting/env var
+        # if another domain is ever added.
+        domain=".theaicompany.co",
     )
 
 
