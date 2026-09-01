@@ -23,15 +23,22 @@ logger = structlog.get_logger()
 
 class EntityDiscoveryConfig:
     """Configuration for entity discovery thresholds"""
-    EXECUTIVE_CONFIDENCE_THRESHOLD = 0.75
+    # Lowered from 0.75→0.65 (forensic-audit fix round, verified against the
+    # real Apple/Tesla corpus -- see the promote_*_candidates() call sites
+    # for the reasoning this mirrors on the competitor side below).
+    EXECUTIVE_CONFIDENCE_THRESHOLD = 0.65
     # Lowered from 3→2: realistic article volumes rarely produce 3 distinct docs per executive
     EXECUTIVE_MENTION_THRESHOLD = 2
     EXECUTIVE_MIN_DOCUMENTS = 2
-    COMPETITOR_MENTION_THRESHOLD = 3
-    # Lowered from 0.75→0.70: _calculate_org_confidence base is 0.70 for names without
-    # corporate suffixes (Inc/Corp/Ltd). The old 0.75 threshold permanently blocked all
-    # such candidates regardless of how many times they appeared.
-    COMPETITOR_CONFIDENCE_THRESHOLD = 0.70
+    # Lowered from 3→2, same real-article-volume reasoning as
+    # EXECUTIVE_MENTION_THRESHOLD above -- now matches it instead of being a
+    # stricter, unexplained outlier between the two entity types.
+    COMPETITOR_MENTION_THRESHOLD = 2
+    # Lowered from 0.70→0.65: _calculate_org_confidence base is 0.70 for names without
+    # corporate suffixes (Inc/Corp/Ltd), so 0.70 still blocked every such
+    # candidate regardless of mention count -- same failure mode the prior
+    # 0.75→0.70 round fixed, just one notch higher than fully closed.
+    COMPETITOR_CONFIDENCE_THRESHOLD = 0.65
     COMPETITOR_MIN_DOCUMENTS = 2
 
     # ── Ignore lists ────────────────────────────────────────────────────────

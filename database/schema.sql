@@ -1050,11 +1050,11 @@ ALTER TABLE ONLY public.risk_events
 
 
 --
--- Name: rss_feeds rss_feeds_feed_url_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: rss_feeds uq_rss_feeds_client_id_feed_url; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.rss_feeds
-    ADD CONSTRAINT rss_feeds_feed_url_key UNIQUE (feed_url);
+    ADD CONSTRAINT uq_rss_feeds_client_id_feed_url UNIQUE (client_id, feed_url);
 
 
 --

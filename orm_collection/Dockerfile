@@ -78,7 +78,20 @@ WORKDIR /app
 # in docker-compose.yml has `depends_on: backend: condition:
 # service_healthy`, so this alone blocked the entire local stack from ever
 # starting.
-RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client libgomp1 curl \
+#
+# Debian bookworm's own `postgresql-client` meta-package resolves to pg_dump
+# 15.x, but the real DB (both the live Render instance and this project's
+# local docker-compose.override.local.yml) is Postgres 18 -- see
+# database/schema.sql's own header ("Dumped by pg_dump version 18.6"). A
+# pg_dump older than its target server errors out and fails run_backup
+# (celery_app.py's daily beat schedule) every single run. pg_dump generally
+# needs to be >= the server's major version, so pull the matching
+# postgresql-client-18 from the official PGDG apt repo instead of bookworm's
+# default.
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-18 libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root runtime user. /backups is created (not just chowned) here so
@@ -93,6 +106,37 @@ RUN groupadd --system appuser && useradd --system --gid appuser --home-dir /app 
 
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
+
+# FinBERT and distilbart-mnli-12-3 (app/services/intelligence/
+# sentiment_analyzer.py, topic_classifier.py) were never pre-downloaded here,
+# unlike en_core_web_sm above -- transformers.pipeline(..., model=...) lazily
+# pulled both from the HuggingFace Hub on first use inside whichever
+# container happened to run first, measured live at ~300s for that first
+# document (forensic audit, Stage 5) versus ~11-13s once cached. HF_HOME is
+# set under /app so the final chown below (which already covers the rest of
+# /app) hands this cache to appuser too, and so it's a real directory this
+# non-root user can read at runtime instead of defaulting to root's own home.
+# Same retry-on-flaky-connection reasoning as the pip install step above.
+# HF_HUB_OFFLINE is intentionally NOT set yet here -- this download step
+# needs real Hub access. It's set right after, once the cache below is
+# populated, so it never applies to this RUN itself.
+ENV HF_HOME=/app/.cache/huggingface
+RUN success=0; \
+    for i in 1 2 3 4 5; do \
+      if python -c "from transformers import pipeline; pipeline('sentiment-analysis', model='ProsusAI/finbert'); pipeline('zero-shot-classification', model='valhalla/distilbart-mnli-12-3')"; then success=1; break; fi; \
+      echo "HF model pre-download attempt $i failed, retrying..."; sleep 5; \
+    done; \
+    if [ "$success" -ne 1 ]; then echo "HF model pre-download failed after 5 attempts"; exit 1; fi
+
+# Forces transformers.pipeline()/from_pretrained() to read only from the
+# cache just populated above and never attempt the Hub freshness HEAD-check
+# `from_pretrained` otherwise makes on every call (confirmed live -- without
+# this, first-load still made a real network request even with the cache
+# warm, defeating "no runtime network dependency", the reason baking was
+# chosen over a persistent HF-cache volume in the first place). Deliberately
+# set AFTER the download RUN above, not combined with HF_HOME's ENV, so it
+# never applies to that RUN itself.
+ENV HF_HUB_OFFLINE=1
 
 RUN chmod +x entrypoint.sh && chown -R appuser:appuser /app
 

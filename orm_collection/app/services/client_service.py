@@ -69,8 +69,16 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
         sanitized_name = onboarding_data.primary_entity_name.replace(" ", "+")
         google_news_url = f"https://news.google.com/rss/search?q={sanitized_name}+OR+{onboarding_data.domain or sanitized_name}"
 
-        # Check if this feed url already exists before adding
-        existing_feed = db.query(RSSFeed).filter(RSSFeed.feed_url == google_news_url).first()
+        # Check if this feed url already exists for THIS client before adding.
+        # Scoped by client_id (migrations/0005) -- filtering by feed_url alone
+        # silently skipped provisioning for any client whose sanitized entity
+        # name collided with an existing client's, since two different
+        # clients now legitimately can (and must) each own a row for the
+        # same feed_url.
+        existing_feed = db.query(RSSFeed).filter(
+            RSSFeed.feed_url == google_news_url,
+            RSSFeed.client_id == db_client.id,
+        ).first()
         if not existing_feed:
             db_feed = RSSFeed(
                 feed_name=f"{onboarding_data.primary_entity_name} Google News Feed",
@@ -87,7 +95,10 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
         # rate limit is ~1 request/5s, HN Algolia has no documented hard limit —
         # 60 minutes is well above either floor.
         gdelt_url = f"https://api.gdeltproject.org/api/v2/doc/doc?query={sanitized_name}&mode=artlist&format=json&maxrecords=50"
-        existing_gdelt_feed = db.query(RSSFeed).filter(RSSFeed.feed_url == gdelt_url).first()
+        existing_gdelt_feed = db.query(RSSFeed).filter(
+            RSSFeed.feed_url == gdelt_url,
+            RSSFeed.client_id == db_client.id,
+        ).first()
         if not existing_gdelt_feed:
             db.add(RSSFeed(
                 feed_name=f"{onboarding_data.primary_entity_name} GDELT Feed",
@@ -101,7 +112,10 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
             ))
 
         hn_url = f"https://hn.algolia.com/api/v1/search?query={sanitized_name}&tags=story"
-        existing_hn_feed = db.query(RSSFeed).filter(RSSFeed.feed_url == hn_url).first()
+        existing_hn_feed = db.query(RSSFeed).filter(
+            RSSFeed.feed_url == hn_url,
+            RSSFeed.client_id == db_client.id,
+        ).first()
         if not existing_hn_feed:
             db.add(RSSFeed(
                 feed_name=f"{onboarding_data.primary_entity_name} HN Algolia Feed",
