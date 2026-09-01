@@ -45,6 +45,17 @@ variables:
     from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresPort
   DB_NAME:
     from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-PostgresDBName
+  # Without these, each prefork process defaults to using every visible
+  # vCPU for BLAS/OMP intra-op parallelism -- 3 concurrent processes on
+  # this task's 2 vCPU (cpu: 2048) thrash each other, measured locally at
+  # ~110s/document vs ~4-13s/document unconstrained (forensic-audit fixes
+  # round) -- a 10-27x regression. This manifest is not currently
+  # deployed (docs/AWS_DEPLOYMENT.md), kept in sync in case it's revived;
+  # docker-compose.yml's celery-worker-nlp service carries the change
+  # that actually matters for the live droplet.
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  TOKENIZERS_PARALLELISM: "false"
   ENABLE_S3_STORAGE: "true"
   S3_BUCKET_NAME:
     from_cfn: ${COPILOT_APPLICATION_NAME}-${COPILOT_ENVIRONMENT_NAME}-BackupBucketName

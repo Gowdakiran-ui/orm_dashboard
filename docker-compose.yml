@@ -127,6 +127,21 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      # Constrain each process's own BLAS/OMP intra-op thread count.
+      # docker-compose.yml (this file) is what the DigitalOcean droplet
+      # actually runs -- copilot/ was generated but never deployed
+      # (docs/AWS_DEPLOYMENT.md: "Nothing in this doc has been run"), so
+      # it is not a real second production target. Verified live
+      # (forensic-audit fixes round) that on a CPU-constrained host,
+      # concurrent transformer-inference processes without this default
+      # to using every visible core each and thrash each other -- ~110s/
+      # document vs ~4-13s/document unconstrained-concurrency=3 on a
+      # 2-vCPU budget, a 10-27x regression. Harmless at today's real
+      # --pool=solo --concurrency=1 (single process, nothing to contend
+      # with), and keeps this correct if concurrency is ever raised here.
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - TOKENIZERS_PARALLELISM=false
     depends_on:
       redis:
         condition: service_healthy
@@ -140,9 +155,11 @@ services:
     # client production target this profiling was done for, and a
     # concurrency bump only pays off if the host actually has the multiple
     # GB of headroom per extra process that requires -- assume it doesn't.
-    # Production's celery-worker-nlp (copilot/celery-worker-nlp/manifest.yml)
-    # runs concurrency=3 on an 8192 MiB Fargate task; see
-    # docs/AWS_DEPLOYMENT.md Section 6 for the full sizing table.
+    # NOTE: this file IS what runs on the real droplet (see above) -- the
+    # copilot/celery-worker-nlp/manifest.yml concurrency=3 sizing
+    # referenced here in earlier revisions was never-deployed planning
+    # config, not a live second environment; don't treat it as "what
+    # production actually runs" without confirming it's been deployed.
     command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=nlp@%h", "--pool=solo", "--concurrency=1", "-Q", "nlp_queue"]
     healthcheck:
       test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d nlp@$(hostname) --timeout 10 | grep -q OK"]
