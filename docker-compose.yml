@@ -123,7 +123,7 @@ services:
   celery-worker-nlp:
     image: orm-platform-backend:dev-review
     restart: unless-stopped
-    mem_limit: 4g
+    mem_limit: 6g
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -136,9 +136,9 @@ services:
       # concurrent transformer-inference processes without this default
       # to using every visible core each and thrash each other -- ~110s/
       # document vs ~4-13s/document unconstrained-concurrency=3 on a
-      # 2-vCPU budget, a 10-27x regression. Harmless at today's real
-      # --pool=solo --concurrency=1 (single process, nothing to contend
-      # with), and keeps this correct if concurrency is ever raised here.
+      # 2-vCPU budget, a 10-27x regression. Required now that concurrency
+      # is >1 below -- without these pins each of the 3 prefork processes
+      # would try to use every visible core and thrash the other two.
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - TOKENIZERS_PARALLELISM=false
@@ -147,20 +147,33 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
-    # Sentiment/topic transformer models: measured at ~1.9GB RSS per worker
-    # process at steady state, not the earlier ~1.6GB parameter-count guess
-    # (docs/AWS_DEPLOYMENT.md Section 6, orm_collection/scripts/
-    # profile_nlp_memory.py). Stays --pool=solo --concurrency=1 here on
-    # purpose: local dev machines aren't sized against the ~20-concurrent-
-    # client production target this profiling was done for, and a
-    # concurrency bump only pays off if the host actually has the multiple
-    # GB of headroom per extra process that requires -- assume it doesn't.
-    # NOTE: this file IS what runs on the real droplet (see above) -- the
-    # copilot/celery-worker-nlp/manifest.yml concurrency=3 sizing
+    # Sentiment/topic transformer models: measured at ~1.9GB RSS for a
+    # single worker process at steady state (docs/AWS_DEPLOYMENT.md
+    # Section 6, orm_collection/scripts/profile_nlp_memory.py). Concurrency
+    # raised from 1 to 3 (with --pool switched solo -> prefork, since solo
+    # only ever runs one process regardless of --concurrency) after live
+    # verification directly against this real Droplet, not the earlier
+    # local test's assumed budget:
+    #   - `nproc` inside this container: 2 (matches the Droplet's real 2
+    #     vCPUs, no cgroup CPU limit imposed -- same budget the local test
+    #     that measured the ~31% throughput gain was run against).
+    #   - `free -h` on the Droplet: 15Gi total, 9.7Gi available at the time
+    #     of testing, well beyond what a raised mem_limit here needs.
+    #   - Real 3-concurrent-process peak RSS, measured via a throwaway
+    #     --entrypoint sleep container from this same image (7g cap, same
+    #     OMP/MKL/TOKENIZERS pins, no DB/Redis/client-data access --
+    #     scripts/profile_nlp_memory.py is self-contained) running 3
+    #     parallel `profile_nlp_memory.py` processes and sampling `docker
+    #     stats` every 5s: peaked and plateaued at 3.55GiB combined --
+    #     lower than the naive ~1.9GB x 3 = 5.7GB estimate, not higher.
+    # mem_limit raised 4g -> 6g accordingly: real measured peak (3.55GiB)
+    # plus a real margin, not the bare 4g the peak would have barely fit
+    # under. NOTE: this file IS what runs on the real droplet (see above)
+    # -- the copilot/celery-worker-nlp/manifest.yml concurrency=3 sizing
     # referenced here in earlier revisions was never-deployed planning
     # config, not a live second environment; don't treat it as "what
     # production actually runs" without confirming it's been deployed.
-    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=nlp@%h", "--pool=solo", "--concurrency=1", "-Q", "nlp_queue"]
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=nlp@%h", "--pool=prefork", "--concurrency=3", "-Q", "nlp_queue"]
     healthcheck:
       test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d nlp@$(hostname) --timeout 10 | grep -q OK"]
       interval: 15s

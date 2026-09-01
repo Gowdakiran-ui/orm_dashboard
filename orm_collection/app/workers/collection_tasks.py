@@ -1,4 +1,5 @@
 from celery import shared_task
+import requests
 from app.core.db import SessionLocal
 from app.models.rss_feed import RSSFeed
 from app.models.collection_job import CollectionJob
@@ -6,6 +7,19 @@ from app.adapters.rss import RSSAdapter
 from app.adapters.registry import ADAPTER_REGISTRY
 import json
 from datetime import datetime, timezone
+
+# Dead-feed circuit breaker (Fix 1): any feed (RSS/GDELT/HN Algolia -- every
+# adapter reachable from fetch_feed_task uses `requests` under the hood, see
+# adapters/rss.py, gdelt.py, hn_algolia.py) whose last this-many consecutive
+# fetch_feed_task retries-exhausted attempts *all* failed with a
+# requests.exceptions.ConnectionError/Timeout gets auto-deactivated, instead
+# of retrying a host that's down forever. Deliberately not GDELT-specific --
+# tracked per feed_id in Redis, not hardcoded to any one adapter/URL.
+FEED_CIRCUIT_BREAKER_THRESHOLD = 5
+
+
+def _feed_circuit_breaker_key(feed_id) -> str:
+    return f"feed:circuit_breaker:consecutive_conn_failures:{feed_id}"
 
 
 def _get_or_create_source(db, feed: RSSFeed):
@@ -214,6 +228,11 @@ def fetch_feed_task(self, feed_id: str):
         adapter = adapter_cls()
         entries = adapter.fetch(feed.feed_url)
 
+        # Fetch succeeded -- this feed's host is reachable, so any
+        # in-progress connection/timeout failure streak is over.
+        from app.utils.redis_client import redis_client
+        redis_client.delete(_feed_circuit_breaker_key(feed.id))
+
         source = _get_or_create_source(db, feed)
         _record_source_health(db, source.id, success=True)
         client_id = str(feed.client_id) if feed.client_id else None
@@ -288,6 +307,34 @@ def fetch_feed_task(self, feed_id: str):
                 existing_source = db.query(Source).filter(Source.url == failed_feed.feed_url).first()
                 if existing_source:
                     _record_source_health(db, existing_source.id, success=False)
+
+                # Dead-feed circuit breaker: only connection/timeout errors
+                # count towards the streak -- an HTTP 4xx/5xx or parse-error
+                # exception means the host answered, which is a different
+                # failure mode and shouldn't silently deactivate a feed
+                # whose remote host is actually up.
+                from app.utils.redis_client import redis_client
+                import structlog
+                breaker_key = _feed_circuit_breaker_key(failed_feed.id)
+                if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+                    consecutive = redis_client.incrby(breaker_key)
+                    if consecutive >= FEED_CIRCUIT_BREAKER_THRESHOLD:
+                        failed_feed.is_active = False
+                        db.commit()
+                        redis_client.delete(breaker_key)
+                        structlog.get_logger().bind(task="fetch_feed_task").warning(
+                            "feed_circuit_breaker_tripped_deactivated",
+                            feed_id=feed_id,
+                            feed_name=failed_feed.feed_name,
+                            feed_url=failed_feed.feed_url,
+                            consecutive_connection_failures=consecutive,
+                            threshold=FEED_CIRCUIT_BREAKER_THRESHOLD,
+                            last_error=str(exc),
+                        )
+                else:
+                    # A non-connection/timeout failure breaks the
+                    # "consecutive connection/timeout failures" streak.
+                    redis_client.delete(breaker_key)
 
         # Exponential backoff: 60s, 120s, 240s
         backoff = 60 * (2 ** self.request.retries)
