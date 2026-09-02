@@ -1408,6 +1408,7 @@ def pipeline_stage_finalize(self, run_id: str, client_id: str, owner_id: str) ->
             log.warning("stage_skipped_stale_duplicate", stage="SUCCESS")
             db.commit()
             return
+        db.commit()
 
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
         log.info("pipeline_task_succeeded",
