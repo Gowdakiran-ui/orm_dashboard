@@ -66,9 +66,14 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
-      # io_queue tasks (feed fetches, search, watchdogs) never touch the
-      # matching engine -- see app/core/celery_app.py's worker_process_init.
-      - CELERY_SKIP_MATCHING_ENGINE=true
+      # CELERY_SKIP_MATCHING_ENGINE was removed here: pipeline_stage_collect
+      # (aggregation_tasks.py, queue="io_queue") calls process_and_save_document
+      # -> engine_instance.process_document, so this worker DOES need the
+      # matching engine loaded and pubsub-refreshed. Skipping it left the
+      # engine frozen at container-startup keywords forever (no pubsub
+      # listener == never hears keyword_updated), silently producing zero
+      # DocumentMatch rows for any client onboarded after this container's
+      # last restart -- confirmed live for Godrej Properties (2026-09-02).
     volumes:
       # app.workers.backup_tasks.run_backup (Section 10) is routed to
       # io_queue and writes its pg_dump output here. Named volume, not a

@@ -228,12 +228,18 @@ def handle_task_success(sender=None, result=None, **other):
 def init_celery_worker(**kwargs):
     import os
 
-    # celery-worker-io consumes io_queue only (feed fetches, search calls,
-    # watchdogs -- grep-confirmed none of those tasks touch engine_instance),
-    # so loading and pubsub-refreshing the matching engine there is pure
-    # waste: a ~10s+ DB round trip per prefork child (concurrency=4 = 4x),
-    # for a cache this worker never reads. Set only on that service in
-    # docker-compose.yml; every other worker keeps today's behavior.
+    # CELERY_SKIP_MATCHING_ENGINE is no longer set anywhere (removed from
+    # celery-worker-io in docker-compose.yml). It was based on the false
+    # premise that io_queue tasks never touch engine_instance --
+    # pipeline_stage_collect (aggregation_tasks.py) is routed to io_queue
+    # and calls process_and_save_document -> engine_instance.process_document.
+    # Skipping this init left that worker's engine frozen at whatever
+    # keywords existed at container startup, since it also skipped
+    # start_pubsub_listener() below -- confirmed live to silently produce
+    # zero DocumentMatch rows for any client onboarded afterward. Kept as a
+    # manual escape hatch (env var, not deleted) rather than removed, in
+    # case a future worker split reintroduces a queue that genuinely never
+    # touches the matching engine.
     if os.environ.get("CELERY_SKIP_MATCHING_ENGINE", "false").lower() == "true":
         return
 
