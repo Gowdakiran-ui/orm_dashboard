@@ -15,10 +15,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import structlog
 from sqlalchemy import Column, String, Integer, DateTime, Text, Float
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.db import Base
+
+logger = structlog.get_logger()
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +43,15 @@ _STAGE_ORDER = [
 ]
 
 _TERMINAL_STATES = {"SUCCESS", "FAILED"}
+
+# Position of each stage in the linear FSM order -- used to recognize a
+# redelivered/duplicate stage-task completion (2026-09-02 stress test:
+# Celery delivered the same pipeline_stage_process task twice; the second
+# copy's completion tried to advance the FSM to a stage the first copy had
+# already moved the run past, which used to raise and false-FAIL an
+# otherwise fully-successful run). A transition attempt into a stage at or
+# behind the run's current position is that exact signature, not a real bug.
+_STAGE_INDEX: dict[str, int] = {s: i for i, s in enumerate(_STAGE_ORDER)}
 
 _ALLOWED_TRANSITIONS: dict[str, set[str]] = {}
 for _i, _s in enumerate(_STAGE_ORDER[:-1]):
@@ -110,16 +122,31 @@ class PipelineRun(Base):
     # FSM helpers
     # ---------------------------------------------------------------------------
 
-    def transition(self, new_stage: str, log_line: Optional[str] = None) -> None:
+    def transition(self, new_stage: str, log_line: Optional[str] = None) -> bool:
         """
-        Advance the FSM to new_stage.
+        Advance the FSM to new_stage. Returns True if the transition actually
+        happened, False if it was ignored as a stale/duplicate no-op.
 
         Raises ValueError on illegal transitions so bad state never silently
-        propagates. FAILED is always reachable from any non-terminal state.
+        propagates -- except for a redelivered/duplicate stage-task
+        completion arriving after the run has already moved to or past
+        new_stage (including past a terminal state). That specific shape is
+        not a bug: the real chain already did (or is doing) that work under
+        its own task, so this is ignored rather than crashing an otherwise-
+        successful run. Any other attempt to mutate a terminal run, or any
+        target that isn't a recognized stage, still raises. FAILED is always
+        reachable from any non-terminal state.
         """
         current = self.status
 
         if current in _TERMINAL_STATES:
+            if new_stage in _STAGE_INDEX and new_stage != current:
+                logger.warning(
+                    "pipeline_stale_transition_ignored",
+                    run_id=self.run_id, current=current, attempted=new_stage,
+                    reason="run already terminal",
+                )
+                return False
             raise ValueError(
                 f"PipelineRun {self.run_id}: cannot transition from terminal "
                 f"state {current!r} to {new_stage!r}"
@@ -127,6 +154,17 @@ class PipelineRun(Base):
 
         allowed = _ALLOWED_TRANSITIONS.get(current, set())
         if new_stage not in allowed:
+            if (
+                new_stage in _STAGE_INDEX
+                and current in _STAGE_INDEX
+                and _STAGE_INDEX[new_stage] <= _STAGE_INDEX[current]
+            ):
+                logger.warning(
+                    "pipeline_stale_transition_ignored",
+                    run_id=self.run_id, current=current, attempted=new_stage,
+                    reason="already at or past this stage",
+                )
+                return False
             raise ValueError(
                 f"PipelineRun {self.run_id}: illegal transition "
                 f"{current!r} → {new_stage!r}. Allowed: {allowed}"
@@ -152,6 +190,8 @@ class PipelineRun(Base):
                 self.duration_s = (now - self.started_at).total_seconds()
             if self.processing_started_at:
                 self.execution_duration_s = (now - self.processing_started_at).total_seconds()
+
+        return True
 
     @property
     def is_active(self) -> bool:

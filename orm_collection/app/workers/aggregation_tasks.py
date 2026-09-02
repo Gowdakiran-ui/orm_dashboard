@@ -831,10 +831,17 @@ def _release_lock(redis_client, client_id: str, owner_id: str, log) -> None:
 # PipelineRun state helpers
 # ---------------------------------------------------------------------------
 
-def _update_run(db, pipeline_run_id: str, new_stage: str, log_line: str = "") -> None:
+def _update_run(db, pipeline_run_id: str, new_stage: str, log_line: str = "") -> bool:
     """
     Advance FSM state in the DB. Uses a fresh session to avoid holding
     a long-lived transaction across slow engine calls.
+
+    Returns True if the run's FSM actually advanced, False if this call was
+    ignored as a stale/duplicate no-op (including "no such run"). Callers
+    MUST check this and skip their real stage work when it's False -- the
+    real chain already did (or is doing) that work under its own task, so
+    running it again would silently double-write that stage's results
+    (duplicate trend/risk/alert/narrative rows etc.), not just risk a crash.
 
     Real-run verification of the timeout fix (see _PIPELINE_RUN_TIMEOUT_MINUTES
     above) hit this live: nlp_queue's --pool=solo worker freezes the whole
@@ -850,23 +857,27 @@ def _update_run(db, pipeline_run_id: str, new_stage: str, log_line: str = "") ->
     every legitimate downstream stage task also failing against the
     now-terminal row.
 
-    Guarding the exact same-stage case as a harmless no-op closes that
-    specific, evidenced crash. It is not a complete fix for message
-    redelivery in general (e.g. a redelivery landing after the real chain
-    has moved *past* this stage would still hit transition()'s existing
-    illegal-transition/terminal-state guards below, same as before) --
-    building full exactly-once chain semantics is a larger change than is
-    safe to make this close to deploy without dedicated testing time; this
-    guard only closes the one failure mode actually observed and reproduced.
+    2026-09-02 stress test reproduced the predicted gap directly: a
+    redelivered app.workers.aggregation_tasks.pipeline_stage_process
+    (same Celery task ID, executed twice, confirmed via duplicate
+    "succeeded" log lines with different durations) each triggered their
+    own downstream chain link. The first copy's chain legitimately advanced
+    TREND -> RISK; the second copy's TREND task then hit the exact "landed
+    after the real chain moved past this stage" case this docstring already
+    called out, and crashed a run that had actually completed its real work.
+    transition() itself now treats "target stage is at or behind the run's
+    current position, including past a terminal state" as a no-op instead of
+    raising, so this helper's own same-stage check is now redundant with
+    that (kept as a fast path / explicit log event) -- see PipelineRun.transition().
     """
     run = db.query(PipelineRun).filter(PipelineRun.run_id == pipeline_run_id).with_for_update().first()
     if not run:
-        return
+        return False
     if run.status == new_stage:
         logger.warning("pipeline_duplicate_stage_transition_ignored",
                         run_id=pipeline_run_id, stage=new_stage)
-        return
-    run.transition(new_stage, log_line)
+        return False
+    return run.transition(new_stage, log_line)
     db.commit()
 
 
@@ -1271,7 +1282,10 @@ def pipeline_stage_collect(self, run_id: str, client_id: str, owner_id: str) -> 
     db = SessionLocal()
     try:
         ctx = _load_context(db, run_id, client_id, worker_id)
-        _update_run(db, run_id, "COLLECTING", "Starting document collection")
+        if not _update_run(db, run_id, "COLLECTING", "Starting document collection"):
+            log.warning("stage_skipped_stale_duplicate", stage="COLLECTING")
+            db.commit()
+            return []
         doc_ids = _stage_collect(ctx, db)
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
         if run:
@@ -1294,7 +1308,10 @@ def pipeline_stage_process(self, doc_ids: List[str], run_id: str, client_id: str
     db = SessionLocal()
     try:
         ctx = _load_context(db, run_id, client_id, worker_id)
-        _update_run(db, run_id, "PROCESSING", f"Running NLP on {len(doc_ids)} documents")
+        if not _update_run(db, run_id, "PROCESSING", f"Running NLP on {len(doc_ids)} documents"):
+            log.warning("stage_skipped_stale_duplicate", stage="PROCESSING")
+            db.commit()
+            return
         _stage_process(ctx, db, doc_ids)
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
         if run:
@@ -1321,7 +1338,10 @@ def _make_aggregation_stage_task(stage_name: str, stage_fn, log_line: str, task_
         db = SessionLocal()
         try:
             ctx = _load_context(db, run_id, client_id, worker_id)
-            _update_run(db, run_id, stage_name, log_line)
+            if not _update_run(db, run_id, stage_name, log_line):
+                log.warning("stage_skipped_stale_duplicate", stage=stage_name)
+                db.commit()
+                return
             stage_fn(ctx, db)
             run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
             if run:
@@ -1373,7 +1393,10 @@ def pipeline_stage_finalize(self, run_id: str, client_id: str, owner_id: str) ->
     db = SessionLocal()
     try:
         ctx = _load_context(db, run_id, client_id, worker_id)
-        _update_run(db, run_id, "FINALIZING", "Finalizing pipeline run")
+        if not _update_run(db, run_id, "FINALIZING", "Finalizing pipeline run"):
+            log.warning("stage_skipped_stale_duplicate", stage="FINALIZING")
+            db.commit()
+            return
         _stage_finalize(ctx, db)
 
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
@@ -1381,7 +1404,10 @@ def pipeline_stage_finalize(self, run_id: str, client_id: str, owner_id: str) ->
             run.current_worker = worker_id
         db.commit()
 
-        _update_run(db, run_id, "SUCCESS", "Pipeline completed")
+        if not _update_run(db, run_id, "SUCCESS", "Pipeline completed"):
+            log.warning("stage_skipped_stale_duplicate", stage="SUCCESS")
+            db.commit()
+            return
 
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).first()
         log.info("pipeline_task_succeeded",
