@@ -18,6 +18,17 @@ class Settings(BaseSettings):
     DATABASE_URL_OVERRIDE: Optional[str] = Field(default=None, validation_alias="DATABASE_URL")
 
     REDIS_URL: str = "redis://localhost:6379/0"  # override with REDIS_URL env var in production
+
+    # Per-service SQLAlchemy pool sizing (db.py). Defaults match the old
+    # one-size-fits-all values (3/2) so any service without an explicit
+    # override in docker-compose.yml keeps today's behavior. Every service
+    # sharing this Postgres instance forks its own OS processes (Celery
+    # --concurrency=N children, each with its own independent pool), so the
+    # real ceiling is pool_size+max_overflow times process count, not times
+    # "number of services" -- see docker-compose.yml for the per-service
+    # values and the 2026-09-02/03 investigation that sized them.
+    DB_POOL_SIZE: int = 3
+    DB_MAX_OVERFLOW: int = 2
     
     @property
     def CELERY_BROKER_URL(self) -> str:

@@ -39,6 +39,11 @@ services:
       # cookie (core/security.py) would silently never reach the backend.
       # Override to true (or unset) for any real HTTPS deployment.
       - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
+      # This is the ONLY process serving real dashboard traffic directly
+      # (single uvicorn process, no --workers), so it gets the largest
+      # individual allocation -- see db.py / 2026-09-02/03 investigation.
+      - DB_POOL_SIZE=8
+      - DB_MAX_OVERFLOW=4
     volumes:
       # database/ lives at the repo root, outside this service's build
       # context (./orm_collection) -- bind-mounted read-only so
@@ -74,6 +79,11 @@ services:
       # listener == never hears keyword_updated), silently producing zero
       # DocumentMatch rows for any client onboarded after this container's
       # last restart -- confirmed live for Godrej Properties (2026-09-02).
+      # This queue is I/O-bound (external feed/search fetches, watchdogs) --
+      # it has the most processes (concurrency=4 below) of any service but
+      # barely touches the DB, so it gets the smallest per-process pool.
+      - DB_POOL_SIZE=1
+      - DB_MAX_OVERFLOW=1
     volumes:
       # app.workers.backup_tasks.run_backup (Section 10) is routed to
       # io_queue and writes its pg_dump output here. Named volume, not a
@@ -110,6 +120,8 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - DB_POOL_SIZE=2
+      - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
         condition: service_healthy
@@ -147,6 +159,8 @@ services:
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - TOKENIZERS_PARALLELISM=false
+      - DB_POOL_SIZE=2
+      - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
         condition: service_healthy
@@ -193,6 +207,8 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - DB_POOL_SIZE=2
+      - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
         condition: service_healthy
@@ -215,6 +231,8 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - DB_POOL_SIZE=1
+      - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
         condition: service_healthy
@@ -235,6 +253,12 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      # beat_schedule (celery_app.py) is defined in Python and dispatch is
+      # a pure Redis publish -- beat itself does not query the app DB in
+      # normal operation, so this is effectively unused headroom, not a
+      # real allocation.
+      - DB_POOL_SIZE=1
+      - DB_MAX_OVERFLOW=0
     depends_on:
       redis:
         condition: service_healthy
