@@ -20,6 +20,19 @@ from app.models.client import Client
 
 logger = structlog.get_logger()
 
+# LLM-assisted split for the residual dominant-entity clustering slice
+# (TASK.md priority-fix round): the 40%-of-topic dominant-entity exclusion
+# and full-membership matching fixes still leave large mechanically-formed
+# clusters that are really several unrelated stories sharing one entity
+# whose frequency happens to sit under the exclusion threshold -- confirmed
+# live, "OpenAI" at 26.4% of Anthropic's Innovation topic (under the 40%
+# cutoff) still produced a 118-document grab-bag, and "Elon Musk" produced
+# similar Tesla clusters. Any cluster at or above this size gets one LLM
+# call to check whether it's genuinely one event; below it, mechanical
+# clustering alone already measured ~90%+ coherent in tonight's audit, so
+# it isn't worth the call.
+NARRATIVE_LLM_SPLIT_MIN_CLUSTER_SIZE = 8
+
 # ─────────────────────────────────────────────────────────────
 # NARRATIVE PROCESSING STATE MACHINE (R2)
 # ─────────────────────────────────────────────────────────────
@@ -323,6 +336,101 @@ class NarrativeEngine:
 
         return f"{p1}\n\n{p2}\n\n{p3}"
 
+    def _llm_verify_and_split_cluster(self, cluster_docs, client_name, run_id=None):
+        """
+        Checks whether a mechanically-formed cluster is genuinely one real-
+        world event, or several unrelated stories merged via a shared
+        entity the dominant-entity threshold didn't catch. Returns a list
+        of sub-lists of cluster_docs (a partition) on a confident,
+        well-formed response, or None on ANY failure -- missing API key,
+        timeout, network error, non-200, null/malformed content, an
+        invalid or incomplete partition. None means "leave the mechanical
+        cluster unsplit, exactly as it was before this call" -- this
+        method never raises and the caller never blocks on it beyond the
+        fixed request timeout below.
+        """
+        import requests
+        import json as _json
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            return None
+
+        log = logger.bind(run_id=run_id, task="narrative_llm_split", client=client_name)
+
+        lines = []
+        for i, d in enumerate(cluster_docs):
+            dt = d.published_at or d.collected_at
+            date_str = dt.strftime("%Y-%m-%d") if dt else "unknown"
+            lines.append(f'{i}. ({date_str}) "{(d.title or "")[:150]}"')
+
+        system_prompt = (
+            "You are given news article titles a mechanical system grouped together "
+            "because they share a common entity or similar wording. Some titles may be "
+            "about the SAME specific real-world event; others may just happen to mention "
+            "the same entity while covering unrelated events. Partition them into groups "
+            "where each group is genuinely one event. Respond with strict JSON only: "
+            '{"groups": [[0,1,4], [2], [3,5]]} -- lists of the given indices. '
+            "Every index from 0 to N-1 must appear in exactly one group."
+        )
+        user_prompt = f"Client: {client_name}\n" + "\n".join(lines)
+
+        try:
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "deepseek/deepseek-v4-pro",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0,
+                    "max_tokens": 800,
+                    "reasoning": {"enabled": False},
+                },
+                timeout=8.0,
+            )
+            if resp.status_code != 200:
+                log.warning("narrative_llm_split_http_error", status=resp.status_code, body=resp.text[:300])
+                return None
+
+            content = resp.json()["choices"][0]["message"]["content"]
+            if content is None:
+                log.warning("narrative_llm_split_null_content")
+                return None
+
+            parsed = _json.loads(content)
+            groups = parsed.get("groups")
+            if not isinstance(groups, list) or not groups:
+                log.warning("narrative_llm_split_malformed", raw=str(content)[:300])
+                return None
+
+            # Strict validation: every index 0..N-1 covered exactly once.
+            # A parse that "worked" but names the wrong indices is just as
+            # unsafe to apply as an HTTP failure -- fail closed here too.
+            seen = set()
+            for g in groups:
+                if not isinstance(g, list) or not g:
+                    log.warning("narrative_llm_split_invalid_group", raw=str(content)[:300])
+                    return None
+                for idx in g:
+                    if not isinstance(idx, int) or idx < 0 or idx >= len(cluster_docs) or idx in seen:
+                        log.warning("narrative_llm_split_invalid_index", idx=idx, raw=str(content)[:300])
+                        return None
+                    seen.add(idx)
+            if len(seen) != len(cluster_docs):
+                log.warning("narrative_llm_split_incomplete_partition", covered=len(seen), expected=len(cluster_docs))
+                return None
+
+            sub_clusters = [[cluster_docs[i] for i in g] for g in groups]
+            log.info("narrative_llm_split_applied", original_size=len(cluster_docs), n_groups=len(sub_clusters))
+            return sub_clusters
+
+        except Exception as exc:
+            log.warning("narrative_llm_split_failed", error=str(exc))
+            return None
+
     def calculate_narratives(
         self,
         db: Session,
@@ -553,6 +661,23 @@ class NarrativeEngine:
                         "ref_doc": doc,
                         "documents": [doc]
                     })
+
+            # LLM-assisted split for oversized clusters. Pure post-pass over
+            # the already-computed mechanical result, before any DB writes
+            # for this topic -- a failure here (see
+            # _llm_verify_and_split_cluster's own contract) just means the
+            # mechanical cluster is kept exactly as-is, so this can never
+            # block or corrupt narrative calculation.
+            refined_clusters = []
+            for cluster in incident_clusters:
+                if len(cluster["documents"]) >= NARRATIVE_LLM_SPLIT_MIN_CLUSTER_SIZE:
+                    sub_groups = self._llm_verify_and_split_cluster(cluster["documents"], client.name, run_id=rid)
+                    if sub_groups and len(sub_groups) > 1:
+                        for group in sub_groups:
+                            refined_clusters.append({"ref_doc": group[0], "documents": group})
+                        continue
+                refined_clusters.append(cluster)
+            incident_clusters = refined_clusters
 
             for idx, cluster in enumerate(incident_clusters):
                 t_narrative_start = time.perf_counter()
