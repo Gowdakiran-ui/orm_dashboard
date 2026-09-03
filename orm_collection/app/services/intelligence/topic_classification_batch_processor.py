@@ -450,13 +450,30 @@ class HardenedTopicClassifier:
             topic_map = {t.name: t.id for t in active_topics}
             topic_thresholds = {t.name: (t.confidence_threshold or 0.5) for t in active_topics}
 
+            # Everything the model needs (preprocessed_text, topic_names) and
+            # everything phase 3 needs to write (topic_map, topic_thresholds)
+            # is now a plain Python value -- str/float/UUID/dict, not an ORM
+            # object bound to this session. Close the connection before the
+            # slow inference call below so it isn't held idle for the model's
+            # duration (confirmed live via pg_stat_activity: this connection
+            # was sitting "idle in transaction" for 23-32s per document under
+            # concurrent load). `doc` becomes detached here -- it is not
+            # touched again; STEP 6 below re-queries a fresh one in the new
+            # phase-3 session instead of reusing this one.
+            db.close()
+
             doc_logger.debug("classification_started", content_length=len(preprocessed_text))
 
             # STEP 4: Classify using the Zero-Shot model on the preprocessed text (Phase A2)
+            # No DB session open during this call.
             try:
                 results = self.classifier.classify_text(preprocessed_text, topic_names)
             except Exception as ml_exc:
                 raise RuntimeError(f"Model classification failed: {ml_exc}") from ml_exc
+
+            # Reopen a fresh session for persistence -- inference is done,
+            # nothing below this point is slow.
+            db = SessionLocal()
 
             # STEP 5: Apply per-topic thresholds, negative suppression, and explainability (Phases A3, A4, A5)
             topics_written = 0
@@ -532,6 +549,10 @@ class HardenedTopicClassifier:
             # STEP 6: Final transition to TOPIC_CLASSIFIED (committed atomically with topics)
             elapsed_ms = (time.perf_counter() - start_time) * 1000
 
+            # `doc` from phase 1 is detached (its session closed above) --
+            # re-query in this phase's session rather than mutating the
+            # stale reference, which would raise DetachedInstanceError.
+            doc = db.query(Document).filter(Document.id == document_id).first()
             doc.topic_processing_status = TopicProcessingState.TOPIC_CLASSIFIED
             doc.topic_run_id = run_id
             doc.topic_batch_id = batch_id

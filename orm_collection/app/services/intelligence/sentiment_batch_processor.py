@@ -381,10 +381,17 @@ class HardenedSentimentProcessor:
             # rather than the ungated DocumentMatch table -- see FINDINGS.md.
             matches = db.query(EntityMention).filter(EntityMention.document_id == document_id).all()
             matched_keywords = set()
+            # Materialize (id, name) for every matched entity now, while the
+            # session is open -- the per-entity sentiment loop below runs
+            # after the session closes and must not touch ORM objects
+            # (mirrors the entity_details pattern already used in
+            # process_batch below).
+            entity_details = []
             for m in matches:
                 ent = db.query(Entity).filter(Entity.id == m.entity_id).first()
                 if ent:
                     matched_keywords.add(ent.name)
+                    entity_details.append({"id": ent.id, "name": ent.name})
 
             # 1. Advanced Preprocessing (A2)
             preprocessed_text = preprocess_text(
@@ -396,7 +403,26 @@ class HardenedSentimentProcessor:
             if not preprocessed_text.strip():
                 preprocessed_text = content
 
+            # 4. Dynamic Source Reliability (A6) -- needs `db` plus doc's
+            # source_id/url; both cheap. Computed here, before the session
+            # closes, rather than after inference as before -- it never
+            # depended on the model's output, so this is a reorder, not a
+            # behavior change.
+            source_reliability = get_dynamic_source_reliability(db, doc.source_id, doc.url)
+
+            # Everything phases 2-3 below need (preprocessed_text, content,
+            # matched_keywords, entity_details, source_reliability) is now a
+            # plain Python value -- str/float/UUID/dict/set -- not an ORM
+            # object bound to this session. Close the connection before the
+            # slow FinBERT calls below so it isn't held idle for their
+            # duration (same evidenced pattern as the topic classifier fix
+            # in this same commit: pg_stat_activity showed connections idle
+            # for 23-32s per document under concurrent load). `doc` and the
+            # `ent`/`matches` ORM objects above are not touched again.
+            db.close()
+
             # 2. Run FinBERT on preprocessed text
+            # No DB session open during this call.
             raw_result = self.analyzer.analyze_text(preprocessed_text)
             raw_label = raw_result.get("label", "neutral").lower()
             raw_score = raw_result.get("score", 1.0)
@@ -408,9 +434,6 @@ class HardenedSentimentProcessor:
 
             score_map = {"positive": 1.0, "neutral": 0.0, "negative": -1.0}
             sentiment_score = score_map.get(calibrated_label, 0.0)
-
-            # 4. Dynamic Source Reliability (A6)
-            source_reliability = get_dynamic_source_reliability(db, doc.source_id, doc.url)
             weighted_score = sentiment_score * source_reliability
 
             # 5. Generate Explainability Metadata (A5)
@@ -440,6 +463,69 @@ class HardenedSentimentProcessor:
                 "model_version": f"{self.analyzer.model_name} (v{self.analyzer.model_version}) + ORM rules v1.0"
             }
 
+            # 6. Localized Entity-Level Sentiment (A7) -- runs against the
+            # entity_details list materialized in phase 1 (plain dicts, not
+            # ORM objects). Still no DB session open: entity context comes
+            # from `content` (already a plain string) and each entity's
+            # already-materialized name. Results are collected here and
+            # persisted below once a fresh session is open.
+            entity_sentiment_results = []
+            for ent_info in entity_details:
+                ent_id = ent_info["id"]
+                ent_name = ent_info["name"]
+
+                # Get surrounding context window for entity (200 characters around it)
+                context = self.analyzer.get_entity_context(content, ent_name, window=200)
+                # Apply advanced preprocessing to entity context too
+                ent_preprocessed = preprocess_text(context, title="", summary="", matched_keywords={ent_name})
+                if not ent_preprocessed.strip():
+                    ent_preprocessed = context
+
+                ent_raw = self.analyzer.analyze_text(ent_preprocessed)
+                ent_raw_label = ent_raw.get("label", "neutral").lower()
+                ent_raw_score = ent_raw.get("score", 1.0)
+
+                # Calibrate locally
+                ent_orm = apply_orm_rules(ent_preprocessed, ent_raw_label, ent_raw_score)
+                ent_calibrated_label = ent_orm["label"]
+                ent_calibrated_score = ent_orm["score"]
+                ent_sentiment_score = score_map.get(ent_calibrated_label, 0.0)
+
+                ent_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', ent_preprocessed) if s.strip()]
+                ent_supporting = ent_sentences[0] if ent_sentences else ""
+                for esent in ent_sentences:
+                    if ent_name.lower() in esent.lower():
+                        ent_supporting = esent
+                        break
+
+                ent_explainability = {
+                    "sentiment": ent_calibrated_label.capitalize(),
+                    "confidence": round(ent_calibrated_score, 4),
+                    "supporting_sentence": ent_supporting,
+                    "supporting_keywords": ent_orm["trigger_words"],
+                    "detected_evidence": ent_orm["applied_rule"],
+                    "rejected_labels": [
+                        {"label": "Neutral", "confidence": round(ent_raw_score, 4) if ent_raw_label == "neutral" else 0.0},
+                        {"label": "Positive", "confidence": round(ent_raw_score, 4) if ent_raw_label == "positive" else 0.0},
+                        {"label": "Negative", "confidence": round(ent_raw_score, 4) if ent_raw_label == "negative" else 0.0}
+                    ],
+                    "decision_reason": f"Localized entity sentiment for {ent_name} calibrated via: {ent_orm['applied_rule']}.",
+                    "model_version": f"{self.analyzer.model_name} (v{self.analyzer.model_version}) + ORM rules v1.0"
+                }
+
+                entity_sentiment_results.append({
+                    "entity_id": ent_id,
+                    "label": ent_calibrated_label,
+                    "score": ent_sentiment_score,
+                    "confidence": ent_calibrated_score,
+                    "explainability": ent_explainability,
+                })
+
+            # Reopen a fresh session for persistence -- all inference (both
+            # document-level and per-entity) is done, nothing below this
+            # point is slow.
+            db = SessionLocal()
+
             # Safe Upsert for DocumentSentiment (R5 + A5)
             ds_id = uuid.uuid4()
             stmt_ds = insert(DocumentSentiment).values(
@@ -466,69 +552,25 @@ class HardenedSentimentProcessor:
             )
             db.execute(stmt_ds)
 
-            # 6. Localized Entity-Level Sentiment (A7)
-            for m in matches:
-                ent = db.query(Entity).filter(Entity.id == m.entity_id).first()
-                if not ent:
-                    continue
-                
-                # Get surrounding context window for entity (200 characters around it)
-                context = self.analyzer.get_entity_context(content, ent.name, window=200)
-                # Apply advanced preprocessing to entity context too
-                ent_preprocessed = preprocess_text(context, title="", summary="", matched_keywords={ent.name})
-                if not ent_preprocessed.strip():
-                    ent_preprocessed = context
-
-                ent_raw = self.analyzer.analyze_text(ent_preprocessed)
-                ent_raw_label = ent_raw.get("label", "neutral").lower()
-                ent_raw_score = ent_raw.get("score", 1.0)
-
-                # Calibrate locally
-                ent_orm = apply_orm_rules(ent_preprocessed, ent_raw_label, ent_raw_score)
-                ent_calibrated_label = ent_orm["label"]
-                ent_calibrated_score = ent_orm["score"]
-                ent_sentiment_score = score_map.get(ent_calibrated_label, 0.0)
-
-                ent_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', ent_preprocessed) if s.strip()]
-                ent_supporting = ent_sentences[0] if ent_sentences else ""
-                for esent in ent_sentences:
-                    if ent.name.lower() in esent.lower():
-                        ent_supporting = esent
-                        break
-
-                ent_explainability = {
-                    "sentiment": ent_calibrated_label.capitalize(),
-                    "confidence": round(ent_calibrated_score, 4),
-                    "supporting_sentence": ent_supporting,
-                    "supporting_keywords": ent_orm["trigger_words"],
-                    "detected_evidence": ent_orm["applied_rule"],
-                    "rejected_labels": [
-                        {"label": "Neutral", "confidence": round(ent_raw_score, 4) if ent_raw_label == "neutral" else 0.0},
-                        {"label": "Positive", "confidence": round(ent_raw_score, 4) if ent_raw_label == "positive" else 0.0},
-                        {"label": "Negative", "confidence": round(ent_raw_score, 4) if ent_raw_label == "negative" else 0.0}
-                    ],
-                    "decision_reason": f"Localized entity sentiment for {ent.name} calibrated via: {ent_orm['applied_rule']}.",
-                    "model_version": f"{self.analyzer.model_name} (v{self.analyzer.model_version}) + ORM rules v1.0"
-                }
-
-                # Safe Upsert for EntitySentiment (R5)
+            # Persist the entity-level sentiment results computed above
+            for res in entity_sentiment_results:
                 es_id = uuid.uuid4()
                 stmt_es = insert(EntitySentiment).values(
                     id=es_id,
                     document_id=document_id,
-                    entity_id=ent.id,
-                    sentiment_label=ent_calibrated_label.capitalize(),
-                    sentiment_score=ent_sentiment_score,
-                    confidence_score=ent_calibrated_score,
-                    explainability_metadata=ent_explainability,
+                    entity_id=res["entity_id"],
+                    sentiment_label=res["label"].capitalize(),
+                    sentiment_score=res["score"],
+                    confidence_score=res["confidence"],
+                    explainability_metadata=res["explainability"],
                     created_at=datetime.now(timezone.utc)
                 ).on_conflict_do_update(
                     constraint="uq_entity_sentiments_doc_entity",
                     set_={
-                        "sentiment_label": ent_calibrated_label.capitalize(),
-                        "sentiment_score": ent_sentiment_score,
-                        "confidence_score": ent_calibrated_score,
-                        "explainability_metadata": ent_explainability,
+                        "sentiment_label": res["label"].capitalize(),
+                        "sentiment_score": res["score"],
+                        "confidence_score": res["confidence"],
+                        "explainability_metadata": res["explainability"],
                         "created_at": datetime.now(timezone.utc)
                     }
                 )
