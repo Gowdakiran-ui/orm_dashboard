@@ -6,10 +6,21 @@ The status endpoint reads this table exclusively.
 No AsyncResult. No Redis parsing.
 
 FSM States (ordered):
-    QUEUED → COLLECTING → PROCESSING → TREND → RISK →
+    QUEUED → COLLECTING → AWAITING_PROCESSING → PROCESSING → TREND → RISK →
     ALERT → NARRATIVE → REPUTATION → EXECUTIVE → BENCHMARK →
     FINALIZING → SUCCESS
                         ↘ FAILED (from any state)
+
+AWAITING_PROCESSING (2026-09-03): pipeline_stage_process (nlp_queue,
+concurrency=3) doesn't start executing the moment it's dispatched -- it
+queues behind whatever's already using the NLP workers. Before this stage
+existed, the FSM just stayed at COLLECTING the whole time a run sat
+queued (confirmed live: over an hour under 5-way concurrent load),
+which looked stalled/stale rather than honestly "done collecting,
+waiting for capacity." pipeline_stage_collect transitions into this
+stage right before returning; pipeline_stage_process's existing
+transition into PROCESSING (unchanged) naturally closes it out once a
+slot actually frees up.
 """
 import uuid
 from datetime import datetime, timezone
@@ -30,6 +41,7 @@ logger = structlog.get_logger()
 _STAGE_ORDER = [
     "QUEUED",
     "COLLECTING",
+    "AWAITING_PROCESSING",
     "PROCESSING",
     "TREND",
     "RISK",
@@ -63,6 +75,7 @@ _ALLOWED_TRANSITIONS["FAILED"] = set()
 STAGE_PROGRESS: dict[str, int] = {
     "QUEUED":      0,
     "COLLECTING":  5,
+    "AWAITING_PROCESSING": 15,
     "PROCESSING":  20,
     "TREND":       40,
     "RISK":        50,

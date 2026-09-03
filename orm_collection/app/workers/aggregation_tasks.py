@@ -1287,12 +1287,22 @@ def pipeline_stage_collect(self, run_id: str, client_id: str, owner_id: str) -> 
             db.commit()
             return []
         doc_ids = _stage_collect(ctx, db)
+
+        # Collection itself is done here, but pipeline_stage_process
+        # (nlp_queue, concurrency=3) may not actually start for a while if
+        # every slot is busy -- transition into AWAITING_PROCESSING rather
+        # than leaving the FSM pinned at COLLECTING for however long that
+        # wait turns out to be. If this is a stale/duplicate call (fix
+        # #1's redelivery guard), the transition itself is a harmless
+        # no-op, but doc_ids is still real work already done and the chain
+        # needs it regardless.
+        if not _update_run(db, run_id, "AWAITING_PROCESSING", f"Collected {len(doc_ids)} documents"):
+            log.warning("stage_skipped_stale_duplicate", stage="AWAITING_PROCESSING")
+
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
         if run:
-            run.progress_pct = 20
-            run.log_tail = f"Collected {len(doc_ids)} documents"
             run.current_worker = worker_id
-            db.commit()
+        db.commit()
         return doc_ids
     except Exception:
         db.rollback()
