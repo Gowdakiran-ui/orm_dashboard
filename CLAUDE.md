@@ -61,3 +61,34 @@ interfaces → easiest to verify → easiest to revert.
 ## WHEN UNCERTAIN
 State the uncertainty explicitly and investigate before acting. Never fill a
 gap in understanding with a plausible-sounding assumption — say "I need to check X" and check it.
+
+## PRODUCTION DROPLET ACCESS (xoop-prod, 167.99.232.206)
+Access method: SSH key-based auth only (`~/.ssh/orm_droplet_key`, root@167.99.232.206).
+Never use password auth to this host — if key auth ever fails, stop and ask
+for a new key to be added rather than accepting a plaintext password.
+
+Do not store the droplet's DB credentials (or any other plaintext secret) in
+this repo, in CLAUDE.md, or in any committed file — a checked-in secret is a
+permanent leak via git history, not a one-time exposure. The approved way to
+query the live DB is through an already-running app container's own session,
+e.g.:
+```
+docker exec orm_dashboard-backend-1 python3 -c "
+from app.core.db import SessionLocal
+from sqlalchemy import text
+db = SessionLocal()
+print(db.execute(text('SELECT ...')).fetchall())
+db.close()
+"
+```
+This uses the container's own configured DB connection — no password ever
+needs to be typed, stored, or passed as a command-line argument.
+
+Default mode on this host is **audit-only**: reading logs, querying the DB
+(read-only), inspecting containers/config, and tracing code are all fine
+without asking first. Before making ANY change with real effect — editing a
+file destined for this host, restarting/recreating a container, rebuilding
+an image, running a DB write/backfill, or anything else that alters running
+state — stop and get explicit confirmation first, even if the fix seems
+obvious and even mid-investigation. This applies every time, not just once
+per session.
