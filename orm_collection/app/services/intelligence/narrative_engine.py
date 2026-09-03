@@ -493,6 +493,29 @@ class NarrativeEngine:
             # headlines, entity-overlap for cases (the common real-world one)
             # where different outlets cover the same event with unrelated
             # wording but name the same person/competitor.
+            #
+            # Full-membership matching (was: compared only against
+            # cluster["ref_doc"], the cluster's original seed document).
+            # Seed-only comparison let a cluster drift arbitrarily far from
+            # its own origin: document B matches seed A, document C matches B
+            # on a completely different signal (not A), document D matches C,
+            # and so on, with no requirement that D have anything in common
+            # with A. Requiring agreement with every existing member closes
+            # that drift path regardless of which signal justified each hop.
+            # Confirmed real-data performance before shipping (459-document
+            # Anthropic "Innovation" topic bucket, the largest in production):
+            # 91ms seed-only vs 155ms full-membership -- a real but
+            # negligible cost against calculate_narratives' actual per-client
+            # runtime (single-digit seconds, dominated by DB I/O), so no
+            # capping/bounding of cluster size was added.
+            #
+            # Confirmed this does NOT fully resolve every dominant-entity
+            # case: a cluster where every member directly shares one same
+            # entity throughout (not a drift chain through changing
+            # signals) satisfies full-membership agreement trivially, same
+            # as it satisfied seed-only agreement -- there's no drift to
+            # catch. That's a limitation of the entity-frequency threshold
+            # (dominant_entities above), not of this matching change.
             incident_clusters = []
             for doc in docs:
                 matched_cluster = None
@@ -500,21 +523,28 @@ class NarrativeEngine:
                 doc_entities = topic_entity_cache.get(doc.id, set())
 
                 for cluster in incident_clusters:
-                    ref_doc = cluster["ref_doc"]
-                    time_diff = abs((doc.published_at or doc.collected_at) - (ref_doc.published_at or ref_doc.collected_at)).days
+                    all_members_match = True
+                    for member in cluster["documents"]:
+                        time_diff = abs((doc.published_at or doc.collected_at) - (member.published_at or member.collected_at)).days
+                        if time_diff > 3:
+                            all_members_match = False
+                            break
 
-                    if time_diff <= 3:
-                        ref_tokens = token_cache.get(ref_doc.id, set())
-                        intersection = doc_tokens.intersection(ref_tokens)
-                        union = doc_tokens.union(ref_tokens)
+                        member_tokens = token_cache.get(member.id, set())
+                        intersection = doc_tokens.intersection(member_tokens)
+                        union = doc_tokens.union(member_tokens)
                         similarity = len(intersection) / len(union) if union else 0.0
 
-                        ref_entities = topic_entity_cache.get(ref_doc.id, set())
-                        shares_entity = bool(doc_entities and ref_entities and (doc_entities & ref_entities))
+                        member_entities = topic_entity_cache.get(member.id, set())
+                        shares_entity = bool(doc_entities and member_entities and (doc_entities & member_entities))
 
-                        if similarity >= 0.25 or shares_entity or (not doc_tokens and not ref_tokens):
-                            matched_cluster = cluster
+                        if not (similarity >= 0.25 or shares_entity or (not doc_tokens and not member_tokens)):
+                            all_members_match = False
                             break
+
+                    if all_members_match:
+                        matched_cluster = cluster
+                        break
 
                 if matched_cluster:
                     matched_cluster["documents"].append(doc)
