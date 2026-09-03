@@ -335,6 +335,105 @@ class RiskEngine:
             )
             raise batch_exc
 
+    # ------------------------------------------------------------------
+    # LLM-assisted SELF/BYSTANDER/EXONERATED role classification
+    # ------------------------------------------------------------------
+    # Only called for documents whose mechanically-computed final_score
+    # already exceeds the LOW/MEDIUM boundary (RISK_THRESHOLDS) -- a
+    # document the formula already scores LOW has little at stake either
+    # way, and calling out to OpenRouter on every one of the ~2,300+
+    # documents in this corpus would risk becoming the next throughput
+    # bottleneck in an already latency-sensitive per-document pipeline,
+    # for no real benefit. MEDIUM+ is where a false "this is about the
+    # client" actually inflates something that matters -- the real
+    # CEO-complaint failure mode confirmed live tonight (Godrej/Orris:
+    # Godrej is a bystander in Orris's legal matter, not the wrongdoer).
+    RISK_ROLE_CLASSIFICATION_MIN_SCORE = 25.0
+
+    def _llm_classify_role(self, document, entity, client_id, run_id=None):
+        """
+        Classifies whether this document is genuinely negative news ABOUT
+        this entity (SELF), the entity merely appears as another party
+        (BYSTANDER), or the entity is party to a negative-sounding dispute
+        that actually resolved in its favor (EXONERATED).
+
+        Returns "SELF", "BYSTANDER", or "EXONERATED" on a confident,
+        well-formed response, or None on ANY failure -- missing API key,
+        timeout, network error, non-200, null/malformed content, or a
+        label outside the three valid values. None means "no change to
+        today's existing scoring" (the caller treats None the same as
+        SELF) -- an OpenRouter outage must never silently suppress a
+        real risk score, only ever fail back to the status quo.
+        """
+        import requests
+        import json as _json
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            return None
+
+        log = logger.bind(run_id=run_id, task="risk_llm_role_classify", client_id=str(client_id), entity_id=str(entity.id))
+
+        system_prompt = (
+            "You classify a news document's role relative to one specific entity. "
+            "Given the entity name and a document title, decide exactly one of:\n"
+            "SELF - the document is negative news ABOUT the entity itself (it is the "
+            "accused, the defendant, the one taking the negative action, or otherwise "
+            "the actual subject of the negative story).\n"
+            "BYSTANDER - the entity merely appears as another party (filer, plaintiff, "
+            "spokesperson, a person/company mentioned in passing) or is not really the "
+            "subject of this document at all.\n"
+            "EXONERATED - the entity is a party to a negative-sounding situation (a "
+            "lawsuit, an accusation, a dispute, scrutiny) but the actual outcome or "
+            "framing is favorable to it (it wins, is cleared, the ruling favors it, it "
+            "successfully defends itself, it receives a positive result despite "
+            "dispute-shaped language).\n"
+            'Respond with strict JSON only: {"label": "SELF"|"BYSTANDER"|"EXONERATED"}'
+        )
+        content_snippet = (document.normalized_content or document.title or "")[:500]
+        user_prompt = f'Entity: {entity.name}\nDocument: "{content_snippet}"'
+
+        try:
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "deepseek/deepseek-v4-pro",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0,
+                    "max_tokens": 200,
+                    "reasoning": {"enabled": False},
+                },
+                timeout=8.0,
+            )
+            if resp.status_code != 200:
+                log.warning("risk_llm_role_http_error", status=resp.status_code, body=resp.text[:300])
+                return None
+
+            content = resp.json()["choices"][0]["message"]["content"]
+            if content is None:
+                log.warning("risk_llm_role_null_content")
+                return None
+
+            label = _json.loads(content).get("label", "")
+            if not isinstance(label, str):
+                log.warning("risk_llm_role_malformed", raw=str(content)[:300])
+                return None
+            label = label.strip().upper()
+            if label not in ("SELF", "BYSTANDER", "EXONERATED"):
+                log.warning("risk_llm_role_invalid_label", label=label, raw=str(content)[:300])
+                return None
+
+            log.info("risk_llm_role_classified", label=label)
+            return label
+
+        except Exception as exc:
+            log.warning("risk_llm_role_failed", error=str(exc))
+            return None
+
     def get_risk_level(self, score: float) -> str:
         if score <= RISK_THRESHOLDS["LOW_TO_MEDIUM"]:
             return "LOW"
@@ -506,6 +605,20 @@ class RiskEngine:
                 final_score = normalized_base * source_reliability
                 final_score = min(100.0, max(0.0, final_score))
 
+                # LLM-assisted role gate: only for documents already scoring
+                # above the LOW/MEDIUM boundary (see
+                # RISK_ROLE_CLASSIFICATION_MIN_SCORE docstring). role is None
+                # on ANY classification failure and is treated identically to
+                # SELF -- the mechanical score is never touched by a missing
+                # key, timeout, or malformed response, only by a confident
+                # BYSTANDER/EXONERATED result.
+                role_classification = None
+                role_classification_attempted = final_score > self.RISK_ROLE_CLASSIFICATION_MIN_SCORE
+                if role_classification_attempted:
+                    role_classification = self._llm_classify_role(document, entity, client_id, run_id=run_id)
+                    if role_classification in ("BYSTANDER", "EXONERATED"):
+                        final_score = 0.0
+
                 risk_factors = []
                 if top_topic:
                     risk_factors.append({"type": "Topic", "factor": top_topic, "weight": topic_weight})
@@ -531,7 +644,18 @@ class RiskEngine:
                     "confidence": confidence_modifier,
                     "final_score": final_score,
                     "final_severity": self.get_risk_level(final_score),
-                    "decision_reason": f"Risk level set to {self.get_risk_level(final_score)} based on topic '{top_topic}' (weight {topic_weight}), sentiment '{ent_sent_label}' (weight {ent_sent_weight}), trend '{trend_severity}' (weight {trend_weight}), and source reliability {source_reliability}.",
+                    "decision_reason": (
+                        f"Risk level set to {self.get_risk_level(final_score)} based on topic '{top_topic}' "
+                        f"(weight {topic_weight}), sentiment '{ent_sent_label}' (weight {ent_sent_weight}), "
+                        f"trend '{trend_severity}' (weight {trend_weight}), and source reliability {source_reliability}."
+                        if role_classification not in ("BYSTANDER", "EXONERATED")
+                        else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
+                    ),
+                    "role_classification": role_classification,
+                    "role_classification_source": (
+                        "not_evaluated" if not role_classification_attempted
+                        else ("llm" if role_classification else "fallback_unchanged")
+                    ),
                     "triggering_documents": [str(document_id)]
                 }
 
