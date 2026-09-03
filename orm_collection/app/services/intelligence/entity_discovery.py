@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, text
 from sqlalchemy.exc import IntegrityError
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.models.entity import Entity, EntityMention, EntityKeyword, EntityAlias
 from app.models.executive_candidate import ExecutiveCandidate
 from app.models.competitor_candidate import CompetitorCandidate
-from app.models.document import Document
+from app.models.document import Document, DocumentMatch
 from app.models.client import Client
 from app.services.matching_engine import engine_instance
 
@@ -1445,6 +1445,86 @@ class EntityDiscoveryEngine:
                 return entity
         return None
 
+    def _rematch_recent_documents_for_new_entity(
+        self,
+        db: Session,
+        client_id: str,
+        entity_id,
+        entity_name: str,
+    ) -> int:
+        """
+        Document matching only happens once, at collection time
+        (document_service.py, via engine_instance). A competitor/executive
+        promoted mid-run gets its keyword loaded into engine_instance right
+        after this call's caller commits and refreshes it -- but documents
+        already collected *before* the promotion never get a chance to
+        match against a keyword that didn't exist yet when they were
+        collected. Confirmed real losses this session: 8/129 documents for
+        Anthropic ("Claude"), 3 more for Google/Icertis combined.
+
+        Re-runs matching for just this one newly-promoted entity against
+        this client's recently-collected, already-relevant documents --
+        "already-relevant" via an existing EntityMention row (cheap,
+        indexed, already proven to be about this client), not a blind
+        full-table scan. Bounded to collected_at >= now()-6h (collected_at
+        is set from datetime.now() in every adapter at fetch time, not the
+        source's published_at, so this genuinely means "collected in this
+        run" -- confirmed live, not assumed) rather than a client's full
+        history, since this runs on every promotion, not just once.
+
+        Only ever adds DocumentMatch rows -- never touches or deletes
+        anything. Explicitly checks for an existing match first since
+        DocumentMatch has no unique constraint on
+        (document_id, matched_entity_id) to rely on.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=6)
+
+        candidate_docs = db.query(Document.id, Document.normalized_content).join(
+            EntityMention, EntityMention.document_id == Document.id
+        ).join(Entity, Entity.id == EntityMention.entity_id).filter(
+            Entity.client_id == client_id,
+            Document.collected_at >= cutoff,
+        ).distinct().all()
+
+        if not candidate_docs:
+            return 0
+
+        doc_ids = [row[0] for row in candidate_docs]
+        already_matched = {
+            row[0] for row in db.query(DocumentMatch.document_id).filter(
+                DocumentMatch.matched_entity_id == entity_id,
+                DocumentMatch.document_id.in_(doc_ids),
+            ).all()
+        }
+
+        rematched = 0
+        for doc_id, content in candidate_docs:
+            if doc_id in already_matched or not content:
+                continue
+            matches = engine_instance.find_matches(content)
+            hit = next((m for m in matches if m["entity_id"] == str(entity_id)), None)
+            if hit:
+                db.add(DocumentMatch(
+                    document_id=doc_id,
+                    matched_entity_id=entity_id,
+                    match_type=hit["match_type"],
+                    match_confidence=hit["confidence"],
+                    matched_text=hit.get("matched_keyword", entity_name),
+                ))
+                rematched += 1
+
+        if rematched:
+            db.commit()
+            logger.info(
+                "post_promotion_rematch_complete",
+                client_id=client_id,
+                entity_id=str(entity_id),
+                entity_name=entity_name,
+                documents_rematched=rematched,
+                candidates_checked=len(candidate_docs),
+            )
+        return rematched
+
     def promote_competitor_candidates(
         self,
         db: Session,
@@ -1463,6 +1543,7 @@ class EntityDiscoveryEngine:
         ).all()
 
         promoted_count = 0
+        promoted_competitors = []
 
         # Fetch client for brand name (needed for self-reference check)
         client = db.query(Client).filter(Client.id == client_id).first()
@@ -1585,14 +1666,17 @@ class EntityDiscoveryEngine:
                         new_entity_id=str(new_entity.id),
                         mention_count=candidate.mention_count
                     )
-                    
+
                     promoted_count += 1
-        
+                    promoted_competitors.append((new_entity.id, candidate.organization_name))
+
         db.commit()
-        
+
         if promoted_count > 0:
             engine_instance.refresh_processor(db)
-        
+            for entity_id, entity_name in promoted_competitors:
+                self._rematch_recent_documents_for_new_entity(db, client_id, entity_id, entity_name)
+
         # Trigger benchmark calculation for newly promoted competitors
         if promoted_count > 0:
             from app.services.intelligence.benchmark_engine import BenchmarkEngine
@@ -1775,10 +1859,18 @@ class EntityDiscoveryEngine:
                 )
         
         db.commit()
-        
+
         if promoted_count > 0:
             engine_instance.refresh_processor(db)
-        
+            for exec_info in promoted_executives:
+                # promoted_executives stores entity_id as str(new_entity.id)
+                # (used for JSON-friendly logging above); convert back to a
+                # UUID for consistency with the raw UUID objects the
+                # competitor path passes.
+                self._rematch_recent_documents_for_new_entity(
+                    db, client_id, uuid.UUID(exec_info["entity_id"]), exec_info["name"]
+                )
+
         # Trigger executive reputation calculation for newly promoted executives
         if promoted_executives:
             from app.services.intelligence.executive_reputation_engine import ExecutiveReputationEngine
