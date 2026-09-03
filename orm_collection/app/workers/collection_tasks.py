@@ -473,3 +473,90 @@ def collection_watchdog():
         log.error("watchdog_failed", error=str(exc))
     finally:
         db.close()
+
+
+# Feed revival watchdog: the other half of the dead-feed circuit breaker
+# above. FEED_CIRCUIT_BREAKER_THRESHOLD trips a feed to is_active=False, but
+# nothing ever flipped it back -- confirmed live (2026-09-02/03): 8 of 9
+# GDELT feeds tripped together during a real GDELT-side outage and stayed
+# deactivated 17+ hours after the outage should have cleared, with no path
+# back except a manual DB write. This task is that path: retry a
+# deactivated feed on a cooldown and reactivate it only on a real
+# successful fetch.
+FEED_REVIVAL_COOLDOWN_MINUTES = 60
+
+
+@shared_task
+def feed_revival_watchdog():
+    """
+    Retries deactivated (circuit-breaker-tripped) feeds one at a time on a
+    cooldown, reactivating on a real successful fetch. Runs hourly.
+
+    Deliberately does a single direct adapter.fetch() per feed, not a call
+    into fetch_feed_task -- that task's own 3-attempt exponential-backoff
+    retry chain is the right shape for an in-flight scheduled poll, but
+    piling several of those chains back-to-back against a host that may
+    still be down is exactly what produced the DB-connection pressure spike
+    seen tonight during manual verification. One lightweight attempt per
+    feed per hour is enough to detect recovery without that cost, and the
+    time.sleep pause below (not just relying on Celery's own concurrency)
+    keeps even a fast HN/RSS-speed host from being hit with a burst of
+    only tens of milliseconds apart.
+    """
+    import time
+    from datetime import timedelta
+    from app.utils.redis_client import redis_client
+    import structlog
+
+    log = structlog.get_logger().bind(task="feed_revival_watchdog")
+    db = SessionLocal()
+    try:
+        cooldown_cutoff = datetime.now(timezone.utc) - timedelta(minutes=FEED_REVIVAL_COOLDOWN_MINUTES)
+        candidates = db.query(RSSFeed).filter(
+            RSSFeed.is_active == False,  # noqa: E712
+            (RSSFeed.last_polled_at == None) | (RSSFeed.last_polled_at < cooldown_cutoff)  # noqa: E711
+        ).all()
+
+        if not candidates:
+            log.info("revival_no_candidates")
+            return
+
+        log.info("revival_candidates_found", total=len(candidates))
+
+        for feed in candidates:
+            log.info("revival_attempt_started", feed_id=str(feed.id), name=feed.feed_name, source_format=feed.source_format)
+            feed.last_polled_at = datetime.now(timezone.utc)
+            db.commit()
+
+            try:
+                adapter_cls = ADAPTER_REGISTRY.get(feed.source_format, RSSAdapter)
+                adapter = adapter_cls()
+                adapter.fetch(feed.feed_url)
+
+                # Real success: reactivate and clear any leftover breaker state.
+                feed.is_active = True
+                db.commit()
+                redis_client.delete(_feed_circuit_breaker_key(feed.id))
+                log.warning(
+                    "revival_succeeded_feed_reactivated",
+                    feed_id=str(feed.id),
+                    name=feed.feed_name,
+                    feed_url=feed.feed_url,
+                )
+            except Exception as fetch_exc:
+                # Still down -- leave deactivated. last_polled_at was already
+                # advanced above, so the cooldown restarts from now.
+                log.info(
+                    "revival_attempt_failed",
+                    feed_id=str(feed.id),
+                    name=feed.feed_name,
+                    error=str(fetch_exc),
+                )
+
+            time.sleep(2)
+
+    except Exception as exc:
+        db.rollback()
+        log.error("revival_watchdog_failed", error=str(exc))
+    finally:
+        db.close()

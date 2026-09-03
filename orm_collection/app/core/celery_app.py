@@ -46,6 +46,7 @@ celery_app.conf.update(
         'app.workers.collection_tasks.schedule_feeds':    {'queue': 'io_queue'},
         'app.workers.collection_tasks.flush_metrics_task':{'queue': 'io_queue'},
         'app.workers.collection_tasks.collection_watchdog':{'queue': 'io_queue'},
+        'app.workers.collection_tasks.feed_revival_watchdog':{'queue': 'io_queue'},
         'app.workers.aggregation_tasks.pipeline_run_watchdog':{'queue': 'io_queue'},
         'app.workers.intelligence_tasks.document_processing_watchdog':{'queue': 'io_queue'},
         'app.workers.search_tasks.execute_search_task':   {'queue': 'io_queue'},
@@ -91,6 +92,17 @@ celery_app.conf.update(
         'collection-watchdog-every-15-minutes': {
             'task': 'app.workers.collection_tasks.collection_watchdog',
             'schedule': crontab(minute='*/15'),
+        },
+
+        # The other half of the dead-feed circuit breaker in
+        # collection_tasks.py: retries a deactivated feed on a 1-hour
+        # cooldown and reactivates it on a real successful fetch, instead of
+        # requiring a manual DB write. Confirmed live 2026-09-03: 8 GDELT
+        # feeds sat deactivated 17+ hours after the underlying outage
+        # cleared, with no automatic path back.
+        'feed-revival-watchdog-every-hour': {
+            'task': 'app.workers.collection_tasks.feed_revival_watchdog',
+            'schedule': crontab(minute=0),
         },
 
         # Phase 1: PipelineRun (Phase 13) had no watchdog at all — the reason
