@@ -472,12 +472,24 @@ class RiskEngine:
             joinedload(EntityMention.entity)
         ).filter(EntityMention.document_id == document_id).all()
 
-        # Group entities by client to generate risk events per client for this document
+        # Group entities by client to generate risk events per client for this
+        # document. Deduplicated by entity.id: an entity can have more than
+        # one EntityMention row on the same document (mentioned multiple
+        # times in the text), and without this the per-entity loop below
+        # scores the same (client, document, entity) triple more than once.
+        # Confirmed live: harmless before the LLM role gate (each redundant
+        # pass produced the same deterministic score), but now each
+        # redundant pass makes its own real LLM call, and _upsert_risk_event
+        # lets whichever pass runs last win -- if an earlier pass got a real
+        # classification and a later, purely-redundant pass then times out
+        # and falls back unchanged, the final persisted score reverts to
+        # the stale mechanical value even though the entity was correctly
+        # classified moments earlier.
         client_to_entities = {}
         for m in mentions:
-            if m.entity.client_id not in client_to_entities:
-                client_to_entities[m.entity.client_id] = []
-            client_to_entities[m.entity.client_id].append(m.entity)
+            bucket = client_to_entities.setdefault(m.entity.client_id, {})
+            bucket[m.entity.id] = m.entity
+        client_to_entities = {cid: list(ents.values()) for cid, ents in client_to_entities.items()}
 
         # Optimization: Combined query with outerjoin to fetch Source and SourceCategory in 1 step
         source_reliability = 1.0
