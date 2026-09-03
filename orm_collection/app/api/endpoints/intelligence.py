@@ -62,7 +62,14 @@ from app.models.risk import RiskEvent
 def get_document_risk(document_id: UUID, client_id: UUID, db: Session = Depends(get_db)):
     document = _get_client_document(db, document_id, client_id)
 
-    events = db.query(RiskEvent).filter(RiskEvent.document_id == document_id).all()
+    # Scoped by client_id -- unscoped, this returned every RiskEvent row for
+    # a shared document_id, including other clients' own client_id/entity_id/
+    # risk_score/confidence when the same document also matched their
+    # entities. Confirmed live on 186 documents matched to more than one
+    # client. Same fix as documents.py's read_document/read_client_documents.
+    events = db.query(RiskEvent).filter(
+        RiskEvent.document_id == document_id, RiskEvent.client_id == client_id
+    ).all()
     results = []
     for e in events:
         results.append({

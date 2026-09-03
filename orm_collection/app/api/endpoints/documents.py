@@ -49,8 +49,20 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     sentiment_rec = db.query(DocumentSentiment).filter(DocumentSentiment.document_id == doc.id).first()
     sentiment_val = getattr(sentiment_rec, "sentiment_score", 0.0) if sentiment_rec else 0.0
     
-    risk_rec = db.query(RiskEvent).filter(RiskEvent.document_id == doc.id).first()
+    # Scoped by client_id and take the highest-scoring entity match --
+    # unscoped .first() previously returned an arbitrary RiskEvent row for
+    # this document_id, including ones belonging to OTHER clients that also
+    # matched the same document (e.g. a shared entity name), or an arbitrary
+    # one of this client's own entities when more than one matched. Confirmed
+    # live: doc b1aedae6-...-5479 has a stale OpenAI risk_events row (39.58)
+    # and Duolingo's own row (35.41) -- Duolingo's detail view was showing
+    # OpenAI's score. risk_engine.py's own upsert already scopes by
+    # client_id; this endpoint just wasn't matching that scoping.
+    risk_rec = db.query(RiskEvent).filter(
+        RiskEvent.document_id == doc.id, RiskEvent.client_id == client_id
+    ).order_by(RiskEvent.risk_score.desc()).first()
     risk_val = getattr(risk_rec, "risk_score", 0.0) if risk_rec else 0.0
+    risk_explainability = getattr(risk_rec, "explainability", None) if risk_rec else None
     
     doc_topic = db.query(DocumentTopic).filter(DocumentTopic.document_id == doc.id).first()
     topic_name = "General"
@@ -100,7 +112,10 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
         "entities": entities,
         "topics": topics,
         "sentiment": sentiment_val,
-        "risk": int(risk_val),
+        "risk": round(risk_val),  # was int() -- truncated toward zero, which
+        # can misclassify a score just above a severity threshold (e.g.
+        # 75.4 -> 75 reads as HIGH under the <=75 rule instead of CRITICAL)
+        "risk_explainability": risk_explainability,
         "alert": alert_data,
         "narrative": narrative_data,
         "reputation_impact": rep_impact
@@ -139,8 +154,22 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
     sentiments = db.query(DocumentSentiment).filter(DocumentSentiment.document_id.in_(doc_ids)).all()
     sentiment_map = {getattr(s, "document_id", None): getattr(s, "sentiment_score", 0.0) for s in sentiments if s}
     
-    risks = db.query(RiskEvent).filter(RiskEvent.document_id.in_(doc_ids)).all()
-    risk_map = {getattr(r, "document_id", None): getattr(r, "risk_score", 0.0) for r in risks if r}
+    # Scoped by client_id, keeping the highest-scoring row per document --
+    # same cross-client/cross-entity bug as read_document above: an
+    # unscoped query here let a stale or foreign-client RiskEvent row for
+    # the same document_id silently overwrite this client's own score in
+    # the dict (confirmed live on 186 documents matched to more than one
+    # client's entities, 2 of which currently carry genuinely different
+    # scores).
+    risks = db.query(RiskEvent).filter(
+        RiskEvent.document_id.in_(doc_ids), RiskEvent.client_id == client_id
+    ).all()
+    risk_map = {}
+    risk_explain_map = {}
+    for r in risks:
+        if r.document_id not in risk_map or r.risk_score > risk_map[r.document_id]:
+            risk_map[r.document_id] = r.risk_score
+            risk_explain_map[r.document_id] = r.explainability
     
     doc_topics = db.query(DocumentTopic).options(joinedload(DocumentTopic.topic)).filter(DocumentTopic.document_id.in_(doc_ids)).all()
     doc_topic_map = {}
@@ -178,6 +207,7 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
         source_name = source_map.get(doc.source_id, "RSS Feed")
         sentiment_val = sentiment_map.get(doc.id, 0.0)
         risk_val = risk_map.get(doc.id, 0.0)
+        risk_explainability = risk_explain_map.get(doc.id)
         confidence_val = confidence_map.get(doc.id, 1.0)
         
         dt = doc_topic_map.get(doc.id)
@@ -202,7 +232,8 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
             "timestamp": (doc.published_at or doc.collected_at).isoformat() if (doc.published_at or doc.collected_at) else None,
             "status": doc.processing_status or "COMPLETED",
             "sentiment": sentiment_val,
-            "risk": int(risk_val),
+            "risk": round(risk_val),  # was int() -- see read_document above
+            "risk_explainability": risk_explainability,
             "narrative": narrative_name,
             "original_content": doc.normalized_content,
             "extracted_entities": extracted_entities,

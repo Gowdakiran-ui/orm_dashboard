@@ -57,7 +57,15 @@ export function RiskTab({
     return (documents || [])
       .filter(d => d && typeof d.risk === "number")
       .map(d => {
-        const likelihood = Math.round(((1 - (d.sentiment ?? 0)) / 2) * 100);
+        // D3/A4: previously derived from sentiment via an invented
+        // ((1 - sentiment) / 2) * 100 formula that risk_engine.py never
+        // computes -- a separately-fabricated number, not the real
+        // likelihood/confidence the backend actually calculated. Use the
+        // real confidence_modifier the engine stores in explainability.confidence
+        // (topic_conf + entity_sentiment_conf) / 2, falling back to 0 --
+        // same "no fabricated signal" convention risk_engine.py itself uses
+        // when an input is missing.
+        const likelihood = Math.round((d.risk_explainability?.confidence ?? 0) * 100);
         return {
           ...d,
           likelihood,
@@ -564,11 +572,18 @@ export function RiskTab({
                   <div className="space-y-1.5 text-[10px]">
                     <div className="flex justify-between">
                       <span className="text-slate-500">Heuristic Impact Score:</span>
-                      <span className="text-slate-300">{selectedDoc.risk}</span>
+                      {/* A4: previously re-displayed selectedDoc.risk (the
+                          overall score, already shown above) instead of the
+                          topic/heuristic component that actually feeds it --
+                          risk_engine.py's own explainability.topic_contribution. */}
+                      <span className="text-slate-300">{selectedDoc.risk_explainability?.topic_contribution ?? 0}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Sentiment Polarity (Multiplier):</span>
-                      <span className="text-slate-350">{selectedDoc.sentiment?.toFixed(2) || "0.00"}</span>
+                      {/* A4: previously the raw sentiment_score (-1..1), not
+                          the sentiment_contribution weight risk_engine.py
+                          actually used in the score. */}
+                      <span className="text-slate-350">{(selectedDoc.risk_explainability?.sentiment_contribution ?? 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between border-t border-[#1F2937]/50 pt-1.5">
                       <span className="text-slate-400">Calculated Likelihood Index:</span>
