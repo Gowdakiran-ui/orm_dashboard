@@ -458,18 +458,46 @@ class NarrativeEngine:
             # Sort documents by publication date to ensure identical incident grouping order
             docs.sort(key=lambda d: d.published_at or d.collected_at)
 
+            # Dominant-entity exclusion (generalizes the brand-entity
+            # exclusion above to any entity, not just the client's own
+            # brand). Confirmed live: a heavily-tracked competitor or person
+            # entity (e.g. "Google" as a competitor entity, or a frequently
+            # quoted executive) can appear on most of a topic's documents in
+            # a run, which makes shares_entity below true for nearly any
+            # pair of that topic's articles regardless of whether they're
+            # about the same real event -- the same mega-cluster collapse
+            # the brand exclusion was designed to prevent, just triggered by
+            # a different entity. Any non-brand entity present on more than
+            # 40% of this topic's documents this run is excluded from the
+            # overlap signal the same way brand_entity_id already is. 40% is
+            # deliberately high enough that a real 2-3 document breaking-news
+            # cluster sharing one specific person/company isn't penalized.
+            topic_doc_count = len(docs)
+            entity_doc_counts = {}
+            for d in docs:
+                for eid in entity_cache.get(d.id, set()):
+                    entity_doc_counts[eid] = entity_doc_counts.get(eid, 0) + 1
+            dominant_entities = {
+                eid for eid, count in entity_doc_counts.items()
+                if topic_doc_count > 0 and (count / topic_doc_count) > 0.4
+            }
+            topic_entity_cache = {
+                d.id: (entity_cache.get(d.id, set()) - dominant_entities)
+                for d in docs
+            }
+
             # P4 — Incident Cluster Optimization: Time-window clustering using
-            # cached title tokens AND shared (non-brand) matched entities.
-            # Either signal alone is enough to cluster two documents together
-            # -- title-Jaccard for cases with near-identical headlines,
-            # entity-overlap for cases (the common real-world one) where
-            # different outlets cover the same event with unrelated wording
-            # but name the same person/competitor.
+            # cached title tokens AND shared (non-brand, non-dominant) matched
+            # entities. Either signal alone is enough to cluster two documents
+            # together -- title-Jaccard for cases with near-identical
+            # headlines, entity-overlap for cases (the common real-world one)
+            # where different outlets cover the same event with unrelated
+            # wording but name the same person/competitor.
             incident_clusters = []
             for doc in docs:
                 matched_cluster = None
                 doc_tokens = token_cache.get(doc.id, set())
-                doc_entities = entity_cache.get(doc.id, set())
+                doc_entities = topic_entity_cache.get(doc.id, set())
 
                 for cluster in incident_clusters:
                     ref_doc = cluster["ref_doc"]
@@ -481,7 +509,7 @@ class NarrativeEngine:
                         union = doc_tokens.union(ref_tokens)
                         similarity = len(intersection) / len(union) if union else 0.0
 
-                        ref_entities = entity_cache.get(ref_doc.id, set())
+                        ref_entities = topic_entity_cache.get(ref_doc.id, set())
                         shares_entity = bool(doc_entities and ref_entities and (doc_entities & ref_entities))
 
                         if similarity >= 0.25 or shares_entity or (not doc_tokens and not ref_tokens):
