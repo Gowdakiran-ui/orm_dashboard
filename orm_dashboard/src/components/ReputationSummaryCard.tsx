@@ -9,8 +9,11 @@ export interface ReputationSummaryCardProps {
   reputationSummaryError: string | null;
   reputationSummary: any;
   documents: any[];
+  documentsLoading?: boolean;
   narratives: any[];
+  narrativesLoading?: boolean;
   executives: any[];
+  executivesLoading?: boolean;
   clientRank: string;
   clientSOV: number;
   activeClientName: string;
@@ -45,8 +48,11 @@ export function ReputationSummaryCard({
   reputationSummaryError,
   reputationSummary,
   documents = [],
+  documentsLoading = false,
   narratives = [],
+  narrativesLoading = false,
   executives = [],
+  executivesLoading = false,
   clientRank,
   clientSOV,
   activeClientName,
@@ -165,18 +171,27 @@ export function ReputationSummaryCard({
     ? `1 open executive-risk alert: ${alertNames ?? "unknown"}.`
     : "No open executive-risk alerts.";
 
+  // documents/narratives/executives each load independently and can settle
+  // at noticeably different times after a client switch (confirmed live:
+  // reputationSummary -- which sentiment reads from -- lands well before
+  // documents does), so a card computed off a still-loading source showed a
+  // real "0 risks tracked" next to an already-correct, non-zero reputation
+  // score for several real seconds -- a genuine, reproducible transient
+  // misread risk, not a one-off glitch. "—" while loading is honest;
+  // rendering the real zero before the real data has arrived is not.
+  const LOADING_PLACEHOLDER = "—";
   const cards = [
     { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}` : "", color: "text-[#D4AF37]", highlight: true },
-    { label: "Risk Signals", value: riskStats.dangerCount, sub: "Critical + High", color: riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
+    { label: "Risk Signals", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.dangerCount, sub: "Critical + High", color: riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
     { label: "Trend Direction", value: trendDisplay, sub: "Reputation momentum", color: "text-purple-400", highlight: true, compactValue: true },
-    { label: "Total Risks Tracked", value: riskStats.total, sub: `${riskStats.critical}C/${riskStats.high}H/${riskStats.medium}M/${riskStats.low}L`, color: RISK_COLOR[riskStats.dominantLevel] },
+    { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: documentsLoading ? "Loading..." : `${riskStats.critical}C/${riskStats.high}H/${riskStats.medium}M/${riskStats.low}L`, color: RISK_COLOR[riskStats.dominantLevel] },
     { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment docs", color: "text-emerald-400" },
     { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative}`, color: "text-emerald-400" },
-    { label: "Narratives Monitored", value: narrativeStats.total, sub: "Active media clusters", color: "text-[#D4AF37]" },
-    { label: "Highest Risk Narrative", value: narrativeStats.highestRisk, sub: "Requires strategic review", color: "text-red-500" },
-    { label: "Fastest Growing Narrative", value: narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
-    { label: "Most Mentioned Executive", value: execStats.mostMentioned, sub: "Core voice proxy", color: "text-indigo-400" },
-    { label: "Tracked Executives", value: execStats.total, sub: "Monitored corporate heads", color: "text-[#38BDF8]" },
+    { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-[#D4AF37]" },
+    { label: "Highest Risk Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.highestRisk, sub: "Requires strategic review", color: "text-red-500" },
+    { label: "Fastest Growing Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
+    { label: "Most Mentioned Executive", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Core voice proxy", color: "text-indigo-400" },
+    { label: "Tracked Executives", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Monitored corporate heads", color: "text-[#38BDF8]" },
     { label: "Competitor Rank / SOV", value: clientRank, sub: `${sovDisplay}% SOV`, color: "text-[#38BDF8]" },
     { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: execAlert.open ? (alertNames ?? "Open alert") : "None open", color: execAlert.open ? "text-red-500" : "text-emerald-500" },
   ];

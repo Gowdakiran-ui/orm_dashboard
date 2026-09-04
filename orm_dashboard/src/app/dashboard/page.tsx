@@ -233,8 +233,11 @@ export default function Home() {
                         reputationSummaryError={data.reputationSummaryError}
                         reputationSummary={data.reputationSummary}
                         documents={data.documents}
+                        documentsLoading={data.documentsLoading}
                         narratives={data.narratives}
+                        narrativesLoading={data.narrativesLoading}
                         executives={data.executives}
+                        executivesLoading={data.executivesLoading}
                         clientRank={analytics.clientRank}
                         clientSOV={calculateClientSOV(analytics.normalizedBenchmarks)}
                         activeClientName={activeClientName}
