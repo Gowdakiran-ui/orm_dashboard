@@ -442,12 +442,25 @@ class RiskEngine:
         """
         import requests
         import json as _json
+        from app.utils.llm_call_logging import log_llm_call
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
             return None
 
         log = logger.bind(run_id=run_id, task="risk_llm_role_classify", client_id=str(client_id), entity_id=str(entity.id))
+        t_call_start = time.perf_counter()
+
+        def _record(success, usage=None):
+            log_llm_call(
+                call_type="risk_role_classify",
+                client_id=client_id,
+                run_id=run_id,
+                tokens_prompt=(usage or {}).get("prompt_tokens"),
+                tokens_completion=(usage or {}).get("completion_tokens"),
+                latency_ms=(time.perf_counter() - t_call_start) * 1000,
+                success=success,
+            )
 
         system_prompt = (
             "You classify a news document's role relative to one specific entity. "
@@ -487,27 +500,35 @@ class RiskEngine:
             )
             if resp.status_code != 200:
                 log.warning("risk_llm_role_http_error", status=resp.status_code, body=resp.text[:300])
+                _record(success=False)
                 return None
 
-            content = resp.json()["choices"][0]["message"]["content"]
+            resp_json = resp.json()
+            usage = resp_json.get("usage")
+            content = resp_json["choices"][0]["message"]["content"]
             if content is None:
                 log.warning("risk_llm_role_null_content")
+                _record(success=False, usage=usage)
                 return None
 
             label = _json.loads(content).get("label", "")
             if not isinstance(label, str):
                 log.warning("risk_llm_role_malformed", raw=str(content)[:300])
+                _record(success=False, usage=usage)
                 return None
             label = label.strip().upper()
             if label not in ("SELF", "BYSTANDER", "EXONERATED"):
                 log.warning("risk_llm_role_invalid_label", label=label, raw=str(content)[:300])
+                _record(success=False, usage=usage)
                 return None
 
             log.info("risk_llm_role_classified", label=label)
+            _record(success=True, usage=usage)
             return label
 
         except Exception as exc:
             log.warning("risk_llm_role_failed", error=str(exc))
+            _record(success=False)
             return None
 
     def get_risk_level(self, score: float) -> str:

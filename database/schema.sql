@@ -460,6 +460,23 @@ CREATE TABLE public.executive_reputation_scores (
 
 
 --
+-- Name: llm_call_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.llm_call_log (
+    id uuid NOT NULL,
+    call_type character varying(50) NOT NULL,
+    client_id uuid NOT NULL,
+    run_id character varying(64),
+    tokens_prompt integer,
+    tokens_completion integer,
+    latency_ms double precision,
+    success boolean NOT NULL,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: matching_metrics; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -984,6 +1001,14 @@ ALTER TABLE ONLY public.executive_candidates
 
 ALTER TABLE ONLY public.executive_reputation_scores
     ADD CONSTRAINT executive_reputation_scores_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: llm_call_log llm_call_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.llm_call_log
+    ADD CONSTRAINT llm_call_log_pkey PRIMARY KEY (id);
 
 
 --
@@ -1536,6 +1561,20 @@ CREATE INDEX ix_executive_reputation_scores_entity_id ON public.executive_reputa
 
 
 --
+-- Name: ix_llm_call_log_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_llm_call_log_client_id ON public.llm_call_log USING btree (client_id);
+
+
+--
+-- Name: ix_llm_call_log_call_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_llm_call_log_call_type ON public.llm_call_log USING btree (call_type);
+
+
+--
 -- Name: ix_model_runs_document_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1918,6 +1957,14 @@ ALTER TABLE ONLY public.executive_reputation_scores
 
 ALTER TABLE ONLY public.executive_reputation_scores
     ADD CONSTRAINT executive_reputation_scores_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
+
+
+--
+-- Name: llm_call_log llm_call_log_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.llm_call_log
+    ADD CONSTRAINT llm_call_log_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
 
 
 --
