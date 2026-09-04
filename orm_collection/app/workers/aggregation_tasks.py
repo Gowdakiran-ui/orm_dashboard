@@ -5,9 +5,12 @@ Architecture
 ============
 This module contains two categories of tasks:
 
-1. SCHEDULER TASKS (unchanged from previous phases):
-   Celery Beat tasks that run on a schedule for all clients.
-   These are completely independent of the pipeline orchestrator.
+1. FORMER SCHEDULER TASKS (Phase 15: no longer scheduled — see
+   celery_app.py's module docstring for the Run-Pipeline-gated
+   architecture change). These functions still exist and can be invoked
+   manually, but are no longer in beat_schedule and will not fire on
+   their own. The equivalent per-client work now runs in-chain via the
+   pipeline_stage_* tasks below, triggered by Run Pipeline.
    - calculate_client_trends
    - calculate_client_risks
    - calculate_document_risk
@@ -1213,10 +1216,37 @@ def _stage_narrative(ctx: PipelineContext, db) -> None:
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
 
 
+def _stage_is_fresh_enough(db, model, client_id: str, hours: float) -> bool:
+    """
+    True if this client already has a `model` row newer than `hours` old.
+
+    REPUTATION/EXECUTIVE/BENCHMARK are higher-order aggregations over a
+    client's whole history, not per-document -- re-running them on every
+    single Run Pipeline call (which can be minutes apart once collection
+    is gated behind it) re-does the same expensive full-history rollup
+    for no new insight. This mirrors the cadence the now-removed standalone
+    beat jobs used to run at (2h/2h/4h -- see beat_schedule's prior
+    calculate-reputation/-executive-reputation/-benchmarks entries), just
+    enforced in-chain instead of by a separate schedule, since a scheduled
+    job independent of Run Pipeline is exactly what the gated-architecture
+    redesign removes.
+    """
+    from datetime import datetime, timezone, timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    latest = db.query(model.created_at).filter(
+        model.client_id == client_id
+    ).order_by(model.created_at.desc()).first()
+    return bool(latest and latest[0] and latest[0] >= cutoff)
+
+
 def _stage_reputation(ctx: PipelineContext, db) -> None:
     from app.services.intelligence.reputation_engine import ReputationEngine as _ReputationEngine
+    from app.models.reputation import ReputationScore
     log = logger.bind(stage="REPUTATION", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
     t0 = time.perf_counter()
+    if _stage_is_fresh_enough(db, ReputationScore, ctx.client_id, hours=2.0):
+        log.info("stage_skipped_fresh_enough", stage="REPUTATION", threshold_hours=2.0)
+        return
     log.info("stage_started")
     _ReputationEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
@@ -1224,8 +1254,12 @@ def _stage_reputation(ctx: PipelineContext, db) -> None:
 
 def _stage_executive(ctx: PipelineContext, db) -> None:
     from app.services.intelligence.executive_reputation_engine import ExecutiveReputationEngine as _ExecEngine
+    from app.models.executive_reputation import ExecutiveReputationScore
     log = logger.bind(stage="EXECUTIVE", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
     t0 = time.perf_counter()
+    if _stage_is_fresh_enough(db, ExecutiveReputationScore, ctx.client_id, hours=2.0):
+        log.info("stage_skipped_fresh_enough", stage="EXECUTIVE", threshold_hours=2.0)
+        return
     log.info("stage_started")
     _ExecEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
@@ -1233,8 +1267,12 @@ def _stage_executive(ctx: PipelineContext, db) -> None:
 
 def _stage_benchmark(ctx: PipelineContext, db) -> None:
     from app.services.intelligence.benchmark_engine import BenchmarkEngine as _BenchmarkEngine
+    from app.models.competitor_benchmark import CompetitorBenchmark
     log = logger.bind(stage="BENCHMARK", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
     t0 = time.perf_counter()
+    if _stage_is_fresh_enough(db, CompetitorBenchmark, ctx.client_id, hours=4.0):
+        log.info("stage_skipped_fresh_enough", stage="BENCHMARK", threshold_hours=4.0)
+        return
     log.info("stage_started")
     _BenchmarkEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))

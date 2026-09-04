@@ -1,20 +1,44 @@
 """
-celery_app.py — Phase 13
+celery_app.py — Phase 15: Run-Pipeline-gated architecture
 
-Pipeline execution order in beat_schedule:
-    Collection          → schedule-feeds-every-minute (io_queue)
-    Search              → schedule-searches-every-minute (io_queue)
-    [Entity Matching    → triggered per-document via document_processor task]
-    [Topic/Sentiment    → triggered per-document via intelligence_tasks]
-    Trend Detection     → calculate-trends-every-hour (aggregation_queue)  ← R1
-    Risk                → (triggered per-document via calculate_document_risk)
-    Alert               → evaluate-alerts-every-hour (aggregation_queue)
-    Narrative           → calculate-narratives-every-hour (aggregation_queue)
-    Reputation          → calculate-reputation-every-2-hours (aggregation_queue)
+Collection and processing are no longer continuous/automatic. Every stage
+that either calls an external source (RSS/GDELT/HN, and -- the actual
+driver of this change -- the metered Reddit/YouTube search path, with
+paid sources like a Meta data-partner integration planned to land the
+same way) or re-scores/re-narrates a client's data now runs ONLY inside
+the run_client_pipeline chain (aggregation_tasks.py), triggered
+exclusively by a client's own "Run Pipeline" action. A client who never
+triggers it gets zero new data and zero new alerts, indefinitely -- this
+is the intended tradeoff, not a bug (see the architecture design doc from
+this session for the full reasoning, including the UX gap this opens: the
+frontend needs a "last updated" indicator since numbers now move in
+trigger-driven steps instead of continuously).
 
-R1: calculate_client_trends is now registered in beat_schedule,
-    running every hour to aggregate trends after sentiment has been processed
-    for documents collected in the rolling 24-hour window.
+Removed from beat_schedule as part of this change (previously ran
+unconditionally for every client/feed, regardless of activity):
+    schedule_feeds, schedule_searches (collection -- schedule_searches was
+        the literal mechanism that would poll YouTube once any
+        SearchSourceConfiguration row for it is enabled),
+    calculate_client_trends, calculate_client_risks, evaluate_alerts,
+        calculate_narratives, calculate_reputation_score,
+        calculate_executive_reputation, calculate_competitor_benchmarks
+        (aggregation -- these only ever read data collection already
+        wrote; see risk_engine.py/narrative_engine.py etc. for the
+        equivalent per-client stage functions now run in-chain instead).
+
+The underlying task functions for the seven aggregation jobs above still
+exist in aggregation_tasks.py (not deleted -- a separate cleanup
+decision, not part of this change) but are no longer registered on any
+schedule; they will not fire unless invoked manually. The equivalent
+per-client work now happens via pipeline_stage_trend/risk/alert/
+narrative/reputation/executive/benchmark inside run_client_pipeline's
+chain -- see that module's docstring for the full chain order.
+
+Pure infrastructure/maintenance beat entries (flush_metrics_task,
+collection_watchdog, feed_revival_watchdog, pipeline_run_watchdog,
+document_processing_watchdog, search_job_watchdog, run_backup) are
+unchanged -- none of them collect or process client data themselves, they
+only recover stuck state or do unrelated housekeeping.
 """
 from celery import Celery
 from celery.schedules import crontab
@@ -73,14 +97,11 @@ celery_app.conf.update(
     },
     beat_schedule={
         # --- Collection Layer ---
-        'schedule-feeds-every-minute': {
-            'task': 'app.workers.collection_tasks.schedule_feeds',
-            'schedule': crontab(minute='*'),
-        },
-        'schedule-searches-every-minute': {
-            'task': 'app.workers.search_tasks.schedule_searches',
-            'schedule': crontab(minute='*'),
-        },
+        # schedule-feeds-every-minute and schedule-searches-every-minute
+        # REMOVED (Phase 15, Run-Pipeline-gated architecture -- see module
+        # docstring). Collection now only happens via pipeline_stage_collect
+        # inside run_client_pipeline's chain, triggered by a client's own
+        # Run Pipeline action.
         'flush-metrics-every-5-minutes': {
             'task': 'app.workers.collection_tasks.flush_metrics_task',
             'schedule': crontab(minute='*/5'),
@@ -89,9 +110,18 @@ celery_app.conf.update(
         # collecting/processing past a 2h timeout) but was never scheduled —
         # see FINDINGS.md D7. Two jobs were found stuck live (20+ and 3+
         # days old) before this was added.
-        'collection-watchdog-every-15-minutes': {
+        #
+        # Loosened from */15 to */30 as part of Phase 15: this watchdog's
+        # correctness doesn't change, but its urgency does -- collection
+        # jobs are no longer created by a perpetual once-a-minute background
+        # process (where a 15-min-old stuck job was one of many still being
+        # created every minute behind it), only by an individual Run
+        # Pipeline call. A stuck job now just means that one manual trigger
+        # is still running; nothing else depends on catching it within 15
+        # minutes specifically.
+        'collection-watchdog-every-30-minutes': {
             'task': 'app.workers.collection_tasks.collection_watchdog',
-            'schedule': crontab(minute='*/15'),
+            'schedule': crontab(minute='*/30'),
         },
 
         # The other half of the dead-feed circuit breaker in
@@ -134,55 +164,21 @@ celery_app.conf.update(
             'schedule': crontab(minute='*/15'),
         },
 
-        # --- R1: Trend Detection — runs every hour ---
-        # Scheduled AFTER entity matching and sentiment analysis which are
-        # triggered per-document via intelligence_tasks (process_document_intelligence).
-        # Documents collected in the 24h window are available by the time
-        # this hourly aggregation runs.
-        'calculate-trends-every-hour': {
-            'task': 'app.workers.aggregation_tasks.calculate_client_trends',
-            'schedule': crontab(minute='0', hour='*'),  # top of every hour
-        },
-
-        # --- Risk Engine — runs every hour (3 min after trends) ---
-        # Aggregates risk scores for all clients once new trends and sentiments are available.
-        'calculate-risks-every-hour': {
-            'task': 'app.workers.aggregation_tasks.calculate_client_risks',
-            'schedule': crontab(minute='3', hour='*'),
-        },
-
-        # --- Alert Engine — runs every hour (5 min after trends) ---
-        # Alert evaluation reads from trend_events written by calculate_client_trends.
-        # 5-minute offset gives trends time to commit before alerts are evaluated.
-        'evaluate-alerts-every-hour': {
-            'task': 'app.workers.aggregation_tasks.evaluate_alerts',
-            'schedule': crontab(minute='5', hour='*'),
-        },
-
-        # --- Narrative Engine — runs every hour (10 min after trends) ---
-        'calculate-narratives-every-hour': {
-            'task': 'app.workers.aggregation_tasks.calculate_narratives',
-            'schedule': crontab(minute='10', hour='*'),
-        },
-
-        # --- Reputation Engine — runs every 2 hours ---
-        # Reputation is a higher-order aggregation; less frequent is sufficient.
-        'calculate-reputation-every-2-hours': {
-            'task': 'app.workers.aggregation_tasks.calculate_reputation_score',
-            'schedule': crontab(minute='15', hour='*/2'),
-        },
-
-        # --- Executive Reputation — runs every 2 hours ---
-        'calculate-executive-reputation-every-2-hours': {
-            'task': 'app.workers.aggregation_tasks.calculate_executive_reputation',
-            'schedule': crontab(minute='20', hour='*/2'),
-        },
-
-        # --- Competitor Benchmarks — runs every 4 hours ---
-        'calculate-benchmarks-every-4-hours': {
-            'task': 'app.workers.aggregation_tasks.calculate_competitor_benchmarks',
-            'schedule': crontab(minute='30', hour='*/4'),
-        },
+        # --- Trend / Risk / Alert / Narrative / Reputation / Executive
+        # Reputation / Competitor Benchmarks ---
+        # REMOVED (Phase 15, Run-Pipeline-gated architecture -- see module
+        # docstring). These only ever read data collection already wrote,
+        # for ALL clients regardless of activity, once an hour (or every
+        # 2h/4h for the three higher-order ones) -- exactly the
+        # "cost/work regardless of activity" pattern this change removes.
+        # The equivalent per-client work now runs in-chain via
+        # pipeline_stage_trend/risk/alert/narrative/reputation/executive/
+        # benchmark inside run_client_pipeline, triggered by Run Pipeline.
+        # REPUTATION/EXECUTIVE/BENCHMARK keep an in-chain staleness guard
+        # (_stage_is_fresh_enough in aggregation_tasks.py) matching their
+        # former 2h/2h/4h cadence, so a client mashing Run Pipeline
+        # repeatedly doesn't re-run those three higher-order rollups on
+        # every single call.
 
         # --- Database Backup (Section 10) — runs daily at 02:00 UTC ---
         # Off-peak relative to the hourly/every-2h/every-4h aggregation jobs
