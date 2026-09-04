@@ -406,6 +406,7 @@ class RiskEngine:
                     "temperature": 0,
                     "max_tokens": 200,
                     "reasoning": {"enabled": False},
+                    "response_format": {"type": "json_object"},
                 },
                 timeout=8.0,
             )

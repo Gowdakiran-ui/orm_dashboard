@@ -589,7 +589,25 @@ export function RiskTab({
                       <span className="text-slate-400">Calculated Likelihood Index:</span>
                       <span className="text-slate-200 font-bold">{selectedDoc.likelihood}%</span>
                     </div>
+                    {selectedDoc.risk_explainability?.role_classification_source && selectedDoc.risk_explainability.role_classification_source !== "not_evaluated" && (
+                      <div className="flex justify-between border-t border-[#1F2937]/50 pt-1.5">
+                        <span className="text-slate-500">LLM Role Classification:</span>
+                        <span className={
+                          selectedDoc.risk_explainability.role_classification === "BYSTANDER" || selectedDoc.risk_explainability.role_classification === "EXONERATED"
+                            ? "text-emerald-400 font-bold"
+                            : "text-slate-300"
+                        }>
+                          {selectedDoc.risk_explainability.role_classification ?? "SELF (unchanged)"}
+                          {selectedDoc.risk_explainability.role_classification_source === "fallback_unchanged" && " (fallback)"}
+                        </span>
+                      </div>
+                    )}
                   </div>
+                  {selectedDoc.risk_explainability?.decision_reason && (
+                    <p className="text-[10px] text-slate-500 leading-relaxed border-t border-[#1F2937]/50 pt-2">
+                      {selectedDoc.risk_explainability.decision_reason}
+                    </p>
+                  )}
                 </div>
 
                 {/* Original Article Content */}

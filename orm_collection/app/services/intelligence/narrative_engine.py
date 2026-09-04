@@ -388,6 +388,7 @@ class NarrativeEngine:
                     "temperature": 0,
                     "max_tokens": 800,
                     "reasoning": {"enabled": False},
+                    "response_format": {"type": "json_object"},
                 },
                 timeout=8.0,
             )
