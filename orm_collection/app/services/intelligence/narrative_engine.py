@@ -336,33 +336,18 @@ class NarrativeEngine:
 
         return f"{p1}\n\n{p2}\n\n{p3}"
 
-    def _llm_verify_and_split_cluster(self, cluster_docs, client_name, run_id=None):
+    def _attempt_split_call(self, cluster_docs, client_name, run_id, log, max_tokens, api_key, lines, retrying=False):
         """
-        Checks whether a mechanically-formed cluster is genuinely one real-
-        world event, or several unrelated stories merged via a shared
-        entity the dominant-entity threshold didn't catch. Returns a list
-        of sub-lists of cluster_docs (a partition) on a confident,
-        well-formed response, or None on ANY failure -- missing API key,
-        timeout, network error, non-200, null/malformed content, an
-        invalid or incomplete partition. None means "leave the mechanical
-        cluster unsplit, exactly as it was before this call" -- this
-        method never raises and the caller never blocks on it beyond the
-        fixed request timeout below.
+        One full request+validate cycle for the split call. Returns
+        ("ok", sub_clusters), ("incomplete", covered_count) -- a
+        well-formed, parseable response that just didn't cover every
+        index, distinguished from other failures so the caller can decide
+        whether a retry is worth attempting -- or ("fail", None) for
+        every other failure mode (HTTP error, null/malformed content,
+        invalid group/index, network error). Never raises.
         """
         import requests
         import json as _json
-
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            return None
-
-        log = logger.bind(run_id=run_id, task="narrative_llm_split", client=client_name)
-
-        lines = []
-        for i, d in enumerate(cluster_docs):
-            dt = d.published_at or d.collected_at
-            date_str = dt.strftime("%Y-%m-%d") if dt else "unknown"
-            lines.append(f'{i}. ({date_str}) "{(d.title or "")[:150]}"')
 
         system_prompt = (
             "You are given news article titles a mechanical system grouped together "
@@ -373,21 +358,22 @@ class NarrativeEngine:
             '{"groups": [[0,1,4], [2], [3,5]]} -- lists of the given indices. '
             "Every index from 0 to N-1 must appear in exactly one group."
         )
+        if retrying:
+            # Confirmed live (2026-09-04): the dominant real failure mode
+            # here is not malformed JSON or truncation -- it's a
+            # well-formed, parseable partition that simply omits one index
+            # (219/220, 17/18, 11/12, 30/31 all observed), independent of
+            # cluster size. temperature=0 makes an identical resubmission
+            # pointless, so the retry's prompt is deliberately strengthened
+            # to name the exact failure mode, not just repeated verbatim.
+            system_prompt += (
+                " IMPORTANT: a previous attempt at this exact task omitted at least one "
+                "index from the partition. Before responding, count your groups' combined "
+                "indices and verify the count equals the number of titles given -- every "
+                "single index from 0 to N-1 must appear in exactly one group, with none "
+                "skipped."
+            )
         user_prompt = f"Client: {client_name}\n" + "\n".join(lines)
-
-        # Size-proportional response budget. 800 was a flat cap regardless of
-        # cluster size -- fine for the common 8-20 doc case, but confirmed
-        # live (forensic audit, 2026-09-04) that the two largest clusters
-        # observed in real production (88 and 72 docs) were exactly the ones
-        # that failed to split (incomplete_partition / timeout), while every
-        # smaller cluster in the same runs split cleanly. Worst-case output
-        # is an all-singleton partition (N groups of 1), each entry ~6-7
-        # chars ("[123],") -- 20 tokens/doc is a generous multiple of that,
-        # not a tight fit. Floor stays at 800 (the original value, unchanged
-        # behavior for every cluster under ~40 docs, which is the vast
-        # majority); capped at 4000 so a pathological cluster can't runaway
-        # the request cost/latency.
-        max_tokens = min(4000, max(800, len(cluster_docs) * 20))
 
         try:
             resp = requests.post(
@@ -407,19 +393,19 @@ class NarrativeEngine:
                 timeout=8.0,
             )
             if resp.status_code != 200:
-                log.warning("narrative_llm_split_http_error", status=resp.status_code, body=resp.text[:300])
-                return None
+                log.warning("narrative_llm_split_http_error", status=resp.status_code, body=resp.text[:300], retrying=retrying)
+                return "fail", None
 
             content = resp.json()["choices"][0]["message"]["content"]
             if content is None:
-                log.warning("narrative_llm_split_null_content")
-                return None
+                log.warning("narrative_llm_split_null_content", retrying=retrying)
+                return "fail", None
 
             parsed = _json.loads(content)
             groups = parsed.get("groups")
             if not isinstance(groups, list) or not groups:
-                log.warning("narrative_llm_split_malformed", raw=str(content)[:300])
-                return None
+                log.warning("narrative_llm_split_malformed", raw=str(content)[:300], retrying=retrying)
+                return "fail", None
 
             # Strict validation: every index 0..N-1 covered exactly once.
             # A parse that "worked" but names the wrong indices is just as
@@ -427,24 +413,92 @@ class NarrativeEngine:
             seen = set()
             for g in groups:
                 if not isinstance(g, list) or not g:
-                    log.warning("narrative_llm_split_invalid_group", raw=str(content)[:300])
-                    return None
+                    log.warning("narrative_llm_split_invalid_group", raw=str(content)[:300], retrying=retrying)
+                    return "fail", None
                 for idx in g:
                     if not isinstance(idx, int) or idx < 0 or idx >= len(cluster_docs) or idx in seen:
-                        log.warning("narrative_llm_split_invalid_index", idx=idx, raw=str(content)[:300])
-                        return None
+                        log.warning("narrative_llm_split_invalid_index", idx=idx, raw=str(content)[:300], retrying=retrying)
+                        return "fail", None
                     seen.add(idx)
             if len(seen) != len(cluster_docs):
-                log.warning("narrative_llm_split_incomplete_partition", covered=len(seen), expected=len(cluster_docs))
-                return None
+                log.warning("narrative_llm_split_incomplete_partition", covered=len(seen), expected=len(cluster_docs), retrying=retrying)
+                return "incomplete", len(seen)
 
             sub_clusters = [[cluster_docs[i] for i in g] for g in groups]
-            log.info("narrative_llm_split_applied", original_size=len(cluster_docs), n_groups=len(sub_clusters))
-            return sub_clusters
+            log.info("narrative_llm_split_applied", original_size=len(cluster_docs), n_groups=len(sub_clusters), retrying=retrying)
+            return "ok", sub_clusters
 
         except Exception as exc:
-            log.warning("narrative_llm_split_failed", error=str(exc))
+            log.warning("narrative_llm_split_failed", error=str(exc), retrying=retrying)
+            return "fail", None
+
+    def _llm_verify_and_split_cluster(self, cluster_docs, client_name, run_id=None):
+        """
+        Checks whether a mechanically-formed cluster is genuinely one real-
+        world event, or several unrelated stories merged via a shared
+        entity the dominant-entity threshold didn't catch. Returns a list
+        of sub-lists of cluster_docs (a partition) on a confident,
+        well-formed response, or None on ANY failure -- missing API key,
+        timeout, network error, non-200, null/malformed content, an
+        invalid partition, or an incomplete partition that also fails a
+        single retry. None means "leave the mechanical cluster unsplit,
+        exactly as it was before this call" -- this method never raises
+        and the caller never blocks on it beyond two fixed-timeout
+        requests at most.
+
+        Retry policy: confirmed live (2026-09-04 forensic re-verification)
+        that "incomplete partition" -- a well-formed response missing
+        exactly one index -- is the real dominant failure mode, occurring
+        across cluster sizes from 12 to 220, i.e. independent of the
+        size-proportional max_tokens budget below (that budget helps a
+        genuinely different, truncation-shaped failure, and still worth
+        keeping, but does not address this one). On an incomplete
+        partition specifically (not on HTTP errors, malformed JSON, or
+        invalid indices -- those stay single-attempt, matching every other
+        LLM call in this codebase's fail-fast convention), retry exactly
+        once with a strengthened prompt naming the failure. Any outcome
+        other than a clean "ok" on the retry still returns None -- this
+        never loops, never exceeds two real API calls per cluster, and the
+        fail-closed guarantee for the caller is unchanged.
+        """
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
             return None
+
+        log = logger.bind(run_id=run_id, task="narrative_llm_split", client=client_name)
+
+        lines = []
+        for i, d in enumerate(cluster_docs):
+            dt = d.published_at or d.collected_at
+            date_str = dt.strftime("%Y-%m-%d") if dt else "unknown"
+            lines.append(f'{i}. ({date_str}) "{(d.title or "")[:150]}"')
+
+        # Size-proportional response budget. 800 was a flat cap regardless of
+        # cluster size -- fine for the common 8-20 doc case, but confirmed
+        # live (forensic audit, 2026-09-04) that the two largest clusters
+        # observed in real production (88 and 72 docs) were exactly the ones
+        # that failed to split (incomplete_partition / timeout), while every
+        # smaller cluster in the same runs split cleanly. Worst-case output
+        # is an all-singleton partition (N groups of 1), each entry ~6-7
+        # chars ("[123],") -- 20 tokens/doc is a generous multiple of that,
+        # not a tight fit. Floor stays at 800 (the original value, unchanged
+        # behavior for every cluster under ~40 docs, which is the vast
+        # majority); capped at 4000 so a pathological cluster can't runaway
+        # the request cost/latency.
+        max_tokens = min(4000, max(800, len(cluster_docs) * 20))
+
+        status, result = self._attempt_split_call(cluster_docs, client_name, run_id, log, max_tokens, api_key, lines, retrying=False)
+        if status == "ok":
+            return result
+        if status == "fail":
+            return None
+
+        # status == "incomplete": one bounded retry, strengthened prompt.
+        status, result = self._attempt_split_call(cluster_docs, client_name, run_id, log, max_tokens, api_key, lines, retrying=True)
+        if status == "ok":
+            log.info("narrative_llm_split_retry_succeeded", original_size=len(cluster_docs))
+            return result
+        return None
 
     def calculate_narratives(
         self,
