@@ -375,6 +375,20 @@ class NarrativeEngine:
         )
         user_prompt = f"Client: {client_name}\n" + "\n".join(lines)
 
+        # Size-proportional response budget. 800 was a flat cap regardless of
+        # cluster size -- fine for the common 8-20 doc case, but confirmed
+        # live (forensic audit, 2026-09-04) that the two largest clusters
+        # observed in real production (88 and 72 docs) were exactly the ones
+        # that failed to split (incomplete_partition / timeout), while every
+        # smaller cluster in the same runs split cleanly. Worst-case output
+        # is an all-singleton partition (N groups of 1), each entry ~6-7
+        # chars ("[123],") -- 20 tokens/doc is a generous multiple of that,
+        # not a tight fit. Floor stays at 800 (the original value, unchanged
+        # behavior for every cluster under ~40 docs, which is the vast
+        # majority); capped at 4000 so a pathological cluster can't runaway
+        # the request cost/latency.
+        max_tokens = min(4000, max(800, len(cluster_docs) * 20))
+
         try:
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -386,7 +400,7 @@ class NarrativeEngine:
                         {"role": "user", "content": user_prompt},
                     ],
                     "temperature": 0,
-                    "max_tokens": 800,
+                    "max_tokens": max_tokens,
                     "reasoning": {"enabled": False},
                     "response_format": {"type": "json_object"},
                 },
