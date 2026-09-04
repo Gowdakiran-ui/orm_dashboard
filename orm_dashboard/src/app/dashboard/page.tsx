@@ -152,6 +152,7 @@ export default function Home() {
         documentsLoading={data.documentsLoading}
         pipelineRunning={pipeline.pipelineRunning}
         pipelineStatus={pipeline.pipelineStatus}
+        lastUpdatedAt={analytics.lastProcessedTimestamp}
         clients={data.clients}
         onSelectCompany={data.handleSelectCompany}
         onSearchChange={setCompanySearch}

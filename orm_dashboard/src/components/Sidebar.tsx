@@ -18,6 +18,7 @@ export interface SidebarProps {
   documentsLoading: boolean;
   pipelineRunning: boolean;
   pipelineStatus?: string;
+  lastUpdatedAt?: string;
   clients: any[];
   onSelectCompany: (id: string) => void;
   onSearchChange: (val: string) => void;
@@ -41,6 +42,7 @@ export function Sidebar({
   documentsLoading,
   pipelineRunning,
   pipelineStatus,
+  lastUpdatedAt,
   clients,
   onSelectCompany,
   onSearchChange,
@@ -165,6 +167,17 @@ export function Sidebar({
           {pipelineError && (
             <div className="mt-2 text-xs text-red-500 font-mono bg-red-500/10 p-2 rounded border border-red-500/20 break-words">
               {pipelineError}
+            </div>
+          )}
+          {/* Phase 15: collection/processing is now Run-Pipeline-gated, not
+              continuous -- these numbers only move when this button is
+              clicked. Without this, a frozen number between runs reads as
+              broken rather than as the intended behavior. */}
+          {!pipelineRunning && (
+            <div className="mt-2 text-[10px] font-mono text-slate-500" title="Data only updates when Run Pipeline is triggered">
+              {lastUpdatedAt && lastUpdatedAt !== "N/A"
+                ? <>Last updated: {lastUpdatedAt} — click Run Pipeline for fresh data</>
+                : <>No data yet — click Run Pipeline to collect and process</>}
             </div>
           )}
         </div>
