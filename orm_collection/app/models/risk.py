@@ -54,5 +54,13 @@ class RiskEvent(Base):
     # risk_factors above, which is genuinely `text` and correctly stays
     # JSONEncodedDict). Using the generic SQLAlchemy JSON type to match.
     explainability = Column(JSON, nullable=True)
-    
+
+    # Concurrency-safe upsert freshness tiebreak (see migration 0006 and
+    # _upsert_risk_event in risk_engine.py) -- not to be confused with
+    # created_at above (the row's DB creation time); this is when the
+    # score/classification itself was computed. Nullable: old rows have
+    # none, and the upsert's WHERE clause treats that as the oldest
+    # possible value.
+    computed_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

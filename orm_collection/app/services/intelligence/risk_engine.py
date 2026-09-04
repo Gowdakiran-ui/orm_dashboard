@@ -5,14 +5,13 @@ import os
 import traceback
 import structlog
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 
 from app.models.document import Document, DocumentMatch
 from app.models.entity import EntityMention, Entity
 from app.models.topic import Topic, DocumentTopic
 from app.models.sentiment import DocumentSentiment, EntitySentiment
 from app.models.trends import TrendEvent
-from app.models.risk import RiskEvent
 from app.models.risk_state import RiskClientState
 from app.models.source import Source, SourceCategory
 from app.core.risk_config import (
@@ -103,51 +102,117 @@ class RiskEngine:
     # ------------------------------------------------------------------
     # R6 — Duplicate Protection (application-level upsert)
     # ------------------------------------------------------------------
-    def _upsert_risk_event(self, db: Session, **kwargs) -> bool:
+    def _upsert_risk_event(self, db: Session, **kwargs) -> str:
         """
-        Idempotent write for RiskEvent.
-        Checks for an existing row with matching:
-            (client_id, document_id, entity_id)
+        Concurrency-safe upsert for RiskEvent, matched against the
+        existing uq_risk_events_daily unique index on
+        (client_id, document_id, entity_id).
 
-        If found: updates risk_score, risk_level, confidence_score,
-                  risk_factors, and all observability metadata.
-        If not found: inserts a new row.
+        A single atomic INSERT ... ON CONFLICT ... DO UPDATE ... WHERE
+        statement enforces a standing invariant: an incoming write may
+        only replace an existing row if its
+        explainability.role_classification_source is a strictly higher
+        quality tier ("llm" beats "fallback_unchanged"/"not_evaluated"/
+        missing), or -- within the same tier -- if it was computed more
+        recently (computed_at). A lower-quality or stale-same-quality
+        write is rejected by Postgres itself (the WHERE clause is false,
+        so DO UPDATE touches nothing and RETURNING yields no row) rather
+        than silently clobbering a better result.
 
-        Returns True if a new row was created, False if an existing row was updated.
+        Confirmed live: the hourly celery-beat calculate_client_risks
+        full-corpus scan and an on-demand pipeline run can both score
+        the same (client, document, entity) concurrently, and the prior
+        plain SELECT-then-branch UPDATE/INSERT let whichever transaction
+        committed LAST win even off a stale read -- a worse
+        (fallback_unchanged) result overwriting a better (llm) one
+        computed moments earlier. A two-step app-level compare-then-write
+        cannot close that gap no matter how careful the comparison is,
+        because the race is between the read and the write, not in the
+        comparison logic. A single ON CONFLICT ... DO UPDATE ... WHERE
+        statement closes it with no extra locking needed: Postgres takes
+        the conflicting row's lock as an intrinsic part of resolving the
+        conflict, so two concurrent writers to the same key serialize
+        automatically and each WHERE predicate is evaluated against the
+        truly-current committed state, not a stale pre-transaction read.
+
+        Returns "inserted", "updated", or "skipped" (a lower-quality or
+        stale write was correctly rejected -- log this for visibility,
+        never treat it as silently dropped).
         """
+        import json as _json
+
         client_id = kwargs["client_id"]
         document_id = kwargs.get("document_id")
         entity_id = kwargs.get("entity_id")
+        explainability = kwargs.get("explainability")
+        risk_factors = kwargs.get("risk_factors")
+        computed_at = kwargs.get("computed_at") or datetime.datetime.now(datetime.timezone.utc)
+        new_id = uuid.uuid4()
 
-        query = db.query(RiskEvent).filter(RiskEvent.client_id == client_id)
-        if document_id is not None:
-            query = query.filter(RiskEvent.document_id == document_id)
-        else:
-            query = query.filter(RiskEvent.document_id == None)  # noqa: E711
-
-        if entity_id is not None:
-            query = query.filter(RiskEvent.entity_id == entity_id)
-        else:
-            query = query.filter(RiskEvent.entity_id == None)  # noqa: E711
-
-        existing = query.first()
-        if existing:
-            existing.risk_score = kwargs["risk_score"]
-            existing.risk_level = kwargs["risk_level"]
-            existing.confidence_score = kwargs["confidence_score"]
-            existing.risk_factors = kwargs["risk_factors"]
-            existing.run_id = kwargs.get("run_id")
-            existing.batch_id = kwargs.get("batch_id")
-            existing.worker_id = kwargs.get("worker_id")
-            existing.latency_ms = kwargs.get("latency_ms")
-            existing.retry_count = kwargs.get("retry_count", 0)
-            existing.source_reliability = kwargs.get("source_reliability")
-            existing.explainability = kwargs.get("explainability")
-            return False  # updated existing
-
-        event = RiskEvent(**kwargs)
-        db.add(event)
-        return True  # new insert
+        result = db.execute(
+            text("""
+                INSERT INTO risk_events (
+                    id, client_id, document_id, entity_id, risk_score, risk_level,
+                    confidence_score, risk_factors, run_id, batch_id, worker_id,
+                    latency_ms, retry_count, source_reliability, explainability,
+                    computed_at
+                ) VALUES (
+                    :id, :client_id, :document_id, :entity_id, :risk_score, :risk_level,
+                    :confidence_score, :risk_factors, :run_id, :batch_id, :worker_id,
+                    :latency_ms, :retry_count, :source_reliability,
+                    CAST(:explainability AS json), :computed_at
+                )
+                ON CONFLICT (client_id, COALESCE(document_id::text, ''), COALESCE(entity_id::text, ''))
+                DO UPDATE SET
+                    risk_score = EXCLUDED.risk_score,
+                    risk_level = EXCLUDED.risk_level,
+                    confidence_score = EXCLUDED.confidence_score,
+                    risk_factors = EXCLUDED.risk_factors,
+                    run_id = EXCLUDED.run_id,
+                    batch_id = EXCLUDED.batch_id,
+                    worker_id = EXCLUDED.worker_id,
+                    latency_ms = EXCLUDED.latency_ms,
+                    retry_count = EXCLUDED.retry_count,
+                    source_reliability = EXCLUDED.source_reliability,
+                    explainability = EXCLUDED.explainability,
+                    computed_at = EXCLUDED.computed_at
+                WHERE
+                    (COALESCE(EXCLUDED.explainability->>'role_classification_source', '') = 'llm')::int
+                    > (COALESCE(risk_events.explainability->>'role_classification_source', '') = 'llm')::int
+                    OR (
+                        (COALESCE(EXCLUDED.explainability->>'role_classification_source', '') = 'llm')
+                        = (COALESCE(risk_events.explainability->>'role_classification_source', '') = 'llm')
+                        AND EXCLUDED.computed_at >= COALESCE(risk_events.computed_at, '-infinity'::timestamptz)
+                    )
+                RETURNING id
+            """),
+            {
+                "id": new_id,
+                "client_id": client_id,
+                "document_id": document_id,
+                "entity_id": entity_id,
+                "risk_score": kwargs["risk_score"],
+                "risk_level": kwargs["risk_level"],
+                "confidence_score": kwargs["confidence_score"],
+                "risk_factors": _json.dumps(risk_factors) if risk_factors is not None else None,
+                "run_id": kwargs.get("run_id"),
+                "batch_id": kwargs.get("batch_id"),
+                "worker_id": kwargs.get("worker_id"),
+                "latency_ms": kwargs.get("latency_ms"),
+                "retry_count": kwargs.get("retry_count", 0),
+                "source_reliability": kwargs.get("source_reliability"),
+                "explainability": _json.dumps(explainability) if explainability is not None else None,
+                "computed_at": computed_at,
+            }
+        )
+        row = result.first()
+        if row is None:
+            return "skipped"
+        # ON CONFLICT DO UPDATE never touches `id` (not in the SET list),
+        # so the existing row keeps its own original id -- comparing
+        # against the id we generated for this call is a deterministic
+        # way to tell insert from update, no xmax heuristics needed.
+        return "inserted" if row.id == new_id else "updated"
 
     # ------------------------------------------------------------------
     # R1 — Atomic Batch Transactions (One transaction per client batch)
@@ -273,7 +338,16 @@ class RiskEngine:
 
             # Persist winning collapsed payloads
             for payload in collapsed_payloads.values():
-                is_new = self._upsert_risk_event(db, **payload)
+                write_result = self._upsert_risk_event(db, **payload)
+                if write_result == "skipped":
+                    log.info(
+                        "risk_event_write_skipped_lower_quality",
+                        client_id=str(payload["client_id"]),
+                        document_id=str(payload["document_id"]),
+                        entity_id=str(payload["entity_id"]),
+                        incoming_role_source=(payload.get("explainability") or {}).get("role_classification_source"),
+                    )
+                    continue
                 log.info(
                     "risk_event_committed",
                     client_id=str(payload["client_id"]),
@@ -281,7 +355,7 @@ class RiskEngine:
                     entity_id=str(payload["entity_id"]),
                     risk_score=round(payload["risk_score"], 2),
                     risk_level=payload["risk_level"],
-                    processing_state="RISK_COMPLETE" if is_new else "RISK_UPDATED"
+                    processing_state="RISK_COMPLETE" if write_result == "inserted" else "RISK_UPDATED"
                 )
 
             # Commit the entire successful batch together (R1 Atomic Transactions)
@@ -686,25 +760,38 @@ class RiskEngine:
                     "latency_ms": latency_ms,
                     "retry_count": attempt - 1,
                     "source_reliability": source_reliability,
-                    "explainability": explainability_data
+                    "explainability": explainability_data,
+                    "computed_at": datetime.datetime.now(datetime.timezone.utc)
                 }
 
                 if persist:
-                    is_new = self._upsert_risk_event(db, **payload)
-                    logger.info(
-                        "risk_event_computed",
-                        run_id=run_id,
-                        batch_id=batch_id,
-                        worker_id=worker_id,
-                        client_id=str(client_id),
-                        document_id=str(document_id),
-                        entity_id=str(entity.id),
-                        risk_score=round(final_score, 2),
-                        risk_level=self.get_risk_level(final_score),
-                        latency_ms=round(latency_ms, 2),
-                        retry_count=attempt - 1,
-                        processing_state="RISK_COMPLETE" if is_new else "RISK_UPDATED"
-                    )
+                    write_result = self._upsert_risk_event(db, **payload)
+                    if write_result == "skipped":
+                        logger.info(
+                            "risk_event_write_skipped_lower_quality",
+                            run_id=run_id,
+                            batch_id=batch_id,
+                            worker_id=worker_id,
+                            client_id=str(client_id),
+                            document_id=str(document_id),
+                            entity_id=str(entity.id),
+                            incoming_role_source=explainability_data.get("role_classification_source"),
+                        )
+                    else:
+                        logger.info(
+                            "risk_event_computed",
+                            run_id=run_id,
+                            batch_id=batch_id,
+                            worker_id=worker_id,
+                            client_id=str(client_id),
+                            document_id=str(document_id),
+                            entity_id=str(entity.id),
+                            risk_score=round(final_score, 2),
+                            risk_level=self.get_risk_level(final_score),
+                            latency_ms=round(latency_ms, 2),
+                            retry_count=attempt - 1,
+                            processing_state="RISK_COMPLETE" if write_result == "inserted" else "RISK_UPDATED"
+                        )
                 else:
                     payloads.append(payload)
 

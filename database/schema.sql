@@ -613,6 +613,7 @@ CREATE TABLE public.risk_events (
     retry_count integer DEFAULT 0,
     source_reliability double precision,
     explainability json,
+    computed_at timestamp with time zone,
     CONSTRAINT ck_risk_events_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
     CONSTRAINT ck_risk_events_risk_score CHECK (((risk_score >= (0)::double precision) AND (risk_score <= (100)::double precision)))
 );
