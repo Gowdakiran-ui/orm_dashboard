@@ -1,33 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.db import get_db
-from app.core.rate_limit import limiter, STRICT_RATE_LIMIT
 from app.models.search import SearchJob, SearchSourceConfiguration
-from app.schemas.search import SearchJobResponse, SearchStatusResponse, SearchTriggerRequest
-from app.workers.search_tasks import execute_search_task
+from app.schemas.search import SearchJobResponse, SearchStatusResponse
 
 router = APIRouter()
 
-@router.post("/{source_type}")
-@limiter.limit(STRICT_RATE_LIMIT)
-def trigger_search(request: Request, response: Response, source_type: str, body: SearchTriggerRequest, db: Session = Depends(get_db)):
-    # Validate source_type
-    if source_type not in ['reddit', 'youtube']:
-        raise HTTPException(status_code=400, detail="Invalid source_type. Must be 'reddit' or 'youtube'")
-
-    source_config = db.query(SearchSourceConfiguration).filter(SearchSourceConfiguration.source_type == source_type).first()
-    if not source_config or not source_config.enabled:
-        raise HTTPException(status_code=400, detail=f"{source_type} source is not enabled or configured.")
-
-    # We create a dummy keyword_id for manual triggers, or ideally we'd pass an actual one if we're searching an existing entity keyword.
-    # For this endpoint, we'll just pass a dummy UUID.
-    import uuid
-    dummy_keyword_id = str(uuid.uuid4())
-
-    execute_search_task.delay(source_type, body.keyword, dummy_keyword_id)
-    return {"status": "queued", "source_type": source_type, "keyword": body.keyword}
+# POST /{source_type} (trigger_search) removed 2026-09-04 (Run-Pipeline-gated
+# architecture, Part F of the forensic audit): it dispatched
+# execute_search_task -- which can call the metered YouTube API -- directly,
+# with no connection to Run Pipeline, no per-client scoping (a bare
+# `keyword: str`, not tied to any tracked entity), and only basic login auth
+# (not require_client_access). It was the one remaining path that could
+# still incur paid-source cost with zero relation to a client's own trigger,
+# the exact thing the redesign exists to prevent. Not wired into the
+# frontend UI (confirmed via grep before removal), so nothing in the product
+# used it. execute_search_task itself is left defined (not deleted) --
+# same pattern as the removed beat-scheduled aggregation tasks -- since
+# schedule_searches (also unreachable post-redesign) still references it.
 
 @router.get("/jobs", response_model=List[SearchJobResponse])
 def get_search_jobs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

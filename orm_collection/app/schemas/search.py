@@ -36,6 +36,3 @@ class SearchStatusResponse(BaseModel):
     active_sources: int
     total_search_jobs: int
     total_results_found: int
-
-class SearchTriggerRequest(BaseModel):
-    keyword: str
