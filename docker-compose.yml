@@ -42,7 +42,14 @@ services:
       # This is the ONLY process serving real dashboard traffic directly
       # (single uvicorn process, no --workers), so it gets the largest
       # individual allocation -- see db.py / 2026-09-02/03 investigation.
-      - DB_POOL_SIZE=8
+      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 8->4 to
+      # relieve DB connection-slot exhaustion confirmed live tonight
+      # (managed Postgres refusing new connections, "remaining connection
+      # slots are reserved for roles with the SUPERUSER attribute"). This
+      # does NOT replace the 8/4 sizing decided above -- restore it if this
+      # environment's DB plan connection limit is ever raised, or if this
+      # config gets promoted to a real production target.
+      - DB_POOL_SIZE=4
       - DB_MAX_OVERFLOW=4
     volumes:
       # database/ lives at the repo root, outside this service's build
@@ -120,7 +127,11 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DB_POOL_SIZE=2
+      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
+      # relieve DB connection-slot exhaustion confirmed live tonight --
+      # see the matching note on the backend service above. Not a change
+      # to real production sizing.
+      - DB_POOL_SIZE=1
       - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
@@ -159,7 +170,11 @@ services:
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - TOKENIZERS_PARALLELISM=false
-      - DB_POOL_SIZE=2
+      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
+      # relieve DB connection-slot exhaustion confirmed live tonight --
+      # see the matching note on the backend service above. Not a change
+      # to real production sizing.
+      - DB_POOL_SIZE=1
       - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
@@ -207,7 +222,11 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DB_POOL_SIZE=2
+      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
+      # relieve DB connection-slot exhaustion confirmed live tonight --
+      # see the matching note on the backend service above. Not a change
+      # to real production sizing.
+      - DB_POOL_SIZE=1
       - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
