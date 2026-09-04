@@ -7,6 +7,21 @@ and AI coding agents — every claim below was checked against live code and
 the live dev DB as of 2026-08-09, not written from memory of past migrations
 or prior audit docs. See section 9 for how to re-verify any of this.
 
+> **2026-09-04 update (Run-Pipeline-gated architecture):** the "Scheduled
+> path" described in sections 1–2 below (`schedule_feeds` firing every
+> minute) has been **removed from `beat_schedule`** — collection now only
+> ever happens via the Manual path (`_stage_collect` inside
+> `run_client_pipeline`), triggered by a client's own "Run Pipeline"
+> action. `schedule_feeds`/`fetch_feed_task` still exist as functions (not
+> deleted) but are unreachable except by direct manual invocation. This
+> was a deliberate business decision (metered/paid sources — YouTube,
+> a planned Meta integration — made "poll everything every minute
+> regardless of activity" cost real money) — see `celery_app.py`'s module
+> docstring for the current architecture. Sections 1–2's internals (how
+> `_stage_collect`/`fetch_feed_task` normalize and dedupe) are still
+> accurate; the "two independent entry points" framing and the beat
+> schedule table in section 7 are not — corrected inline below.
+
 **Out of scope:** processing/NLP internals, reputation engine internals,
 frontend/API layers (beyond noting where collection hands off to them).
 
@@ -21,27 +36,29 @@ persists it to `documents`. From there it hands off to the processing/NLP
 layer (entity matching, topic classification, sentiment analysis — not
 covered in this doc) by enqueuing `process_document_intelligence`.
 
-There are **two independent entry points** into collection, and they do not
-call each other:
+There is **one entry point** into collection (as of the 2026-09-04
+Run-Pipeline-gated redesign — see the update note above):
 
-- **Scheduled path** — Celery Beat fires `schedule_feeds` every minute,
-  which enqueues `fetch_feed_task` per due feed. This is the path that
-  actually keeps `documents` up to date over time.
 - **Manual path** — `POST /clients/{client_id}/pipeline/run` dispatches
   `run_client_pipeline`, whose first stage (`_stage_collect`) collects only
   that client's own feeds synchronously, in-process, as part of a larger
   on-demand intelligence pipeline run (collection → processing → trend →
   risk → alert → narrative → reputation → executive → benchmark).
 
-Both paths converge on the same adapter registry and the same
-dedup-on-insert logic, but they differ in async-ness, error handling, and
-scope — see section 2.
+A **scheduled path** existed previously — Celery Beat fired
+`schedule_feeds` every minute, enqueuing `fetch_feed_task` per due feed,
+async and independent of any client action. It is documented in section 2
+below (the mechanics are unchanged in the code, just unreachable now) since
+`fetch_feed_task`/`process_document_task` are still the functions the
+manual path's `_stage_collect` conceptually mirrors, and understanding the
+old async shape helps explain some of the schema fields (`last_polled_at`
+etc.) still in use.
 
 ---
 
 ## 2. Architecture (current, both paths)
 
-### Scheduled path (async, all active feeds)
+### Scheduled path (async, all active feeds) — REMOVED from beat_schedule 2026-09-04, mechanics below no longer run
 
 ```
 Celery Beat (every minute)
@@ -305,17 +322,28 @@ see section 5.
 
 ### Celery Beat schedule (collection-relevant entries only)
 
+As of the 2026-09-04 Run-Pipeline-gated redesign, `schedule_feeds` and
+`schedule_searches` are no longer in `beat_schedule` — collection only
+happens inside `run_client_pipeline`'s chain. Real, live schedule
+(confirmed by dumping the running celery-beat container's
+`celery_app.conf.beat_schedule`, not just reading the source):
+
 | Beat key | Task | Queue | Frequency |
 |---|---|---|---|
-| `schedule-feeds-every-minute` | `collection_tasks.schedule_feeds` | `io_queue` | every minute |
 | `flush-metrics-every-5-minutes` | `collection_tasks.flush_metrics_task` | `io_queue` | every 5 min |
-| `collection-watchdog-every-15-minutes` | `collection_tasks.collection_watchdog` | `io_queue` | every 15 min |
+| `collection-watchdog-every-30-minutes` | `collection_tasks.collection_watchdog` | `io_queue` | every 30 min (loosened from 15 min — collection jobs are now created by individual Run Pipeline triggers, not a perpetual once-a-minute process, so a stuck job is lower-urgency to catch) |
+| `feed-revival-watchdog-every-hour` | `collection_tasks.feed_revival_watchdog` | `io_queue` | every hour |
 
-`fetch_feed_task` itself is not in `beat_schedule` — it's dispatched
-per-feed by `schedule_feeds`, routed to `io_queue`.
-`document_processor.process_document_task` runs on `cpu_queue`.
+`fetch_feed_task` and `schedule_feeds` are no longer dispatched by any beat
+entry; `_stage_collect` (inside `run_client_pipeline`) is the only live
+collection entry point, and calls the same `adapter.fetch()` /
+`process_and_save_document()` logic in-process instead of dispatching
+`fetch_feed_task`/`process_document_task` as separate Celery tasks.
+`document_processor.process_document_task` and `fetch_feed_task` still
+exist (not deleted) but are unreachable without a beat entry or manual
+invocation.
 `run_client_pipeline` (manual path) runs on its own isolated
-`pipeline_queue`, so manual runs don't compete with the scheduler.
+`pipeline_queue`.
 
 ### Retry/backoff
 
