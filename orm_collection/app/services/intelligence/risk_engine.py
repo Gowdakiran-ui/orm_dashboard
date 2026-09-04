@@ -12,6 +12,7 @@ from app.models.entity import EntityMention, Entity
 from app.models.topic import Topic, DocumentTopic
 from app.models.sentiment import DocumentSentiment, EntitySentiment
 from app.models.trends import TrendEvent
+from app.models.risk import RiskEvent
 from app.models.risk_state import RiskClientState
 from app.models.source import Source, SourceCategory
 from app.core.risk_config import (
@@ -622,6 +623,27 @@ class RiskEngine:
         ent_sentiments = db.query(EntitySentiment).filter(EntitySentiment.document_id == document_id).all()
         ent_sent_map = {es.entity_id: es for es in ent_sentiments}
 
+        # Risk classification caching: documents are never content-mutated
+        # after insert (process_and_save_document uses ON CONFLICT DO
+        # NOTHING -- confirmed via grep, no update path touches
+        # normalized_content/title anywhere in the codebase), so an
+        # existing "llm"-sourced role_classification for this exact
+        # (client, document, entity) triple is still valid on any later
+        # run and the expensive OpenRouter call can be skipped entirely.
+        # The deterministic scoring math below is still re-run in full --
+        # only the LLM judgment call itself is cached.
+        cached_role_by_client_entity = {}
+        for re_row in db.query(
+            RiskEvent.client_id, RiskEvent.entity_id, RiskEvent.explainability
+        ).filter(
+            RiskEvent.document_id == document_id,
+            RiskEvent.entity_id.isnot(None)
+        ).all():
+            expl = re_row.explainability or {}
+            cached_label = expl.get("role_classification")
+            if expl.get("role_classification_source") == "llm" and cached_label in ("SELF", "BYSTANDER", "EXONERATED"):
+                cached_role_by_client_entity[(re_row.client_id, re_row.entity_id)] = cached_label
+
         # Optimization: Pre-fetch all TrendEvents for client batch to avoid N+1 queries in the loop
         client_ids = list(client_to_entities.keys())
         trends_by_client_entity = {}
@@ -701,8 +723,22 @@ class RiskEngine:
                 # BYSTANDER/EXONERATED result.
                 role_classification = None
                 role_classification_attempted = final_score > self.RISK_ROLE_CLASSIFICATION_MIN_SCORE
+                role_classification_cache_hit = False
                 if role_classification_attempted:
-                    role_classification = self._llm_classify_role(document, entity, client_id, run_id=run_id)
+                    cached_role = cached_role_by_client_entity.get((client_id, entity.id))
+                    if cached_role:
+                        role_classification = cached_role
+                        role_classification_cache_hit = True
+                        logger.info(
+                            "risk_llm_role_cache_hit",
+                            run_id=run_id,
+                            client_id=str(client_id),
+                            entity_id=str(entity.id),
+                            document_id=str(document_id),
+                            label=cached_role,
+                        )
+                    else:
+                        role_classification = self._llm_classify_role(document, entity, client_id, run_id=run_id)
                     if role_classification in ("BYSTANDER", "EXONERATED"):
                         final_score = 0.0
 
@@ -739,10 +775,19 @@ class RiskEngine:
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
                     ),
                     "role_classification": role_classification,
+                    # Deliberately stays "llm" (not a distinct "llm_cached" tier)
+                    # on a cache hit: a cached label is the same LLM judgment,
+                    # just reused, and _upsert_risk_event's quality-tier WHERE
+                    # clause only recognizes the literal string "llm" as
+                    # top-tier -- a different string here would make a
+                    # correctly-cached result lose to a genuinely lower-quality
+                    # concurrent write. role_classification_cache_hit below
+                    # carries the cache-vs-fresh distinction for observability.
                     "role_classification_source": (
                         "not_evaluated" if not role_classification_attempted
                         else ("llm" if role_classification else "fallback_unchanged")
                     ),
+                    "role_classification_cache_hit": role_classification_cache_hit,
                     "triggering_documents": [str(document_id)]
                 }
 
