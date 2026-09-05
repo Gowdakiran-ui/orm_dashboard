@@ -326,6 +326,27 @@ class ExecutiveReputationEngine:
             risk_component = 100.0 - avg_risk
 
         # 3. Executive Narratives
+        # KNOWN GAP (2026-09-05, deferred -- see FINDINGS.md "Known gap: narrative
+        # attribution is not role-classification-aware"): unlike sentiment_component
+        # above, this does NOT exclude BYSTANDER/EXONERATED documents. A narrative's
+        # evidence_metadata.supporting_entities (narrative_engine.py's
+        # calculate_narratives, ~line 824-832) is built by iterating every
+        # EntityMention across the narrative's whole document cluster and adding
+        # every person-entity found, with no role check -- so an executive merely
+        # mentioned in passing in ONE document belonging to a narrative can show
+        # that narrative's theme as their own top_positive/top_negative, even with
+        # zero real evidence otherwise (confirmed live: Thomas Edison, a Tesla
+        # candidate promoted on a single incidental mention, inherited a genuine
+        # Tesla EV-charging narrative's theme this way). Fixable in principle by
+        # reusing narrative_engine.py's already-preloaded risk_map (keyed by
+        # document_id, RiskEvent rows carry entity_id + explainability) to skip an
+        # entity for a given document when that (document, entity) pair has a
+        # BYSTANDER/EXONERATED classification -- the same pattern as the sentiment
+        # fix above. NOT done here: that loop is shared narrative-computation
+        # logic (narrative_engine.py), consumed by NarrativesTab/CompetitorsTab/
+        # NarrativeIntelligenceWorkbench too, not exclusive to Executive
+        # Reputation -- changing it needs its own verification pass against those
+        # other consumers, not a same-session addition to this file.
         supporting_narratives = []
         narrative_penalty = 0
         top_positive = None

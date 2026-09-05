@@ -2145,3 +2145,48 @@ generalized executive/product/industry boosts in `evaluate_match_accuracy`),
 `app/services/entity_matching_batch_processor.py` and
 `app/services/intelligence/entity_extractor.py` (both callers, batched
 per-client term fetch to avoid N+1).
+
+---
+
+## Known gap: narrative attribution is not role-classification-aware
+## (Executive Reputation redesign, 2026-09-05, deferred)
+
+`executive_reputation_engine.py`'s `sentiment_component` was fixed this
+session to exclude documents where an executive was classified BYSTANDER or
+EXONERATED (same session, `risk_engine.py`'s existing SELF/BYSTANDER/
+EXONERATED signal, reused via `supporting_risks` -- already a parameter, no
+new query, no new LLM call). `narrative_component`/`top_positive`/
+`top_negative` were NOT given the same treatment, and confirmed live to
+have the same underlying problem: Thomas Edison, a Tesla executive
+candidate promoted on a single incidental mention (2 mentions total, 0.70
+confidence), shows a real Tesla EV-charging narrative as his own
+top-positive theme despite `health_status: INSUFFICIENT_EVIDENCE` (zero
+qualifying evidence otherwise).
+
+**Root cause, traced to `narrative_engine.py`'s `calculate_narratives`**
+(~line 824-832): a narrative's `evidence_metadata.supporting_entities` is
+built by iterating every `EntityMention` across the narrative's whole
+document cluster and adding every person-entity found, unconditionally --
+no role check. Mere presence in one document belonging to the narrative's
+cluster is enough, regardless of whether that document's role
+classification for that entity is SELF, BYSTANDER, or EXONERATED.
+
+**Why not fixed in this session**: the data needed is already there in
+principle -- `calculate_narratives` already preloads `risk_map` (keyed by
+`document_id`, `RiskEvent` rows carrying `entity_id` + `explainability`),
+so the fix shape is the same pattern as the sentiment one: when building
+`exec_ids` for a document, skip an entity if that (document, entity) pair
+has a BYSTANDER/EXONERATED classification. But this loop is shared
+narrative-computation logic in `narrative_engine.py`, consumed by
+`NarrativesTab.tsx`, `CompetitorsTab.tsx`, and
+`NarrativeIntelligenceWorkbench.tsx` too -- not exclusive to Executive
+Reputation. Changing it changes what "supporting_entities" means for every
+narrative platform-wide and needs its own verification pass against those
+other consumers, not a same-session addition made while focused on
+Executive Reputation alone.
+
+**Not fixed**: deferred as a known, documented limitation. A code comment
+at the exact narrative-matching block in
+`executive_reputation_engine.py` (`_evaluate_single_executive_optimized`,
+"3. Executive Narratives") cites this entry and sketches the fix shape for
+whoever picks it up next.
