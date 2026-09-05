@@ -430,16 +430,87 @@ def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_d
 @router.get("/{client_id}/executive-search", response_model=Dict[str, Any])
 def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     """
-    Part 2.4 (Executive Reputation redesign): three distinct states, never
-    conflated -- a raw unpromoted candidate must never render as if it were
-    verified tracked data.
+    Executive Reputation redesign: same search-first, zero-noise shape as
+    competitor-search, with one critical difference for person-entity
+    disambiguation -- see the "genuinely new name" branch below for why a
+    bare-name fresh-search collection query is never used here.
+
+    Four distinct states, never conflated:
+    - tracked: a real Entity(entity_type='person') exists. Returned with
+      whatever ExecutiveReputationScore exists, or an honest
+      INSUFFICIENT_EVIDENCE shape -- including once a completed brand-scoped
+      fresh search genuinely finds no qualifying coverage (same honest-empty
+      pattern competitor-search already uses; deliberately not a distinct
+      "not_found" after a real search ran -- the person is now genuinely
+      tracked, just with no evidence yet, exactly like any other zero-
+      evidence tracked entity elsewhere in this system).
+    - unpromoted_candidate: NER already discovered this name in already-
+      collected documents but no one promoted it. Same short-circuit
+      reasoning as competitor-search: re-collecting data likely already in
+      the corpus wastes collection + LLM cost the promotion path gets free.
+    - searching: a fresh search for this exact name is in flight.
+    - invalid_name: the searched text was rejected by the same person-name
+      shape/negative-list validation (_is_valid_person_name_layered) that
+      already gates passive NER discovery -- never silently collapsed into
+      "not found", since "this doesn't look like a valid person name" is a
+      materially different answer than "found nothing for a valid name".
+      Nothing is provisioned when this fires.
+
+    A genuinely new, validly-shaped name is never answered with a bare
+    "not found" -- it provisions the tracked entity + brand-co-occurrence-
+    scoped feeds and returns "searching", same as competitor-search.
     """
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    from app.models.entity import Entity
+    from app.models.entity import Entity, EntityKeyword
     from app.models.executive_reputation import ExecutiveReputationScore
     from app.models.executive_candidate import ExecutiveCandidate
+    from app.models.rss_feed import RSSFeed
+    from app.models.collection_job import CollectionJob
+    from app.services.client_service import entity_search_feed_urls, provision_entity_search_feeds
+    from app.services.intelligence.entity_discovery import entity_discovery_engine
+
+    def _executive_payload(entity: "Entity", score) -> Dict[str, Any]:
+        return {
+            "status": "tracked",
+            "executive": {
+                "id": str(score.id) if score else None,
+                "entity_id": str(entity.id),
+                "name": score.executive_name if score else entity.name,
+                "score": score.score if score else None,
+                "grade": score.grade if score else None,
+                "trend": score.reputation_trend if score else None,
+                "top_positive": score.top_positive_narrative if score else None,
+                "top_negative": score.top_negative_narrative if score else None,
+                "confidence_score": score.confidence_score if score else None,
+                "data_coverage": score.data_coverage if score else None,
+                "health_status": score.health_status if score else "INSUFFICIENT_EVIDENCE"
+            }
+        }
+
+    def _latest_jobs_terminal(feeds: list) -> bool:
+        """Same contract as competitor-search's own helper of this name --
+        true only once every one of these feeds' most recent CollectionJob
+        has reached a terminal status. Duplicated locally rather than
+        factored out, to avoid touching competitor-search's already-live
+        code for this change."""
+        terminal = {"completed", "failed"}
+        for feed in feeds:
+            latest_job = db.query(CollectionJob).filter(
+                CollectionJob.source_id == feed.id
+            ).order_by(CollectionJob.started_at.desc()).first()
+            if not latest_job or latest_job.status not in terminal:
+                return False
+        return True
+
+    # The client's own brand name -- required to scope every fresh-search
+    # collection query below to "[name] AND [this]", never a bare name.
+    client_brand = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "brand"
+    ).first()
+    client_brand_name = client_brand.name if client_brand else client.name
 
     # 1. Tracked (promoted) executive -- same Entity(entity_type='person')
     # source of truth /executives reads from. A promoted executive with no
@@ -455,22 +526,34 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
         score = db.query(ExecutiveReputationScore).filter(
             ExecutiveReputationScore.entity_id == tracked_entity.id
         ).order_by(ExecutiveReputationScore.created_at.desc()).first()
-        return {
-            "status": "tracked",
-            "executive": {
-                "id": str(score.id) if score else None,
-                "entity_id": str(tracked_entity.id),
-                "name": score.executive_name if score else tracked_entity.name,
-                "score": score.score if score else None,
-                "grade": score.grade if score else None,
-                "trend": score.reputation_trend if score else None,
-                "top_positive": score.top_positive_narrative if score else None,
-                "top_negative": score.top_negative_narrative if score else None,
-                "confidence_score": score.confidence_score if score else None,
-                "data_coverage": score.data_coverage if score else None,
-                "health_status": score.health_status if score else "INSUFFICIENT_EVIDENCE"
-            }
-        }
+        if score:
+            return _executive_payload(tracked_entity, score)
+
+        # No score row yet -- if this entity's own fresh-search feeds are
+        # still collecting, tell the frontend to keep polling rather than
+        # rendering a premature INSUFFICIENT_EVIDENCE.
+        search_urls = list(entity_search_feed_urls(tracked_entity.name, co_occur_with=client_brand_name).values())
+        search_feeds = db.query(RSSFeed).filter(
+            RSSFeed.client_id == client_id,
+            RSSFeed.feed_url.in_(search_urls),
+        ).all()
+        if search_feeds and not _latest_jobs_terminal(search_feeds):
+            return {"status": "searching"}
+
+        if search_feeds:
+            # Collection just finished and nothing has scored this entity
+            # yet -- run the same aggregation a Run Pipeline call would
+            # eventually do for it, right now, same pattern
+            # competitor-search's own fresh-search branch already uses for
+            # RiskEngine/BenchmarkEngine (safe to call directly outside the
+            # pipeline chain's freshness gate).
+            from app.services.intelligence.executive_reputation_engine import ExecutiveReputationEngine
+            ExecutiveReputationEngine().process_client(db, str(client_id))
+            score = db.query(ExecutiveReputationScore).filter(
+                ExecutiveReputationScore.entity_id == tracked_entity.id
+            ).order_by(ExecutiveReputationScore.created_at.desc()).first()
+
+        return _executive_payload(tracked_entity, score)
 
     # 2. Unpromoted candidate -- never returned as if it were verified data.
     candidate = db.query(ExecutiveCandidate).filter(
@@ -489,8 +572,99 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
             }
         }
 
-    # 3. Nothing found.
-    return {"status": "not_found"}
+    # 3. Near-duplicate guard (same reasoning as competitor-search's
+    # _find_near_duplicate_competitor_entity): a spelling-variant search
+    # ("Uday Ruddaraju" vs tracked "Uday Ruddarraju") routes into the
+    # existing entity's tracked/searching state instead of provisioning a
+    # second, duplicate person entity for the same individual.
+    near_dup = entity_discovery_engine._find_near_duplicate_person_entity(db, str(client_id), name)
+    if near_dup:
+        score = db.query(ExecutiveReputationScore).filter(
+            ExecutiveReputationScore.entity_id == near_dup.id
+        ).order_by(ExecutiveReputationScore.created_at.desc()).first()
+        return _executive_payload(near_dup, score)
+
+    # 4. Validation -- the same name-shape/negative-list layers that already
+    # gate passive NER discovery (_is_valid_person_name_layered). Deliberately
+    # NOT the same as "not_found": a rejected name is a different, more
+    # useful answer than a genuine zero-results search, so the frontend can
+    # render "this doesn't look like a valid person name" instead of
+    # silently collapsing both into one message.
+    is_valid, reject_layer, reject_reason = entity_discovery_engine._is_valid_person_name_layered(
+        name, db, str(client_id), source_text=None
+    )
+    if not is_valid:
+        return {"status": "invalid_name", "reason": reject_reason, "layer": reject_layer}
+
+    # Race guard: a fresh search for this exact name may already be in
+    # flight from a concurrent request (e.g. two browser tabs) -- feeds
+    # exist (uq_rss_feeds_client_id_feed_url) but the Entity row from that
+    # other request hasn't committed/been read yet.
+    race_urls = list(entity_search_feed_urls(name, co_occur_with=client_brand_name).values())
+    if db.query(RSSFeed).filter(RSSFeed.client_id == client_id, RSSFeed.feed_url.in_(race_urls)).first():
+        return {"status": "searching"}
+
+    # 5. Genuinely new, validly-shaped name -- provision the tracked entity
+    # now. CRITICAL DIFFERENCE FROM COMPETITOR-SEARCH: the fresh-search
+    # collection query below is ALWAYS scoped to "[name] AND [client brand]"
+    # (entity_search_feed_urls' co_occur_with), never a bare-name query --
+    # a bare "Suraj Kumar" search could collect real news about a completely
+    # unrelated person sharing that name and silently track the wrong
+    # individual. Query-level scoping reduces what THESE 3 feeds return, but
+    # is NOT a complete guarantee by itself -- confirmed by tracing
+    # evaluate_match_accuracy (matching_engine.py) concretely rather than
+    # assuming: a PRIMARY-category keyword whose text equals the entity's
+    # own name reaches base_confidence 0.75-0.85 before any bonus/penalty is
+    # even evaluated, comfortably over the 0.60 acceptance threshold, with
+    # NO existing check requiring brand/domain co-occurrence for person
+    # entities. That means once this entity's keyword exists, ANY future
+    # document processed anywhere in the system (from any client's
+    # collection activity, not just these 3 feeds) that happens to contain
+    # this exact name string would still be accepted as a real mention of
+    # THIS tracked executive. Closing that residual gap requires an explicit
+    # change to matching_engine.py/entity_extractor.py -- shared, core
+    # matching logic used by every entity in the system -- which is
+    # deliberately NOT included in this change and needs its own proposal
+    # and go-ahead, not a same-breath addition here.
+    #
+    # NO BARE-NAME FALLBACK: if the brand-scoped query above genuinely finds
+    # nothing, the honest answer is "not found" or "still searching" --
+    # never retry with just `name` on its own. A well-intentioned future
+    # "robustness" fix that adds such a fallback would silently reintroduce
+    # the exact wrong-person-collision risk this whole branch exists to
+    # prevent. Do not add one.
+    new_entity = Entity(client_id=client_id, name=name, entity_type="person")
+    db.add(new_entity)
+    db.flush()
+    db.add(EntityKeyword(
+        entity_id=new_entity.id,
+        keyword_text=name,
+        match_type="exact",
+        category="EXECUTIVE",
+        priority=1,
+        is_active=True
+    ))
+    provision_entity_search_feeds(db, client_id, name, co_occur_with=client_brand_name)
+    db.commit()
+
+    from app.services.matching_engine import engine_instance
+    engine_instance.refresh_processor(db)
+    try:
+        from app.utils.redis_client import redis_client
+        redis_client.publish('keyword_updated', 'refresh')
+    except Exception:
+        pass
+    entity_discovery_engine._rematch_recent_documents_for_new_entity(db, str(client_id), new_entity.id, name)
+
+    search_feeds = db.query(RSSFeed).filter(
+        RSSFeed.client_id == client_id,
+        RSSFeed.feed_url.in_(list(entity_search_feed_urls(name, co_occur_with=client_brand_name).values())),
+    ).all()
+    from app.core.celery_app import celery_app
+    for feed in search_feeds:
+        celery_app.send_task("app.workers.collection_tasks.fetch_feed_task", args=[str(feed.id)])
+
+    return {"status": "searching"}
 
 @router.get("/{client_id}/competitor-candidates", response_model=List[Dict[str, Any]])
 def get_client_competitor_candidates(client_id: UUID, db: Session = Depends(get_db)):

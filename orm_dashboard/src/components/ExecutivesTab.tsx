@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { 
   Users, Activity, Search, AlertTriangle, ShieldCheck, Trophy, Info, 
-  TrendingUp, Calendar, AlertOctagon, X, ExternalLink, Award
+  TrendingUp, Calendar, AlertOctagon, X, ExternalLink
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -64,35 +64,101 @@ export function ExecutivesTab({
     return () => { cancelled = true; };
   }, [selectedDocId, clientId]);
 
-  // Executive search (Part 2.4): three distinct states from the backend --
-  // tracked (real data), unpromoted_candidate (never shown as verified),
-  // not_found. searchResult is null until a search has actually been run.
+  // Executive search: hyperfocus redesign, same pattern as CompetitorsTab's
+  // search-first CompetitorsTab.tsx. Four backend states (tracked /
+  // unpromoted_candidate / searching / invalid_name), plus a fifth
+  // transient one the frontend drives by polling: a "searching" response
+  // means a fresh brand-scoped search was just triggered (or is still in
+  // flight) -- real async collection, not instant. Same never-conflate-
+  // states principle as CompetitorsTab: "searching"/"unpromoted_candidate"/
+  // "invalid_name" are never rendered as if they were verified reputation
+  // data.
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<any | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchErrorMsg, setSearchErrorMsg] = useState<string | null>(null);
+  const searchPollRef = React.useRef<{ cancelled: boolean }>({ cancelled: false });
+
+  // Same realistic patience window as CompetitorsTab's competitor-search --
+  // a genuinely-new name's fresh collection goes through the same
+  // ~9-10s/doc NLP bottleneck, so a short timeout would prematurely report
+  // "taking longer than expected" on a search that's actually still working.
+  const MAX_SEARCH_POLLS = 450; // ~45 minutes at 6s intervals
+  const SEARCH_POLL_INTERVAL_MS = 6000;
+
+  async function pollExecutiveSearch(query: string, attempt: number) {
+    if (searchPollRef.current.cancelled || !clientId) return;
+    try {
+      const result = await searchExecutive(clientId, query);
+      if (searchPollRef.current.cancelled) return;
+      setSearchResult(result);
+      if (result?.status === "searching") {
+        if (attempt >= MAX_SEARCH_POLLS) {
+          setSearchErrorMsg("Search is taking longer than expected — try again in a few minutes.");
+          setSearchLoading(false);
+          return;
+        }
+        setTimeout(() => pollExecutiveSearch(query, attempt + 1), SEARCH_POLL_INTERVAL_MS);
+      } else {
+        setSearchLoading(false);
+      }
+    } catch (err: any) {
+      if (searchPollRef.current.cancelled) return;
+      setSearchErrorMsg(err?.message || "Search failed");
+      setSearchResult(null);
+      setSearchLoading(false);
+    }
+  }
 
   async function handleExecutiveSearch(e: React.FormEvent) {
     e.preventDefault();
     const query = searchQuery.trim();
     if (!clientId || !query) return;
+    searchPollRef.current.cancelled = false;
     setSearchLoading(true);
     setSearchErrorMsg(null);
-    try {
-      const result = await searchExecutive(clientId, query);
-      setSearchResult(result);
-    } catch (err: any) {
-      setSearchErrorMsg(err?.message || "Search failed");
-      setSearchResult(null);
-    } finally {
-      setSearchLoading(false);
-    }
+    setSearchResult(null);
+    pollExecutiveSearch(query, 1);
   }
+
+  useEffect(() => {
+    return () => { searchPollRef.current.cancelled = true; };
+  }, []);
+
+  // Hyperfocus redesign (same principle as CompetitorsTab.tsx): this tab
+  // shows exactly one executive at a time -- whichever one is currently
+  // searched -- never every historically-tracked executive a client happens
+  // to have accumulated. `selectedExecutive` is the single source of truth
+  // for "what executive is in focus"; it's null (blank page) until a search
+  // resolves to a real tracked executive, and goes null again the instant a
+  // new search starts (handleExecutiveSearch's setSearchResult(null)).
+  const selectedExecutive = searchResult && searchResult.status === "tracked" ? searchResult.executive : null;
+  const hasSelectedExecutive = !!selectedExecutive;
+
+  // Same row shape the (now-unused-by-default) `executives` prop provided,
+  // but containing only the one executive in focus -- lets the existing
+  // per-row computations below (summary/distribution/sentiment/timeline/
+  // influence) work unchanged on a single-item list instead of a fleet.
+  const singleExecutiveList = useMemo(() => {
+    if (!selectedExecutive) return [];
+    return [{
+      id: selectedExecutive.entity_id,
+      name: selectedExecutive.name,
+      score: selectedExecutive.score,
+      grade: selectedExecutive.grade,
+      trend: selectedExecutive.trend,
+      top_positive: selectedExecutive.top_positive,
+      top_negative: selectedExecutive.top_negative,
+      confidence_score: selectedExecutive.confidence_score,
+      data_coverage: selectedExecutive.data_coverage,
+      health_status: selectedExecutive.health_status,
+    }];
+  }, [selectedExecutive]);
 
   // 1. EXECUTIVE NAMES CACHE
   const execNames = useMemo(() => {
-    return (executives || []).map(e => e.name.toLowerCase());
-  }, [executives]);
+    return (singleExecutiveList || []).map(e => e.name.toLowerCase());
+  }, [singleExecutiveList]);
 
   // 2. FILTER EXECUTIVE-RELATED PIPELINE EVENTS
   const execEvents = useMemo(() => {
@@ -108,7 +174,7 @@ export function ExecutivesTab({
       })
       .map(d => {
         const docText = (d.title || "") + " " + (d.original_content || "");
-        const matchedExec = (executives || []).find(e => 
+        const matchedExec = (singleExecutiveList || []).find(e =>
           docText.toLowerCase().includes(e.name.toLowerCase()) ||
           d.extracted_entities?.some((ent: any) => ent.name.toLowerCase() === e.name.toLowerCase())
         );
@@ -123,97 +189,41 @@ export function ExecutivesTab({
         const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
         return dateB - dateA;
       });
-  }, [documents, execNames, executives]);
+  }, [documents, execNames, singleExecutiveList]);
 
   const selectedDoc = useMemo(() => {
     if (!selectedDocId) return null;
     return execEvents.find(d => d.id === selectedDocId) || null;
   }, [selectedDocId, execEvents]);
 
-  // 3. EXECUTIVE INTEL SUMMARY METRICS
+  // 3. EXECUTIVE INTEL SUMMARY METRICS -- simplified for the hyperfocus
+  // redesign. With exactly one executive in focus, "highest reputation" /
+  // "highest risk" / "most mentioned" would always just echo the one
+  // selected executive's own name back, which is noise, not information
+  // (same reasoning CompetitorsTab.tsx's summary card simplification used).
   const summary = useMemo(() => {
-    const totalMonitored = executives.length;
-    if (totalMonitored === 0) {
+    const exec = singleExecutiveList[0];
+    if (!exec) {
       return {
-        totalMonitored: 0,
-        highestRep: "Insufficient historical data",
-        highestRisk: "Insufficient historical data",
-        mostMentioned: "Insufficient historical data",
-        avgRep: "0.0",
-        latestEvent: "Insufficient historical data"
+        score: "N/A",
+        latestEvent: "Insufficient historical data",
+        activeTopic: "Insufficient historical data"
       };
     }
-
-    // Highest Reputation Executive
-    const sortedByRep = [...executives].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-    const highestRep = sortedByRep[0] ? `${sortedByRep[0].name} (${sortedByRep[0].score.toFixed(1)})` : "N/A";
-
-    // Highest Risk Executive (highest avg document risk)
-    const execRisks: Record<string, { totalRisk: number, count: number }> = {};
-    execEvents.forEach(e => {
-      if (!execRisks[e.matchedExecutive]) {
-        execRisks[e.matchedExecutive] = { totalRisk: 0, count: 0 };
-      }
-      execRisks[e.matchedExecutive].totalRisk += e.risk ?? 0;
-      execRisks[e.matchedExecutive].count += 1;
-    });
-    let highestRiskName = "N/A";
-    let highestRiskVal = -1;
-    Object.entries(execRisks).forEach(([name, data]) => {
-      const avg = data.totalRisk / data.count;
-      if (avg > highestRiskVal) {
-        highestRiskVal = avg;
-        highestRiskName = `${name} (Avg Risk: ${avg.toFixed(0)})`;
-      }
-    });
-
-    // Most Mentioned Executive
-    const mentions: Record<string, number> = {};
-    execEvents.forEach(e => {
-      mentions[e.matchedExecutive] = (mentions[e.matchedExecutive] || 0) + 1;
-    });
-    const mostMentionedName = Object.entries(mentions).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
-
-    // Average Executive Reputation Score
-    const avgRepVal = executives.reduce((sum, e) => sum + (e.score ?? 0), 0) / totalMonitored;
-
-    // Latest Executive Event
-    const latestEvent = execEvents[0]?.timestamp 
+    const latestEvent = execEvents[0]?.timestamp
       ? new Date(execEvents[0].timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
       : "Insufficient historical data";
-
+    const topicCounts = execEvents.map(d => d.topic).filter(Boolean).reduce((acc, t) => {
+      acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const activeTopic = Object.entries(topicCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || "General";
     return {
-      totalMonitored,
-      highestRep,
-      highestRisk: highestRiskName,
-      mostMentioned: mostMentionedName,
-      avgRep: avgRepVal.toFixed(1),
-      latestEvent
+      score: exec.score !== undefined && exec.score !== null ? exec.score.toFixed(1) : "N/A",
+      latestEvent,
+      activeTopic
     };
-  }, [executives, execEvents]);
-
-  // 4. SCORE DISTRIBUTION DATA
-  const distributionData = useMemo(() => {
-    let excellent = 0;
-    let good = 0;
-    let average = 0;
-    let poor = 0;
-
-    executives.forEach(e => {
-      const s = e.score ?? 0;
-      if (s >= 80) excellent++;
-      else if (s >= 60) good++;
-      else if (s >= 40) average++;
-      else poor++;
-    });
-
-    return [
-      { range: "Excellent (80+)", count: excellent },
-      { range: "Good (60-80)", count: good },
-      { range: "Average (40-60)", count: average },
-      { range: "Poor (<40)", count: poor }
-    ];
-  }, [executives]);
+  }, [singleExecutiveList, execEvents]);
 
   // 5. SENTIMENT BREAKDOWN DATA
   const sentimentData = useMemo(() => {
@@ -258,62 +268,14 @@ export function ExecutivesTab({
     return Object.entries(dates).map(([date, count]) => ({ date, Mentions: count }));
   }, [execEvents]);
 
-  // 7. EXECUTIVE INFLUENCE RANKING
-  const influenceData = useMemo(() => {
-    const mentions: Record<string, number> = {};
-    executives.forEach(e => {
-      mentions[e.name] = 0;
-    });
-    execEvents.forEach(e => {
-      if (mentions[e.matchedExecutive] !== undefined) {
-        mentions[e.matchedExecutive]++;
-      }
-    });
-    return Object.entries(mentions)
-      .map(([name, count]) => ({ name, Mentions: count }))
-      .sort((a, b) => b.Mentions - a.Mentions);
-  }, [executives, execEvents]);
-
   return (
     <div className="space-y-6">
-      
-      {/* 1. EXECUTIVE INTELLIGENCE SUMMARY SECTION */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl font-mono">
-        <CardHeader className="pb-3 border-b border-[#1F2937]/40">
-          <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
-            <Trophy className="h-4 w-4 text-[#D4AF37] mr-2" />
-            Executive Intelligence Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-6 text-[10px]">
-          <div>
-            <span className="text-slate-500 block">Executives Monitored:</span>
-            <span className="text-slate-200 font-bold">{summary.totalMonitored}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block">Highest Reputation:</span>
-            <span className="text-slate-200 font-bold">{summary.highestRep}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block">Highest Risk Executive:</span>
-            <span className="text-slate-200 font-bold">{summary.highestRisk}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block">Most Mentioned Executive:</span>
-            <span className="text-slate-200 font-bold">{summary.mostMentioned}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block">Average Reputation:</span>
-            <span className="text-slate-200 font-bold">{summary.avgRep}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block">Latest Executive Event:</span>
-            <span className="text-slate-200 font-bold">{summary.latestEvent}</span>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* 1b. EXECUTIVE SEARCH */}
+      {/* EXECUTIVE SEARCH -- the only path onto this tab's data now. No
+          candidate lists, no scorecard, no auto-surfaced noise: a name
+          either matches a real tracked executive, a discovered-but-
+          unpromoted candidate, is rejected as not shaped like a real
+          person's name, or triggers a scoped fresh search. */}
       <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
         <CardHeader className="pb-3 border-b border-[#1F2937]/40">
           <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
@@ -341,6 +303,15 @@ export function ExecutivesTab({
 
           {searchErrorMsg && (
             <p className="text-red-400 font-mono text-[10px]">{searchErrorMsg}</p>
+          )}
+
+          {searchResult && searchResult.status === "searching" && (
+            <div className="border border-[#38BDF8]/30 bg-[#030712] rounded p-4 flex items-center space-x-3">
+              <div className="h-3 w-3 rounded-full bg-[#38BDF8] animate-pulse" />
+              <p className="text-[10px] font-mono text-slate-400">
+                Running a fresh, brand-scoped search — collecting and scoring coverage for this name alongside {`"`}{searchQuery}{`"`}. This can take a while.
+              </p>
+            </div>
           )}
 
           {searchResult && searchResult.status === "tracked" && (
@@ -381,18 +352,84 @@ export function ExecutivesTab({
                 <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 font-mono text-[9px]">NOT YET TRACKED</Badge>
               </div>
               <p className="text-[10px] font-mono text-slate-500">
-                Discovered ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) but not yet promoted to a tracked executive — no reputation data exists for this name yet. Promote via "Executive Candidates Awaiting Promotion" below to start tracking.
+                Discovered ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) but not yet promoted to a tracked executive — no reputation data exists for this name yet. Promote below to start tracking.
               </p>
             </div>
           )}
 
-          {searchResult && searchResult.status === "not_found" && (
+          {searchResult && searchResult.status === "invalid_name" && (
             <div className="border border-[#1F2937]/60 bg-[#030712] rounded p-4">
               <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider text-center">
-                No record found for that name
+                This doesn{`'`}t look like a valid person name{searchResult.reason ? ` — ${searchResult.reason}` : ""}
               </p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {!hasSelectedExecutive && (
+        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-40">
+          <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
+            <Users className="h-6 w-6 text-slate-500 opacity-60" />
+            <p className="text-slate-500 font-mono text-xs">No executive selected yet.</p>
+            <p className="text-slate-600 font-mono text-[9px]">Search a name above to start tracking a real executive.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Executive Candidates Awaiting Promotion -- only shown when the
+          current search resolves to unpromoted_candidate, not unconditional
+          (hyperfocus redesign: no noise from historically-discovered names
+          the user didn't just search for). */}
+      {searchResult && searchResult.status === "unpromoted_candidate" && executiveCandidates.length > 0 && (
+        <Card className="bg-[#060B18]/60 border-[#D4AF37]/30 shadow-2xl">
+          <CardHeader className="pb-3 border-b border-[#1F2937]/40">
+            <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <span className="flex items-center">
+                <AlertTriangle className="h-4 w-4 text-[#D4AF37] mr-2" />
+                Promote {searchResult.candidate.name}
+              </span>
+            </CardTitle>
+            <CardDescription className="text-[10px] font-mono text-slate-500">
+              Discovered via NER on ingested documents but not yet promoted to a tracked executive. Promotion applies confidence/mention thresholds automatically across all pending candidates.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <button
+              onClick={onPromoteExecutives}
+              disabled={!onPromoteExecutives || promotingExecutives}
+              className="bg-[#D4AF37] hover:bg-[#bfa032] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2"
+            >
+              {promotingExecutives ? "Promoting..." : "Run Promotion Check"}
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {hasSelectedExecutive && (
+      <>
+      {/* EXECUTIVE INTELLIGENCE SUMMARY -- scoped to the one selected
+          executive only. */}
+      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl font-mono">
+        <CardHeader className="pb-3 border-b border-[#1F2937]/40">
+          <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
+            <Trophy className="h-4 w-4 text-[#D4AF37] mr-2" />
+            Executive Intelligence Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 grid gap-4 sm:grid-cols-3 text-[10px]">
+          <div>
+            <span className="text-slate-500 block">Reputation Score:</span>
+            <span className="text-slate-200 font-bold">{summary.score}</span>
+          </div>
+          <div>
+            <span className="text-slate-500 block">Latest Event:</span>
+            <span className="text-slate-200 font-bold">{summary.latestEvent}</span>
+          </div>
+          <div>
+            <span className="text-slate-500 block">Most Active Topic:</span>
+            <span className="text-slate-200 font-bold">{summary.activeTopic}</span>
+          </div>
         </CardContent>
       </Card>
 
@@ -429,8 +466,8 @@ export function ExecutivesTab({
                     <div className="grid grid-cols-2 gap-4 w-full px-8">
                       <div className="border border-[#1F2937]/60 bg-[#030712] rounded p-4 flex flex-col items-center justify-center space-y-2">
                         <Users className="h-6 w-6 text-slate-500 mb-1" />
-                        <span className="font-mono text-xs text-slate-400">Total Monitored Executives</span>
-                        <span className="font-mono text-xl font-bold text-slate-200">{executives.length}</span>
+                        <span className="font-mono text-xs text-slate-400">Executive In Focus</span>
+                        <span className="font-mono text-xl font-bold text-slate-200">{singleExecutiveList.length}</span>
                       </div>
                       <div className="border border-[#1F2937]/60 bg-[#030712] rounded p-4 flex flex-col items-center justify-center space-y-2">
                         <Activity className="h-6 w-6 text-[#D4AF37]/50 mb-1" />
@@ -447,30 +484,11 @@ export function ExecutivesTab({
         )}
       </ErrorBoundary>
 
-      {/* 3. DUAL-ROW VISUALIZATIONS SECTION */}
+      {/* 3. DUAL VISUALIZATIONS -- Reputation Distribution and Influence
+          Ranking removed per hyperfocus redesign: both were rankings/
+          histograms across every historically-tracked executive, which are
+          meaningless with exactly one executive in focus. */}
       <div className="grid gap-6 md:grid-cols-2">
-        
-        {/* Executive Reputation Distribution */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
-              <Award className="h-4 w-4 text-[#D4AF37] mr-2" />
-              Reputation Distribution
-            </CardTitle>
-            <CardDescription className="text-[10px] font-mono text-slate-500">Executives categorized by reputation tiers</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[220px] pl-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={distributionData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1F2937" strokeOpacity={0.2} />
-                <XAxis type="number" stroke="#94A3B8" fontSize={10} />
-                <YAxis type="category" dataKey="range" stroke="#94A3B8" fontSize={10} width={100} />
-                <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff' }} />
-                <Bar dataKey="count" fill="#EAB308" radius={[0, 3, 3, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
 
         {/* Executive Sentiment Breakdown */}
         <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
@@ -522,65 +540,7 @@ export function ExecutivesTab({
           </CardContent>
         </Card>
 
-        {/* Executive Influence Ranking */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
-              <Users className="h-4 w-4 text-purple-400 mr-2" />
-              Executive Influence Ranking
-            </CardTitle>
-            <CardDescription className="text-[10px] font-mono text-slate-500">Leadership figures ranked by total document mentions</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[220px] pl-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={influenceData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1F2937" strokeOpacity={0.2} />
-                <XAxis type="number" stroke="#94A3B8" fontSize={10} />
-                <YAxis type="category" dataKey="name" stroke="#94A3B8" fontSize={10} width={100} />
-                <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff' }} />
-                <Bar dataKey="Mentions" fill="#A855F7" radius={[0, 3, 3, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
       </div>
-
-      {/* 3b. EXECUTIVE CANDIDATES AWAITING PROMOTION */}
-      {executiveCandidates.length > 0 && (
-        <Card className="bg-[#060B18]/60 border-[#D4AF37]/30 shadow-2xl">
-          <CardHeader className="pb-3 border-b border-[#1F2937]/40">
-            <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center justify-between">
-              <span className="flex items-center">
-                <AlertTriangle className="h-4 w-4 text-[#D4AF37] mr-2" />
-                Executive Candidates Awaiting Promotion
-              </span>
-              <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-[9px]">
-                {executiveCandidates.length} Pending
-              </Badge>
-            </CardTitle>
-            <CardDescription className="text-[10px] font-mono text-slate-500">
-              Discovered via NER on ingested documents but not yet promoted to tracked executives. Promotion applies confidence/mention thresholds automatically.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {executiveCandidates.slice(0, 20).map((c) => (
-                <Badge key={c.id} variant="outline" className="border-[#1F2937]/60 text-slate-300 font-mono text-[9px] bg-[#030712]">
-                  {c.name} · {c.mention_count} mentions · {(c.confidence * 100).toFixed(0)}% conf.
-                </Badge>
-              ))}
-            </div>
-            <button
-              onClick={onPromoteExecutives}
-              disabled={!onPromoteExecutives || promotingExecutives}
-              className="bg-[#D4AF37] hover:bg-[#bfa032] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2"
-            >
-              {promotingExecutives ? "Promoting..." : "Run Promotion Check"}
-            </button>
-          </CardContent>
-        </Card>
-      )}
 
       {/* 4. LEADERSHIP FIGURES REPUTATION SCORECARD */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Executives Error" />}>
@@ -612,7 +572,7 @@ export function ExecutivesTab({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {executives.map((e, i) => (
+                  {singleExecutiveList.map((e, i) => (
                     e.health_status === 'INSUFFICIENT_EVIDENCE' ? (
                       // Honest empty state: a real 0.0/NA computed for zero-evidence
                       // executives (executive_reputation_engine.py's own zero-evidence
@@ -656,19 +616,6 @@ export function ExecutivesTab({
                       </TableRow>
                     )
                   ))}
-                  {executives.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-10">
-                        <div className="flex flex-col items-center space-y-3">
-                          <Users className="h-8 w-8 text-slate-500" />
-                          <p className="text-slate-400 font-mono text-sm">Executive intelligence is still being collected.</p>
-                          <div className="text-slate-600 font-mono text-[9px] mt-2">
-                            Last Processing: {lastProcessedTimestamp}
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -682,7 +629,7 @@ export function ExecutivesTab({
           <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
             <div className="flex items-center">
               <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
-              EXECUTIVE INTELLIGENCE REGISTER
+              EXECUTIVE INTELLIGENCE REGISTER — {selectedExecutive?.name}
             </div>
             <Badge className="bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/30 font-mono text-[9px]">
               {execEvents.length} Events
@@ -752,6 +699,8 @@ export function ExecutivesTab({
           </Table>
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* Slide-Over Tactical Trace Examiner Drawer */}
       {selectedDoc && (

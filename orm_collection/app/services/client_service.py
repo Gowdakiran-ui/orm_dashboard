@@ -206,38 +206,75 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
 
     return db_client
 
-def competitor_search_feed_urls(entity_name: str) -> dict:
+def entity_search_feed_urls(entity_name: str, co_occur_with: Optional[str] = None) -> dict:
     """
     Same 3 query-URL formulas onboard_client uses to provision the primary
     entity's feeds (Google News RSS, GDELT DOC 2.0, HN Algolia), factored out
-    so the competitor fresh-search flow (client_intelligence.py's
-    competitor-search endpoint) can both provision feeds for a name AND, on a
+    so a fresh-search flow (client_intelligence.py's competitor-search and
+    executive-search endpoints) can both provision feeds for a name AND, on a
     later poll, re-derive the same URLs to look up the RSSFeed rows it
     already created -- without a new entity_id column on rss_feeds.
     Deliberately NOT wired into onboard_client itself (kept that working path
     untouched); this only mirrors its formulas.
+
+    `co_occur_with` (e.g. the client's own brand name) is required for
+    person-entity searches (executive-search): a bare "Suraj Kumar" query
+    could return real news about a completely unrelated person sharing that
+    name. When present, every one of the 3 queries is scoped to require both
+    terms, using each adapter's own AND-capable syntax -- this is query-level
+    volume reduction only, NOT a substitute for the separate entity-matching
+    safety gap noted in the executive fresh-search branch below (see its
+    comment for why a second, adapter-independent backstop is also needed).
+    Competitor-search never passes this (a competitor's name alone is what's
+    being searched for), so its 3 URLs are byte-for-byte unchanged from
+    before this parameter existed.
     """
     sanitized_name = entity_name.replace(" ", "+")
+    if not co_occur_with:
+        return {
+            "google_news": f"https://news.google.com/rss/search?q={sanitized_name}",
+            "gdelt": f"https://api.gdeltproject.org/api/v2/doc/doc?query={sanitized_name}&mode=artlist&format=json&maxrecords=50",
+            "hn_algolia": f"https://hn.algolia.com/api/v1/search?query={sanitized_name}&tags=story",
+        }
+    sanitized_co = co_occur_with.replace(" ", "+")
     return {
-        "google_news": f"https://news.google.com/rss/search?q={sanitized_name}",
-        "gdelt": f"https://api.gdeltproject.org/api/v2/doc/doc?query={sanitized_name}&mode=artlist&format=json&maxrecords=50",
-        "hn_algolia": f"https://hn.algolia.com/api/v1/search?query={sanitized_name}&tags=story",
+        # Google News RSS's `q=` behaves like a normal Google search --
+        # space-separated terms are implicitly AND'd (same assumption
+        # onboard_client's own `+OR+` formula already relies on for OR).
+        "google_news": f"https://news.google.com/rss/search?q={sanitized_name}+{sanitized_co}",
+        # GDELT DOC 2.0 documents space-separated terms in `query=` as
+        # implicit AND; quoting each phrase makes multi-word names/brands
+        # exact-phrase matches instead of matching either word alone.
+        "gdelt": f'https://api.gdeltproject.org/api/v2/doc/doc?query="{sanitized_name}"+"{sanitized_co}"&mode=artlist&format=json&maxrecords=50',
+        # HN Algolia's `query=` is relevance-ranked full-text search, not a
+        # guaranteed boolean AND -- this reduces how often an unrelated
+        # result surfaces but is not relied upon as a hard guarantee (see
+        # the executive-search comment on the separate matching-layer gap).
+        "hn_algolia": f"https://hn.algolia.com/api/v1/search?query={sanitized_name}+{sanitized_co}&tags=story",
     }
 
 
-def provision_competitor_search_feeds(db: Session, client_id, entity_name: str) -> list:
+# Back-compat alias -- competitor-search's existing call sites use this name;
+# kept so this change is additive there (behavior byte-for-byte unchanged
+# when co_occur_with is omitted) rather than a rename that touches every
+# existing caller.
+def competitor_search_feed_urls(entity_name: str) -> dict:
+    return entity_search_feed_urls(entity_name)
+
+
+def provision_entity_search_feeds(db: Session, client_id, entity_name: str, co_occur_with: Optional[str] = None) -> list:
     """
-    Creates the 3 keyword-scoped RSSFeed rows (Google News/GDELT/HN Algolia)
-    for a newly fresh-searched competitor entity -- same feed_url formulas
-    and source_format values as onboard_client's primary-entity provisioning
-    (Part 5b there), just parameterized to any entity name/client instead of
-    only the client's own brand. Scoped by (client_id, feed_url) exactly like
-    onboarding's own dedup check (uq_rss_feeds_client_id_feed_url), so a
-    re-search of the same name is a no-op here, not a duplicate feed.
-    Does not commit -- caller commits once, alongside the Entity/keyword rows
-    it creates in the same transaction.
+    Creates the 3 query-scoped RSSFeed rows (Google News/GDELT/HN Algolia)
+    for a newly fresh-searched entity (competitor or executive) -- same
+    feed_url formulas and source_format values as onboard_client's
+    primary-entity provisioning (Part 5b there), just parameterized to any
+    entity name/client instead of only the client's own brand. Scoped by
+    (client_id, feed_url) exactly like onboarding's own dedup check
+    (uq_rss_feeds_client_id_feed_url), so a re-search of the same name is a
+    no-op here, not a duplicate feed. Does not commit -- caller commits once,
+    alongside the Entity/keyword rows it creates in the same transaction.
     """
-    urls = competitor_search_feed_urls(entity_name)
+    urls = entity_search_feed_urls(entity_name, co_occur_with=co_occur_with)
     feeds = []
     # source_type is DB-constrained (ck_rss_feeds_source_type) to exactly
     # 'entity_search' | 'topical_global' | 'json_api' -- confirmed live
@@ -272,6 +309,11 @@ def provision_competitor_search_feeds(db: Session, client_id, entity_name: str) 
         db.add(feed)
         feeds.append(feed)
     return feeds
+
+
+# Back-compat alias -- competitor-search's existing call sites use this name.
+def provision_competitor_search_feeds(db: Session, client_id, entity_name: str) -> list:
+    return provision_entity_search_feeds(db, client_id, entity_name)
 
 
 def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None, client_ids=None):
