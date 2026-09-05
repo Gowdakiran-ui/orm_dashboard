@@ -75,7 +75,20 @@ export function CompetitorsTab({
   const [searchErrorMsg, setSearchErrorMsg] = useState<string | null>(null);
   const searchPollRef = React.useRef<{ cancelled: boolean }>({ cancelled: false });
 
-  const MAX_SEARCH_POLLS = 20; // ~2 minutes at 6s intervals
+  // A genuinely-new competitor name's fresh-search collects real documents
+  // (Google News alone routinely returns 50-100+ for an actively-covered
+  // topic) and each one goes through the same ~9-10s/doc zero-shot topic
+  // classification bottleneck already measured elsewhere in this pipeline
+  // (see the Run Pipeline timing investigation) -- there is no fast path.
+  // Live-measured case: searching "DeepSeek" for the Anthropic client
+  // collected 163 real documents across the 3 feeds; even with the NLP
+  // queue otherwise idle, only ~35 had finished after 8 minutes (~14s/doc),
+  // projecting to roughly 35-40 minutes for the full backlog. The previous
+  // 2-minute window (20 polls x 6s) wasn't a bug in the search itself --
+  // search_client_competitor kept correctly returning {status: "searching"}
+  // the whole time, never stuck, never erroring -- it just gave up on an
+  // honest "still working" answer far too early for realistic volumes.
+  const MAX_SEARCH_POLLS = 450; // ~45 minutes at 6s intervals
   const SEARCH_POLL_INTERVAL_MS = 6000;
 
   async function pollCompetitorSearch(query: string, attempt: number) {
