@@ -294,11 +294,27 @@ class ExecutiveReputationEngine:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         one_day_ago = now_utc - datetime.timedelta(days=1)
 
+        # 2026-09-05: derived from supporting_risks (already a parameter --
+        # zero new query, zero new LLM calls) so sentiment stops counting
+        # documents where this executive was a mere BYSTANDER or was
+        # EXONERATED. risk_component below already benefits from this same
+        # role signal for free (risk_engine.py zeroes risk_score for these
+        # documents), but sentiment_component previously ignored it and
+        # averaged raw DocumentSentiment for every doc_id regardless of role
+        # -- confirmed live for Tesla's Elon Musk: 5 BYSTANDER documents were
+        # dragging his sentiment component down as if he were genuinely their
+        # subject.
+        bystander_or_exonerated_doc_ids = {
+            r.document_id for r in supporting_risks
+            if (r.explainability or {}).get("role_classification") in ("BYSTANDER", "EXONERATED")
+        }
+
         # 1. Executive Sentiment (None when there's no evidence to compute it from)
         sentiment_component = None
         avg_sentiment = None
-        if doc_ids:
-            sent_scores = [sentiment_map[did] for did in doc_ids if did in sentiment_map]
+        qualifying_doc_ids = [did for did in doc_ids if did not in bystander_or_exonerated_doc_ids]
+        if qualifying_doc_ids:
+            sent_scores = [sentiment_map[did] for did in qualifying_doc_ids if did in sentiment_map]
             if sent_scores:
                 avg_sentiment = sum(sent_scores) / len(sent_scores)
                 sentiment_component = ((avg_sentiment + 1.0) / 2.0) * 100.0
