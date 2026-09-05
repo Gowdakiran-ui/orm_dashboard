@@ -7,14 +7,14 @@ import {
   BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
-  Compass, Users, BarChart3, Search, AlertTriangle, ShieldCheck, 
+  Compass, Users, BarChart3, Search, ShieldCheck,
   Trophy, Info, Activity, Calendar, AlertOctagon, X, ExternalLink
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
-import { fetchDocumentDetails } from "@/lib/api";
+import { fetchDocumentDetails, searchCompetitor } from "@/lib/api";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -28,9 +28,6 @@ export interface CompetitorsTabProps {
   clientRank: string;
   documents: any[]; // Pipe documents list for dynamic register calculations
   clientId?: string | null;
-  competitorCandidates?: any[];
-  onPromoteCompetitors?: () => void;
-  promotingCompetitors?: boolean;
 }
 
 export function CompetitorsTab({
@@ -45,9 +42,6 @@ export function CompetitorsTab({
   clientRank,
   documents,
   clientId,
-  competitorCandidates = [],
-  onPromoteCompetitors,
-  promotingCompetitors = false
 }: CompetitorsTabProps) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
@@ -66,6 +60,62 @@ export function CompetitorsTab({
       .catch(() => { if (!cancelled) setSelectedDocUrl(null); });
     return () => { cancelled = true; };
   }, [selectedDocId, clientId]);
+
+  // Competitor search (TASK.md Part 2.2-2.5): search-first, zero-noise --
+  // three backend states (tracked / unpromoted_candidate / searching) plus a
+  // fourth transient one the frontend drives by polling: a "searching"
+  // response means a fresh search was just triggered (or is still in
+  // flight) and collection/processing is real async work, not instant.
+  // Same never-conflate-states principle as ExecutivesTab's search: a
+  // "searching" or "unpromoted_candidate" result is never rendered as if it
+  // were verified comparison data.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResult, setSearchResult] = useState<any | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchErrorMsg, setSearchErrorMsg] = useState<string | null>(null);
+  const searchPollRef = React.useRef<{ cancelled: boolean }>({ cancelled: false });
+
+  const MAX_SEARCH_POLLS = 20; // ~2 minutes at 6s intervals
+  const SEARCH_POLL_INTERVAL_MS = 6000;
+
+  async function pollCompetitorSearch(query: string, attempt: number) {
+    if (searchPollRef.current.cancelled || !clientId) return;
+    try {
+      const result = await searchCompetitor(clientId, query);
+      if (searchPollRef.current.cancelled) return;
+      setSearchResult(result);
+      if (result?.status === "searching") {
+        if (attempt >= MAX_SEARCH_POLLS) {
+          setSearchErrorMsg("Search is taking longer than expected — try again in a few minutes.");
+          setSearchLoading(false);
+          return;
+        }
+        setTimeout(() => pollCompetitorSearch(query, attempt + 1), SEARCH_POLL_INTERVAL_MS);
+      } else {
+        setSearchLoading(false);
+      }
+    } catch (err: any) {
+      if (searchPollRef.current.cancelled) return;
+      setSearchErrorMsg(err?.message || "Search failed");
+      setSearchResult(null);
+      setSearchLoading(false);
+    }
+  }
+
+  async function handleCompetitorSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const query = searchQuery.trim();
+    if (!clientId || !query) return;
+    searchPollRef.current.cancelled = false;
+    setSearchLoading(true);
+    setSearchErrorMsg(null);
+    setSearchResult(null);
+    pollCompetitorSearch(query, 1);
+  }
+
+  useEffect(() => {
+    return () => { searchPollRef.current.cancelled = true; };
+  }, []);
 
   // 1. COMPREHENSIVE BRAND LIST FOR DISPLAY
   // C3: rank is no longer computed here. There were three independent,
@@ -296,9 +346,114 @@ export function CompetitorsTab({
     };
   }, [competitorEvents, normalizedBenchmarks]);
 
+  const hasTrackedCompetitors = normalizedBenchmarks.length > 0;
+
   return (
     <div className="space-y-6">
-      
+
+      {/* COMPETITOR SEARCH -- the only path onto this tab's data now. No
+          candidate lists, no auto-surfaced noise: a name either matches a
+          real tracked competitor, a discovered-but-unpromoted candidate, or
+          triggers a scoped fresh search. */}
+      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+        <CardHeader className="pb-3 border-b border-[#1F2937]/40">
+          <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
+            <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
+            Search Competitors
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-4">
+          <form onSubmit={handleCompetitorSearch} className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search competitor name..."
+              className="flex-1 bg-[#030712] border border-[#1F2937]/60 rounded px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#38BDF8]/50"
+            />
+            <button
+              type="submit"
+              disabled={searchLoading || !searchQuery.trim()}
+              className="bg-[#38BDF8] hover:bg-[#2ba8e0] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2 whitespace-nowrap"
+            >
+              {searchLoading ? "Searching..." : "Search"}
+            </button>
+          </form>
+
+          {searchErrorMsg && (
+            <p className="text-red-400 font-mono text-[10px]">{searchErrorMsg}</p>
+          )}
+
+          {searchResult && searchResult.status === "searching" && (
+            <div className="border border-[#38BDF8]/30 bg-[#030712] rounded p-4 flex items-center space-x-3">
+              <div className="h-3 w-3 rounded-full bg-[#38BDF8] animate-pulse" />
+              <p className="text-[10px] font-mono text-slate-400">
+                Running a fresh scoped search — collecting and scoring coverage for this name. This can take a moment.
+              </p>
+            </div>
+          )}
+
+          {searchResult && searchResult.status === "tracked" && (
+            <div className="border border-[#D4AF37]/30 bg-[#030712] rounded p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm font-bold text-slate-200">{searchResult.competitor.name}</span>
+                <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-[9px]">TRACKED</Badge>
+              </div>
+              {searchResult.competitor.health_status === 'INSUFFICIENT_EVIDENCE' ? (
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                  No qualifying coverage found yet — tracked, but not enough evidence to score
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-3 text-[10px] font-mono">
+                  <div>
+                    <span className="text-slate-500 block">Reputation</span>
+                    <span className="text-[#D4AF37] font-bold text-sm">
+                      {searchResult.competitor.reputation_score !== null ? searchResult.competitor.reputation_score.toFixed(1) : 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Rank</span>
+                    <span className="text-slate-200">{searchResult.competitor.rank ? `#${searchResult.competitor.rank}` : 'Unranked'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Risk</span>
+                    <span className="text-slate-200">{searchResult.competitor.risk_score !== null ? searchResult.competitor.risk_score.toFixed(1) : 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">SOV</span>
+                    <span className="text-slate-200">{searchResult.competitor.share_of_voice !== null ? `${searchResult.competitor.share_of_voice.toFixed(1)}%` : 'N/A'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {searchResult && searchResult.status === "unpromoted_candidate" && (
+            <div className="border border-amber-500/30 bg-[#030712] rounded p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm font-bold text-slate-200">{searchResult.candidate.name}</span>
+                <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 font-mono text-[9px]">NOT YET TRACKED</Badge>
+              </div>
+              <p className="text-[10px] font-mono text-slate-500">
+                Discovered ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) in already-collected coverage but not yet promoted — no comparison data exists for this name yet.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {!hasTrackedCompetitors && (
+        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-40">
+          <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
+            <Compass className="h-6 w-6 text-slate-500 opacity-60" />
+            <p className="text-slate-500 font-mono text-xs">No tracked competitors yet.</p>
+            <p className="text-slate-600 font-mono text-[9px]">Search a name above to start tracking a real competitor.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {hasTrackedCompetitors && (
+      <>
       {/* EXECUTIVE SUMMARY CARD */}
       {summary && (
         <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl font-mono">
@@ -522,33 +677,6 @@ export function CompetitorsTab({
                 COMPETITIVE LANDSCAPE INDEX
               </CardTitle>
             </CardHeader>
-            {competitorCandidates.length > 0 && (
-              <CardContent className="pt-0 pb-4 border-b border-[#1F2937]/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#D4AF37] flex items-center">
-                    <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
-                    Competitor Candidates Awaiting Promotion
-                  </span>
-                  <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-[9px]">
-                    {competitorCandidates.length} Pending
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {competitorCandidates.slice(0, 20).map((c) => (
-                    <Badge key={c.id} variant="outline" className="border-[#1F2937]/60 text-slate-300 font-mono text-[9px] bg-[#030712]">
-                      {c.organization_name} · {c.mention_count} mentions · {(c.confidence * 100).toFixed(0)}% conf.
-                    </Badge>
-                  ))}
-                </div>
-                <button
-                  onClick={onPromoteCompetitors}
-                  disabled={!onPromoteCompetitors || promotingCompetitors}
-                  className="bg-[#D4AF37] hover:bg-[#bfa032] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2"
-                >
-                  {promotingCompetitors ? "Promoting..." : "Run Promotion Check"}
-                </button>
-              </CardContent>
-            )}
             <CardContent>
               <Table>
                 <TableHeader className="border-[#1F2937]/40 bg-[#030712]/40">
@@ -755,6 +883,8 @@ export function CompetitorsTab({
           </Table>
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* Risk Details Drawer (Slide-Over Panel) */}
       {selectedDoc && (

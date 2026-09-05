@@ -514,6 +514,193 @@ def get_client_competitor_candidates(client_id: UUID, db: Session = Depends(get_
         "source_document_count": len(c.source_documents) if c.source_documents else 0
     } for c in candidates]
 
+@router.get("/{client_id}/competitor-search", response_model=Dict[str, Any])
+def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    """
+    Competitor Compare redesign (TASK.md Part 2.2/2.3): search-first, no
+    auto-surfaced candidate noise. Four states, polled by the frontend (the
+    "searching" state is deliberately transient -- collection/processing is
+    real async work, not instant):
+
+    - tracked: a real Entity(entity_type='competitor') exists. Returned with
+      whatever CompetitorBenchmark data exists for it -- possibly an
+      INSUFFICIENT_EVIDENCE row (same honest-empty pattern as executive
+      reputation), never a fabricated comparison.
+    - unpromoted_candidate: NER already discovered this name in already-
+      collected documents but no one promoted it. Short-circuits a fresh
+      search on purpose -- re-collecting data likely already in the corpus
+      would waste collection + LLM cost the promotion path gets for free.
+    - searching: a fresh search for this exact name is in flight (this call
+      triggered it, or an earlier poll did and collection hasn't finished).
+    - Genuinely new name with nothing in flight yet -- this call provisions
+      the tracked entity + feeds and returns "searching" (see below).
+    """
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    from app.models.entity import Entity, EntityKeyword
+    from app.models.competitor_candidate import CompetitorCandidate
+    from app.models.competitor_benchmark import CompetitorBenchmark
+    from app.models.rss_feed import RSSFeed
+    from app.models.collection_job import CollectionJob
+    from app.services.client_service import competitor_search_feed_urls, provision_competitor_search_feeds
+
+    def _benchmark_payload(entity: "Entity", benchmark) -> Dict[str, Any]:
+        return {
+            "status": "tracked",
+            "competitor": {
+                "id": str(benchmark.id) if benchmark else None,
+                "entity_id": str(entity.id),
+                "name": entity.name,
+                "reputation_score": benchmark.reputation_score if benchmark else None,
+                "sentiment_score": benchmark.sentiment_score if benchmark else None,
+                "risk_score": benchmark.risk_score if benchmark else None,
+                "share_of_voice": benchmark.share_of_voice if benchmark else None,
+                "rank": benchmark.rank if benchmark else 0,
+                "top_narrative": benchmark.top_narrative if benchmark else None,
+                "confidence_score": benchmark.confidence_score if benchmark else None,
+                "data_coverage": benchmark.data_coverage if benchmark else None,
+                # Same sentinel used everywhere else in this table when there
+                # is genuinely no scoreable evidence yet, not a fabricated 0.0.
+                "health_status": benchmark.health_status if benchmark else "INSUFFICIENT_EVIDENCE",
+            }
+        }
+
+    def _latest_jobs_terminal(feeds: list) -> bool:
+        """True only once every one of these feeds' most recent CollectionJob
+        has reached a terminal status. A feed with no job row yet (task not
+        picked up by a worker) counts as still in flight."""
+        terminal = {"completed", "failed"}
+        for feed in feeds:
+            latest_job = db.query(CollectionJob).filter(
+                CollectionJob.source_id == feed.id
+            ).order_by(CollectionJob.started_at.desc()).first()
+            if not latest_job or latest_job.status not in terminal:
+                return False
+        return True
+
+    tracked_entity = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "competitor",
+        Entity.name.ilike(f"%{name}%")
+    ).first()
+
+    if tracked_entity:
+        benchmark = db.query(CompetitorBenchmark).filter(
+            CompetitorBenchmark.competitor_entity_id == tracked_entity.id
+        ).order_by(CompetitorBenchmark.created_at.desc()).first()
+        if benchmark:
+            return _benchmark_payload(tracked_entity, benchmark)
+
+        # No benchmark row yet -- if this entity's own fresh-search feeds are
+        # still collecting, tell the frontend to keep polling rather than
+        # rendering a premature INSUFFICIENT_EVIDENCE.
+        search_urls = list(competitor_search_feed_urls(tracked_entity.name).values())
+        search_feeds = db.query(RSSFeed).filter(
+            RSSFeed.client_id == client_id,
+            RSSFeed.feed_url.in_(search_urls),
+        ).all()
+        if search_feeds and not _latest_jobs_terminal(search_feeds):
+            return {"status": "searching"}
+
+        if search_feeds:
+            # Collection just finished and nothing has scored this entity yet
+            # -- run the same aggregation a Run Pipeline call would eventually
+            # do for it, right now, instead of leaving the user staring at
+            # INSUFFICIENT_EVIDENCE until the next scheduled run picks it up.
+            # Both engines are safe to call directly outside the pipeline
+            # chain's freshness gate -- BenchmarkEngine has no LLM cost at
+            # all, and promote_competitor_candidates already calls it this
+            # same way after every promotion. RiskEngine's only real cost
+            # (the SELF/BYSTANDER/EXONERATED classification) is cached per
+            # (client, document, entity) triple, so this does not re-bill for
+            # any of the client's already-classified documents -- confirmed
+            # in risk_engine.py, only the newly collected documents here can
+            # incur a new LLM call.
+            from app.services.intelligence.risk_engine import RiskEngine
+            from app.services.intelligence.benchmark_engine import BenchmarkEngine
+            RiskEngine().process_client(db, str(client_id))
+            BenchmarkEngine().process_client(db, str(client_id))
+            benchmark = db.query(CompetitorBenchmark).filter(
+                CompetitorBenchmark.competitor_entity_id == tracked_entity.id
+            ).order_by(CompetitorBenchmark.created_at.desc()).first()
+
+        return _benchmark_payload(tracked_entity, benchmark)
+
+    candidate = db.query(CompetitorCandidate).filter(
+        CompetitorCandidate.client_id == client_id,
+        CompetitorCandidate.promoted_to_competitor_id.is_(None),
+        CompetitorCandidate.organization_name.ilike(f"%{name}%")
+    ).order_by(CompetitorCandidate.confidence.desc(), CompetitorCandidate.mention_count.desc()).first()
+    if candidate:
+        return {
+            "status": "unpromoted_candidate",
+            "candidate": {
+                "id": str(candidate.id),
+                "name": candidate.organization_name,
+                "mention_count": candidate.mention_count,
+                "confidence": candidate.confidence
+            }
+        }
+
+    # Nothing tracked, no candidate. Race guard: a fresh search for this
+    # exact name may already be in flight from a concurrent request (e.g. two
+    # browser tabs) -- feeds exist (uq_rss_feeds_client_id_feed_url) but the
+    # Entity row from that other request hasn't committed/been read yet.
+    race_urls = list(competitor_search_feed_urls(name).values())
+    if db.query(RSSFeed).filter(RSSFeed.client_id == client_id, RSSFeed.feed_url.in_(race_urls)).first():
+        return {"status": "searching"}
+
+    # A1.7-equivalent guard (entity_discovery.py's own near-duplicate check
+    # for the promotion path): the substring `ilike` lookup above only
+    # catches the case where the search term is contained in an existing
+    # entity's name ("Ford" finds "Ford Motor Company"), not the reverse or
+    # a spelling/plural variant ("Ford Motors" searched against tracked
+    # "Ford"). Route those into the existing entity's tracked/searching state
+    # instead of provisioning a second, duplicate competitor row for the
+    # same benchmark.
+    from app.services.intelligence.entity_discovery import entity_discovery_engine
+    near_dup = entity_discovery_engine._find_near_duplicate_competitor_entity(db, str(client_id), name)
+    if near_dup:
+        benchmark = db.query(CompetitorBenchmark).filter(
+            CompetitorBenchmark.competitor_entity_id == near_dup.id
+        ).order_by(CompetitorBenchmark.created_at.desc()).first()
+        return _benchmark_payload(near_dup, benchmark)
+
+    # Genuinely new name -- provision the tracked entity now. Deliberately
+    # bypasses the CompetitorCandidate mention/confidence thresholds: a
+    # user typing an exact name into search IS the human verification signal
+    # promotion thresholds exist to approximate for NER-discovered names.
+    new_entity = Entity(client_id=client_id, name=name, entity_type="competitor")
+    db.add(new_entity)
+    db.flush()
+    db.add(EntityKeyword(
+        entity_id=new_entity.id,
+        keyword_text=name,
+        match_type="exact",
+        category="PRIMARY",
+        priority=1,
+        is_active=True
+    ))
+    provision_competitor_search_feeds(db, client_id, name)
+    db.commit()
+
+    from app.services.matching_engine import engine_instance
+    engine_instance.refresh_processor(db)
+    entity_discovery_engine._rematch_recent_documents_for_new_entity(db, str(client_id), new_entity.id, name)
+
+    search_feeds = db.query(RSSFeed).filter(
+        RSSFeed.client_id == client_id,
+        RSSFeed.feed_url.in_(list(competitor_search_feed_urls(name).values())),
+    ).all()
+    from app.core.celery_app import celery_app
+    for feed in search_feeds:
+        celery_app.send_task("app.workers.collection_tasks.fetch_feed_task", args=[str(feed.id)])
+
+    return {"status": "searching"}
+
+
 @router.post("/{client_id}/promote-competitors", response_model=Dict[str, Any])
 def promote_competitor_candidates(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()

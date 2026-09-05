@@ -513,6 +513,11 @@ export async function fetchCompetitorCandidates(clientId: string, signal?: Abort
   return parseOrThrow(res);
 }
 
+export async function searchCompetitor(clientId: string, name: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/competitor-search?name=${encodeURIComponent(name)}`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function promoteCompetitorCandidates(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/promote-competitors`, {
     method: "POST",

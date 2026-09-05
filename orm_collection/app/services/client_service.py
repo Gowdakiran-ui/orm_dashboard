@@ -201,6 +201,67 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
 
     return db_client
 
+def competitor_search_feed_urls(entity_name: str) -> dict:
+    """
+    Same 3 query-URL formulas onboard_client uses to provision the primary
+    entity's feeds (Google News RSS, GDELT DOC 2.0, HN Algolia), factored out
+    so the competitor fresh-search flow (client_intelligence.py's
+    competitor-search endpoint) can both provision feeds for a name AND, on a
+    later poll, re-derive the same URLs to look up the RSSFeed rows it
+    already created -- without a new entity_id column on rss_feeds.
+    Deliberately NOT wired into onboard_client itself (kept that working path
+    untouched); this only mirrors its formulas.
+    """
+    sanitized_name = entity_name.replace(" ", "+")
+    return {
+        "google_news": f"https://news.google.com/rss/search?q={sanitized_name}",
+        "gdelt": f"https://api.gdeltproject.org/api/v2/doc/doc?query={sanitized_name}&mode=artlist&format=json&maxrecords=50",
+        "hn_algolia": f"https://hn.algolia.com/api/v1/search?query={sanitized_name}&tags=story",
+    }
+
+
+def provision_competitor_search_feeds(db: Session, client_id, entity_name: str) -> list:
+    """
+    Creates the 3 keyword-scoped RSSFeed rows (Google News/GDELT/HN Algolia)
+    for a newly fresh-searched competitor entity -- same feed_url formulas
+    and source_format values as onboard_client's primary-entity provisioning
+    (Part 5b there), just parameterized to any entity name/client instead of
+    only the client's own brand. Scoped by (client_id, feed_url) exactly like
+    onboarding's own dedup check (uq_rss_feeds_client_id_feed_url), so a
+    re-search of the same name is a no-op here, not a duplicate feed.
+    Does not commit -- caller commits once, alongside the Entity/keyword rows
+    it creates in the same transaction.
+    """
+    urls = competitor_search_feed_urls(entity_name)
+    feeds = []
+    specs = [
+        ("google_news", urls["google_news"], f"{entity_name} Google News Feed", "rss", "rss"),
+        ("gdelt", urls["gdelt"], f"{entity_name} GDELT Feed", "json_api", "gdelt_json"),
+        ("hn_algolia", urls["hn_algolia"], f"{entity_name} HN Algolia Feed", "json_api", "hn_algolia_json"),
+    ]
+    for _key, feed_url, feed_name, source_type, source_format in specs:
+        existing = db.query(RSSFeed).filter(
+            RSSFeed.feed_url == feed_url,
+            RSSFeed.client_id == client_id,
+        ).first()
+        if existing:
+            feeds.append(existing)
+            continue
+        feed = RSSFeed(
+            feed_name=feed_name,
+            feed_url=feed_url,
+            category="News",
+            poll_interval_minutes=60,
+            is_active=True,
+            client_id=client_id,
+            source_type=source_type,
+            source_format=source_format,
+        )
+        db.add(feed)
+        feeds.append(feed)
+    return feeds
+
+
 def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None, client_ids=None):
     query = db.query(Client)
     if client_ids is not None:

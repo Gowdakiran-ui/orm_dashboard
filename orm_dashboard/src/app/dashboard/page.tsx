@@ -359,9 +359,6 @@ export default function Home() {
                     clientRank={analytics.clientRank}
                     documents={data.documents}
                     clientId={data.clientId}
-                    competitorCandidates={data.competitorCandidates}
-                    onPromoteCompetitors={exec.handlePromoteCompetitors}
-                    promotingCompetitors={exec.promotingCompetitors}
                   />
                 </ErrorBoundary>
               )}
