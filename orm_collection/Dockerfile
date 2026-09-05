@@ -105,7 +105,6 @@ RUN groupadd --system appuser && useradd --system --gid appuser --home-dir /app 
     && chown -R appuser:appuser /app /backups
 
 COPY --from=builder /opt/venv /opt/venv
-COPY . .
 
 # FinBERT and distilbart-mnli-12-3 (app/services/intelligence/
 # sentiment_analyzer.py, topic_classifier.py) were never pre-downloaded here,
@@ -120,6 +119,17 @@ COPY . .
 # HF_HUB_OFFLINE is intentionally NOT set yet here -- this download step
 # needs real Hub access. It's set right after, once the cache below is
 # populated, so it never applies to this RUN itself.
+#
+# Deliberately placed BEFORE `COPY . .` below (2026-09-05): this step's only
+# dependency is the venv just copied above -- the RUN command's model IDs are
+# literals, it never imports anything from /app's own source. Ordering it
+# after COPY . . (as it was before) meant Docker's layer cache treated this
+# multi-hundred-MB download as dependent on every file in the repo, so any
+# unrelated one-line app-code change forced a full re-download from scratch
+# on every rebuild -- confirmed live tonight as the actual cause of repeated
+# "no space left on device" build failures (each redundant download left a
+# new multi-GB layer behind). Moving it here means it's now cached across
+# any rebuild that doesn't touch this exact block or requirements.txt.
 ENV HF_HOME=/app/.cache/huggingface
 RUN success=0; \
     for i in 1 2 3 4 5; do \
@@ -137,6 +147,8 @@ RUN success=0; \
 # set AFTER the download RUN above, not combined with HF_HOME's ENV, so it
 # never applies to that RUN itself.
 ENV HF_HUB_OFFLINE=1
+
+COPY . .
 
 RUN chmod +x entrypoint.sh && chown -R appuser:appuser /app
 
