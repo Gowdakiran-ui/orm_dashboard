@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # frequent DB usage where reusing a warm connection matters.
     DB_USE_NULLPOOL: bool = False
 
+    # DigitalOcean-managed PgBouncer connection pool (structural fix for the
+    # 2026-09-05 connection-exhaustion incident -- see db.py/docker-compose.yml
+    # comments). A distinct setting, not a DATABASE_URL override: backup_tasks.py
+    # shells out to `pg_dump settings.DATABASE_URL` directly (pg_dump does not
+    # work against a transaction-mode PgBouncer pool per DO's own docs), so
+    # DATABASE_URL itself must keep meaning "the direct connection" for every
+    # caller that already reads it. Only db.py's engine consults these two.
+    DATABASE_URL_POOLED: Optional[str] = None
+    DB_USE_POOLED_URL: bool = False
+
     @property
     def CELERY_BROKER_URL(self) -> str:
         return self.REDIS_URL

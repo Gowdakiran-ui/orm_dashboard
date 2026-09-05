@@ -39,6 +39,13 @@ services:
       # cookie (core/security.py) would silently never reach the backend.
       # Override to true (or unset) for any real HTTPS deployment.
       - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
+      # 2026-09-05: route through DigitalOcean's managed PgBouncer connection
+      # pool instead of connecting to Postgres directly -- see db.py. Does
+      # NOT touch DATABASE_URL itself (backup_tasks.py's pg_dump call needs
+      # that to stay a direct connection). DATABASE_URL_POOLED itself lives
+      # only in .env (gitignored), never in this file.
+      - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
+      - DB_USE_POOLED_URL=true
       # This is the ONLY process serving real dashboard traffic directly
       # (single uvicorn process, no --workers), so it gets the largest
       # individual allocation -- see db.py / 2026-09-02/03 investigation.
@@ -127,6 +134,10 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      # 2026-09-05: routed through DigitalOcean's PgBouncer pool -- see the
+      # matching note on the backend service above.
+      - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
+      - DB_USE_POOLED_URL=true
       # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
       # relieve DB connection-slot exhaustion confirmed live tonight --
       # see the matching note on the backend service above. Not a change
@@ -155,6 +166,10 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      # 2026-09-05: routed through DigitalOcean's PgBouncer pool -- see the
+      # matching note on the backend service above.
+      - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
+      - DB_USE_POOLED_URL=true
       # Constrain each process's own BLAS/OMP intra-op thread count.
       # docker-compose.yml (this file) is what the DigitalOcean droplet
       # actually runs -- copilot/ was generated but never deployed
@@ -222,6 +237,10 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      # 2026-09-05: routed through DigitalOcean's PgBouncer pool -- see the
+      # matching note on the backend service above.
+      - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
+      - DB_USE_POOLED_URL=true
       # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
       # relieve DB connection-slot exhaustion confirmed live tonight --
       # see the matching note on the backend service above. Not a change
