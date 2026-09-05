@@ -234,8 +234,15 @@ def provision_competitor_search_feeds(db: Session, client_id, entity_name: str) 
     """
     urls = competitor_search_feed_urls(entity_name)
     feeds = []
+    # source_type is DB-constrained (ck_rss_feeds_source_type) to exactly
+    # 'entity_search' | 'topical_global' | 'json_api' -- confirmed live
+    # against production after an initial "rss" guess violated the
+    # constraint. 'entity_search' matches the model's own comment for a
+    # per-client keyword feed and is what onboard_client's Google News feed
+    # relies on via the column default; the other two set json_api
+    # explicitly, same as onboard_client's GDELT/HN feeds.
     specs = [
-        ("google_news", urls["google_news"], f"{entity_name} Google News Feed", "rss", "rss"),
+        ("google_news", urls["google_news"], f"{entity_name} Google News Feed", "entity_search", "rss"),
         ("gdelt", urls["gdelt"], f"{entity_name} GDELT Feed", "json_api", "gdelt_json"),
         ("hn_algolia", urls["hn_algolia"], f"{entity_name} HN Algolia Feed", "json_api", "hn_algolia_json"),
     ]
