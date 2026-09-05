@@ -29,7 +29,16 @@ class Settings(BaseSettings):
     # values and the 2026-09-02/03 investigation that sized them.
     DB_POOL_SIZE: int = 3
     DB_MAX_OVERFLOW: int = 2
-    
+
+    # Opt-in per-service override for celery-beat (see db.py): beat only ever
+    # enqueues task messages via Redis on its cron schedule -- every scheduled
+    # task is routed to a worker queue and executed by a worker process, never
+    # by beat itself -- so a standing QueuePool allocation sits idle 100% of
+    # the time. NullPool opens/closes a fresh connection per checkout instead
+    # of holding any idle ones. False for every other service: they have real,
+    # frequent DB usage where reusing a warm connection matters.
+    DB_USE_NULLPOOL: bool = False
+
     @property
     def CELERY_BROKER_URL(self) -> str:
         return self.REDIS_URL

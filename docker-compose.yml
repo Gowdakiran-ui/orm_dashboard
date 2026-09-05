@@ -274,10 +274,13 @@ services:
       - REDIS_URL=redis://redis:6379/0
       # beat_schedule (celery_app.py) is defined in Python and dispatch is
       # a pure Redis publish -- beat itself does not query the app DB in
-      # normal operation, so this is effectively unused headroom, not a
-      # real allocation.
-      - DB_POOL_SIZE=1
-      - DB_MAX_OVERFLOW=0
+      # normal operation, so a standing QueuePool allocation here was unused
+      # headroom, not a real allocation. Switched to NullPool (db.py) so
+      # this holds zero idle DB connections at rest instead of reserving a
+      # slot it never actually needs -- see the 2026-09-05 connection-
+      # exhaustion investigation. DB_POOL_SIZE/DB_MAX_OVERFLOW are unused
+      # (and intentionally omitted) when DB_USE_NULLPOOL=true.
+      - DB_USE_NULLPOOL=true
     depends_on:
       redis:
         condition: service_healthy

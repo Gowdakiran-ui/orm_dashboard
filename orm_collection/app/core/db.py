@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import NullPool
 from app.core.config import settings
 
 # Phase 5 item 23: hosted providers (RDS idle timeout, Supabase/Neon pooler,
@@ -23,13 +24,27 @@ from app.core.config import settings
 # Right-sizing alone does not guarantee staying under 25 in a genuine
 # worst-case burst across every service at once; PgBouncer or a DB plan
 # upgrade is the structural fix if that's still not enough headroom.
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-)
+# DB_USE_NULLPOOL (celery-beat only, see config.py): NullPool's constructor
+# doesn't accept pool_size/max_overflow (TypeError if passed) -- it opens a
+# fresh connection per checkout and holds none idle, so those args are
+# meaningless for it anyway. pool_pre_ping/pool_recycle are base-Pool params
+# both classes accept -- confirmed against this project's installed
+# SQLAlchemy 2.0.25 via a throwaway sqlite:// engine before wiring this in.
+if settings.DB_USE_NULLPOOL:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+    )
+else:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+    )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
