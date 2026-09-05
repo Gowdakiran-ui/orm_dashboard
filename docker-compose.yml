@@ -49,14 +49,13 @@ services:
       # This is the ONLY process serving real dashboard traffic directly
       # (single uvicorn process, no --workers), so it gets the largest
       # individual allocation -- see db.py / 2026-09-02/03 investigation.
-      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 8->4 to
-      # relieve DB connection-slot exhaustion confirmed live tonight
-      # (managed Postgres refusing new connections, "remaining connection
-      # slots are reserved for roles with the SUPERUSER attribute"). This
-      # does NOT replace the 8/4 sizing decided above -- restore it if this
-      # environment's DB plan connection limit is ever raised, or if this
-      # config gets promoted to a real production target.
-      - DB_POOL_SIZE=4
+      # Real 8/4 sizing RESTORED 2026-09-05: the 2026-09-04 emergency halving
+      # (8->4) is no longer needed now that this service routes through
+      # DigitalOcean's PgBouncer pool (DATABASE_URL_POOLED above) -- the pool
+      # absorbs each app-side connection instead of every one holding its own
+      # direct Postgres backend connection, so the real max_connections=25
+      # ceiling is no longer at risk from this service's pool_size alone.
+      - DB_POOL_SIZE=8
       - DB_MAX_OVERFLOW=4
     volumes:
       # database/ lives at the repo root, outside this service's build
@@ -138,11 +137,9 @@ services:
       # matching note on the backend service above.
       - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
       - DB_USE_POOLED_URL=true
-      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
-      # relieve DB connection-slot exhaustion confirmed live tonight --
-      # see the matching note on the backend service above. Not a change
-      # to real production sizing.
-      - DB_POOL_SIZE=1
+      # Real 2/1 sizing RESTORED 2026-09-05 -- see the matching note on the
+      # backend service above (routed through the pool now).
+      - DB_POOL_SIZE=2
       - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
@@ -185,11 +182,9 @@ services:
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - TOKENIZERS_PARALLELISM=false
-      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
-      # relieve DB connection-slot exhaustion confirmed live tonight --
-      # see the matching note on the backend service above. Not a change
-      # to real production sizing.
-      - DB_POOL_SIZE=1
+      # Real 2/1 sizing RESTORED 2026-09-05 -- see the matching note on the
+      # backend service above (routed through the pool now).
+      - DB_POOL_SIZE=2
       - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
@@ -241,11 +236,9 @@ services:
       # matching note on the backend service above.
       - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
       - DB_USE_POOLED_URL=true
-      # TEMPORARY DEV-ONLY OVERRIDE (2026-09-04): pool_size halved 2->1 to
-      # relieve DB connection-slot exhaustion confirmed live tonight --
-      # see the matching note on the backend service above. Not a change
-      # to real production sizing.
-      - DB_POOL_SIZE=1
+      # Real 2/1 sizing RESTORED 2026-09-05 -- see the matching note on the
+      # backend service above (routed through the pool now).
+      - DB_POOL_SIZE=2
       - DB_MAX_OVERFLOW=1
     depends_on:
       redis:
