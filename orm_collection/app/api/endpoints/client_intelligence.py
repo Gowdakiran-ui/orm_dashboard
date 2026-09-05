@@ -688,6 +688,11 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
 
     from app.services.matching_engine import engine_instance
     engine_instance.refresh_processor(db)
+    try:
+        from app.utils.redis_client import redis_client
+        redis_client.publish('keyword_updated', 'refresh')
+    except Exception:
+        pass
     entity_discovery_engine._rematch_recent_documents_for_new_entity(db, str(client_id), new_entity.id, name)
 
     search_feeds = db.query(RSSFeed).filter(
@@ -713,7 +718,12 @@ def promote_competitor_candidates(client_id: UUID, db: Session = Depends(get_db)
     # Refresh matching engine after promotion
     from app.services.matching_engine import engine_instance
     engine_instance.refresh_processor(db)
-    
+    try:
+        from app.utils.redis_client import redis_client
+        redis_client.publish('keyword_updated', 'refresh')
+    except Exception:
+        pass
+
     return result
 
 @router.post("/{client_id}/promote-executives", response_model=Dict[str, Any])
@@ -728,7 +738,12 @@ def promote_executive_candidates(client_id: UUID, db: Session = Depends(get_db))
     # Refresh matching engine after promotion
     from app.services.matching_engine import engine_instance
     engine_instance.refresh_processor(db)
-    
+    try:
+        from app.utils.redis_client import redis_client
+        redis_client.publish('keyword_updated', 'refresh')
+    except Exception:
+        pass
+
     return result
 
 @router.get("/{client_id}/reputation-summary", response_model=Dict[str, Any])

@@ -189,6 +189,11 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
         # In our platform, the matching engine needs to reload the new active keywords
         from app.services.matching_engine import engine_instance
         engine_instance.refresh_processor(db)
+        try:
+            from app.utils.redis_client import redis_client
+            redis_client.publish('keyword_updated', 'refresh')
+        except Exception:
+            pass
 
         db.commit()
     except Exception as exc:

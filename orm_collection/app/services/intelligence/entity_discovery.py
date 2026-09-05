@@ -1674,6 +1674,11 @@ class EntityDiscoveryEngine:
 
         if promoted_count > 0:
             engine_instance.refresh_processor(db)
+            try:
+                from app.utils.redis_client import redis_client
+                redis_client.publish('keyword_updated', 'refresh')
+            except Exception:
+                pass
             for entity_id, entity_name in promoted_competitors:
                 self._rematch_recent_documents_for_new_entity(db, client_id, entity_id, entity_name)
 
@@ -1862,6 +1867,11 @@ class EntityDiscoveryEngine:
 
         if promoted_count > 0:
             engine_instance.refresh_processor(db)
+            try:
+                from app.utils.redis_client import redis_client
+                redis_client.publish('keyword_updated', 'refresh')
+            except Exception:
+                pass
             for exec_info in promoted_executives:
                 # promoted_executives stores entity_id as str(new_entity.id)
                 # (used for JSON-friendly logging above); convert back to a
