@@ -15,6 +15,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { fetchDocumentDetails, searchCompetitor } from "@/lib/api";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -43,6 +45,9 @@ export function CompetitorsTab({
   documents,
   clientId,
 }: CompetitorsTabProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
@@ -374,10 +379,11 @@ export function CompetitorsTab({
           candidate lists, no auto-surfaced noise: a name either matches a
           real tracked competitor, a discovered-but-unpromoted candidate, or
           triggers a scoped fresh search. */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
-        <CardHeader className="pb-3 border-b border-[#1F2937]/40">
-          <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
-            <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
+        <CardHeader className={`pb-3 border-b ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
+          <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+            <Search className="h-4 w-4 mr-2" style={{ color: accent }} />
             Search Competitors
           </CardTitle>
         </CardHeader>
@@ -388,59 +394,59 @@ export function CompetitorsTab({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search competitor name..."
-              className="flex-1 bg-[#030712] border border-[#1F2937]/60 rounded px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#38BDF8]/50"
+              className={`flex-1 rounded px-3 py-2 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[#3B82F6]/50"}`}
             />
             <button
               type="submit"
               disabled={searchLoading || !searchQuery.trim()}
-              className="bg-[#38BDF8] hover:bg-[#2ba8e0] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2 whitespace-nowrap"
+              className={`disabled:opacity-50 disabled:cursor-not-allowed font-mono text-[10px] px-4 py-2 whitespace-nowrap ${glassPrimaryButton(theme)}`}
             >
               {searchLoading ? "Searching..." : "Search"}
             </button>
           </form>
 
           {searchErrorMsg && (
-            <p className="text-red-400 font-mono text-[10px]">{searchErrorMsg}</p>
+            <p className="text-red-500 font-mono text-[10px]">{searchErrorMsg}</p>
           )}
 
           {searchResult && searchResult.status === "searching" && (
-            <div className="border border-[#38BDF8]/30 bg-[#030712] rounded p-4 flex items-center space-x-3">
-              <div className="h-3 w-3 rounded-full bg-[#38BDF8] animate-pulse" />
-              <p className="text-[10px] font-mono text-slate-400">
+            <div className={`rounded-2xl p-4 flex items-center space-x-3 border ${isDark ? "border-[#00F5D4]/30 bg-black/30" : "border-[#3B82F6]/30 bg-black/[0.03]"}`}>
+              <div className="h-3 w-3 rounded-full animate-pulse" style={{ backgroundColor: accent }} />
+              <p className={`text-[10px] font-mono ${mutedText(theme)}`}>
                 Running a fresh scoped search — collecting and scoring coverage for this name. This can take a moment.
               </p>
             </div>
           )}
 
           {searchResult && searchResult.status === "tracked" && (
-            <div className="border border-[#D4AF37]/30 bg-[#030712] rounded p-4 space-y-2">
+            <div className={`rounded-2xl p-4 space-y-2 border ${isDark ? "border-[#00F5D4]/30 bg-black/30" : "border-[#3B82F6]/30 bg-black/[0.03]"}`}>
               <div className="flex items-center justify-between">
-                <span className="font-mono text-sm font-bold text-slate-200">{searchResult.competitor.name}</span>
-                <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-[9px]">TRACKED</Badge>
+                <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.competitor.name}</span>
+                <Badge className={glassPill(theme)} style={{ color: accent }}>TRACKED</Badge>
               </div>
               {searchResult.competitor.health_status === 'INSUFFICIENT_EVIDENCE' ? (
-                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                <p className={`text-[10px] font-mono uppercase tracking-wider ${mutedText(theme)}`}>
                   No qualifying coverage found yet — tracked, but not enough evidence to score
                 </p>
               ) : (
                 <div className="grid grid-cols-4 gap-3 text-[10px] font-mono">
                   <div>
-                    <span className="text-slate-500 block">Reputation</span>
-                    <span className="text-[#D4AF37] font-bold text-sm">
+                    <span className={`block ${mutedText(theme)}`}>Reputation</span>
+                    <span className="font-bold text-sm" style={{ color: accent }}>
                       {searchResult.competitor.reputation_score !== null ? searchResult.competitor.reputation_score.toFixed(1) : 'N/A'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Rank</span>
-                    <span className="text-slate-200">{searchResult.competitor.rank ? `#${searchResult.competitor.rank}` : 'Unranked'}</span>
+                    <span className={`block ${mutedText(theme)}`}>Rank</span>
+                    <span className={bodyText(theme)}>{searchResult.competitor.rank ? `#${searchResult.competitor.rank}` : 'Unranked'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Risk</span>
-                    <span className="text-slate-200">{searchResult.competitor.risk_score !== null ? searchResult.competitor.risk_score.toFixed(1) : 'N/A'}</span>
+                    <span className={`block ${mutedText(theme)}`}>Risk</span>
+                    <span className={bodyText(theme)}>{searchResult.competitor.risk_score !== null ? searchResult.competitor.risk_score.toFixed(1) : 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">SOV</span>
-                    <span className="text-slate-200">{searchResult.competitor.share_of_voice !== null ? `${searchResult.competitor.share_of_voice.toFixed(1)}%` : 'N/A'}</span>
+                    <span className={`block ${mutedText(theme)}`}>SOV</span>
+                    <span className={bodyText(theme)}>{searchResult.competitor.share_of_voice !== null ? `${searchResult.competitor.share_of_voice.toFixed(1)}%` : 'N/A'}</span>
                   </div>
                 </div>
               )}
@@ -448,12 +454,12 @@ export function CompetitorsTab({
           )}
 
           {searchResult && searchResult.status === "unpromoted_candidate" && (
-            <div className="border border-amber-500/30 bg-[#030712] rounded p-4 space-y-2">
+            <div className={`rounded-2xl p-4 space-y-2 border border-amber-500/30 ${isDark ? "bg-black/30" : "bg-black/[0.03]"}`}>
               <div className="flex items-center justify-between">
-                <span className="font-mono text-sm font-bold text-slate-200">{searchResult.candidate.name}</span>
-                <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 font-mono text-[9px]">NOT YET TRACKED</Badge>
+                <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.candidate.name}</span>
+                <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-[9px]">NOT YET TRACKED</Badge>
               </div>
-              <p className="text-[10px] font-mono text-slate-500">
+              <p className={`text-[10px] font-mono ${mutedText(theme)}`}>
                 Discovered ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) in already-collected coverage but not yet promoted — no comparison data exists for this name yet.
               </p>
             </div>
@@ -462,10 +468,11 @@ export function CompetitorsTab({
       </Card>
 
       {!hasTrackedCompetitors && (
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-40">
+        <Card className={`${glassCard(theme)} h-40`}>
+          <div className={SPECULAR_LINE} />
           <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
-            <Compass className="h-6 w-6 text-slate-500 opacity-60" />
-            <p className="text-slate-500 font-mono text-xs">No tracked competitors yet.</p>
+            <Compass className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+            <p className={`font-mono text-xs ${mutedText(theme)}`}>No tracked competitors yet.</p>
             <p className="text-slate-600 font-mono text-[9px]">Search a name above to start tracking a real competitor.</p>
           </CardContent>
         </Card>
@@ -475,7 +482,7 @@ export function CompetitorsTab({
       <>
       {/* EXECUTIVE SUMMARY CARD */}
       {summary && (
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl font-mono">
+        <Card className={`${glassCard(theme)} font-mono`}>
           <CardHeader className="pb-3 border-b border-[#1F2937]/40">
             <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
               <Trophy className="h-4 w-4 text-[#D4AF37] mr-2" />
@@ -498,13 +505,13 @@ export function CompetitorsTab({
       {/* 1. Radar Comparison Matrix -- client vs. the one selected competitor only */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Radar Chart Error" />}>
         {benchmarksLoading ? (
-          <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-[380px] animate-pulse" />
+          <Card className={`${glassTokens[theme].card} rounded-3xl h-[380px] animate-pulse`} />
         ) : benchmarksError ? (
-          <Card className="bg-[#060B18]/60 border-red-500/20 h-[380px]">
+          <Card className={`${glassCard(theme)} border-red-500/20 h-[380px]`}>
             <TelemetryErrorWidget title="Radar Telemetry Offline" message={benchmarksError} />
           </Card>
         ) : (
-          <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+          <Card className={glassCard(theme)}>
             <CardHeader>
               <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
                 <Compass className="h-4 w-4 text-[#D4AF37] mr-2" />
@@ -543,15 +550,15 @@ export function CompetitorsTab({
         {/* Reputation Compare Chart */}
         <ErrorBoundary fallback={<TelemetryErrorWidget title="Compare Chart Error" />}>
           {benchmarksLoading ? (
-            <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-[320px] animate-pulse">
+            <Card className={`${glassTokens[theme].card} rounded-3xl h-[320px] animate-pulse`}>
               <CardContent className="h-[240px] bg-[#1E293B]/10 rounded m-4" />
             </Card>
           ) : benchmarksError ? (
-            <Card className="bg-[#060B18]/60 border-red-500/20 h-[320px]">
+            <Card className={`${glassCard(theme)} border-red-500/20 h-[320px]`}>
               <TelemetryErrorWidget title="Competitor Metrics Offline" message={benchmarksError} />
             </Card>
           ) : (
-            <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+            <Card className={glassCard(theme)}>
               <CardHeader>
                 <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
                   <BarChart3 className="h-4 w-4 text-[#D4AF37] mr-2" />
@@ -594,15 +601,15 @@ export function CompetitorsTab({
         {/* SOV Chart */}
         <ErrorBoundary fallback={<TelemetryErrorWidget title="SOV Chart Error" />}>
           {benchmarksLoading ? (
-            <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-[320px] animate-pulse">
+            <Card className={`${glassTokens[theme].card} rounded-3xl h-[320px] animate-pulse`}>
               <CardContent className="h-[240px] bg-[#1E293B]/10 rounded m-4" />
             </Card>
           ) : benchmarksError ? (
-            <Card className="bg-[#060B18]/60 border-red-500/20 h-[320px]">
+            <Card className={`${glassCard(theme)} border-red-500/20 h-[320px]`}>
               <TelemetryErrorWidget title="Competitor SOV Offline" message={benchmarksError} />
             </Card>
           ) : (
-            <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+            <Card className={glassCard(theme)}>
               <CardHeader>
                 <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
                   <Users className="h-4 w-4 text-blue-400 mr-2" />
@@ -652,7 +659,7 @@ export function CompetitorsTab({
           removed with it (verified unused elsewhere before deleting). */}
 
       {/* ACTIVITY SUMMARY CARD */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl font-mono">
+      <Card className={`${glassCard(theme)} font-mono`}>
         <CardHeader className="pb-3 border-b border-[#1F2937]/40">
           <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
             <Activity className="h-4 w-4 text-[#D4AF37] mr-2" />
@@ -677,7 +684,7 @@ export function CompetitorsTab({
 
       {/* COMPETITIVE INTELLIGENCE REGISTER -- events for the one selected
           competitor only (competitorEvents is already scoped above). */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+      <Card className={glassCard(theme)}>
         <CardHeader>
           <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
             <div className="flex items-center">

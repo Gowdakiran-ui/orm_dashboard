@@ -3,6 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { getRiskLevel } from "@/utils/riskLevel";
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, mutedText, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, SPECULAR_LINE } from "@/components/theme/tokens";
+import { HeroGlass } from "@/components/theme/HeroGlass";
 
 export interface ReputationSummaryCardProps {
   reputationSummaryLoading: boolean;
@@ -29,12 +32,20 @@ const RISK_COLOR: Record<string, string> = {
   LOW: "text-emerald-500",
 };
 
-// Same gold small-caps section header / body text styling as the Narrative
+// Same small-caps section header / body text styling as the Narrative
 // Registry's "AI Executive Summary" block (NarrativeIntelligenceWorkbench.tsx
 // lines 352-359) -- that block is a plain template-literal string, not an
 // LLM call, so this panel's text stays deterministic/template-based too.
-const SECTION_LABEL_CLASS = "text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block border-b border-[#1F2937]/30 pb-1";
-const SECTION_TEXT_CLASS = "text-[11px] text-slate-300 leading-relaxed font-mono mt-1.5";
+// Theme-aware functions instead of static strings since the accent + border
+// now depend on light/dark glass mode.
+function sectionLabelClass(isDark: boolean) {
+  return `text-[9.5px] font-bold uppercase tracking-wider block border-b pb-1 ${
+    isDark ? "text-[#00F5D4] border-white/[0.12]" : "text-[#3B82F6] border-black/[0.06]"
+  }`;
+}
+function sectionTextClass(isDark: boolean) {
+  return `text-[11px] leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`;
+}
 
 // SOV bands considered notably low/high for the Key Highlights bullet.
 const SOV_LOW_THRESHOLD = 15;
@@ -59,6 +70,9 @@ export function ReputationSummaryCard({
   normalizedBenchmarks = [],
   repHistory = [],
 }: ReputationSummaryCardProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
   // Total risks + severity breakdown + avg risk score, same computation as
   // Risk Center's stat cards (RiskTab.tsx `stats`), driven off documents.
   const riskStats = useMemo(() => {
@@ -140,17 +154,17 @@ export function ReputationSummaryCard({
       <div className="space-y-6 animate-pulse">
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 font-mono">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-24 bg-[#060B18]/60 border border-[#1F2937]/60 rounded-lg" />
+            <div key={i} className={`h-24 rounded-3xl ${glassTokens[theme].card}`} />
           ))}
         </div>
-        <div className="h-20 bg-[#060B18]/60 border border-[#1F2937]/60 rounded-lg" />
+        <div className={`h-20 rounded-3xl ${glassTokens[theme].card}`} />
       </div>
     );
   }
 
   if (reputationSummaryError || !reputationSummary) {
     return (
-      <Card className="bg-[#060B18]/60 border-red-500/20 h-32">
+      <Card className={`${glassCard(theme)} border-red-500/20 h-32`}>
         <TelemetryErrorWidget title="Summary Telemetry Offline" message={reputationSummaryError || "No data"} />
       </Card>
     );
@@ -217,40 +231,56 @@ export function ReputationSummaryCard({
   }
   const shownHighlights = highlights.slice(0, 4);
 
+  // Only the Reputation Score tile (index 0 -- the single number this whole
+  // panel exists to surface) gets the full spotlight + border-beam glass
+  // treatment. Everything else, including the other "highlight" tiles, gets
+  // the plain glass-card base style -- see the redesign report for why.
+  const statCardBody = (card: (typeof cards)[number]) => (
+    <>
+      <span className={`${card.highlight ? "text-[10px]" : "text-[9px]"} ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
+      <div>
+        <span className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
+        {card.sub && <span className={`text-[9px] ${mutedText(theme)} block truncate mt-1`}>{card.sub}</span>}
+      </div>
+    </>
+  );
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 font-mono">
-        {cards.map((card, idx) => (
-          <div
-            key={idx}
-            className={`bg-[#060B18]/60 border rounded-lg p-4 flex flex-col justify-between shadow-[0_0_12px_rgba(212,175,55,0.06)] hover:shadow-[0_0_16px_rgba(212,175,55,0.18)] transition-all duration-300 ${
-              card.highlight
-                ? "border-[#D4AF37] shadow-[0_0_18px_rgba(212,175,55,0.14)] md:col-span-2 lg:col-span-2"
-                : "border-[#D4AF37]/40 hover:border-[#D4AF37]"
-            }`}
-          >
-            <span className={`${card.highlight ? "text-[10px]" : "text-[9px]"} text-slate-500 uppercase tracking-wider block mb-2`}>{card.label}</span>
-            <div>
-              <span className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
-              {card.sub && <span className="text-[9px] text-slate-500 block truncate mt-1">{card.sub}</span>}
+        {cards.map((card, idx) =>
+          idx === 0 ? (
+            <HeroGlass key={idx} theme={theme} className="p-4 flex flex-col justify-between md:col-span-2 lg:col-span-2">
+              {statCardBody(card)}
+            </HeroGlass>
+          ) : (
+            <div
+              key={idx}
+              className={`${glassCard(theme)} p-4 flex flex-col justify-between ${
+                card.highlight ? "md:col-span-2 lg:col-span-2" : ""
+              }`}
+            >
+              <div className={SPECULAR_LINE} />
+              {statCardBody(card)}
             </div>
-          </div>
-        ))}
+          )
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 bg-[#060B18]/60 border-[#D4AF37]/40 shadow-[0_0_16px_rgba(212,175,55,0.08)]">
+        <Card className={`lg:col-span-2 ${glassCard(theme)}`}>
+          <div className={SPECULAR_LINE} />
           <CardContent className="p-4 space-y-4">
             <div>
-              <span className={SECTION_LABEL_CLASS}>Overview</span>
-              <p className={SECTION_TEXT_CLASS}>
+              <span className={sectionLabelClass(isDark)}>Overview</span>
+              <p className={sectionTextClass(isDark)}>
                 {activeClientName}'s reputation is {scoreDisplay} ({gradeDisplay}), trending {trendDisplay}.
               </p>
             </div>
 
             <div>
-              <span className={SECTION_LABEL_CLASS}>Risk Profile</span>
-              <p className={SECTION_TEXT_CLASS}>
+              <span className={sectionLabelClass(isDark)}>Risk Profile</span>
+              <p className={sectionTextClass(isDark)}>
                 {riskStats.total} risks are being tracked ({riskStats.critical} critical, {riskStats.high} high, {riskStats.medium} medium, {riskStats.low} low), with an average risk score of {riskStats.avg}.
                 {riskStats.topRiskDocs.length > 0 && (
                   <>
@@ -262,23 +292,23 @@ export function ReputationSummaryCard({
             </div>
 
             <div>
-              <span className={SECTION_LABEL_CLASS}>Sentiment</span>
-              <p className={SECTION_TEXT_CLASS}>
+              <span className={sectionLabelClass(isDark)}>Sentiment</span>
+              <p className={sectionTextClass(isDark)}>
                 Sentiment is running {sentiment.dominant ?? "unknown"} ({sentiment.positive} positive / {sentiment.neutral} neutral / {sentiment.negative} negative).
                 {drivingTheme && <> The leading driver is the "{drivingTheme.name}" narrative ({drivingTheme.sentiment.toFixed(2)} sentiment).</>}
               </p>
             </div>
 
             <div>
-              <span className={SECTION_LABEL_CLASS}>Narrative Landscape</span>
-              <p className={SECTION_TEXT_CLASS}>
+              <span className={sectionLabelClass(isDark)}>Narrative Landscape</span>
+              <p className={sectionTextClass(isDark)}>
                 {narrativeStats.total} narrative{narrativeStats.total === 1 ? "" : "s"} are being monitored. The highest-risk narrative is "{narrativeStats.highestRisk}"{typeof narrativeStats.highestRiskScore === "number" ? ` (Risk Index ${narrativeStats.highestRiskScore.toFixed(1)} pts)` : ""}. The fastest-growing narrative is "{narrativeStats.fastestGrowing}"{typeof narrativeStats.fastestGrowingTrend === "number" ? ` (Velocity Index ${narrativeStats.fastestGrowingTrend >= 0 ? "+" : ""}${narrativeStats.fastestGrowingTrend.toFixed(1)}%)` : ""}.
               </p>
             </div>
 
             <div>
-              <span className={SECTION_LABEL_CLASS}>Leadership</span>
-              <p className={SECTION_TEXT_CLASS}>
+              <span className={sectionLabelClass(isDark)}>Leadership</span>
+              <p className={sectionTextClass(isDark)}>
                 {execStats.mostMentioned} is the most-mentioned executive, out of {execStats.total} tracked executive{execStats.total === 1 ? "" : "s"}.
                 {execStats.highest && execStats.lowest && execStats.highest !== execStats.lowest && (
                   <> {execStats.highest.name} leads on reputation ({(execStats.highest.score ?? 0).toFixed(1)}), while {execStats.lowest.name} trails ({(execStats.lowest.score ?? 0).toFixed(1)}).</>
@@ -287,36 +317,37 @@ export function ReputationSummaryCard({
             </div>
 
             <div>
-              <span className={SECTION_LABEL_CLASS}>Competitive Standing</span>
-              <p className={SECTION_TEXT_CLASS}>
+              <span className={sectionLabelClass(isDark)}>Competitive Standing</span>
+              <p className={sectionTextClass(isDark)}>
                 {activeClientName} ranks {clientRank} among tracked competitors with {sovDisplay}% share of voice.
                 {topCompetitor && <> The top-ranked competitor is {topCompetitor.competitor_name}.</>}
               </p>
             </div>
 
             <div>
-              <span className={SECTION_LABEL_CLASS}>Alerts</span>
-              <p className={SECTION_TEXT_CLASS}>{alertLine}</p>
+              <span className={sectionLabelClass(isDark)}>Alerts</span>
+              <p className={sectionTextClass(isDark)}>{alertLine}</p>
             </div>
           </CardContent>
         </Card>
 
         <div className="space-y-6">
           {repHistory.length > 0 && (
-            <Card className="bg-[#060B18]/60 border-[#D4AF37]/40 shadow-[0_0_16px_rgba(212,175,55,0.08)]">
+            <Card className={glassCard(theme)}>
+              <div className={SPECULAR_LINE} />
               <CardContent className="p-4">
-                <span className="text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block mb-2">Reputation Trend</span>
+                <span className={`text-[9.5px] font-bold uppercase tracking-wider block mb-2 ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Reputation Trend</span>
                 <div className="h-20 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={repHistory}>
                       <defs>
                         <linearGradient id="repTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+                          <stop offset="5%" stopColor={accent} stopOpacity={0.3} />
+                          <stop offset="95%" stopColor={accent} stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <Tooltip contentStyle={{ backgroundColor: "#060B18", borderColor: "#1F2937", color: "#fff", fontSize: 10 }} />
-                      <Area type="monotone" dataKey="score" stroke="#D4AF37" strokeWidth={1.5} fillOpacity={1} fill="url(#repTrendGradient)" />
+                      <Tooltip contentStyle={{ backgroundColor: isDark ? "#18181b" : "#ffffff", borderColor: isDark ? "#3f3f46" : "#e4e4e7", color: isDark ? "#fff" : "#18181b", fontSize: 10 }} />
+                      <Area type="monotone" dataKey="score" stroke={accent} strokeWidth={1.5} fillOpacity={1} fill="url(#repTrendGradient)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -324,20 +355,21 @@ export function ReputationSummaryCard({
             </Card>
           )}
 
-          <Card className="bg-[#060B18]/60 border-[#D4AF37]/40 shadow-[0_0_16px_rgba(212,175,55,0.08)]">
+          <Card className={glassCard(theme)}>
+            <div className={SPECULAR_LINE} />
             <CardContent className="p-4 space-y-2">
-              <span className={SECTION_LABEL_CLASS}>Key Highlights</span>
+              <span className={sectionLabelClass(isDark)}>Key Highlights</span>
               {shownHighlights.length > 0 ? (
                 <ul className="space-y-2 mt-1.5">
                   {shownHighlights.map((h, idx) => (
-                    <li key={idx} className="text-[11px] text-slate-300 leading-relaxed font-mono flex gap-2">
-                      <span className="text-[#D4AF37] shrink-0">&#8226;</span>
+                    <li key={idx} className={`text-[11px] leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
+                      <span className="shrink-0" style={{ color: accent }}>&#8226;</span>
                       <span>{h}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className={SECTION_TEXT_CLASS}>No thresholds breached -- reputation posture is stable.</p>
+                <p className={sectionTextClass(isDark)}>No thresholds breached -- reputation posture is stable.</p>
               )}
             </CardContent>
           </Card>

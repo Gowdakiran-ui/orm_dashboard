@@ -40,8 +40,20 @@ import { useCompanyManagement } from "@/hooks/useCompanyManagement";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
+import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
+import { bodyBg, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, mutedText, glassPrimaryButton } from "@/components/theme/tokens";
 
 export default function Home() {
+  return (
+    <ThemeProvider>
+      <DashboardShell />
+    </ThemeProvider>
+  );
+}
+
+function DashboardShell() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [activeTab, setActiveTab] = useState("reputation");
   const [analyticsSubTab, setAnalyticsSubTab] = useState("overview");
   const [currentTime, setCurrentTime] = useState("");
@@ -127,20 +139,22 @@ export default function Home() {
     telemetry: data.telemetry
   });
 
+  const accentFrom = isDark ? "#00F5D4" : "#3B82F6";
+
   if (data.clientsLoading) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-[#030712] text-[#D4AF37]">
+      <div className={`flex h-screen w-full flex-col items-center justify-center ${bodyBg(theme)}`} style={{ color: accentFrom }}>
         <div className="relative flex items-center justify-center">
-          <div className="h-24 w-24 rounded-full border-t-2 border-b-2 border-[#D4AF37] animate-spin absolute" />
-          <Compass className="h-10 w-10 text-[#D4AF37] animate-pulse" />
+          <div className="h-24 w-24 rounded-full border-t-2 border-b-2 animate-spin absolute" style={{ borderColor: accentFrom }} />
+          <Compass className="h-10 w-10 animate-pulse" />
         </div>
-        <p className="text-md font-mono tracking-widest mt-16 text-[#D4AF37] animate-pulse">CONNECTING SECURE SESSION...</p>
+        <p className="text-md font-mono tracking-widest mt-16 animate-pulse">CONNECTING SECURE SESSION...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex bg-[#030712] text-slate-100 min-h-screen font-sans selection:bg-[#D4AF37] selection:text-[#030712]">
+    <div className={`flex ${bodyBg(theme)} ${bodyText(theme)} min-h-screen font-sans selection:bg-[#00F5D4]/40`}>
 
       <Sidebar
         clientId={data.clientId}
@@ -170,16 +184,16 @@ export default function Home() {
       <main className="flex-1 flex flex-col min-w-0">
 
         {/* Mobile top bar — hamburger trigger for the off-canvas sidebar, hidden at md+ */}
-        <div className="md:hidden sticky top-0 z-30 flex items-center gap-3 h-14 px-4 border-b border-[#1F2937]/40 bg-[#040812]/90 backdrop-blur-md">
+        <div className={`md:hidden sticky top-0 z-30 flex items-center gap-3 h-14 px-4 border-b backdrop-blur-2xl ${isDark ? "border-white/[0.12] bg-zinc-900/70" : "border-black/[0.06] bg-white/70"}`}>
           <button
             onClick={() => setSidebarOpen(true)}
             title="Open Menu"
             aria-label="Open navigation menu"
-            className="text-slate-300 hover:text-[#D4AF37] transition-colors"
+            className={`transition-colors ${isDark ? "text-zinc-300 hover:text-[#00F5D4]" : "text-zinc-600 hover:text-[#3B82F6]"}`}
           >
             <Menu className="h-5 w-5" />
           </button>
-          <span className="text-xs font-mono font-extrabold tracking-wider text-slate-200 uppercase truncate">
+          <span className={`text-xs font-mono font-extrabold tracking-wider uppercase truncate ${bodyText(theme)}`}>
             ORM Command
           </span>
         </div>
@@ -195,24 +209,24 @@ export default function Home() {
         <div className="flex-1 space-y-4 p-4 lg:p-6 max-w-[1900px] mx-auto w-full">
           
           {!data.clientId && data.clientsError ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] border border-dashed border-red-500/30 rounded-2xl bg-[#060B18]/30 p-8 text-center font-mono my-8">
+            <div className={`flex flex-col items-center justify-center min-h-[400px] rounded-3xl border border-dashed border-red-500/30 p-8 text-center font-mono my-8 ${isDark ? "bg-zinc-900/35" : "bg-white/45"}`}>
               <AlertTriangle className="h-12 w-12 text-red-500/60 opacity-80 mb-4 animate-pulse" />
               <h2 className="text-md uppercase tracking-wider text-red-400 font-bold mb-2">Backend Unreachable</h2>
-              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+              <p className={`text-xs max-w-md mx-auto leading-relaxed ${mutedText(theme)}`}>
                 Could not load the client list from the backend. This is not the empty-account state — the intelligence platform's API did not respond.
               </p>
-              <p className="text-[10px] text-slate-500 mt-2">{data.clientsError}</p>
+              <p className={`text-[10px] mt-2 ${mutedText(theme)}`}>{data.clientsError}</p>
             </div>
           ) : !data.clientId ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] border border-dashed border-[#1F2937]/60 rounded-2xl bg-[#060B18]/30 p-8 text-center font-mono my-8">
-              <Compass className="h-12 w-12 text-[#D4AF37]/60 opacity-80 mb-4 animate-pulse" />
-              <h2 className="text-md uppercase tracking-wider text-[#D4AF37] font-bold mb-2">No Enterprise Selected</h2>
-              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+            <div className={`flex flex-col items-center justify-center min-h-[400px] rounded-3xl border border-dashed p-8 text-center font-mono my-8 ${isDark ? "border-white/[0.12] bg-zinc-900/35" : "border-black/[0.08] bg-white/45"}`}>
+              <Compass className="h-12 w-12 opacity-80 mb-4 animate-pulse" style={{ color: accentFrom }} />
+              <h2 className="text-md uppercase tracking-wider font-bold mb-2" style={{ color: accentFrom }}>No Enterprise Selected</h2>
+              <p className={`text-xs max-w-md mx-auto leading-relaxed ${mutedText(theme)}`}>
                 There are no active corporate entities monitored at the moment. Please select or onboard a company to view the reputation intelligence indices.
               </p>
               <button
                 onClick={() => { company.setAddOpen(true); company.setAddError(null); }}
-                className="mt-6 px-5 py-2.5 bg-[#D4AF37] hover:bg-[#F3C63F] text-[#030712] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors duration-200 shadow-lg shadow-[#D4AF37]/10"
+                className={`mt-6 px-5 py-2.5 text-xs uppercase tracking-wider ${glassPrimaryButton(theme)}`}
               >
                 Onboard Company
               </button>
@@ -450,32 +464,32 @@ export default function Home() {
 
       {/* Onboarding / Onboarding Client Form Dialog */}
       <Dialog open={company.addOpen} onOpenChange={company.setAddOpen}>
-        <DialogContent className="bg-[#060B18] border-[#1F2937] text-slate-100">
+        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90 border-white/[0.12]" : "bg-white/90 border-white/70"}`}>
           <DialogHeader>
-            <DialogTitle className="font-mono text-[#D4AF37]">Onboard Target Enterprise</DialogTitle>
-            <DialogDescription className="text-slate-400 font-mono text-xs">
+            <DialogTitle className={`font-mono ${GRADIENT_HEADING_CLASS}`} style={gradientHeadingStyle(theme)}>Onboard Target Enterprise</DialogTitle>
+            <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
               Initialize real-time intelligence feeds and narrative modeling for a new corporate entity.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4 font-mono text-xs">
             <div className="space-y-2">
-              <label className="text-slate-400">Enterprise Name</label>
+              <label className={mutedText(theme)}>Enterprise Name</label>
               <input
                 type="text"
                 placeholder="e.g. Acme Corp"
                 value={company.addName}
                 onChange={(e) => company.setAddName(e.target.value)}
-                className="w-full bg-[#030712] border border-[#1F2937] rounded px-3 py-2 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-slate-400">Industry / Sector</label>
+              <label className={mutedText(theme)}>Industry / Sector</label>
               <input
                 type="text"
                 placeholder="e.g. Technology"
                 value={company.addIndustry}
                 onChange={(e) => company.setAddIndustry(e.target.value)}
-                className="w-full bg-[#030712] border border-[#1F2937] rounded px-3 py-2 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
               />
             </div>
             {company.addError && (
@@ -485,14 +499,14 @@ export default function Home() {
           <DialogFooter>
             <button
               onClick={() => company.setAddOpen(false)}
-              className="font-mono text-xs px-4 py-2 text-slate-400 hover:text-slate-200"
+              className={`font-mono text-xs px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
             >
               Cancel
             </button>
             <button
               onClick={company.handleAddCompany}
               disabled={company.addLoading}
-              className="bg-[#D4AF37] text-black font-bold font-mono text-xs px-4 py-2 rounded disabled:opacity-50"
+              className={`font-mono text-xs px-4 py-2 disabled:opacity-50 ${glassPrimaryButton(theme)}`}
             >
               {company.addLoading ? "Initializing..." : "Start Onboarding"}
             </button>
@@ -502,12 +516,12 @@ export default function Home() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={company.deleteTarget !== null} onOpenChange={(open) => { if (!open) { company.setDeleteTarget(null); company.setDeleteError(null); } }}>
-        <DialogContent className="bg-[#060B18] border-[#1F2937] text-slate-100">
+        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90 border-white/[0.12]" : "bg-white/90 border-white/70"}`}>
           <DialogHeader>
             <DialogTitle className="font-mono text-red-500">Decommission Enterprise Telemetry</DialogTitle>
-            <DialogDescription className="text-slate-400 font-mono text-xs">
+            <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
               Are you sure you want to stop all active crawling, index tables, and narrative calculations for{" "}
-              <span className="text-slate-200 font-bold">{company.deleteTarget?.name}</span>? This action is permanent and deletes all historical indices.
+              <span className={`font-bold ${bodyText(theme)}`}>{company.deleteTarget?.name}</span>? This action is permanent and deletes all historical indices.
             </DialogDescription>
           </DialogHeader>
           {company.deleteError && (
@@ -516,7 +530,7 @@ export default function Home() {
           <DialogFooter>
             <button
               onClick={() => { company.setDeleteTarget(null); company.setDeleteError(null); }}
-              className="font-mono text-xs px-4 py-2 text-slate-300 hover:text-white"
+              className={`font-mono text-xs px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
             >
               Cancel
             </button>

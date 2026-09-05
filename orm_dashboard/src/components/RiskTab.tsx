@@ -13,6 +13,8 @@ import {
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { fetchDocumentDetails } from "@/lib/api";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export interface RiskTabProps {
   alertsLoading: boolean;
@@ -33,6 +35,9 @@ export function RiskTab({
   documents,
   clientId
 }: RiskTabProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ impact: string; likelihood: string } | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
@@ -177,12 +182,12 @@ export function RiskTab({
       <div className="space-y-6 animate-pulse">
         <div className="grid gap-6 md:grid-cols-6">
           {[1, 2, 3, 4, 5, 6].map(x => (
-            <div key={x} className="h-20 bg-[#1E293B]/20 border border-[#1F2937]/60 rounded-lg" />
+            <div key={x} className={`h-20 rounded-3xl ${glassTokens[theme].card}`} />
           ))}
         </div>
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="h-60 bg-[#1E293B]/10 border border-[#1F2937]/60 rounded-lg" />
-          <div className="h-60 bg-[#1E293B]/10 border border-[#1F2937]/60 rounded-lg" />
+          <div className={`h-60 rounded-3xl ${glassTokens[theme].card}`} />
+          <div className={`h-60 rounded-3xl ${glassTokens[theme].card}`} />
         </div>
       </div>
     );
@@ -190,7 +195,7 @@ export function RiskTab({
 
   if (documentsError) {
     return (
-      <Card className="bg-[#060B18]/60 border-red-500/20 col-span-4 h-96">
+      <Card className={`${glassCard(theme)} border-red-500/20 col-span-4 h-96`}>
         <TelemetryErrorWidget title="Risk Telemetry Offline" message={documentsError} />
       </Card>
     );
@@ -202,31 +207,33 @@ export function RiskTab({
       {/* 1. Risk Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 font-mono">
         {[
-          { label: "Total Risks", value: stats.total, color: "text-[#D4AF37]" },
+          { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
           { label: "Critical Risks", value: stats.critical, color: "text-red-500" },
           { label: "High Risks", value: stats.high, color: "text-orange-500" },
           { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
           { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
-          { label: "Avg Risk Score", value: stats.avg, color: "text-slate-200" },
-          { label: "Highest Risk", value: stats.highest, color: "text-red-650 font-black" }
+          { label: "Avg Risk Score", value: stats.avg, color: bodyText(theme) },
+          { label: "Highest Risk", value: stats.highest, color: "text-red-500 font-black" }
         ].map((card, idx) => (
-          <div key={idx} className="bg-[#060B18]/60 border border-[#1F2937]/60 rounded-lg p-4 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all duration-300">
-            <span className="text-[9px] text-slate-500 uppercase tracking-wider block mb-2">{card.label}</span>
+          <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
+            <div className={SPECULAR_LINE} />
+            <span className={`text-[9px] ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
             <span className={`text-xl font-bold ${card.color}`}>{card.value}</span>
           </div>
         ))}
       </div>
 
       {/* 1b. Active Alerts */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
         <CardHeader>
-          <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
             <span className="flex items-center">
               <AlertTriangle className="h-4 w-4 text-orange-500 mr-2" />
               ACTIVE ALERTS
             </span>
             {!alertsLoading && !alertsError && (
-              <Badge className="bg-orange-500/10 text-orange-400 border border-orange-500/30 font-mono text-[9px]">{alerts.length} Active</Badge>
+              <Badge className={`${glassPill(theme)} text-orange-500 font-mono text-[9px]`}>{alerts.length} Active</Badge>
             )}
           </CardTitle>
         </CardHeader>
@@ -234,30 +241,30 @@ export function RiskTab({
           {alertsLoading ? (
             <div className="space-y-2 animate-pulse">
               {[1, 2, 3].map(x => (
-                <div key={x} className="h-10 bg-[#1E293B]/20 border border-[#1F2937]/60 rounded-lg" />
+                <div key={x} className={`h-10 rounded-lg ${glassTokens[theme].card}`} />
               ))}
             </div>
           ) : alertsError ? (
             <TelemetryErrorWidget title="Alert Feed Offline" message={alertsError} />
           ) : alerts.length === 0 ? (
-            <div className="text-center py-6 text-slate-500 font-mono text-xs">No active alerts.</div>
+            <div className={`text-center py-6 ${mutedText(theme)} font-mono text-xs`}>No active alerts.</div>
           ) : (
             <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
               {alerts.map((alert) => (
-                <div key={alert.id} className="flex items-center justify-between bg-[#030712] border border-[#1F2937]/50 rounded p-3 font-mono text-xs">
+                <div key={alert.id} className={`flex items-center justify-between rounded p-3 font-mono text-xs ${glassPill(theme)}`}>
                   <div className="flex items-center space-x-3 min-w-0">
                     <Badge className={`font-mono text-[8px] shrink-0 ${
-                      alert.severity === "CRITICAL" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                      alert.severity === "HIGH" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
-                      alert.severity === "WARNING" ? "bg-yellow-500/10 text-yellow-550 border border-yellow-500/20" :
-                      "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                      alert.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                      alert.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
+                      alert.severity === "WARNING" ? "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20" :
+                      `${isDark ? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20" : "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20"}`
                     }`}>
                       {alert.severity}
                     </Badge>
-                    <span className="text-slate-200 font-bold truncate">{alert.title}</span>
-                    <span className="text-slate-500 text-[10px] shrink-0 hidden sm:inline">{alert.alert_type}</span>
+                    <span className={`font-bold truncate ${bodyText(theme)}`}>{alert.title}</span>
+                    <span className={`text-[10px] shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
                   </div>
-                  <span className="text-slate-500 text-[10px] shrink-0 ml-3">
+                  <span className={`text-[10px] shrink-0 ml-3 ${mutedText(theme)}`}>
                     {alert.created_at ? new Date(alert.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
                   </span>
                 </div>
@@ -271,9 +278,10 @@ export function RiskTab({
       <div className="grid gap-6 md:grid-cols-12">
         
         {/* 2. Risk Severity Distribution (Donut Chart) */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl md:col-span-4">
+        <Card className={`${glassCard(theme)} md:col-span-4`}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Severity Profile</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Severity Profile</CardTitle>
           </CardHeader>
           <CardContent className="h-[220px] flex justify-center items-center relative">
             {severityChartData.length > 0 ? (
@@ -292,34 +300,35 @@ export function RiskTab({
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff', fontFamily: 'monospace', fontSize: 10 }} />
+                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-slate-500 font-mono text-[10px] flex items-center justify-center">No risk profile details.</div>
+              <div className={`font-mono text-[10px] flex items-center justify-center ${mutedText(theme)}`}>No risk profile details.</div>
             )}
             <div className="absolute flex flex-col items-center justify-center font-mono">
-              <span className="text-[8px] text-slate-500 uppercase">Avg Rating</span>
-              <span className="text-lg font-bold text-slate-200">{stats.avg}</span>
+              <span className={`text-[8px] uppercase ${mutedText(theme)}`}>Avg Rating</span>
+              <span className={`text-lg font-bold ${bodyText(theme)}`}>{stats.avg}</span>
             </div>
           </CardContent>
         </Card>
 
         {/* 3. 3x3 Risk Matrix */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl md:col-span-8">
+        <Card className={`${glassCard(theme)} md:col-span-8`}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Analyst Risk Matrix (Likelihood × Impact)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Analyst Risk Matrix (Likelihood × Impact)</CardTitle>
           </CardHeader>
           <CardContent className="p-4">
             <div className="grid grid-cols-12 gap-2 font-mono text-[9px]">
-              
+
               {/* Y Axis Label */}
               <div className="col-span-1 flex items-center justify-center">
-                <span className="transform -rotate-90 origin-center whitespace-nowrap text-slate-500 uppercase tracking-widest font-bold">IMPACT (RISK)</span>
+                <span className={`transform -rotate-90 origin-center whitespace-nowrap uppercase tracking-widest font-bold ${mutedText(theme)}`}>IMPACT (RISK)</span>
               </div>
 
               {/* 3x3 Matrix Grid */}
-              <div className="col-span-11 grid grid-rows-3 gap-1 bg-[#030712] p-1.5 rounded border border-[#1F2937]/40">
+              <div className={`col-span-11 grid grid-rows-3 gap-1 p-1.5 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                 {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
                   <div key={rowKey} className="grid grid-cols-3 gap-1 h-[55px]">
                     {["LOW", "MEDIUM", "HIGH"].map((colKey) => {
@@ -354,31 +363,32 @@ export function RiskTab({
                           {count > 0 ? (
                             <span className="text-[10px] font-bold block">🔴 {count} {count === 1 ? "Incident" : "Incidents"}</span>
                           ) : (
-                            <span className="text-[10px] text-slate-600 block">No incidents</span>
+                            <span className={`text-[10px] block ${mutedText(theme)}`}>No incidents</span>
                           )}
-                          
-                          {/* Hover diagnostics tooltip */}
-                          <div className="absolute z-50 hidden group-hover:block bg-[#030712] border border-[#1F2937] p-3 rounded shadow-2xl font-mono text-[9px] w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none">
-                            <div className="font-bold border-b border-[#1F2937] pb-1 text-[#D4AF37] mb-1">Cell Diagnostics</div>
+
+                          {/* Hover diagnostics tooltip -- kept solid (not glass-translucent) so
+                              it stays unambiguous over an already-colored matrix cell */}
+                          <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-[9px] w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
+                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell Diagnostics</div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Impact:</span>
-                              <span className="text-slate-200">{rowKey}</span>
+                              <span className={mutedText(theme)}>Impact:</span>
+                              <span className={bodyText(theme)}>{rowKey}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Likelihood:</span>
-                              <span className="text-slate-200">{colKey}</span>
+                              <span className={mutedText(theme)}>Likelihood:</span>
+                              <span className={bodyText(theme)}>{colKey}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Incidents:</span>
-                              <span className="text-slate-200 font-bold">{count}</span>
+                              <span className={mutedText(theme)}>Incidents:</span>
+                              <span className={`font-bold ${bodyText(theme)}`}>{count}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Avg Risk Score:</span>
-                              <span className="text-slate-250 font-bold">{count > 0 ? avgRisk : "N/A"}</span>
+                              <span className={mutedText(theme)}>Avg Risk Score:</span>
+                              <span className={`font-bold ${bodyText(theme)}`}>{count > 0 ? avgRisk : "N/A"}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Highest Risk:</span>
-                              <span className="text-red-400 font-bold">{count > 0 ? maxRisk : "N/A"}</span>
+                              <span className={mutedText(theme)}>Highest Risk:</span>
+                              <span className="text-red-500 font-bold">{count > 0 ? maxRisk : "N/A"}</span>
                             </div>
                           </div>
                         </div>
@@ -390,7 +400,7 @@ export function RiskTab({
 
               {/* X Axis Labels */}
               <div className="col-span-1" />
-              <div className="col-span-11 grid grid-cols-3 text-center text-slate-500 uppercase tracking-wider font-bold mt-1 text-[8px]">
+              <div className={`col-span-11 grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-[8px] ${mutedText(theme)}`}>
                 <span>LOW LIKELIHOOD</span>
                 <span>MED LIKELIHOOD</span>
                 <span>HIGH LIKELIHOOD</span>
@@ -404,10 +414,11 @@ export function RiskTab({
       <div className="grid gap-6 md:grid-cols-2">
         
         {/* 4. Risk Timeline */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+        <Card className={glassCard(theme)}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
-              <Calendar className="h-4 w-4 text-[#D4AF37] mr-2" />
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+              <Calendar className="h-4 w-4 mr-2" style={{ color: accent }} />
               Risk Ingestion Timeline
             </CardTitle>
           </CardHeader>
@@ -415,24 +426,25 @@ export function RiskTab({
             {timelineChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={timelineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1F2937" strokeOpacity={0.2} />
-                  <XAxis dataKey="date" stroke="#64748B" fontSize={8} tickLine={false} />
-                  <YAxis stroke="#64748B" fontSize={8} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff', fontFamily: 'monospace', fontSize: 10 }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
+                  <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} />
+                  <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
                   <Line type="monotone" dataKey="count" name="Risks Detected" stroke="#EF4444" strokeWidth={2} dot={{ r: 3, fill: '#EF4444' }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs">No historical risks tracked.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No historical risks tracked.</div>
             )}
           </CardContent>
         </Card>
 
         {/* 5. Risk Categories */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+        <Card className={glassCard(theme)}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
-              <TrendingUp className="h-4 w-4 text-[#D4AF37] mr-2" />
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+              <TrendingUp className="h-4 w-4 mr-2" style={{ color: accent }} />
               Incident Categories
             </CardTitle>
           </CardHeader>
@@ -440,77 +452,87 @@ export function RiskTab({
             {categoryData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={categoryData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1F2937" strokeOpacity={0.2} />
-                  <XAxis type="number" stroke="#64748B" fontSize={8} tickLine={false} />
-                  <YAxis dataKey="name" type="category" stroke="#64748B" fontSize={8} tickLine={false} width={80} />
-                  <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff', fontFamily: 'monospace', fontSize: 10 }} />
-                  <Bar dataKey="count" name="Incidents" fill="#D4AF37" radius={[0, 4, 4, 0]} barSize={12} />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
+                  <XAxis type="number" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} />
+                  <YAxis dataKey="name" type="category" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} width={80} />
+                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
+                  <Bar dataKey="count" name="Incidents" fill={accent} radius={[0, 4, 4, 0]} barSize={12} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs">No category metrics loaded.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No category metrics loaded.</div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* 6. High Risk Incidents Table */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+      {/* 6. High Risk Incidents Table -- the dense data view: risk score,
+          severity, and topic badges below intentionally use full-strength
+          semantic colors (red/orange/yellow, solid badge borders) rather
+          than the muted glass-pill treatment, since these are the actual
+          product signal and must stay unambiguous over the translucent
+          background, not just decorative tags. See redesign report. */}
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
         <CardHeader>
-          <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
             <span className="flex items-center">
               <ShieldAlert className="h-4 w-4 text-red-500 mr-2" />
               INCIDENT COMMAND REGISTER
             </span>
-            <Badge className="bg-red-500/10 text-red-400 border border-red-500/30 font-mono text-[9px]">{riskDocs.length} Incidents</Badge>
+            <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-[9px]">{riskDocs.length} Incidents</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader className="border-[#1F2937]/40 bg-[#030712]/50">
-              <TableRow className="border-[#1F2937]/40">
-                <TableHead className="text-slate-500 font-mono text-[10px]">INCIDENT HEADLINE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">RISK SCORE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">SEVERITY</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">CORE TOPIC</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px]">SOURCE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px]">PUBLISHED DATE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-right">ACTION</TableHead>
+            <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
+              <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
+                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>INCIDENT HEADLINE</TableHead>
+                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
+                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>SEVERITY</TableHead>
+                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>CORE TOPIC</TableHead>
+                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>SOURCE</TableHead>
+                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
+                <TableHead className={`font-mono text-[10px] text-right ${mutedText(theme)}`}>ACTION</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {riskDocs.map((doc, idx) => (
-                <TableRow key={doc.id} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
-                  <TableCell className="font-mono text-xs font-bold text-slate-200 max-w-[320px] truncate">
+                <TableRow
+                  key={doc.id}
+                  className={`transition-colors cursor-pointer ${isDark ? "border-white/[0.08] hover:bg-white/[0.04]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}
+                  onClick={() => setSelectedDocId(doc.id)}
+                >
+                  <TableCell className={`font-mono text-xs font-bold max-w-[320px] truncate ${bodyText(theme)}`}>
                     {doc.title}
                   </TableCell>
                   <TableCell className={`text-center font-mono text-xs font-black ${
-                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-500"
+                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
                   }`}>
                     {doc.risk}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge className={`font-mono text-[8px] ${
-                      doc.severity === "CRITICAL" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                      doc.severity === "HIGH" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
-                      "bg-yellow-500/10 text-yellow-550 border border-yellow-500/20"
+                      doc.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                      doc.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
+                      "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
                     }`}>
                       {doc.severity}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-[9px]">
+                    <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] font-mono text-[9px]" : "border-[#3B82F6]/30 text-[#3B82F6] font-mono text-[9px]"}>
                       {doc.topic}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-400 truncate max-w-[120px]">
+                  <TableCell className={`font-mono text-xs truncate max-w-[120px] ${mutedText(theme)}`}>
                     {doc.source || "Unknown Source"}
                   </TableCell>
-                  <TableCell className="font-mono text-[10px] text-slate-500">
+                  <TableCell className={`font-mono text-[10px] ${mutedText(theme)}`}>
                     {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); setSelectedDocId(doc.id); }}
                       className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-[9px] rounded py-1 px-2.5"
                     >
@@ -521,7 +543,7 @@ export function RiskTab({
               ))}
               {riskDocs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-slate-500 font-mono text-xs">
+                  <TableCell colSpan={7} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
                     No risk incidents flagged.
                   </TableCell>
                 </TableRow>
@@ -531,71 +553,76 @@ export function RiskTab({
         </CardContent>
       </Card>
 
-      {/* 7. Risk Details Drawer (Slide-Over Panel) */}
+      {/* 7. Risk Details Drawer (Slide-Over Panel) -- kept high-opacity
+          (bg-zinc-950/95 dark, bg-white/95 light) rather than the standard
+          glass alpha: at full page height over the dimmed backdrop, the
+          spec's translucency read as illegible on long paragraph text
+          (Original Article Snippet) in review, so this is the one place we
+          backed off transparency for legibility per Part 3 of the brief. */}
       {selectedDoc && (
         <div className="fixed inset-0 z-50 overflow-hidden font-mono">
           {/* Overlay backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedDocId(null)} />
-          
+
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-[600px] bg-[#060B18] border-l border-[#1F2937]/80 text-slate-200 flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300">
-              
+            <div className={`w-[600px] backdrop-blur-2xl border-l flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300 ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]"}`}>
+
               {/* Header */}
-              <div className="p-6 border-b border-[#1F2937]/80 flex items-center justify-between">
+              <div className={`p-6 border-b flex items-center justify-between ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
                 <div className="flex items-center space-x-3">
                   <AlertOctagon className="h-5 w-5 text-red-500" />
-                  <span className="text-sm font-bold uppercase text-[#D4AF37]">Tactical Trace Examiner</span>
+                  <span className="text-sm font-bold uppercase" style={{ color: accent }}>Tactical Trace Examiner</span>
                 </div>
-                <button onClick={() => setSelectedDocId(null)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                <button onClick={() => setSelectedDocId(null)} className={`transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}>
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
               {/* Content Panel */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                
+
                 {/* Headline & Meta */}
                 <div className="space-y-2">
-                  <h3 className="text-sm font-bold text-slate-100 leading-snug">{selectedDoc.title}</h3>
+                  <h3 className={`text-sm font-bold leading-snug ${bodyText(theme)}`}>{selectedDoc.title}</h3>
                   <div className="flex flex-wrap gap-2 text-[10px]">
-                    <span className="bg-[#030712] border border-[#1F2937]/65 px-2 py-0.5 rounded text-slate-400">Source: {selectedDoc.source}</span>
-                    <span className="bg-[#030712] border border-[#1F2937]/65 px-2 py-0.5 rounded text-slate-400">Topic: {selectedDoc.topic}</span>
+                    <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>Source: {selectedDoc.source}</span>
+                    <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>Topic: {selectedDoc.topic}</span>
                   </div>
                 </div>
 
                 {/* Risk score calculation breakdown */}
-                <div className="bg-[#030712] p-4 rounded border border-red-500/20 space-y-3">
-                  <div className="flex justify-between items-center border-b border-[#1F2937] pb-2">
-                    <span className="text-xs font-bold text-red-400">RISK COMMAND RATING</span>
+                <div className={`p-4 rounded-2xl border border-red-500/20 space-y-3 ${isDark ? "bg-black/30" : "bg-black/[0.03]"}`}>
+                  <div className={`flex justify-between items-center border-b pb-2 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
+                    <span className="text-xs font-bold text-red-500">RISK COMMAND RATING</span>
                     <span className="text-lg font-black text-red-500">{selectedDoc.risk} / 100</span>
                   </div>
                   <div className="space-y-1.5 text-[10px]">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Heuristic Impact Score:</span>
+                      <span className={mutedText(theme)}>Heuristic Impact Score:</span>
                       {/* A4: previously re-displayed selectedDoc.risk (the
                           overall score, already shown above) instead of the
                           topic/heuristic component that actually feeds it --
                           risk_engine.py's own explainability.topic_contribution. */}
-                      <span className="text-slate-300">{selectedDoc.risk_explainability?.topic_contribution ?? 0}</span>
+                      <span className={bodyText(theme)}>{selectedDoc.risk_explainability?.topic_contribution ?? 0}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Sentiment Polarity (Multiplier):</span>
+                      <span className={mutedText(theme)}>Sentiment Polarity (Multiplier):</span>
                       {/* A4: previously the raw sentiment_score (-1..1), not
                           the sentiment_contribution weight risk_engine.py
                           actually used in the score. */}
-                      <span className="text-slate-350">{(selectedDoc.risk_explainability?.sentiment_contribution ?? 0).toFixed(2)}</span>
+                      <span className={bodyText(theme)}>{(selectedDoc.risk_explainability?.sentiment_contribution ?? 0).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between border-t border-[#1F2937]/50 pt-1.5">
-                      <span className="text-slate-400">Calculated Likelihood Index:</span>
-                      <span className="text-slate-200 font-bold">{selectedDoc.likelihood}%</span>
+                    <div className={`flex justify-between border-t pt-1.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                      <span className={mutedText(theme)}>Calculated Likelihood Index:</span>
+                      <span className={`font-bold ${bodyText(theme)}`}>{selectedDoc.likelihood}%</span>
                     </div>
                     {selectedDoc.risk_explainability?.role_classification_source && selectedDoc.risk_explainability.role_classification_source !== "not_evaluated" && (
-                      <div className="flex justify-between border-t border-[#1F2937]/50 pt-1.5">
-                        <span className="text-slate-500">LLM Role Classification:</span>
+                      <div className={`flex justify-between border-t pt-1.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                        <span className={mutedText(theme)}>LLM Role Classification:</span>
                         <span className={
                           selectedDoc.risk_explainability.role_classification === "BYSTANDER" || selectedDoc.risk_explainability.role_classification === "EXONERATED"
-                            ? "text-emerald-400 font-bold"
-                            : "text-slate-300"
+                            ? "text-emerald-500 font-bold"
+                            : bodyText(theme)
                         }>
                           {selectedDoc.risk_explainability.role_classification ?? "SELF (unchanged)"}
                           {selectedDoc.risk_explainability.role_classification_source === "fallback_unchanged" && " (fallback)"}
@@ -604,7 +631,7 @@ export function RiskTab({
                     )}
                   </div>
                   {selectedDoc.risk_explainability?.decision_reason && (
-                    <p className="text-[10px] text-slate-500 leading-relaxed border-t border-[#1F2937]/50 pt-2">
+                    <p className={`text-[10px] leading-relaxed border-t pt-2 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                       {selectedDoc.risk_explainability.decision_reason}
                     </p>
                   )}
@@ -612,34 +639,34 @@ export function RiskTab({
 
                 {/* Original Article Content */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center">
-                    <Info className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Original Article Snippet
+                  <span className={`text-[10px] uppercase font-bold flex items-center ${mutedText(theme)}`}>
+                    <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> Original Article Snippet
                   </span>
-                  <div className="bg-[#030712] border border-[#1F2937]/40 p-4 rounded text-[11px] text-slate-400 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
+                  <div className={`p-4 rounded-2xl border text-[11px] leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                     {selectedDoc.original_content || "No original content available."}
                   </div>
                 </div>
 
                 {/* Detected Entities */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold">Extracted Named Entities</span>
+                  <span className={`text-[10px] uppercase font-bold ${mutedText(theme)}`}>Extracted Named Entities</span>
                   <div className="flex flex-wrap gap-2">
                     {selectedDoc.extracted_entities && selectedDoc.extracted_entities.length > 0 ? (
                       selectedDoc.extracted_entities.map((ent: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-400 text-[9px] bg-blue-500/5">
+                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-500 text-[9px] bg-blue-500/5">
                           {ent.name} ({ent.entity_type})
                         </Badge>
                       ))
                     ) : (
-                      <span className="text-[10px] text-slate-500">No matching corporate entities identified.</span>
+                      <span className={`text-[10px] ${mutedText(theme)}`}>No matching corporate entities identified.</span>
                     )}
                   </div>
                 </div>
 
                 {/* Related Narratives */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold">Related Narrative Tracks</span>
-                  <div className="bg-[#030712] border border-[#1F2937]/40 p-3 rounded text-[11px] text-slate-300">
+                  <span className={`text-[10px] uppercase font-bold ${mutedText(theme)}`}>Related Narrative Tracks</span>
+                  <div className={`p-3 rounded-2xl border text-[11px] ${bodyText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                     {selectedDoc.narrative || "General Narrative"}
                   </div>
                 </div>
@@ -647,21 +674,21 @@ export function RiskTab({
               </div>
 
               {/* Drawer Footer */}
-              <div className="p-4 border-t border-[#1F2937]/80 bg-[#030712]/50 flex justify-end space-x-3">
+              <div className={`p-4 border-t flex justify-end space-x-3 ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
                 {selectedDocUrl && (
                   <a
                     href={selectedDocUrl}
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="flex items-center space-x-1.5 bg-[#D4AF37] hover:bg-[#bfa032] text-black font-bold font-mono text-[10px] rounded px-4 py-2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center space-x-1.5 font-mono text-[10px] px-4 py-2 ${glassPrimaryButton(theme)}`}
                   >
                     <span>View Source Article</span>
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
-                <button 
-                  onClick={() => setSelectedDocId(null)} 
-                  className="bg-transparent border border-[#1F2937] hover:border-slate-500 text-slate-400 hover:text-slate-200 text-[10px] rounded px-4 py-2"
+                <button
+                  onClick={() => setSelectedDocId(null)}
+                  className={`bg-transparent border text-[10px] rounded px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"}`}
                 >
                   Close
                 </button>
@@ -672,22 +699,23 @@ export function RiskTab({
       </div>
       )}
 
-      {/* 8. Risk Cell Incidents Drawer */}
+      {/* 8. Risk Cell Incidents Drawer -- same high-opacity backing as the
+          drawer above, for the same legibility reason. */}
       {selectedCell && (
         <div className="fixed inset-0 z-50 overflow-hidden font-mono">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedCell(null)} />
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-[600px] bg-[#060B18] border-l border-[#1F2937]/80 text-slate-200 flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300">
-              
+            <div className={`w-[600px] backdrop-blur-2xl border-l flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300 ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]"}`}>
+
               {/* Header */}
-              <div className="p-6 border-b border-[#1F2937]/80 flex items-center justify-between">
+              <div className={`p-6 border-b flex items-center justify-between ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
                 <div className="flex items-center space-x-3">
                   <ShieldAlert className="h-5 w-5 text-red-500" />
-                  <span className="text-sm font-bold uppercase text-[#D4AF37]">
+                  <span className="text-sm font-bold uppercase" style={{ color: accent }}>
                     Incidents: {selectedCell.impact} Impact / {selectedCell.likelihood} Likelihood
                   </span>
                 </div>
-                <button onClick={() => setSelectedCell(null)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                <button onClick={() => setSelectedCell(null)} className={`transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}>
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -697,31 +725,31 @@ export function RiskTab({
                 {(() => {
                   const cellDocs = matrixData[selectedCell.impact]?.[selectedCell.likelihood] || [];
                   if (cellDocs.length === 0) {
-                    return <div className="text-center py-10 text-slate-500 text-xs">No incidents in this cell.</div>;
+                    return <div className={`text-center py-10 text-xs ${mutedText(theme)}`}>No incidents in this cell.</div>;
                   }
                   return cellDocs.map((doc, idx) => (
-                    <div key={doc.id ?? idx} className="bg-[#030712] p-4 rounded border border-[#1F2937]/65 space-y-3 hover:border-[#D4AF37]/45 transition-colors">
+                    <div key={doc.id ?? idx} className={`p-4 rounded-2xl border space-y-3 transition-colors ${isDark ? "bg-black/30 border-white/[0.08] hover:border-[#00F5D4]/40" : "bg-black/[0.03] border-black/[0.06] hover:border-[#3B82F6]/40"}`}>
                       <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-slate-500">Source: {doc.source}</span>
+                        <span className={`text-[10px] ${mutedText(theme)}`}>Source: {doc.source}</span>
                         <Badge className={`font-mono text-[8px] ${
-                          doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                          doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
-                          "bg-yellow-500/10 text-yellow-450 border border-yellow-500/20"
+                          doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                          doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
+                          "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
                         }`}>
                           Risk Score: {doc.risk}
                         </Badge>
                       </div>
-                      <h4 className="text-xs font-bold text-slate-200 leading-snug">{doc.title}</h4>
-                      <div className="flex justify-between items-center text-[10px] pt-1 border-t border-[#1F2937]/40">
-                        <span className="text-slate-400">Topic: {doc.topic}</span>
-                        <span className="text-slate-500">
+                      <h4 className={`text-xs font-bold leading-snug ${bodyText(theme)}`}>{doc.title}</h4>
+                      <div className={`flex justify-between items-center text-[10px] pt-1 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                        <span className={mutedText(theme)}>Topic: {doc.topic}</span>
+                        <span className={mutedText(theme)}>
                           {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
                         </span>
                       </div>
                       <div className="flex justify-end pt-1">
                         <button
                           onClick={() => { setSelectedDocId(doc.id); setSelectedCell(null); }}
-                          className="bg-blue-650 hover:bg-blue-750 text-white font-mono text-[9px] rounded py-1 px-3"
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-mono text-[9px] rounded py-1 px-3"
                         >
                           TRACE EXAMINER &rarr;
                         </button>
@@ -732,10 +760,10 @@ export function RiskTab({
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-[#1F2937]/80 bg-[#030712]/50 flex justify-end">
-                <button 
-                  onClick={() => setSelectedCell(null)} 
-                  className="bg-transparent border border-[#1F2937] hover:border-slate-500 text-slate-400 hover:text-slate-200 text-[10px] rounded px-4 py-2"
+              <div className={`p-4 border-t flex justify-end ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+                <button
+                  onClick={() => setSelectedCell(null)}
+                  className={`bg-transparent border text-[10px] rounded px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"}`}
                 >
                   Close Window
                 </button>

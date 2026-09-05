@@ -14,6 +14,8 @@ import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export interface ExecutivesTabProps {
   execHistoryLoading: boolean;
@@ -46,6 +48,9 @@ export function ExecutivesTab({
   onPromoteExecutives,
   promotingExecutives = false
 }: ExecutivesTabProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
@@ -276,7 +281,7 @@ export function ExecutivesTab({
           either matches a real tracked executive, a discovered-but-
           unpromoted candidate, is rejected as not shaped like a real
           person's name, or triggers a scoped fresh search. */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+      <Card className={glassCard(theme)}>
         <CardHeader className="pb-3 border-b border-[#1F2937]/40">
           <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
             <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
@@ -368,7 +373,7 @@ export function ExecutivesTab({
       </Card>
 
       {!hasSelectedExecutive && (
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-40">
+        <Card className={`${glassCard(theme)} h-40`}>
           <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
             <Users className="h-6 w-6 text-slate-500 opacity-60" />
             <p className="text-slate-500 font-mono text-xs">No executive selected yet.</p>
@@ -382,7 +387,7 @@ export function ExecutivesTab({
           (hyperfocus redesign: no noise from historically-discovered names
           the user didn't just search for). */}
       {searchResult && searchResult.status === "unpromoted_candidate" && executiveCandidates.length > 0 && (
-        <Card className="bg-[#060B18]/60 border-[#D4AF37]/30 shadow-2xl">
+        <Card className={glassCard(theme)}>
           <CardHeader className="pb-3 border-b border-[#1F2937]/40">
             <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center justify-between">
               <span className="flex items-center">
@@ -410,7 +415,7 @@ export function ExecutivesTab({
       <>
       {/* EXECUTIVE INTELLIGENCE SUMMARY -- scoped to the one selected
           executive only. */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl font-mono">
+      <Card className={`${glassCard(theme)} font-mono`}>
         <CardHeader className="pb-3 border-b border-[#1F2937]/40">
           <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
             <Trophy className="h-4 w-4 text-[#D4AF37] mr-2" />
@@ -436,9 +441,9 @@ export function ExecutivesTab({
       {/* 2. Executive History Line Chart */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Exec History Chart Error" />}>
         {execHistoryLoading ? (
-          <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-[340px] animate-pulse" />
+          <Card className={`${glassTokens[theme].card} rounded-3xl h-[340px] animate-pulse`} />
         ) : (
-          <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+          <Card className={glassCard(theme)}>
             <CardHeader>
               <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Leadership Figures Reputation Trend</CardTitle>
               <CardDescription className="text-[10px] font-mono text-slate-500">Historical reputation score timeline per executive figure</CardDescription>
@@ -491,7 +496,7 @@ export function ExecutivesTab({
       <div className="grid gap-6 md:grid-cols-2">
 
         {/* Executive Sentiment Breakdown */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+        <Card className={glassCard(theme)}>
           <CardHeader>
             <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
               <Activity className="h-4 w-4 text-emerald-400 mr-2" />
@@ -513,7 +518,7 @@ export function ExecutivesTab({
         </Card>
 
         {/* Executive Activity Timeline */}
-        <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+        <Card className={glassCard(theme)}>
           <CardHeader>
             <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
               <Calendar className="h-4 w-4 text-[#38BDF8] mr-2" />
@@ -545,13 +550,13 @@ export function ExecutivesTab({
       {/* 4. LEADERSHIP FIGURES REPUTATION SCORECARD */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Executives Error" />}>
         {executivesLoading ? (
-          <Card className="bg-[#060B18]/60 border-[#1F2937]/60 h-48 animate-pulse" />
+          <Card className={`${glassTokens[theme].card} rounded-3xl h-48 animate-pulse`} />
         ) : executivesError ? (
-          <Card className="bg-[#060B18]/60 border-red-500/20 h-48">
+          <Card className={`${glassCard(theme)} border-red-500/20 h-48`}>
             <TelemetryErrorWidget title="Executives Telemetry Offline" message={executivesError} />
           </Card>
         ) : (
-          <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+          <Card className={glassCard(theme)}>
             <CardHeader>
               <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
                 <Users className="h-4 w-4 text-[#D4AF37] mr-2" />
@@ -624,7 +629,7 @@ export function ExecutivesTab({
       </ErrorBoundary>
 
       {/* 5. EXECUTIVE INTELLIGENCE REGISTER */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+      <Card className={glassCard(theme)}>
         <CardHeader>
           <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
             <div className="flex items-center">
