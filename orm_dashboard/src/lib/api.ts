@@ -503,6 +503,11 @@ export async function fetchExecutiveCandidates(clientId: string, signal?: AbortS
   return parseOrThrow(res);
 }
 
+export async function searchExecutive(clientId: string, name: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executive-search?name=${encodeURIComponent(name)}`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function fetchCompetitorCandidates(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/competitor-candidates`, { signal });
   return parseOrThrow(res);

@@ -427,6 +427,71 @@ def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_d
         "source_document_count": len(c.source_documents) if c.source_documents else 0
     } for c in candidates]
 
+@router.get("/{client_id}/executive-search", response_model=Dict[str, Any])
+def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    """
+    Part 2.4 (Executive Reputation redesign): three distinct states, never
+    conflated -- a raw unpromoted candidate must never render as if it were
+    verified tracked data.
+    """
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    from app.models.entity import Entity
+    from app.models.executive_reputation import ExecutiveReputationScore
+    from app.models.executive_candidate import ExecutiveCandidate
+
+    # 1. Tracked (promoted) executive -- same Entity(entity_type='person')
+    # source of truth /executives reads from. A promoted executive with no
+    # score row yet (reputation not computed) is still genuinely tracked --
+    # returned with the same INSUFFICIENT_EVIDENCE shape 2.3 renders, not
+    # "not_found".
+    tracked_entity = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "person",
+        Entity.name.ilike(f"%{name}%")
+    ).first()
+    if tracked_entity:
+        score = db.query(ExecutiveReputationScore).filter(
+            ExecutiveReputationScore.entity_id == tracked_entity.id
+        ).order_by(ExecutiveReputationScore.created_at.desc()).first()
+        return {
+            "status": "tracked",
+            "executive": {
+                "id": str(score.id) if score else None,
+                "entity_id": str(tracked_entity.id),
+                "name": score.executive_name if score else tracked_entity.name,
+                "score": score.score if score else None,
+                "grade": score.grade if score else None,
+                "trend": score.reputation_trend if score else None,
+                "top_positive": score.top_positive_narrative if score else None,
+                "top_negative": score.top_negative_narrative if score else None,
+                "confidence_score": score.confidence_score if score else None,
+                "data_coverage": score.data_coverage if score else None,
+                "health_status": score.health_status if score else "INSUFFICIENT_EVIDENCE"
+            }
+        }
+
+    # 2. Unpromoted candidate -- never returned as if it were verified data.
+    candidate = db.query(ExecutiveCandidate).filter(
+        ExecutiveCandidate.client_id == client_id,
+        ExecutiveCandidate.promoted_to_executive_id.is_(None),
+        ExecutiveCandidate.name.ilike(f"%{name}%")
+    ).order_by(ExecutiveCandidate.confidence.desc(), ExecutiveCandidate.mention_count.desc()).first()
+    if candidate:
+        return {
+            "status": "unpromoted_candidate",
+            "candidate": {
+                "id": str(candidate.id),
+                "name": candidate.name,
+                "mention_count": candidate.mention_count,
+                "confidence": candidate.confidence
+            }
+        }
+
+    # 3. Nothing found.
+    return {"status": "not_found"}
+
 @router.get("/{client_id}/competitor-candidates", response_model=List[Dict[str, Any]])
 def get_client_competitor_candidates(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()

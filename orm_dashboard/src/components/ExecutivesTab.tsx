@@ -13,7 +13,7 @@ import {
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
-import { fetchDocumentDetails } from "@/lib/api";
+import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
 
 export interface ExecutivesTabProps {
   execHistoryLoading: boolean;
@@ -63,6 +63,31 @@ export function ExecutivesTab({
       .catch(() => { if (!cancelled) setSelectedDocUrl(null); });
     return () => { cancelled = true; };
   }, [selectedDocId, clientId]);
+
+  // Executive search (Part 2.4): three distinct states from the backend --
+  // tracked (real data), unpromoted_candidate (never shown as verified),
+  // not_found. searchResult is null until a search has actually been run.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResult, setSearchResult] = useState<any | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchErrorMsg, setSearchErrorMsg] = useState<string | null>(null);
+
+  async function handleExecutiveSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const query = searchQuery.trim();
+    if (!clientId || !query) return;
+    setSearchLoading(true);
+    setSearchErrorMsg(null);
+    try {
+      const result = await searchExecutive(clientId, query);
+      setSearchResult(result);
+    } catch (err: any) {
+      setSearchErrorMsg(err?.message || "Search failed");
+      setSearchResult(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  }
 
   // 1. EXECUTIVE NAMES CACHE
   const execNames = useMemo(() => {
@@ -288,6 +313,89 @@ export function ExecutivesTab({
         </CardContent>
       </Card>
 
+      {/* 1b. EXECUTIVE SEARCH */}
+      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+        <CardHeader className="pb-3 border-b border-[#1F2937]/40">
+          <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
+            <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
+            Search Executives
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-4">
+          <form onSubmit={handleExecutiveSearch} className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search executive name..."
+              className="flex-1 bg-[#030712] border border-[#1F2937]/60 rounded px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#38BDF8]/50"
+            />
+            <button
+              type="submit"
+              disabled={searchLoading || !searchQuery.trim()}
+              className="bg-[#38BDF8] hover:bg-[#2ba8e0] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-[10px] rounded px-4 py-2 whitespace-nowrap"
+            >
+              {searchLoading ? "Searching..." : "Search"}
+            </button>
+          </form>
+
+          {searchErrorMsg && (
+            <p className="text-red-400 font-mono text-[10px]">{searchErrorMsg}</p>
+          )}
+
+          {searchResult && searchResult.status === "tracked" && (
+            <div className="border border-[#D4AF37]/30 bg-[#030712] rounded p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm font-bold text-slate-200">{searchResult.executive.name}</span>
+                <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-[9px]">TRACKED</Badge>
+              </div>
+              {searchResult.executive.health_status === 'INSUFFICIENT_EVIDENCE' ? (
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                  No qualifying coverage yet — tracked, but not enough evidence to score
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-3 text-[10px] font-mono">
+                  <div>
+                    <span className="text-slate-500 block">Score</span>
+                    <span className="text-[#D4AF37] font-bold text-sm">
+                      {searchResult.executive.score !== null ? searchResult.executive.score.toFixed(1) : 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Trend</span>
+                    <span className="text-slate-200">{searchResult.executive.trend ?? 'STABLE'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Grade</span>
+                    <span className="text-slate-200">{searchResult.executive.grade ?? 'N/A'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {searchResult && searchResult.status === "unpromoted_candidate" && (
+            <div className="border border-amber-500/30 bg-[#030712] rounded p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm font-bold text-slate-200">{searchResult.candidate.name}</span>
+                <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 font-mono text-[9px]">NOT YET TRACKED</Badge>
+              </div>
+              <p className="text-[10px] font-mono text-slate-500">
+                Discovered ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) but not yet promoted to a tracked executive — no reputation data exists for this name yet. Promote via "Executive Candidates Awaiting Promotion" below to start tracking.
+              </p>
+            </div>
+          )}
+
+          {searchResult && searchResult.status === "not_found" && (
+            <div className="border border-[#1F2937]/60 bg-[#030712] rounded p-4">
+              <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider text-center">
+                No record found for that name
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* 2. Executive History Line Chart */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Exec History Chart Error" />}>
         {execHistoryLoading ? (
@@ -505,34 +613,48 @@ export function ExecutivesTab({
                 </TableHeader>
                 <TableBody>
                   {executives.map((e, i) => (
-                    <TableRow key={e.id ?? i} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors">
-                      <TableCell className="font-mono text-xs font-bold text-slate-200">{e.name}</TableCell>
-                      <TableCell className="text-center font-mono text-xs font-black text-[#D4AF37]">
-                        {e.score !== undefined && e.score !== null ? e.score.toFixed(1) : 'N/A'}
-                      </TableCell>
-                      <TableCell className="text-center font-mono text-xs text-slate-350">
-                        {e.confidence_score !== undefined ? `${(e.confidence_score * 100).toFixed(0)}%` : "100%"}
-                        {e.health_status === 'PARTIAL' && (
-                          <Badge className="ml-1.5 text-[8px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                            LIMITED DATA
+                    e.health_status === 'INSUFFICIENT_EVIDENCE' ? (
+                      // Honest empty state: a real 0.0/NA computed for zero-evidence
+                      // executives (executive_reputation_engine.py's own zero-evidence
+                      // sentinel) previously rendered as a plain "0.0" score -- visually
+                      // identical to a genuinely bad reputation. Surface the real reason
+                      // instead of a number that looks broken.
+                      <TableRow key={e.id ?? i} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors">
+                        <TableCell className="font-mono text-xs font-bold text-slate-200">{e.name}</TableCell>
+                        <TableCell colSpan={6} className="text-center font-mono text-[10px] text-slate-500 uppercase tracking-wider py-3">
+                          No qualifying coverage yet — tracked, but not enough evidence to score
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <TableRow key={e.id ?? i} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors">
+                        <TableCell className="font-mono text-xs font-bold text-slate-200">{e.name}</TableCell>
+                        <TableCell className="text-center font-mono text-xs font-black text-[#D4AF37]">
+                          {e.score !== undefined && e.score !== null ? e.score.toFixed(1) : 'N/A'}
+                        </TableCell>
+                        <TableCell className="text-center font-mono text-xs text-slate-350">
+                          {e.confidence_score !== undefined ? `${(e.confidence_score * 100).toFixed(0)}%` : "100%"}
+                          {e.health_status === 'PARTIAL' && (
+                            <Badge className="ml-1.5 text-[8px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                              LIMITED DATA
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center font-mono text-xs text-slate-350">
+                          {e.data_coverage !== undefined ? `${(e.data_coverage * 100).toFixed(0)}%` : "40%"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge className={`text-[9px] font-mono ${
+                            e.trend === 'IMPROVING' ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" :
+                            e.trend === 'DECLINING' ? "bg-red-500/10 text-red-400 border border-red-500/30" :
+                            "bg-slate-500/10 text-slate-300 border border-slate-500/30"
+                          }`}>
+                            {e.trend ?? 'STABLE'}
                           </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center font-mono text-xs text-slate-350">
-                        {e.data_coverage !== undefined ? `${(e.data_coverage * 100).toFixed(0)}%` : "40%"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge className={`text-[9px] font-mono ${
-                          e.trend === 'IMPROVING' ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" :
-                          e.trend === 'DECLINING' ? "bg-red-500/10 text-red-400 border border-red-500/30" :
-                          "bg-slate-500/10 text-slate-300 border border-slate-500/30"
-                        }`}>
-                          {e.trend ?? 'STABLE'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-emerald-400 font-mono text-xs truncate max-w-[120px]">{e.top_positive ?? 'None'}</TableCell>
-                      <TableCell className="text-red-400 font-mono text-xs truncate max-w-[120px]">{e.top_negative ?? 'None'}</TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell className="text-emerald-400 font-mono text-xs truncate max-w-[120px]">{e.top_positive ?? 'None'}</TableCell>
+                        <TableCell className="text-red-400 font-mono text-xs truncate max-w-[120px]">{e.top_negative ?? 'None'}</TableCell>
+                      </TableRow>
+                    )
                   ))}
                   {executives.length === 0 && (
                     <TableRow>
