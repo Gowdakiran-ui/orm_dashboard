@@ -25,7 +25,7 @@ def test_reddit_adapter_normalize():
 
 def test_youtube_adapter_normalize():
     adapter = YouTubeAdapter()
-    
+
     mock_raw_data = {
         "id": {"videoId": "test_vid_123"},
         "snippet": {
@@ -35,12 +35,45 @@ def test_youtube_adapter_normalize():
             "publishedAt": "2020-09-13T12:26:40Z"
         }
     }
-    
+
     normalized = adapter.normalize(mock_raw_data, "test_source_id")
-    
+
     assert normalized["title"] == "Test YouTube Title"
-    assert normalized["url"] == "https://www.youtube.com/watch?v=test_vid_123"
+    # youtu.be/{id} (path-based) not /watch?v={id} (query-based) -- the
+    # video ID must survive canonicalize_url()'s query-string stripping,
+    # or every video collapses onto the same canonical URL and gets
+    # silently deduplicated after the first one ever saved.
+    assert normalized["url"] == "https://youtu.be/test_vid_123"
     assert normalized["content"] == "Test youtube content"
     assert normalized["source_id"] == "test_source_id"
     assert normalized["source_type"] == "youtube"
     assert normalized["author"] == "testchannel"
+
+
+def test_youtube_adapter_normalize_includes_stats_prefix_when_available():
+    adapter = YouTubeAdapter()
+
+    mock_raw_data = {
+        "id": {"videoId": "test_vid_456"},
+        "snippet": {
+            "title": "Stats Video",
+            "description": "Some description",
+            "channelTitle": "testchannel",
+            "publishedAt": "2020-09-13T12:26:40Z"
+        },
+        "statistics": {"viewCount": "1200000", "commentCount": "340"}
+    }
+
+    normalized = adapter.normalize(mock_raw_data, "test_source_id")
+
+    assert normalized["content"] == "1.2M views, 340 comments\n\nSome description"
+
+
+def test_youtube_adapter_unavailable_without_api_key(monkeypatch):
+    monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
+    adapter = YouTubeAdapter()
+
+    assert adapter.available is False
+    results, cursor = adapter.search("anything", cursor="c1")
+    assert results == []
+    assert cursor == "c1"

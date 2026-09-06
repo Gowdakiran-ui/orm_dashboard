@@ -1050,6 +1050,164 @@ def pipeline_run_watchdog():
 # Stage functions — each receives PipelineContext, returns stage output
 # ---------------------------------------------------------------------------
 
+# One search.list call costs 100 units against YouTube's 10,000/day
+# platform-wide quota ceiling. This cooldown stops a client repeatedly
+# hitting "Run Pipeline" (rate-limited to 5/minute at the API layer, which
+# is not a meaningful daily cap on its own -- see clients.py) from being
+# able to burn through the entire day's shared budget by itself.
+_YOUTUBE_SEARCH_COOLDOWN_MINUTES = 60
+
+
+def _get_or_create_youtube_source(db):
+    """
+    Resolve the single shared `sources` row for YouTube search results,
+    creating it if needed. One row platform-wide (not per-client, not
+    per-keyword) -- Source models an external provider's reliability
+    metadata, not a client-specific link; that per-client link is
+    EntityKeyword/SearchCursor, same relationship RSSFeed has to Source
+    for RSS. Mirrors collection_tasks.py::_get_or_create_source's
+    INSERT ... ON CONFLICT DO NOTHING + SELECT pattern for the same
+    race-safety reason (two clients' pipeline runs can hit this
+    concurrently).
+    """
+    from sqlalchemy.dialects.postgresql import insert
+    from app.models.source import Source, SourceCategory
+
+    cat = db.query(SourceCategory).filter(SourceCategory.name == "Video Search").first()
+    if not cat:
+        cat = SourceCategory(name="Video Search", base_reliability_score=1.0)
+        db.add(cat)
+        db.commit()
+        db.refresh(cat)
+
+    synthetic_url = "search://youtube"
+    stmt = insert(Source).values(
+        category_id=cat.id,
+        name="YouTube Search",
+        source_type="youtube",
+        url=synthetic_url,
+        schedule_cron="on-demand",
+        is_active=True,
+    ).on_conflict_do_nothing(index_elements=['url'])
+    db.execute(stmt)
+    db.commit()
+
+    return db.query(Source).filter(Source.url == synthetic_url).first()
+
+
+def _stage_collect_youtube(ctx: PipelineContext, db, client, log) -> List[str]:
+    """
+    Search YouTube for this client's single highest-priority active
+    keyword (2b decision: precision over breadth -- one search.list call,
+    not an OR-joined multi-keyword query) and persist any new videos.
+
+    Reachability: this function is only ever called from _stage_collect,
+    which only ever runs as pipeline_stage_collect inside run_client_pipeline
+    (aggregation_tasks.py chain), which is only ever dispatched from
+    POST /clients/{client_id}/pipeline/run (clients.py) -- confirmed by
+    grep, there is no other caller of run_client_pipeline, no beat_schedule
+    entry references it or _stage_collect, and the only HTTP endpoint that
+    used to be able to reach YouTubeAdapter directly (POST /search/{source_type}
+    -> execute_search_task) was removed 2026-09-04 (search.py's module
+    docstring) for exactly this reason. execute_search_task/schedule_searches
+    remain dead code, untouched by this change.
+    """
+    from app.models.entity import Entity, EntityKeyword
+    from app.models.search import SearchCursor
+    from app.models.document import Document
+    from app.adapters.youtube import (
+        YouTubeAdapter,
+        YouTubeQuotaExhaustedError,
+        YouTubeCircuitBreakerOpenError,
+    )
+    from app.services.document_service import process_and_save_document
+    from app.schemas.document import NormalizedDocument
+    from app.utils.text_processing import canonicalize_url
+
+    new_doc_ids: List[str] = []
+
+    brand_entity = db.query(Entity).filter(
+        Entity.client_id == ctx.client_id,
+        Entity.entity_type == "brand",
+    ).first()
+    if not brand_entity:
+        return new_doc_ids
+
+    keyword_row = db.query(EntityKeyword).filter(
+        EntityKeyword.entity_id == brand_entity.id,
+        EntityKeyword.is_active == True,
+    ).order_by(
+        (EntityKeyword.category == "PRIMARY").desc(),
+        EntityKeyword.priority.desc(),
+    ).first()
+    if not keyword_row:
+        return new_doc_ids
+
+    cursor = db.query(SearchCursor).filter(
+        SearchCursor.keyword_id == keyword_row.id,
+        SearchCursor.source_type == "youtube",
+    ).first()
+
+    if cursor and cursor.last_searched_at:
+        elapsed_minutes = (datetime.now(timezone.utc) - cursor.last_searched_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
+        if elapsed_minutes < _YOUTUBE_SEARCH_COOLDOWN_MINUTES:
+            log.info(
+                "youtube_search_skipped_cooldown",
+                keyword=keyword_row.keyword_text,
+                minutes_since_last_search=round(elapsed_minutes, 1),
+                cooldown_minutes=_YOUTUBE_SEARCH_COOLDOWN_MINUTES,
+            )
+            return new_doc_ids
+
+    try:
+        adapter = YouTubeAdapter()
+        if not adapter.available:
+            # Adapter itself already logged youtube_adapter_unavailable with
+            # the reason. Don't touch SearchCursor here -- no call was
+            # attempted, so starting the 60-minute cooldown against a
+            # config problem (missing key) would just delay the first real
+            # attempt once it's fixed, for no quota-protection benefit.
+            return new_doc_ids
+
+        raw_results, new_cursor_val = adapter.search(
+            keyword_row.keyword_text,
+            cursor=cursor.cursor_value if cursor else None,
+            limit=25,
+        )
+
+        if raw_results:
+            source = _get_or_create_youtube_source(db)
+            for res in raw_results:
+                norm = adapter.normalize(res, str(source.id))
+                norm_doc = NormalizedDocument(**norm)
+                is_saved, _, _ = process_and_save_document(db, norm_doc)
+                if is_saved:
+                    db_doc = db.query(Document).filter(Document.url == canonicalize_url(norm["url"])).first()
+                    if db_doc:
+                        new_doc_ids.append(str(db_doc.id))
+
+        if not cursor:
+            cursor = SearchCursor(keyword_id=keyword_row.id, source_type="youtube")
+            db.add(cursor)
+        cursor.cursor_value = new_cursor_val
+        cursor.last_searched_at = datetime.now(timezone.utc)
+        db.commit()
+
+        log.info("youtube_search_complete", keyword=keyword_row.keyword_text, results_found=len(raw_results), new_docs=len(new_doc_ids))
+
+    except YouTubeQuotaExhaustedError as e:
+        db.rollback()
+        log.warning("youtube_quota_exhausted", keyword=keyword_row.keyword_text, detail=str(e))
+    except YouTubeCircuitBreakerOpenError as e:
+        db.rollback()
+        log.warning("youtube_circuit_breaker_open", keyword=keyword_row.keyword_text, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        log.warning("youtube_search_failed", keyword=keyword_row.keyword_text, error=str(e))
+
+    return new_doc_ids
+
+
 def _stage_collect(ctx: PipelineContext, db) -> List[str]:
     """
     COLLECTING stage: fetch RSS feeds for this client, deduplicate,
@@ -1106,6 +1264,9 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
                         new_doc_ids.append(str(db_doc.id))
         except Exception as fe:
             log.warning("feed_fetch_failed", feed_name=feed.feed_name, error=str(fe))
+
+    youtube_doc_ids = _stage_collect_youtube(ctx, db, client, log)
+    new_doc_ids.extend(youtube_doc_ids)
 
     # Also pick up any PENDING docs from this client's feeds
     feed_urls = [f.feed_url for f in client_feeds]
