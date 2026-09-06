@@ -172,7 +172,7 @@ export function AdminUsersPanel() {
             </span>
             <button
               onClick={() => { setCreateOpen(true); setCreateError(null); }}
-              className={`flex items-center space-x-1.5 font-bold text-[10px] uppercase tracking-wider px-3 py-1.5 ${glassPrimaryButton(theme)}`}
+              className={`flex items-center space-x-1.5 font-bold text-xs uppercase tracking-wider px-3 py-1.5 ${glassPrimaryButton(theme)}`}
             >
               <UserPlus className="h-3.5 w-3.5" />
               <span>Create User</span>
@@ -183,11 +183,11 @@ export function AdminUsersPanel() {
           <Table>
             <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
               <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
-                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>EMAIL</TableHead>
-                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>ROLE</TableHead>
-                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>STATUS</TableHead>
-                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>ASSIGNED CLIENTS</TableHead>
-                <TableHead className={`font-mono text-[10px] text-right ${mutedText(theme)}`}>ACTION</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EMAIL</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>ROLE</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>STATUS</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>ASSIGNED CLIENTS</TableHead>
+                <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -195,7 +195,7 @@ export function AdminUsersPanel() {
                 <TableRow key={u.id} className={`transition-colors ${isDark ? "border-white/[0.08] hover:bg-white/[0.03]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}>
                   <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{u.email}</TableCell>
                   <TableCell className="text-center">
-                    <Badge className={`font-mono text-[8px] ${
+                    <Badge className={`font-mono text-xs ${
                       u.role === "super_admin"
                         ? isDark ? "bg-[#00F5D4]/10 text-[#00F5D4] border border-[#00F5D4]/30" : "bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30"
                         : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
@@ -205,12 +205,12 @@ export function AdminUsersPanel() {
                   </TableCell>
                   <TableCell className="text-center">
                     {u.is_active ? (
-                      <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono text-[8px]">ACTIVE</Badge>
+                      <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono text-xs">ACTIVE</Badge>
                     ) : (
-                      <Badge className={`font-mono text-[8px] ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>INACTIVE</Badge>
+                      <Badge className={`font-mono text-xs ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>INACTIVE</Badge>
                     )}
                   </TableCell>
-                  <TableCell className={`font-mono text-[10px] ${mutedText(theme)}`}>
+                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
                     {u.role === "super_admin" ? (
                       <span style={{ color: `${accent}B3` }}>All clients</span>
                     ) : u.client_ids.length === 0 ? (
@@ -223,7 +223,7 @@ export function AdminUsersPanel() {
                     <div className="flex items-center justify-end space-x-3">
                       <button
                         onClick={() => { setResetTarget(u); setResetError(null); }}
-                        className="flex items-center space-x-1 text-[10px] uppercase transition-colors"
+                        className="flex items-center space-x-1 text-xs uppercase transition-colors min-h-[44px] px-2"
                         style={{ color: accent }}
                         title="Reset password"
                       >
@@ -232,7 +232,7 @@ export function AdminUsersPanel() {
                       </button>
                       <button
                         onClick={() => { setDeleteTarget(u); setDeleteError(null); }}
-                        className="flex items-center space-x-1 text-red-500 hover:text-red-400 text-[10px] uppercase"
+                        className="flex items-center space-x-1 text-red-500 hover:text-red-400 text-xs uppercase min-h-[44px] px-2"
                         title="Delete user"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -301,12 +301,12 @@ export function AdminUsersPanel() {
                     </label>
                   ))}
                   {clients.length === 0 && (
-                    <span className={`text-[10px] ${mutedText(theme)}`}>No clients available.</span>
+                    <span className={`text-xs ${mutedText(theme)}`}>No clients available.</span>
                   )}
                 </div>
               </div>
             )}
-            {createError && <p className="text-red-500 text-[11px]">{createError}</p>}
+            {createError && <p className="text-red-500 text-xs">{createError}</p>}
           </div>
           <DialogFooter>
             <button
@@ -338,7 +338,7 @@ export function AdminUsersPanel() {
             </DialogDescription>
           </DialogHeader>
           {resetError && (
-            <p className="text-red-500 text-[11px]">{resetError}</p>
+            <p className="text-red-500 text-xs">{resetError}</p>
           )}
           <DialogFooter>
             <button
@@ -369,7 +369,7 @@ export function AdminUsersPanel() {
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
-            <p className="text-red-500 text-[11px]">{deleteError}</p>
+            <p className="text-red-500 text-xs">{deleteError}</p>
           )}
           <DialogFooter>
             <button

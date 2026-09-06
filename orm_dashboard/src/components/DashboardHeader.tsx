@@ -32,7 +32,7 @@ export function DashboardHeader({
         </span>
         <Terminal className="h-5 w-5 ml-2" style={{ color: accent }} />
         <h2 className={`text-xs font-mono font-extrabold tracking-wider uppercase ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
-          {activeClientName} SECURE ZONE // {activeTab.toUpperCase()}
+          {activeClientName} — {activeTab.toUpperCase()}
         </h2>
       </div>
 
@@ -48,7 +48,7 @@ export function DashboardHeader({
           </Badge>
         ) : (
           <Badge className={glassPill(theme)} style={{ color: accent }}>
-            SECURE SESSION
+            Connected
           </Badge>
         )}
       </div>

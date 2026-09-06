@@ -95,10 +95,10 @@ export function Sidebar({
           </div>
           <div className="flex-1">
             <h1 className={`text-md font-mono font-extrabold tracking-wider uppercase ${GRADIENT_HEADING_CLASS}`} style={gradientHeadingStyle(theme)}>
-              ORM COMMAND
+              XOOP
             </h1>
-            <p className={`text-[10px] font-mono uppercase tracking-widest ${mutedText(theme)}`}>
-              AI Threat Shield v1.2
+            <p className={`text-xs font-mono uppercase tracking-widest ${mutedText(theme)}`}>
+              AI Monitoring
             </p>
           </div>
           <ThemeToggle />
@@ -106,22 +106,24 @@ export function Sidebar({
             onClick={onClose}
             title="Close Menu"
             aria-label="Close navigation menu"
-            className={`md:hidden transition-colors ${isDark ? "text-zinc-500 hover:text-zinc-200" : "text-zinc-400 hover:text-zinc-700"}`}
+            className={`md:hidden flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] transition-colors ${isDark ? "text-zinc-500 hover:text-zinc-200" : "text-zinc-400 hover:text-zinc-700"}`}
           >
             <X className="h-4 w-4" />
+            <span className="text-xs leading-none">Close</span>
           </button>
           <button
             onClick={handleLogout}
             title="Sign Out"
-            className={`transition-colors ${isDark ? "text-zinc-500 hover:text-red-400" : "text-zinc-400 hover:text-red-500"}`}
+            className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] transition-colors ${isDark ? "text-zinc-500 hover:text-red-400" : "text-zinc-400 hover:text-red-500"}`}
           >
             <LogOut className="h-4 w-4" />
+            <span className="text-xs leading-none">Sign Out</span>
           </button>
         </div>
 
         {/* Client Control */}
         <div className={`p-4 border-b space-y-3 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-          <label className={`text-[10px] font-mono uppercase tracking-wider block ${mutedText(theme)}`}>Target Enterprise</label>
+          <label className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>Company</label>
           <div className="space-y-2">
             <select
               value={clientId || ''}
@@ -156,14 +158,14 @@ export function Sidebar({
           <div className={`flex justify-between items-center pt-1 border-t ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
             <button
               onClick={onAddCompanyClick}
-              className={`flex items-center text-[10px] font-mono transition-colors ${isDark ? "text-[#00F5D4] hover:text-[#00F5D4]/80" : "text-[#3B82F6] hover:text-[#3B82F6]/80"}`}
+              className={`flex items-center text-xs font-mono transition-colors ${isDark ? "text-[#00F5D4] hover:text-[#00F5D4]/80" : "text-[#3B82F6] hover:text-[#3B82F6]/80"}`}
               title="Add Company"
             >
               <Plus className="h-3 w-3 mr-1" /> Add
             </button>
             <button
               onClick={() => onDeleteCompanyClick(clients.find((c: any) => c.id === clientId))}
-              className="flex items-center text-[10px] font-mono text-red-400 hover:text-red-300 transition-colors"
+              className="flex items-center text-xs font-mono text-red-400 hover:text-red-300 transition-colors"
               title="Delete Company"
             >
               <Trash2 className="h-3 w-3 mr-1" /> Delete
@@ -171,7 +173,7 @@ export function Sidebar({
             <button
               onClick={onRunPipeline}
               disabled={pipelineRunning}
-              className={`flex items-center text-[10px] font-mono disabled:opacity-50 transition-colors ${isDark ? "text-[#7B2CBF] hover:text-[#7B2CBF]/80" : "text-[#8B5CF6] hover:text-[#8B5CF6]/80"}`}
+              className={`flex items-center text-xs font-mono disabled:opacity-50 transition-colors ${isDark ? "text-[#7B2CBF] hover:text-[#7B2CBF]/80" : "text-[#8B5CF6] hover:text-[#8B5CF6]/80"}`}
               title="Run Pipeline"
             >
               {pipelineRunning ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Play className="h-3 w-3 mr-1" />}
@@ -190,7 +192,7 @@ export function Sidebar({
               clicked. Without this, a frozen number between runs reads as
               broken rather than as the intended behavior. */}
           {!pipelineRunning && (
-            <div className={`mt-2 text-[10px] font-mono ${mutedText(theme)}`} title="Data only updates when Run Pipeline is triggered">
+            <div className={`mt-2 text-xs font-mono ${mutedText(theme)}`} title="Data only updates when Run Pipeline is triggered">
               {lastUpdatedAt && lastUpdatedAt !== "N/A"
                 ? <>Last updated: {lastUpdatedAt} — click Run Pipeline for fresh data</>
                 : <>No data yet — click Run Pipeline to collect and process</>}
@@ -200,7 +202,7 @@ export function Sidebar({
 
         {/* Threat Indicator */}
         <div className={`p-6 border-b space-y-2 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Active Threat Level</span>
+          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block">Current Risk Level</span>
           <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
             threatLevel === "CRITICAL" ? "bg-red-950/20 border-red-500/30 text-red-400" :
             threatLevel === "ELEVATED" ? "bg-orange-950/20 border-orange-500/30 text-orange-400" :
@@ -213,7 +215,7 @@ export function Sidebar({
 
         {/* Navigation Links */}
         <div className="flex-1 p-4 space-y-1">
-          <span className={`text-[10px] font-mono uppercase tracking-wider px-2 block mb-2 ${mutedText(theme)}`}>Systems Menu</span>
+          <span className={`text-xs font-mono uppercase tracking-wider px-2 block mb-2 ${mutedText(theme)}`}>Menu</span>
           {[
             { id: "reputation", label: "Brand Equity", icon: Award },
             { id: "risk", label: "Risk Center", icon: ShieldAlert },
@@ -237,7 +239,7 @@ export function Sidebar({
               <button
                 key={tab.id}
                 onClick={() => onSelectTab(tab.id)}
-                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-md text-xs font-mono transition-all duration-300 relative ${
+                className={`w-full flex items-center space-x-3 px-3 py-3 min-h-[44px] rounded-md text-xs font-mono transition-all duration-300 relative ${
                   isActive ? activeClass : inactiveClass
                 }`}
               >
@@ -252,18 +254,18 @@ export function Sidebar({
       {/* Live Telemetry Ingestion Stats */}
       <div className={`p-4 border-t ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-white/40"}`}>
         <div className="flex items-center justify-between mb-2">
-          <span className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Live Ingestion Telemetry</span>
+          <span className={`text-xs font-mono uppercase tracking-wider ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Data Collection Status</span>
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
         </div>
-        <div className={`grid grid-cols-2 gap-2 text-[10px] font-mono ${mutedText(theme)}`}>
+        <div className={`grid grid-cols-2 gap-2 text-xs font-mono ${mutedText(theme)}`}>
           <div className={glassPill(theme) + " p-2"}>
-            <span className={`block text-[8px] ${mutedText(theme)}`}>DOCS</span>
+            <span className={`block text-xs ${mutedText(theme)}`}>DOCS</span>
             <span className={`font-bold ${bodyText(theme)}`}>
               {documentsLoading ? "..." : derivedPipelineHealth.documents}
             </span>
           </div>
           <div className={glassPill(theme) + " p-2"}>
-            <span className={`block text-[8px] ${mutedText(theme)}`}>ENTITIES</span>
+            <span className={`block text-xs ${mutedText(theme)}`}>ENTITIES</span>
             <span className={`font-bold ${bodyText(theme)}`}>
               {documentsLoading ? "..." : derivedPipelineHealth.entity_mentions}
             </span>

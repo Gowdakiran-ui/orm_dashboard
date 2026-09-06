@@ -39,12 +39,12 @@ const RISK_COLOR: Record<string, string> = {
 // Theme-aware functions instead of static strings since the accent + border
 // now depend on light/dark glass mode.
 function sectionLabelClass(isDark: boolean) {
-  return `text-[9.5px] font-bold uppercase tracking-wider block border-b pb-1 ${
+  return `text-xs font-bold uppercase tracking-wider block border-b pb-1 ${
     isDark ? "text-[#00F5D4] border-white/[0.12]" : "text-[#3B82F6] border-black/[0.06]"
   }`;
 }
 function sectionTextClass(isDark: boolean) {
-  return `text-[11px] leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`;
+  return `text-xs leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`;
 }
 
 // SOV bands considered notably low/high for the Key Highlights bullet.
@@ -203,16 +203,16 @@ export function ReputationSummaryCard({
   const cards = [
     { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}` : "", color: "text-[#D4AF37]", highlight: true },
     { label: "Risk Signals", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.dangerCount, sub: "Critical + High", color: riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
-    { label: "Trend Direction", value: trendDisplay, sub: "Reputation momentum", color: "text-purple-400", highlight: true, compactValue: true },
+    { label: "Trend Direction", value: trendDisplay, sub: "Reputation momentum", color: "text-sky-500", highlight: true, compactValue: true },
     { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: documentsLoading ? "Loading..." : `${riskStats.critical}C/${riskStats.high}H/${riskStats.medium}M/${riskStats.low}L`, color: RISK_COLOR[riskStats.dominantLevel] },
     { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment docs", color: "text-emerald-400" },
     { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative}`, color: "text-emerald-400" },
-    { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-[#D4AF37]" },
+    { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-sky-500" },
     { label: "Highest Risk Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.highestRisk, sub: "Requires strategic review", color: "text-red-500" },
     { label: "Fastest Growing Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
-    { label: "Most Mentioned Executive", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Core voice proxy", color: "text-indigo-400" },
-    { label: "Tracked Executives", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Monitored corporate heads", color: "text-[#38BDF8]" },
-    { label: "Competitor Rank / SOV", value: clientRank, sub: `${sovDisplay}% SOV`, color: "text-[#38BDF8]" },
+    { label: "Most Mentioned Executive", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
+    { label: "Tracked Executives", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Monitored leaders", color: "text-sky-500" },
+    { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500" },
     { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: execAlert.open ? (alertNames ?? "Open alert") : "None open", color: execAlert.open ? "text-red-500" : "text-emerald-500" },
   ];
 
@@ -243,34 +243,52 @@ export function ReputationSummaryCard({
   // the plain glass-card base style -- see the redesign report for why.
   const statCardBody = (card: (typeof cards)[number]) => (
     <>
-      <span className={`${card.highlight ? "text-[10px]" : "text-[9px]"} ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
+      <span className={`${card.highlight ? "text-xs" : "text-xs"} ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
       <div>
         <span className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
-        {card.sub && <span className={`text-[9px] ${mutedText(theme)} block truncate mt-1`}>{card.sub}</span>}
+        {card.sub && <span className={`text-xs ${mutedText(theme)} block truncate mt-1`}>{card.sub}</span>}
       </div>
     </>
   );
 
+  // Two-tier layout so a first-time viewer has an obvious "start here": the
+  // hero tile plus the other highlight tiles render first, larger and with
+  // their own section label; everything else follows under a plainer
+  // "More Detail" label. Purely a render-order/label split of the same
+  // `cards` data above -- no values, order-of-computation, or logic changed.
+  const heroCards = cards.map((card, idx) => ({ card, idx })).filter(({ card }) => card.highlight);
+  const detailCards = cards.map((card, idx) => ({ card, idx })).filter(({ card }) => !card.highlight);
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 font-mono">
-        {cards.map((card, idx) =>
-          idx === 0 ? (
-            <HeroGlass key={idx} theme={theme} className="p-4 flex flex-col justify-between md:col-span-2 lg:col-span-2">
-              {statCardBody(card)}
-            </HeroGlass>
-          ) : (
-            <div
-              key={idx}
-              className={`${glassCard(theme)} p-4 flex flex-col justify-between ${
-                card.highlight ? "md:col-span-2 lg:col-span-2" : ""
-              }`}
-            >
+      <div className="space-y-3">
+        <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>At a Glance</span>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 font-mono">
+          {heroCards.map(({ card, idx }) =>
+            idx === 0 ? (
+              <HeroGlass key={idx} theme={theme} className="p-4 flex flex-col justify-between">
+                {statCardBody(card)}
+              </HeroGlass>
+            ) : (
+              <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
+                <div className={SPECULAR_LINE} />
+                {statCardBody(card)}
+              </div>
+            )
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>More Detail</span>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 font-mono">
+          {detailCards.map(({ card, idx }) => (
+            <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
               <div className={SPECULAR_LINE} />
               {statCardBody(card)}
             </div>
-          )
-        )}
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -308,7 +326,7 @@ export function ReputationSummaryCard({
             <div>
               <span className={sectionLabelClass(isDark)}>Narrative Landscape</span>
               <p className={sectionTextClass(isDark)}>
-                {narrativeStats.total} narrative{narrativeStats.total === 1 ? "" : "s"} are being monitored. The highest-risk narrative is "{narrativeStats.highestRisk}"{typeof narrativeStats.highestRiskScore === "number" ? ` (Risk Index ${narrativeStats.highestRiskScore.toFixed(1)} pts)` : ""}. The fastest-growing narrative is "{narrativeStats.fastestGrowing}"{typeof narrativeStats.fastestGrowingTrend === "number" ? ` (Velocity Index ${narrativeStats.fastestGrowingTrend >= 0 ? "+" : ""}${narrativeStats.fastestGrowingTrend.toFixed(1)}%)` : ""}.
+                {narrativeStats.total} narrative{narrativeStats.total === 1 ? "" : "s"} are being monitored. The highest-risk narrative is "{narrativeStats.highestRisk}"{typeof narrativeStats.highestRiskScore === "number" ? ` (Risk Score ${narrativeStats.highestRiskScore.toFixed(1)} pts)` : ""}. The fastest-growing narrative is "{narrativeStats.fastestGrowing}"{typeof narrativeStats.fastestGrowingTrend === "number" ? ` (Coverage Trend ${narrativeStats.fastestGrowingTrend >= 0 ? "+" : ""}${narrativeStats.fastestGrowingTrend.toFixed(1)}%)` : ""}.
               </p>
             </div>
 
@@ -342,7 +360,7 @@ export function ReputationSummaryCard({
             <Card className={glassCard(theme)}>
               <div className={SPECULAR_LINE} />
               <CardContent className="p-4">
-                <span className={`text-[9.5px] font-bold uppercase tracking-wider block mb-2 ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Reputation Trend</span>
+                <span className={`text-xs font-bold uppercase tracking-wider block mb-2 ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Reputation Trend</span>
                 <div className="h-20 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={repHistory}>
@@ -368,7 +386,7 @@ export function ReputationSummaryCard({
               {shownHighlights.length > 0 ? (
                 <ul className="space-y-2 mt-1.5">
                   {shownHighlights.map((h, idx) => (
-                    <li key={idx} className={`text-[11px] leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
+                    <li key={idx} className={`text-xs leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
                       <span className="shrink-0" style={{ color: accent }}>&#8226;</span>
                       <span>{h}</span>
                     </li>

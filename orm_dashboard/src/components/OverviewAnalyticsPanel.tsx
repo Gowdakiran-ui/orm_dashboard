@@ -46,9 +46,9 @@ export function OverviewAnalyticsPanel({
     const posRatio = totalVal > 0 ? `${((posVal / totalVal) * 100).toFixed(0)}%` : "0%";
 
     return [
-      { label: "Avg Reputation", value: latestRepScore, desc: "Global asset rating index", icon: Activity, color: accentColor },
-      { label: "Sentiment Index", value: latestSentScore, desc: "Polarity score (-1.0 to +1.0)", icon: Smile, color: accentColor },
-      { label: "Topic Dimensions", value: dimensionsCount, desc: "Active classified vectors", icon: BarChart3, color: "text-purple-400" },
+      { label: "Avg Reputation", value: latestRepScore, desc: "Overall reputation score", icon: Activity, color: accentColor },
+      { label: "Sentiment Score", value: latestSentScore, desc: "How positive coverage is (-1.0 to +1.0)", icon: Smile, color: accentColor },
+      { label: "Topics Covered", value: dimensionsCount, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400" },
       { label: "Positive Share", value: posRatio, desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400" }
     ];
   }, [repHistory, sentimentTrendData, topicDistData, sentimentDistData, accentColor]);
@@ -99,12 +99,12 @@ export function OverviewAnalyticsPanel({
             >
               <div className={SPECULAR_LINE} />
               <div className="flex justify-between items-start mb-2">
-                <span className={`text-[10px] uppercase tracking-wider ${mutedText(theme)}`}>{k.label}</span>
+                <span className={`text-xs uppercase tracking-wider ${mutedText(theme)}`}>{k.label}</span>
                 <Icon className={`h-4 w-4 ${k.color}`} />
               </div>
               <div>
                 <span className={`text-xl font-bold block ${k.color}`}>{k.value}</span>
-                <span className={`text-[8px] ${mutedText(theme)}`}>{k.desc}</span>
+                <span className={`text-xs ${mutedText(theme)}`}>{k.desc}</span>
               </div>
             </div>
           );
@@ -116,7 +116,7 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Sentiment Distribution Matrix</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Sentiment Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="flex justify-center items-center h-[260px]">
             {sentimentDistData.length > 0 ? (
@@ -153,7 +153,7 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Dimension Frequency (Topic Count)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Coverage by Topic</CardTitle>
           </CardHeader>
           <CardContent className="pl-2">
             <div className="h-[260px]">
@@ -178,7 +178,7 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Reputation Score Trend Timeline</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Reputation Score Over Time</CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[260px]">
             {repHistory.length > 0 ? (
@@ -213,7 +213,7 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Average Sentiment Trend Timeline</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Average Sentiment Over Time</CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[260px]">
             {sentimentTrendData.length > 0 ? (

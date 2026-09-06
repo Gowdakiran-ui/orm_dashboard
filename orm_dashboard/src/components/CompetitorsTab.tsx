@@ -48,6 +48,20 @@ export function CompetitorsTab({
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
+  // Shared theme-aware surface tokens for the sections below that were
+  // previously hardcoded to a fixed dark palette (text-slate-*,
+  // border-[#1F2937], bg-[#030712]/[#060B18]) and never branched on isDark
+  // -- same conventions the search card above (and RiskTab.tsx) already use.
+  const cardBorder = isDark ? "border-white/[0.12]" : "border-black/[0.06]";
+  const rowBorder = isDark ? "border-white/[0.08]" : "border-black/[0.06]";
+  const rowHoverBg = isDark ? "hover:bg-white/[0.04]" : "hover:bg-black/[0.02]";
+  const surfaceBg = isDark ? "bg-black/30" : "bg-black/[0.03]";
+  const surfaceBorder = isDark ? "border-white/[0.08]" : "border-black/[0.06]";
+  const drawerSurface = isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]";
+  const chipClass = isDark ? "bg-[#030712] border border-white/[0.10] text-zinc-400" : "bg-black/[0.03] border border-black/[0.08] text-zinc-500";
+  const tableHeaderBg = isDark ? "bg-black/20" : "bg-black/[0.02]";
+  // 44x44px-floor touch target helper for compact icon/text action controls.
+  const touchTarget = "min-h-[44px] inline-flex items-center justify-center";
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
@@ -173,7 +187,7 @@ export function CompetitorsTab({
     const clientAvgRisk = repBreakdown?.risk !== undefined && repBreakdown?.risk !== null ? repBreakdown.risk : 0;
     const data: any[] = [
       { subject: "Reputation Score" },
-      { subject: "Sentiment Index" },
+      { subject: "Sentiment Score" },
       { subject: "Risk Containment" },
       { subject: "Share of Voice" }
     ];
@@ -399,20 +413,20 @@ export function CompetitorsTab({
             <button
               type="submit"
               disabled={searchLoading || !searchQuery.trim()}
-              className={`disabled:opacity-50 disabled:cursor-not-allowed font-mono text-[10px] px-4 py-2 whitespace-nowrap ${glassPrimaryButton(theme)}`}
+              className={`disabled:opacity-50 disabled:cursor-not-allowed font-mono text-xs px-4 py-2 whitespace-nowrap ${glassPrimaryButton(theme)}`}
             >
               {searchLoading ? "Searching..." : "Search"}
             </button>
           </form>
 
           {searchErrorMsg && (
-            <p className="text-red-500 font-mono text-[10px]">{searchErrorMsg}</p>
+            <p className="text-red-500 font-mono text-xs">{searchErrorMsg}</p>
           )}
 
           {searchResult && searchResult.status === "searching" && (
             <div className={`rounded-2xl p-4 flex items-center space-x-3 border ${isDark ? "border-[#00F5D4]/30 bg-black/30" : "border-[#3B82F6]/30 bg-black/[0.03]"}`}>
               <div className="h-3 w-3 rounded-full animate-pulse" style={{ backgroundColor: accent }} />
-              <p className={`text-[10px] font-mono ${mutedText(theme)}`}>
+              <p className={`text-xs font-mono ${mutedText(theme)}`}>
                 Running a fresh scoped search — collecting and scoring coverage for this name. This can take a moment.
               </p>
             </div>
@@ -425,11 +439,11 @@ export function CompetitorsTab({
                 <Badge className={glassPill(theme)} style={{ color: accent }}>TRACKED</Badge>
               </div>
               {searchResult.competitor.health_status === 'INSUFFICIENT_EVIDENCE' ? (
-                <p className={`text-[10px] font-mono uppercase tracking-wider ${mutedText(theme)}`}>
+                <p className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>
                   No qualifying coverage found yet — tracked, but not enough evidence to score
                 </p>
               ) : (
-                <div className="grid grid-cols-4 gap-3 text-[10px] font-mono">
+                <div className="grid grid-cols-4 gap-3 text-xs font-mono">
                   <div>
                     <span className={`block ${mutedText(theme)}`}>Reputation</span>
                     <span className="font-bold text-sm" style={{ color: accent }}>
@@ -445,7 +459,7 @@ export function CompetitorsTab({
                     <span className={bodyText(theme)}>{searchResult.competitor.risk_score !== null ? searchResult.competitor.risk_score.toFixed(1) : 'N/A'}</span>
                   </div>
                   <div>
-                    <span className={`block ${mutedText(theme)}`}>SOV</span>
+                    <span className={`block ${mutedText(theme)}`}>Share of Voice</span>
                     <span className={bodyText(theme)}>{searchResult.competitor.share_of_voice !== null ? `${searchResult.competitor.share_of_voice.toFixed(1)}%` : 'N/A'}</span>
                   </div>
                 </div>
@@ -457,9 +471,9 @@ export function CompetitorsTab({
             <div className={`rounded-2xl p-4 space-y-2 border border-amber-500/30 ${isDark ? "bg-black/30" : "bg-black/[0.03]"}`}>
               <div className="flex items-center justify-between">
                 <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.candidate.name}</span>
-                <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-[9px]">NOT YET TRACKED</Badge>
+                <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-xs">NOT YET TRACKED</Badge>
               </div>
-              <p className={`text-[10px] font-mono ${mutedText(theme)}`}>
+              <p className={`text-xs font-mono ${mutedText(theme)}`}>
                 Discovered ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) in already-collected coverage but not yet promoted — no comparison data exists for this name yet.
               </p>
             </div>
@@ -473,30 +487,30 @@ export function CompetitorsTab({
           <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
             <Compass className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
             <p className={`font-mono text-xs ${mutedText(theme)}`}>No tracked competitors yet.</p>
-            <p className="text-slate-600 font-mono text-[9px]">Search a name above to start tracking a real competitor.</p>
+            <p className={`font-mono text-xs ${mutedText(theme)}`}>Search a name above to start tracking a real competitor.</p>
           </CardContent>
         </Card>
       )}
 
       {hasTrackedCompetitors && (
       <>
-      {/* EXECUTIVE SUMMARY CARD */}
+      {/* SUMMARY CARD */}
       {summary && (
         <Card className={`${glassCard(theme)} font-mono`}>
-          <CardHeader className="pb-3 border-b border-[#1F2937]/40">
-            <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
+          <CardHeader className={`pb-3 border-b ${cardBorder}`}>
+            <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
               <Trophy className="h-4 w-4 text-[#D4AF37] mr-2" />
-              COMPETITIVE INTELLIGENCE SUMMARY
+              Competitor Summary
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4 grid gap-4 sm:grid-cols-2 text-[10px]">
+          <CardContent className="pt-4 grid gap-4 sm:grid-cols-2 text-xs">
             <div>
-              <span className="text-slate-500 block">Ahead on Reputation:</span>
-              <span className="text-slate-200 font-bold">{summary.leader}</span>
+              <span className={`block ${mutedText(theme)}`}>Ahead on Reputation:</span>
+              <span className={`font-bold ${bodyText(theme)}`}>{summary.leader}</span>
             </div>
-            <div className="border-t border-[#1F2937]/30 pt-3 sm:border-t-0 sm:pt-0 sm:border-l sm:pl-4 border-[#1F2937]/30">
-              <span className="text-slate-500 block">Recommendation:</span>
-              <p className="text-slate-300 leading-normal mt-1">{summary.recommendation}</p>
+            <div className={`border-t pt-3 sm:border-t-0 sm:pt-0 sm:border-l sm:pl-4 ${cardBorder}`}>
+              <span className={`block ${mutedText(theme)}`}>Recommendation:</span>
+              <p className={`leading-normal mt-1 ${bodyText(theme)}`}>{summary.recommendation}</p>
             </div>
           </CardContent>
         </Card>
@@ -513,31 +527,31 @@ export function CompetitorsTab({
         ) : (
           <Card className={glassCard(theme)}>
             <CardHeader>
-              <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                 <Compass className="h-4 w-4 text-[#D4AF37] mr-2" />
-                Competitor Radar Matrix
+                Competitor Comparison
               </CardTitle>
-              <CardDescription className="text-[10px] font-mono text-slate-500">{activeClientName} vs. {selectedCompetitor?.name || "selected competitor"} — Reputation, Sentiment, Risk Containment, and SOV</CardDescription>
+              <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>{activeClientName} vs. {selectedCompetitor?.name || "selected competitor"} — Reputation, Sentiment, Risk Containment, and Share of Voice</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center items-center h-[320px]">
               {selectedCompetitor && selectedCompetitor.health_status !== "INSUFFICIENT_EVIDENCE" ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart cx="50%" cy="50%" outerRadius="80%" data={singleCompetitorRadarData}>
-                    <PolarGrid stroke="#1F2937" />
-                    <PolarAngleAxis dataKey="subject" stroke="#94A3B8" fontSize={10} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#1F2937" tick={false} />
+                    <PolarGrid stroke={isDark ? "#3f3f46" : "#d4d4d8"} />
+                    <PolarAngleAxis dataKey="subject" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} stroke={isDark ? "#3f3f46" : "#d4d4d8"} tick={false} />
 
                     {/* CLIENT RADAR STYLING */}
                     <Radar name={activeClientName} dataKey={activeClientName} stroke="#D4AF37" fill="#D4AF37" fillOpacity={0.4} strokeWidth={3} />
 
                     {/* THE ONE SELECTED COMPETITOR */}
                     <Radar name={selectedCompetitor.name} dataKey={selectedCompetitor.name} stroke="#38BDF8" fill="#38BDF8" fillOpacity={0.15} strokeWidth={2} />
-                    <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff', borderRadius: '6px', fontFamily: 'monospace', fontSize: 11 }} />
+                    <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', borderRadius: '6px', fontFamily: 'monospace', fontSize: 12 }} />
                   </RadarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="text-slate-500 font-mono text-xs text-center">
-                  Waiting for verified competitor intelligence.
+                <div className={`font-mono text-xs text-center ${mutedText(theme)}`}>
+                  Waiting for verified competitor data.
                 </div>
               )}
             </CardContent>
@@ -560,9 +574,9 @@ export function CompetitorsTab({
           ) : (
             <Card className={glassCard(theme)}>
               <CardHeader>
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                   <BarChart3 className="h-4 w-4 text-[#D4AF37] mr-2" />
-                  REPUTATION COMPARE
+                  Reputation Compare
                 </CardTitle>
               </CardHeader>
               <CardContent className="pl-2">
@@ -579,17 +593,17 @@ export function CompetitorsTab({
                           ]}
                           margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
                       >
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1F2937" strokeOpacity={0.2} />
-                          <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
-                          <YAxis stroke="#94A3B8" fontSize={10} domain={[0, 100]} />
-                          <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff' }} />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
+                          <XAxis dataKey="name" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+                          <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} />
+                          <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
                           <Bar dataKey="Score" fill="#D4AF37" radius={[3, 3, 0, 0]} />
                       </BarChart>
                       </ResponsiveContainer>
                   ) : (
                       <div className="flex flex-col items-center justify-center h-full space-y-2">
-                        <BarChart3 className="h-6 w-6 text-slate-500 opacity-60" />
-                        <p className="text-slate-500 font-mono text-xs">Waiting for verified competitor intelligence.</p>
+                        <BarChart3 className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+                        <p className={`font-mono text-xs ${mutedText(theme)}`}>Waiting for verified competitor data.</p>
                       </div>
                   )}
                 </div>
@@ -598,7 +612,7 @@ export function CompetitorsTab({
           )}
         </ErrorBoundary>
 
-        {/* SOV Chart */}
+        {/* Share of Voice Chart */}
         <ErrorBoundary fallback={<TelemetryErrorWidget title="SOV Chart Error" />}>
           {benchmarksLoading ? (
             <Card className={`${glassTokens[theme].card} rounded-3xl h-[320px] animate-pulse`}>
@@ -611,9 +625,9 @@ export function CompetitorsTab({
           ) : (
             <Card className={glassCard(theme)}>
               <CardHeader>
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
-                  <Users className="h-4 w-4 text-blue-400 mr-2" />
-                  SHARE OF VOICE (SOV)
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+                  <Users className="h-4 w-4 text-blue-500 mr-2" />
+                  Share of Voice (SOV)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pl-2">
@@ -633,17 +647,17 @@ export function CompetitorsTab({
                           ]}
                           margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
                       >
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1F2937" strokeOpacity={0.2} />
-                          <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
-                          <YAxis stroke="#94A3B8" fontSize={10} domain={[0, 100]} />
-                          <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff' }} />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
+                          <XAxis dataKey="name" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+                          <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} />
+                          <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
                           <Bar dataKey="Share of Voice" fill="#38BDF8" radius={[3, 3, 0, 0]} />
                       </BarChart>
                       </ResponsiveContainer>
                   ) : (
                       <div className="flex flex-col items-center justify-center h-full space-y-2">
-                        <Users className="h-6 w-6 text-slate-500 opacity-60" />
-                        <p className="text-slate-500 font-mono text-xs">Waiting for verified competitor intelligence.</p>
+                        <Users className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+                        <p className={`font-mono text-xs ${mutedText(theme)}`}>Waiting for verified competitor data.</p>
                       </div>
                   )}
                 </div>
@@ -660,63 +674,63 @@ export function CompetitorsTab({
 
       {/* ACTIVITY SUMMARY CARD */}
       <Card className={`${glassCard(theme)} font-mono`}>
-        <CardHeader className="pb-3 border-b border-[#1F2937]/40">
-          <CardTitle className="text-xs uppercase tracking-wider text-slate-400 flex items-center">
+        <CardHeader className={`pb-3 border-b ${cardBorder}`}>
+          <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
             <Activity className="h-4 w-4 text-[#D4AF37] mr-2" />
             Competitive Activity
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-4 grid gap-4 sm:grid-cols-3 text-[10px]">
+        <CardContent className="pt-4 grid gap-4 sm:grid-cols-3 text-xs">
           <div>
-            <span className="text-slate-500 block">Events Analysed:</span>
-            <span className="text-slate-200 font-bold">{activitySummary.total}</span>
+            <span className={`block ${mutedText(theme)}`}>Events Analysed:</span>
+            <span className={`font-bold ${bodyText(theme)}`}>{activitySummary.total}</span>
           </div>
           <div>
-            <span className="text-slate-500 block">Latest Event:</span>
-            <span className="text-slate-200 font-bold">{activitySummary.latestEvent}</span>
+            <span className={`block ${mutedText(theme)}`}>Latest Event:</span>
+            <span className={`font-bold ${bodyText(theme)}`}>{activitySummary.latestEvent}</span>
           </div>
           <div>
-            <span className="text-slate-500 block">Most Active Topic:</span>
-            <span className="text-slate-200 font-bold">{activitySummary.activeTopic}</span>
+            <span className={`block ${mutedText(theme)}`}>Most Active Topic:</span>
+            <span className={`font-bold ${bodyText(theme)}`}>{activitySummary.activeTopic}</span>
           </div>
         </CardContent>
       </Card>
 
-      {/* COMPETITIVE INTELLIGENCE REGISTER -- events for the one selected
+      {/* COMPETITOR ACTIVITY TABLE -- events for the one selected
           competitor only (competitorEvents is already scoped above). */}
       <Card className={glassCard(theme)}>
         <CardHeader>
-          <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
             <div className="flex items-center">
               <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
-              COMPETITIVE INTELLIGENCE REGISTER — {selectedCompetitor?.name}
+              Competitor Activity — {selectedCompetitor?.name}
             </div>
-            <Badge className="bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/30 font-mono text-[9px]">
+            <Badge className="bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/30 font-mono text-xs">
               {competitorEvents.length} Events
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader className="border-[#1F2937]/40 bg-[#030712]/40">
-              <TableRow className="border-[#1F2937]/40">
-                <TableHead className="text-slate-500 font-mono text-[10px]">COMPETITOR</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px]">EVENT HEADLINE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">BUSINESS TOPIC</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">REPUTATION IMPACT</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">RISK SCORE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px]">SOURCE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px]">PUBLISHED DATE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-right">ACTION</TableHead>
+            <TableHeader className={`${rowBorder} ${tableHeaderBg}`}>
+              <TableRow className={rowBorder}>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>COMPETITOR</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EVENT HEADLINE</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>BUSINESS TOPIC</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>REPUTATION IMPACT</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
+                <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {competitorEvents.map((doc, idx) => (
-                <TableRow key={doc.id} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors cursor-pointer" onClick={() => setSelectedDocId(doc.id)}>
-                  <TableCell className="font-mono text-xs text-slate-200 font-bold">{doc.matchedCompetitor}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-300 max-w-[280px] truncate">{doc.title}</TableCell>
+                <TableRow key={doc.id} className={`${rowBorder} ${rowHoverBg} transition-colors cursor-pointer`} onClick={() => setSelectedDocId(doc.id)}>
+                  <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{doc.matchedCompetitor}</TableCell>
+                  <TableCell className={`font-mono text-xs max-w-[280px] truncate ${bodyText(theme)}`}>{doc.title}</TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-[9px] bg-[#D4AF37]/5">
+                    <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-xs bg-[#D4AF37]/5">
                       {doc.topic}
                     </Badge>
                   </TableCell>
@@ -726,27 +740,27 @@ export function CompetitorsTab({
                     {doc.reputation_impact}
                   </TableCell>
                   <TableCell className={`text-center font-mono text-xs font-bold ${
-                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-500"
+                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
                   }`}>
                     {Math.round(doc.risk || 0)}
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-400 truncate max-w-[100px]">{doc.source}</TableCell>
-                  <TableCell className="font-mono text-[10px] text-slate-500">
+                  <TableCell className={`font-mono text-xs truncate max-w-[100px] ${mutedText(theme)}`}>{doc.source}</TableCell>
+                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
                     {doc.timestamp ? new Date(doc.timestamp).toLocaleDateString(undefined, { dateStyle: 'short' }) : "N/A"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); setSelectedDocId(doc.id); }}
-                      className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-[9px] rounded py-1 px-2.5"
+                      className={`bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-xs rounded px-3 ${touchTarget}`}
                     >
-                      TRACE
+                      Details
                     </button>
                   </TableCell>
                 </TableRow>
               ))}
               {competitorEvents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-slate-500 font-mono text-xs">
+                  <TableCell colSpan={8} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
                     No competitor events recorded.
                   </TableCell>
                 </TableRow>
@@ -758,77 +772,84 @@ export function CompetitorsTab({
       </>
       )}
 
-      {/* Risk Details Drawer (Slide-Over Panel) */}
+      {/* Details Drawer (Slide-Over Panel) -- kept high-opacity (not the
+          standard glass alpha) for the same legibility reason as RiskTab.tsx's
+          drawers: at full page height over a dimmed backdrop, translucency
+          reads poorly on long paragraph text. */}
       {selectedDoc && (
         <div className="fixed inset-0 z-50 overflow-hidden font-mono">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedDocId(null)} />
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-[600px] bg-[#060B18] border-l border-[#1F2937]/80 text-slate-200 flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300">
-              
+            <div className={`w-[600px] backdrop-blur-2xl border-l flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300 ${bodyText(theme)} ${drawerSurface}`}>
+
               {/* Header */}
-              <div className="p-6 border-b border-[#1F2937]/80 flex items-center justify-between">
+              <div className={`p-6 border-b flex items-center justify-between ${cardBorder}`}>
                 <div className="flex items-center space-x-3">
                   <AlertOctagon className="h-5 w-5 text-red-500" />
-                  <span className="text-sm font-bold uppercase text-[#D4AF37]">Tactical Trace Examiner</span>
+                  <span className="text-sm font-bold uppercase text-[#D4AF37]">Details</span>
                 </div>
-                <button onClick={() => setSelectedDocId(null)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                <button
+                  onClick={() => setSelectedDocId(null)}
+                  className={`flex items-center gap-1.5 text-xs transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"} ${touchTarget}`}
+                >
                   <X className="h-5 w-5" />
+                  <span>Close</span>
                 </button>
               </div>
 
               {/* Content Panel */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                
+
                 {/* Headline & Meta */}
                 <div className="space-y-2">
-                  <h3 className="text-sm font-bold text-slate-100 leading-snug">{selectedDoc.title}</h3>
-                  <div className="flex flex-wrap gap-2 text-[10px]">
-                    <span className="bg-[#030712] border border-[#1F2937]/65 px-2 py-0.5 rounded text-slate-400">Source: {selectedDoc.source}</span>
-                    <span className="bg-[#030712] border border-[#1F2937]/65 px-2 py-0.5 rounded text-slate-400">Topic: {selectedDoc.topic}</span>
-                    <span className="bg-[#030712] border border-[#1F2937]/65 px-2 py-0.5 rounded text-slate-400">Matched Brand: {selectedDoc.matchedCompetitor}</span>
+                  <h3 className={`text-sm font-bold leading-snug ${bodyText(theme)}`}>{selectedDoc.title}</h3>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className={`px-2 py-0.5 rounded ${chipClass}`}>Source: {selectedDoc.source}</span>
+                    <span className={`px-2 py-0.5 rounded ${chipClass}`}>Topic: {selectedDoc.topic}</span>
+                    <span className={`px-2 py-0.5 rounded ${chipClass}`}>Matched Brand: {selectedDoc.matchedCompetitor}</span>
                   </div>
                 </div>
 
                 {/* Risk score calculation breakdown */}
-                <div className="bg-[#030712] p-4 rounded border border-red-500/20 space-y-3">
-                  <div className="flex justify-between items-center border-b border-[#1F2937] pb-2">
-                    <span className="text-xs font-bold text-red-400">RISK COMMAND RATING</span>
+                <div className={`p-4 rounded border border-red-500/20 space-y-3 ${surfaceBg}`}>
+                  <div className={`flex justify-between items-center border-b pb-2 ${cardBorder}`}>
+                    <span className="text-xs font-bold text-red-500">Risk Rating</span>
                     <span className="text-lg font-black text-red-500">{selectedDoc.risk} / 100</span>
                   </div>
-                  <div className="space-y-1.5 text-[10px]">
+                  <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Heuristic Impact Score:</span>
-                      <span className="text-slate-300">{selectedDoc.risk}</span>
+                      <span className={mutedText(theme)}>Impact Score:</span>
+                      <span className={bodyText(theme)}>{selectedDoc.risk}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Sentiment Polarity (Multiplier):</span>
-                      <span className="text-slate-300">{selectedDoc.sentiment?.toFixed(2) || "0.00"}</span>
+                      <span className={mutedText(theme)}>Sentiment:</span>
+                      <span className={bodyText(theme)}>{selectedDoc.sentiment?.toFixed(2) || "0.00"}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Original Article Content */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center">
+                  <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
                     <Info className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Original Article Snippet
                   </span>
-                  <div className="bg-[#030712] border border-[#1F2937]/40 p-4 rounded text-[11px] text-slate-400 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
+                  <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
                     {selectedDoc.original_content || "No original content available."}
                   </div>
                 </div>
 
                 {/* Detected Entities */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold">Extracted Named Entities</span>
+                  <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Extracted Named Entities</span>
                   <div className="flex flex-wrap gap-2">
                     {selectedDoc.extracted_entities && selectedDoc.extracted_entities.length > 0 ? (
                       selectedDoc.extracted_entities.map((ent: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-400 text-[9px] bg-blue-500/5">
+                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-500 text-xs bg-blue-500/5">
                           {ent.name} ({ent.entity_type})
                         </Badge>
                       ))
                     ) : (
-                      <span className="text-[10px] text-slate-500">No matching corporate entities identified.</span>
+                      <span className={`text-xs ${mutedText(theme)}`}>No matching corporate entities identified.</span>
                     )}
                   </div>
                 </div>
@@ -836,21 +857,21 @@ export function CompetitorsTab({
               </div>
 
               {/* Drawer Footer */}
-              <div className="p-4 border-t border-[#1F2937]/80 bg-[#030712]/50 flex justify-end space-x-3">
+              <div className={`p-4 border-t flex justify-end space-x-3 ${cardBorder} ${isDark ? "bg-black/20" : "bg-black/[0.02]"}`}>
                 {selectedDocUrl && (
                   <a
                     href={selectedDocUrl}
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="flex items-center space-x-1.5 bg-[#D4AF37] hover:bg-[#bfa032] text-black font-bold font-mono text-[10px] rounded px-4 py-2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center space-x-1.5 bg-[#D4AF37] hover:bg-[#bfa032] text-black font-bold font-mono text-xs rounded px-4 ${touchTarget}`}
                   >
                     <span>View Source Article</span>
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
-                <button 
-                  onClick={() => setSelectedDocId(null)} 
-                  className="bg-transparent border border-[#1F2937] hover:border-slate-500 text-slate-400 hover:text-slate-200 text-[10px] rounded px-4 py-2"
+                <button
+                  onClick={() => setSelectedDocId(null)}
+                  className={`bg-transparent border text-xs rounded px-4 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"} ${touchTarget}`}
                 >
                   Close
                 </button>

@@ -148,7 +148,7 @@ function DashboardShell() {
           <div className="h-24 w-24 rounded-full border-t-2 border-b-2 animate-spin absolute" style={{ borderColor: accentFrom }} />
           <Compass className="h-10 w-10 animate-pulse" />
         </div>
-        <p className="text-md font-mono tracking-widest mt-16 animate-pulse">CONNECTING SECURE SESSION...</p>
+        <p className="text-md font-mono tracking-widest mt-16 animate-pulse">Loading your dashboard...</p>
       </div>
     );
   }
@@ -194,7 +194,7 @@ function DashboardShell() {
             <Menu className="h-5 w-5" />
           </button>
           <span className={`text-xs font-mono font-extrabold tracking-wider uppercase truncate ${bodyText(theme)}`}>
-            ORM Command
+            XOOP
           </span>
         </div>
 
@@ -215,7 +215,7 @@ function DashboardShell() {
               <p className={`text-xs max-w-md mx-auto leading-relaxed ${mutedText(theme)}`}>
                 Could not load the client list from the backend. This is not the empty-account state — the intelligence platform's API did not respond.
               </p>
-              <p className={`text-[10px] mt-2 ${mutedText(theme)}`}>{data.clientsError}</p>
+              <p className={`text-xs mt-2 ${mutedText(theme)}`}>{data.clientsError}</p>
             </div>
           ) : !data.clientId ? (
             <div className={`flex flex-col items-center justify-center min-h-[400px] rounded-3xl border border-dashed p-8 text-center font-mono my-8 ${isDark ? "border-white/[0.12] bg-zinc-900/35" : "border-black/[0.08] bg-white/45"}`}>
@@ -466,14 +466,14 @@ function DashboardShell() {
       <Dialog open={company.addOpen} onOpenChange={company.setAddOpen}>
         <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90 border-white/[0.12]" : "bg-white/90 border-white/70"}`}>
           <DialogHeader>
-            <DialogTitle className={`font-mono ${GRADIENT_HEADING_CLASS}`} style={gradientHeadingStyle(theme)}>Onboard Target Enterprise</DialogTitle>
+            <DialogTitle className={`font-mono ${GRADIENT_HEADING_CLASS}`} style={gradientHeadingStyle(theme)}>Add Company</DialogTitle>
             <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
-              Initialize real-time intelligence feeds and narrative modeling for a new corporate entity.
+              Start tracking a new company.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4 font-mono text-xs">
             <div className="space-y-2">
-              <label className={mutedText(theme)}>Enterprise Name</label>
+              <label className={mutedText(theme)}>Company Name</label>
               <input
                 type="text"
                 placeholder="e.g. Acme Corp"
@@ -493,7 +493,7 @@ function DashboardShell() {
               />
             </div>
             {company.addError && (
-              <p className="text-red-500 text-[11px]">{company.addError}</p>
+              <p className="text-red-500 text-xs">{company.addError}</p>
             )}
           </div>
           <DialogFooter>
@@ -508,7 +508,7 @@ function DashboardShell() {
               disabled={company.addLoading}
               className={`font-mono text-xs px-4 py-2 disabled:opacity-50 ${glassPrimaryButton(theme)}`}
             >
-              {company.addLoading ? "Initializing..." : "Start Onboarding"}
+              {company.addLoading ? "Adding..." : "Add Company"}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -518,14 +518,14 @@ function DashboardShell() {
       <Dialog open={company.deleteTarget !== null} onOpenChange={(open) => { if (!open) { company.setDeleteTarget(null); company.setDeleteError(null); } }}>
         <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90 border-white/[0.12]" : "bg-white/90 border-white/70"}`}>
           <DialogHeader>
-            <DialogTitle className="font-mono text-red-500">Decommission Enterprise Telemetry</DialogTitle>
+            <DialogTitle className="font-mono text-red-500">Delete Company</DialogTitle>
             <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
-              Are you sure you want to stop all active crawling, index tables, and narrative calculations for{" "}
-              <span className={`font-bold ${bodyText(theme)}`}>{company.deleteTarget?.name}</span>? This action is permanent and deletes all historical indices.
+              This will permanently delete{" "}
+              <span className={`font-bold ${bodyText(theme)}`}>{company.deleteTarget?.name}</span> and all of its tracked data. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           {company.deleteError && (
-            <p className="text-red-500 text-[11px]">{company.deleteError}</p>
+            <p className="text-red-500 text-xs">{company.deleteError}</p>
           )}
           <DialogFooter>
             <button

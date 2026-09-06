@@ -215,23 +215,27 @@ export function RiskTab({
   return (
     <div className="space-y-8 relative">
       
-      {/* 1. Risk Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 font-mono">
-        {[
-          { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
-          { label: "Critical Risks", value: stats.critical, color: "text-red-500" },
-          { label: "High Risks", value: stats.high, color: "text-orange-500" },
-          { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
-          { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
-          { label: "Avg Risk Score", value: stats.avg, color: bodyText(theme) },
-          { label: "Highest Risk", value: stats.highest, color: "text-red-500 font-black" }
-        ].map((card, idx) => (
-          <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
-            <div className={SPECULAR_LINE} />
-            <span className={`text-[9px] ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
-            <span className={`text-xl font-bold ${card.color}`}>{card.value}</span>
-          </div>
-        ))}
+      {/* 1. Risk Summary Cards -- Total/Critical get slightly larger type so
+          the two numbers an exec most needs land first, at a glance. */}
+      <div className="space-y-3">
+        <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>At a Glance</span>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 font-mono">
+          {[
+            { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true },
+            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true },
+            { label: "High Risks", value: stats.high, color: "text-orange-500" },
+            { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
+            { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
+            { label: "Avg Risk Score", value: stats.avg, color: bodyText(theme) },
+            { label: "Highest Risk", value: stats.highest, color: "text-red-500 font-black" }
+          ].map((card, idx) => (
+            <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
+              <div className={SPECULAR_LINE} />
+              <span className={`text-xs ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
+              <span className={`${card.highlight ? "text-2xl" : "text-xl"} font-bold ${card.color}`}>{card.value}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 1b. Active Alerts */}
@@ -244,7 +248,7 @@ export function RiskTab({
               ACTIVE ALERTS
             </span>
             {!alertsLoading && !alertsError && (
-              <Badge className={`${glassPill(theme)} text-orange-500 font-mono text-[9px]`}>{alerts.length} Active</Badge>
+              <Badge className={`${glassPill(theme)} text-orange-500 font-mono text-xs`}>{alerts.length} Active</Badge>
             )}
           </CardTitle>
         </CardHeader>
@@ -264,7 +268,7 @@ export function RiskTab({
               {alerts.map((alert) => (
                 <div key={alert.id} className={`flex items-center justify-between rounded p-3 font-mono text-xs ${glassPill(theme)}`}>
                   <div className="flex items-center space-x-3 min-w-0">
-                    <Badge className={`font-mono text-[8px] shrink-0 ${
+                    <Badge className={`font-mono text-xs shrink-0 ${
                       alert.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
                       alert.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
                       alert.severity === "WARNING" ? "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20" :
@@ -273,9 +277,9 @@ export function RiskTab({
                       {alert.severity}
                     </Badge>
                     <span className={`font-bold truncate ${bodyText(theme)}`}>{alert.title}</span>
-                    <span className={`text-[10px] shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
+                    <span className={`text-xs shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
                   </div>
-                  <span className={`text-[10px] shrink-0 ml-3 ${mutedText(theme)}`}>
+                  <span className={`text-xs shrink-0 ml-3 ${mutedText(theme)}`}>
                     {alert.created_at ? new Date(alert.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
                   </span>
                 </div>
@@ -315,10 +319,10 @@ export function RiskTab({
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className={`font-mono text-[10px] flex items-center justify-center ${mutedText(theme)}`}>No risk profile details.</div>
+              <div className={`font-mono text-xs flex items-center justify-center ${mutedText(theme)}`}>No risk profile details.</div>
             )}
             <div className="absolute flex flex-col items-center justify-center font-mono">
-              <span className={`text-[8px] uppercase ${mutedText(theme)}`}>Avg Rating</span>
+              <span className={`text-xs uppercase ${mutedText(theme)}`}>Avg Rating</span>
               <span className={`text-lg font-bold ${bodyText(theme)}`}>{stats.avg}</span>
             </div>
           </CardContent>
@@ -328,10 +332,10 @@ export function RiskTab({
         <Card className={`${glassCard(theme)} md:col-span-8`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Analyst Risk Matrix (Likelihood × Impact)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Risk Matrix (Likelihood × Impact)</CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            <div className="grid grid-cols-12 gap-2 font-mono text-[9px]">
+            <div className="grid grid-cols-12 gap-2 font-mono text-xs">
 
               {/* Y Axis Label */}
               <div className="col-span-1 flex items-center justify-center">
@@ -372,14 +376,14 @@ export function RiskTab({
                           className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center ${bgClass}`}
                         >
                           {count > 0 ? (
-                            <span className="text-[10px] font-bold block">🔴 {count} {count === 1 ? "Incident" : "Incidents"}</span>
+                            <span className="text-xs font-bold block">🔴 {count} {count === 1 ? "Incident" : "Incidents"}</span>
                           ) : (
-                            <span className={`text-[10px] block ${mutedText(theme)}`}>No incidents</span>
+                            <span className={`text-xs block ${mutedText(theme)}`}>No incidents</span>
                           )}
 
                           {/* Hover diagnostics tooltip -- kept solid (not glass-translucent) so
                               it stays unambiguous over an already-colored matrix cell */}
-                          <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-[9px] w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
+                          <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-xs w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
                             <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell Diagnostics</div>
                             <div className="flex justify-between">
                               <span className={mutedText(theme)}>Impact:</span>
@@ -411,7 +415,7 @@ export function RiskTab({
 
               {/* X Axis Labels */}
               <div className="col-span-1" />
-              <div className={`col-span-11 grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-[8px] ${mutedText(theme)}`}>
+              <div className={`col-span-11 grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-xs ${mutedText(theme)}`}>
                 <span>LOW LIKELIHOOD</span>
                 <span>MED LIKELIHOOD</span>
                 <span>HIGH LIKELIHOOD</span>
@@ -489,22 +493,22 @@ export function RiskTab({
           <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
             <span className="flex items-center">
               <ShieldAlert className="h-4 w-4 text-red-500 mr-2" />
-              INCIDENT COMMAND REGISTER
+              Risk Events
             </span>
-            <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-[9px]">{riskDocs.length} Incidents</Badge>
+            <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-xs">{riskDocs.length} Incidents</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
               <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
-                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>INCIDENT HEADLINE</TableHead>
-                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
-                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>SEVERITY</TableHead>
-                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>CORE TOPIC</TableHead>
-                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>SOURCE</TableHead>
-                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
-                <TableHead className={`font-mono text-[10px] text-right ${mutedText(theme)}`}>ACTION</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>INCIDENT HEADLINE</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>SEVERITY</TableHead>
+                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>CORE TOPIC</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
+                <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -523,7 +527,7 @@ export function RiskTab({
                     {Math.round(doc.risk || 0)}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge className={`font-mono text-[8px] ${
+                    <Badge className={`font-mono text-xs ${
                       doc.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
                       doc.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
                       "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
@@ -532,22 +536,22 @@ export function RiskTab({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] font-mono text-[9px]" : "border-[#3B82F6]/30 text-[#3B82F6] font-mono text-[9px]"}>
+                    <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] font-mono text-xs" : "border-[#3B82F6]/30 text-[#3B82F6] font-mono text-xs"}>
                       {doc.topic}
                     </Badge>
                   </TableCell>
                   <TableCell className={`font-mono text-xs truncate max-w-[120px] ${mutedText(theme)}`}>
                     {doc.source || "Unknown Source"}
                   </TableCell>
-                  <TableCell className={`font-mono text-[10px] ${mutedText(theme)}`}>
+                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
                     {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
                   </TableCell>
                   <TableCell className="text-right">
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedDocId(doc.id); }}
-                      className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-[9px] rounded py-1 px-2.5"
+                      className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-xs rounded px-3 min-h-[44px] inline-flex items-center justify-center"
                     >
-                      TRACE
+                      Details
                     </button>
                   </TableCell>
                 </TableRow>
@@ -582,10 +586,14 @@ export function RiskTab({
               <div className={`p-6 border-b flex items-center justify-between ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
                 <div className="flex items-center space-x-3">
                   <AlertOctagon className="h-5 w-5 text-red-500" />
-                  <span className="text-sm font-bold uppercase" style={{ color: accent }}>Tactical Trace Examiner</span>
+                  <span className="text-sm font-bold uppercase" style={{ color: accent }}>Details</span>
                 </div>
-                <button onClick={() => setSelectedDocId(null)} className={`transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}>
+                <button
+                  onClick={() => setSelectedDocId(null)}
+                  className={`flex items-center gap-1.5 text-xs min-h-[44px] transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
+                >
                   <X className="h-5 w-5" />
+                  <span>Close</span>
                 </button>
               </div>
 
@@ -595,7 +603,7 @@ export function RiskTab({
                 {/* Headline & Meta */}
                 <div className="space-y-2">
                   <h3 className={`text-sm font-bold leading-snug ${bodyText(theme)}`}>{selectedDoc.title}</h3>
-                  <div className="flex flex-wrap gap-2 text-[10px]">
+                  <div className="flex flex-wrap gap-2 text-xs">
                     <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>Source: {selectedDoc.source}</span>
                     <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>Topic: {selectedDoc.topic}</span>
                   </div>
@@ -604,12 +612,12 @@ export function RiskTab({
                 {/* Risk score calculation breakdown */}
                 <div className={`p-4 rounded-2xl border border-red-500/20 space-y-3 ${isDark ? "bg-black/30" : "bg-black/[0.03]"}`}>
                   <div className={`flex justify-between items-center border-b pb-2 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-                    <span className="text-xs font-bold text-red-500">RISK COMMAND RATING</span>
+                    <span className="text-xs font-bold text-red-500">Risk Rating</span>
                     <span className="text-lg font-black text-red-500">{selectedDoc.risk} / 100</span>
                   </div>
-                  <div className="space-y-1.5 text-[10px]">
+                  <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between">
-                      <span className={mutedText(theme)}>Heuristic Impact Score:</span>
+                      <span className={mutedText(theme)}>Impact Score:</span>
                       {/* A4: previously re-displayed selectedDoc.risk (the
                           overall score, already shown above) instead of the
                           topic/heuristic component that actually feeds it --
@@ -617,19 +625,19 @@ export function RiskTab({
                       <span className={bodyText(theme)}>{selectedDoc.risk_explainability?.topic_contribution ?? 0}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className={mutedText(theme)}>Sentiment Polarity (Multiplier):</span>
+                      <span className={mutedText(theme)}>Sentiment:</span>
                       {/* A4: previously the raw sentiment_score (-1..1), not
                           the sentiment_contribution weight risk_engine.py
                           actually used in the score. */}
                       <span className={bodyText(theme)}>{(selectedDoc.risk_explainability?.sentiment_contribution ?? 0).toFixed(2)}</span>
                     </div>
                     <div className={`flex justify-between border-t pt-1.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                      <span className={mutedText(theme)}>Calculated Likelihood Index:</span>
+                      <span className={mutedText(theme)}>Likelihood:</span>
                       <span className={`font-bold ${bodyText(theme)}`}>{selectedDoc.likelihood}%</span>
                     </div>
                     {selectedDoc.risk_explainability?.role_classification_source && selectedDoc.risk_explainability.role_classification_source !== "not_evaluated" && (
                       <div className={`flex justify-between border-t pt-1.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                        <span className={mutedText(theme)}>LLM Role Classification:</span>
+                        <span className={mutedText(theme)}>Attribution:</span>
                         <span className={
                           selectedDoc.risk_explainability.role_classification === "BYSTANDER" || selectedDoc.risk_explainability.role_classification === "EXONERATED"
                             ? "text-emerald-500 font-bold"
@@ -642,7 +650,7 @@ export function RiskTab({
                     )}
                   </div>
                   {selectedDoc.risk_explainability?.decision_reason && (
-                    <p className={`text-[10px] leading-relaxed border-t pt-2 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                    <p className={`text-xs leading-relaxed border-t pt-2 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                       {selectedDoc.risk_explainability.decision_reason}
                     </p>
                   )}
@@ -650,34 +658,34 @@ export function RiskTab({
 
                 {/* Original Article Content */}
                 <div className="space-y-2">
-                  <span className={`text-[10px] uppercase font-bold flex items-center ${mutedText(theme)}`}>
+                  <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
                     <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> Original Article Snippet
                   </span>
-                  <div className={`p-4 rounded-2xl border text-[11px] leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+                  <div className={`p-4 rounded-2xl border text-xs leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                     {selectedDoc.original_content || "No original content available."}
                   </div>
                 </div>
 
                 {/* Detected Entities */}
                 <div className="space-y-2">
-                  <span className={`text-[10px] uppercase font-bold ${mutedText(theme)}`}>Extracted Named Entities</span>
+                  <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Extracted Named Entities</span>
                   <div className="flex flex-wrap gap-2">
                     {selectedDoc.extracted_entities && selectedDoc.extracted_entities.length > 0 ? (
                       selectedDoc.extracted_entities.map((ent: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-500 text-[9px] bg-blue-500/5">
+                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-500 text-xs bg-blue-500/5">
                           {ent.name} ({ent.entity_type})
                         </Badge>
                       ))
                     ) : (
-                      <span className={`text-[10px] ${mutedText(theme)}`}>No matching corporate entities identified.</span>
+                      <span className={`text-xs ${mutedText(theme)}`}>No matching corporate entities identified.</span>
                     )}
                   </div>
                 </div>
 
                 {/* Related Narratives */}
                 <div className="space-y-2">
-                  <span className={`text-[10px] uppercase font-bold ${mutedText(theme)}`}>Related Narrative Tracks</span>
-                  <div className={`p-3 rounded-2xl border text-[11px] ${bodyText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+                  <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Related Narrative Tracks</span>
+                  <div className={`p-3 rounded-2xl border text-xs ${bodyText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                     {selectedDoc.narrative || "General Narrative"}
                   </div>
                 </div>
@@ -691,7 +699,7 @@ export function RiskTab({
                     href={selectedDocUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`flex items-center space-x-1.5 font-mono text-[10px] px-4 py-2 ${glassPrimaryButton(theme)}`}
+                    className={`flex items-center space-x-1.5 font-mono text-xs px-4 py-2 ${glassPrimaryButton(theme)}`}
                   >
                     <span>View Source Article</span>
                     <ExternalLink className="h-3 w-3" />
@@ -699,7 +707,7 @@ export function RiskTab({
                 )}
                 <button
                   onClick={() => setSelectedDocId(null)}
-                  className={`bg-transparent border text-[10px] rounded px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"}`}
+                  className={`bg-transparent border text-xs rounded px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"}`}
                 >
                   Close
                 </button>
@@ -726,8 +734,12 @@ export function RiskTab({
                     Incidents: {selectedCell.impact} Impact / {selectedCell.likelihood} Likelihood
                   </span>
                 </div>
-                <button onClick={() => setSelectedCell(null)} className={`transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}>
+                <button
+                  onClick={() => setSelectedCell(null)}
+                  className={`flex items-center gap-1.5 text-xs min-h-[44px] transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
+                >
                   <X className="h-5 w-5" />
+                  <span>Close</span>
                 </button>
               </div>
 
@@ -741,8 +753,8 @@ export function RiskTab({
                   return cellDocs.map((doc, idx) => (
                     <div key={doc.id ?? idx} className={`p-4 rounded-2xl border space-y-3 transition-colors ${isDark ? "bg-black/30 border-white/[0.08] hover:border-[#00F5D4]/40" : "bg-black/[0.03] border-black/[0.06] hover:border-[#3B82F6]/40"}`}>
                       <div className="flex justify-between items-start">
-                        <span className={`text-[10px] ${mutedText(theme)}`}>Source: {doc.source}</span>
-                        <Badge className={`font-mono text-[8px] ${
+                        <span className={`text-xs ${mutedText(theme)}`}>Source: {doc.source}</span>
+                        <Badge className={`font-mono text-xs ${
                           doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "bg-red-500/10 text-red-500 border border-red-500/20" :
                           doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
                           "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
@@ -751,7 +763,7 @@ export function RiskTab({
                         </Badge>
                       </div>
                       <h4 className={`text-xs font-bold leading-snug ${bodyText(theme)}`}>{doc.title}</h4>
-                      <div className={`flex justify-between items-center text-[10px] pt-1 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                      <div className={`flex justify-between items-center text-xs pt-1 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                         <span className={mutedText(theme)}>Topic: {doc.topic}</span>
                         <span className={mutedText(theme)}>
                           {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
@@ -760,9 +772,9 @@ export function RiskTab({
                       <div className="flex justify-end pt-1">
                         <button
                           onClick={() => { setSelectedDocId(doc.id); setSelectedCell(null); }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-mono text-[9px] rounded py-1 px-3"
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-mono text-xs rounded px-3 min-h-[44px] inline-flex items-center justify-center"
                         >
-                          TRACE EXAMINER &rarr;
+                          View Details &rarr;
                         </button>
                       </div>
                     </div>
@@ -774,7 +786,7 @@ export function RiskTab({
               <div className={`p-4 border-t flex justify-end ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
                 <button
                   onClick={() => setSelectedCell(null)}
-                  className={`bg-transparent border text-[10px] rounded px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"}`}
+                  className={`bg-transparent border text-xs rounded px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"}`}
                 >
                   Close Window
                 </button>

@@ -97,7 +97,7 @@ export function NarrativesTab({
       { label: "Scanned Documents", value: totalDocs, desc: "Pipeline document pool", color: "text-purple-400" },
       { label: "Highest Risk Narrative", value: highestRiskNarr, desc: "Requires strategic review", color: "text-red-500" },
       { label: "Fastest Growing Narrative", value: fastestGrowingNarr, desc: "High velocity trend", color: "text-orange-400" },
-      { label: "Most Mentioned Executive", value: mostMentionedExec, desc: "Core voice proxy", color: "text-indigo-400" },
+      { label: "Most Mentioned Executive", value: mostMentionedExec, desc: "Overall visibility", color: "text-indigo-400" },
       { label: "Average Risk Level", value: `${avgRiskScore} pts`, desc: "Risk index across feed", color: "text-rose-500" },
       { label: "Average Strength", value: `${avgNarrativeStrength}%`, desc: "Narrative velocity rate", color: "text-emerald-400" }
     ];
@@ -206,7 +206,7 @@ export function NarrativesTab({
       const data = payload[0].payload;
       const sentimentColor = data.sentiment >= 0.25 ? "text-emerald-500" : data.sentiment <= -0.25 ? "text-red-500" : "text-amber-500";
       return (
-        <div className={`rounded-lg p-3 font-mono text-[10px] space-y-1.5 shadow-2xl border ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.08]"}`}>
+        <div className={`rounded-lg p-3 font-mono text-xs space-y-1.5 shadow-2xl border ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.08]"}`}>
           <div className="font-bold border-b pb-1 truncate max-w-[200px] uppercase" style={{ color: accent, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)" }}>
             {data.name}
           </div>
@@ -243,10 +243,10 @@ export function NarrativesTab({
             className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
           >
             <div className={SPECULAR_LINE} />
-            <span className={`text-[10px] uppercase tracking-wider block mb-2 ${mutedText(theme)}`}>{k.label}</span>
+            <span className={`text-xs uppercase tracking-wider block mb-2 ${mutedText(theme)}`}>{k.label}</span>
             <div>
               <span className={`text-lg font-bold block ${k.color} truncate`}>{k.value}</span>
-              <span className={`text-[8.5px] block truncate mt-1 ${mutedText(theme)}`}>{k.desc}</span>
+              <span className={`text-xs block truncate mt-1 ${mutedText(theme)}`}>{k.desc}</span>
             </div>
           </div>
         ))}
@@ -270,7 +270,16 @@ export function NarrativesTab({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Health Bubble Matrix</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Overview</CardTitle>
+            {/* Static legend -- this chart previously relied entirely on
+                hover-only tooltips to explain color/size, which a first-time
+                viewer has no way to see without already knowing to hover. */}
+            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono pt-1 ${mutedText(theme)}`}>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#10B981" }} />Positive sentiment</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#EAB308" }} />Neutral sentiment</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#EF4444" }} />Negative sentiment</span>
+              <span>Bubble size = coverage volume</span>
+            </div>
           </CardHeader>
           <CardContent className="h-[480px]">
             {healthMatrixData.length > 0 ? (
@@ -283,7 +292,7 @@ export function NarrativesTab({
                     stroke={isDark ? "#a1a1aa" : "#71717a"}
                     fontSize={14}
                     tickLine={true}
-                    label={{ value: 'Velocity Index', position: 'bottom', fill: isDark ? "#a1a1aa" : "#71717a", offset: 25, fontSize: 15, fontFamily: 'monospace', fontWeight: 'bold' }}
+                    label={{ value: 'Coverage Trend', position: 'bottom', fill: isDark ? "#a1a1aa" : "#71717a", offset: 25, fontSize: 15, fontFamily: 'monospace', fontWeight: 'bold' }}
                   />
                   <YAxis
                     type="number"
@@ -335,7 +344,7 @@ export function NarrativesTab({
                 </ScatterChart>
               </ResponsiveContainer>
             ) : (
-              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No matching narrative vectors.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No matching narratives found.</div>
             )}
           </CardContent>
         </Card>
@@ -344,7 +353,7 @@ export function NarrativesTab({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Spikes Timeline</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Coverage Volume Over Time</CardTitle>
           </CardHeader>
           <CardContent className="h-[480px] pl-2">
             {timelineData.length > 0 ? (
@@ -373,7 +382,7 @@ export function NarrativesTab({
       <Card className={glassCard(theme)}>
         <div className={SPECULAR_LINE} />
         <CardHeader className="pb-2">
-          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Intelligence Table Register</CardTitle>
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narratives</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table className="font-mono text-xs">
@@ -396,7 +405,7 @@ export function NarrativesTab({
                 return (
                   <TableRow key={n.id ?? idx} className={`transition-all duration-150 ${isDark ? "border-white/[0.08] hover:bg-white/[0.03]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}>
                     <TableCell className={`font-bold truncate max-w-[200px] ${bodyText(theme)}`}>{n.name}</TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className={`text-[9px] font-normal uppercase tracking-wider ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>{n.type || "General"}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={`text-xs font-normal uppercase tracking-wider ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>{n.type || "General"}</Badge></TableCell>
                     <TableCell className={`text-center font-bold ${bodyText(theme)}`}>{n.mentions || 0}</TableCell>
                     <TableCell className="text-center font-bold text-red-500">{n.risk || 0}</TableCell>
                     <TableCell className={`text-center ${bodyText(theme)}`}>{(n.trend || 0).toFixed(1)}%</TableCell>
@@ -404,10 +413,10 @@ export function NarrativesTab({
                     <TableCell className="text-right pr-6">
                       <Button
                         size="sm"
-                        className="bg-purple-500/10 text-purple-400 border border-purple-500/30 hover:bg-purple-600 hover:text-white font-mono text-[9px] h-7 px-3"
+                        className="bg-purple-500/10 text-purple-400 border border-purple-500/30 hover:bg-purple-600 hover:text-white font-mono text-xs h-7 px-3"
                         onClick={() => handleTraceClick(n.name)}
                       >
-                        TRACE
+                        Details
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -425,19 +434,20 @@ export function NarrativesTab({
         </CardContent>
       </Card>
 
-      {/* 6. Slide-over Tactical Intelligence Drawer */}
+      {/* 6. Slide-over Details Drawer */}
       {drawerData && (
         <div className={`fixed inset-y-0 right-0 z-50 w-[420px] backdrop-blur-2xl border-l shadow-2xl transform transition-transform duration-300 ease-out flex flex-col font-mono text-xs ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]"}`}>
           {/* Header -- kept high-opacity for the same legibility reason as
               Risk Center's drawers: a full-height panel over dimmed content
               reads better solid than at the standard glass alpha. */}
           <div className={`flex justify-between items-center p-4 border-b ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-            <span className="uppercase tracking-wider font-bold" style={{ color: accent }}>{drawerData.type} Intelligence Drawer</span>
+            <span className="uppercase tracking-wider font-bold" style={{ color: accent }}>{drawerData.type} Details</span>
             <button
               onClick={() => setDrawerData(null)}
-              className={`font-bold text-lg transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
+              className={`flex items-center gap-1.5 font-bold min-h-[44px] transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
             >
               <X className="h-5 w-5" />
+              <span className="text-xs">Close</span>
             </button>
           </div>
 
@@ -448,7 +458,7 @@ export function NarrativesTab({
             {drawerData.type === "client" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="dash-muted block uppercase text-[8px]">Client Entity</span>
+                  <span className="dash-muted block uppercase text-xs">Client Entity</span>
                   <span className="text-[14px] font-bold dash-strong block leading-snug">{drawerData.data.name} Corp</span>
                 </div>
                 
@@ -472,8 +482,8 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="dash-muted block uppercase text-[8px]">Monitored Executives</span>
-                  <div className="dash-box border dash-border rounded p-2 divide-y divide-[#1F2937]/30 text-[10px]">
+                  <span className="dash-muted block uppercase text-xs">Monitored Executives</span>
+                  <div className="dash-box border dash-border rounded p-2 divide-y divide-[#1F2937]/30 text-xs">
                     {executives.map((exec, idx) => (
                       <div key={idx} className="flex justify-between py-1.5 first:pt-0 last:pb-0">
                         <span className="dash-strong">{exec.name}</span>
@@ -484,8 +494,8 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="dash-muted block uppercase text-[8px]">Active Narratives</span>
-                  <div className="dash-box border dash-border rounded p-2 divide-y divide-[#1F2937]/30 text-[10px]">
+                  <span className="dash-muted block uppercase text-xs">Active Narratives</span>
+                  <div className="dash-box border dash-border rounded p-2 divide-y divide-[#1F2937]/30 text-xs">
                     {narratives.map((narr, idx) => (
                       <div key={idx} className="flex justify-between py-1.5 first:pt-0 last:pb-0">
                         <span className="dash-strong truncate max-w-[200px]">{narr.name}</span>
@@ -496,8 +506,8 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1">
-                  <span className="dash-muted block uppercase text-[8px]">Latest Monitored Activity</span>
-                  <div className="dash-box border dash-border rounded p-2.5 text-[10px] dash-strong italic">
+                  <span className="dash-muted block uppercase text-xs">Latest Monitored Activity</span>
+                  <div className="dash-box border dash-border rounded p-2.5 text-xs dash-strong italic">
                     "{drawerData.data.latestActivity}"
                   </div>
                 </div>
@@ -508,29 +518,29 @@ export function NarrativesTab({
             {drawerData.type === "executive" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="dash-muted block uppercase text-[8px]">Executive Profile</span>
+                  <span className="dash-muted block uppercase text-xs">Executive Profile</span>
                   <span className="text-[14px] font-bold dash-strong block leading-snug">{drawerData.data.name}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 dash-box p-3 rounded border dash-border">
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Reputation Score</span>
+                    <span className="dash-muted block uppercase text-xs">Reputation Score</span>
                     <span className="text-[14px] font-bold dash-accent">
                       {drawerData.data.score?.toFixed(1) || "N/A"} [{drawerData.data.grade || "N/A"}]
                     </span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Reputation Trend</span>
+                    <span className="dash-muted block uppercase text-xs">Reputation Trend</span>
                     <span className="dash-strong font-bold uppercase">{drawerData.data.reputation_trend || "STABLE"}</span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Confidence</span>
+                    <span className="dash-muted block uppercase text-xs">Confidence</span>
                     <span className="dash-strong font-bold">
                       {typeof drawerData.data.confidence_score === 'number' ? `${(drawerData.data.confidence_score * 100).toFixed(0)}%` : "85%"}
                     </span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Evidence Coverage</span>
+                    <span className="dash-muted block uppercase text-xs">Evidence Coverage</span>
                     <span className="dash-strong font-bold">
                       {typeof drawerData.data.data_coverage === 'number' ? `${(drawerData.data.data_coverage * 100).toFixed(0)}%` : "40%"}
                     </span>
@@ -538,14 +548,14 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="dash-muted block uppercase text-[8px]">Connected Narratives</span>
+                  <span className="dash-muted block uppercase text-xs">Connected Narratives</span>
                   {drawerData.data.connectedNarratives && drawerData.data.connectedNarratives.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {drawerData.data.connectedNarratives.map((narrName: string, idx: number) => (
                         <Badge 
                           key={idx} 
                           variant="outline" 
-                          className="text-[9px] font-normal uppercase bg-[#A855F7]/10 border-[#A855F7]/30 text-purple-300 py-1 px-2 cursor-pointer hover:bg-[#A855F7]/25"
+                          className="text-xs font-normal uppercase bg-[#A855F7]/10 border-[#A855F7]/30 text-purple-300 py-1 px-2 cursor-pointer hover:bg-[#A855F7]/25"
                           onClick={() => {
                             const found = narratives.find(n => n.name.toLowerCase() === narrName.toLowerCase());
                             if (found) {
@@ -571,7 +581,7 @@ export function NarrativesTab({
                       ))}
                     </div>
                   ) : (
-                    <div className="dash-muted text-[10px] italic">No directly connected narrative tracks.</div>
+                    <div className="dash-muted text-xs italic">No directly connected narrative tracks.</div>
                   )}
                 </div>
               </div>
@@ -581,24 +591,24 @@ export function NarrativesTab({
             {drawerData.type === "narrative" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="dash-muted block uppercase text-[8px]">Narrative Theme</span>
+                  <span className="dash-muted block uppercase text-xs">Narrative Theme</span>
                   <span className="text-[14px] font-bold dash-strong block leading-snug">{drawerData.data.name}</span>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="dash-muted block uppercase text-[8px]">Executive Summary</span>
-                  <div className="dash-box border dash-border rounded p-2.5 text-[10px] dash-strong leading-relaxed">
+                  <span className="dash-muted block uppercase text-xs">Executive Summary</span>
+                  <div className="dash-box border dash-border rounded p-2.5 text-xs dash-strong leading-relaxed">
                     {drawerData.data.description || `Active media narrative track focusing on corporate governance and strategic alignment regarding ${drawerData.data.name}.`}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 dash-box p-2.5 rounded border dash-border text-center">
                   <div>
-                    <span className="dash-muted block uppercase text-[7.5px] mb-0.5">Risk Score</span>
+                    <span className="dash-muted block uppercase text-xs mb-0.5">Risk Score</span>
                     <span className="text-[13px] font-bold text-red-400">{drawerData.data.risk || 0} pts</span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[7.5px] mb-0.5">Sentiment</span>
+                    <span className="dash-muted block uppercase text-xs mb-0.5">Sentiment</span>
                     <span className={`text-[13px] font-bold ${
                       (drawerData.data.sentiment ?? 0) >= 0.25 ? "text-emerald-400" : (drawerData.data.sentiment ?? 0) <= -0.25 ? "text-red-400" : "text-amber-400"
                     }`}>
@@ -606,24 +616,24 @@ export function NarrativesTab({
                     </span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[7.5px] mb-0.5">Velocity</span>
+                    <span className="dash-muted block uppercase text-xs mb-0.5">Velocity</span>
                     <span className="text-[13px] font-bold text-orange-400">{(drawerData.data.trend || 0).toFixed(1)}%</span>
                   </div>
                 </div>
 
-                <div className="flex justify-between border-b dash-border py-1 text-[10px]">
+                <div className="flex justify-between border-b dash-border py-1 text-xs">
                   <span className="dash-muted">Volume Level:</span>
                   <span className="dash-strong font-bold">{drawerData.data.mentions || 0} mentions</span>
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="dash-muted block uppercase text-[8px]">Linked Executives</span>
+                  <span className="dash-muted block uppercase text-xs">Linked Executives</span>
                   <div className="flex flex-wrap gap-1.5">
                     {drawerData.data.linkedExecutives?.map((execName: string, idx: number) => (
                       <Badge 
                         key={idx} 
                         variant="outline" 
-                        className="text-[9px] font-normal dash-accent-bg dash-accent-bg text-sky-300 py-0.5 px-1.5 cursor-pointer hover:dash-accent-bg"
+                        className="text-xs font-normal dash-accent-bg dash-accent-bg text-sky-300 py-0.5 px-1.5 cursor-pointer hover:dash-accent-bg"
                         onClick={() => {
                           const found = executives.find(e => e.name.toLowerCase() === execName.toLowerCase());
                           if (found) {
@@ -647,26 +657,26 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="dash-muted block uppercase text-[8px]">Linked Documents ({drawerData.data.linkedDocuments?.length || 0})</span>
+                  <span className="dash-muted block uppercase text-xs">Linked Documents ({drawerData.data.linkedDocuments?.length || 0})</span>
                   {drawerData.data.linkedDocuments && drawerData.data.linkedDocuments.length > 0 ? (
                     <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
                       {drawerData.data.linkedDocuments.map((doc: any, idx: number) => (
-                        <div key={idx} className="dash-box border dash-border rounded p-2 flex flex-col justify-between space-y-1 text-[10px]">
+                        <div key={idx} className="dash-box border dash-border rounded p-2 flex flex-col justify-between space-y-1 text-xs">
                           <span className="dash-strong font-bold truncate block">{doc.title}</span>
-                          <div className="flex justify-between items-center text-[9px] dash-muted">
+                          <div className="flex justify-between items-center text-xs dash-muted">
                             <span>Risk: <b className="text-red-400">{Math.round(doc.risk || 0)}</b></span>
                             <button 
                               onClick={() => setDrawerData({ type: "document", data: doc })}
                               className="text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider"
                             >
-                              Open Trace
+                              View Details
                             </button>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="dash-muted text-[10px] italic">No linked documents found.</div>
+                    <div className="dash-muted text-xs italic">No linked documents found.</div>
                   )}
                 </div>
               </div>
@@ -676,27 +686,27 @@ export function NarrativesTab({
             {drawerData.type === "document" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="dash-muted block uppercase text-[8px]">Headline</span>
+                  <span className="dash-muted block uppercase text-xs">Headline</span>
                   <span className="text-[12px] font-bold dash-strong block leading-snug">{drawerData.data.title}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 dash-box p-3 rounded border dash-border">
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Risk Score</span>
+                    <span className="dash-muted block uppercase text-xs">Risk Score</span>
                     <span className="text-[14px] font-bold text-red-400">{drawerData.data.risk || 0}</span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Sentiment</span>
+                    <span className="dash-muted block uppercase text-xs">Sentiment</span>
                     <span className={`text-[14px] font-bold ${(drawerData.data.sentiment ?? 0) >= 0.2 ? "text-emerald-400" : (drawerData.data.sentiment ?? 0) <= -0.2 ? "text-red-400" : "text-amber-400"}`}>
                       {drawerData.data.sentiment !== undefined ? drawerData.data.sentiment.toFixed(2) : "0.00"}
                     </span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Source Ingestion</span>
+                    <span className="dash-muted block uppercase text-xs">Source Ingestion</span>
                     <span className="dash-strong font-bold">{drawerData.data.source || "RSS Feed"}</span>
                   </div>
                   <div>
-                    <span className="dash-muted block uppercase text-[8px]">Published Date</span>
+                    <span className="dash-muted block uppercase text-xs">Published Date</span>
                     <span className="dash-strong font-bold block truncate">
                       {drawerData.data.timestamp ? new Date(drawerData.data.timestamp).toLocaleDateString() : "N/A"}
                     </span>
@@ -704,8 +714,8 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1">
-                  <span className="dash-muted block uppercase text-[8px]">Context Snippet</span>
-                  <div className="dash-box border dash-border rounded p-3 text-[10px] dash-strong max-h-[120px] overflow-y-auto leading-relaxed">
+                  <span className="dash-muted block uppercase text-xs">Context Snippet</span>
+                  <div className="dash-box border dash-border rounded p-3 text-xs dash-strong max-h-[120px] overflow-y-auto leading-relaxed">
                     {drawerData.data.content || "No summary snippet available."}
                   </div>
                 </div>
@@ -713,10 +723,10 @@ export function NarrativesTab({
                 {/* Extracted Entity references */}
                 {drawerData.data.extracted_entities && drawerData.data.extracted_entities.length > 0 && (
                   <div className="space-y-1.5">
-                    <span className="dash-muted block uppercase text-[8px]">Extracted Entities</span>
+                    <span className="dash-muted block uppercase text-xs">Extracted Entities</span>
                     <div className="flex flex-wrap gap-1.5">
                       {drawerData.data.extracted_entities.map((ent: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="text-[9px] font-normal uppercase bg-slate-900/40 border-slate-800 dash-strong">
+                        <Badge key={idx} variant="outline" className="text-xs font-normal uppercase bg-slate-900/40 border-slate-800 dash-strong">
                           {ent.name} [{ent.entity_type}]
                         </Badge>
                       ))}
@@ -726,11 +736,11 @@ export function NarrativesTab({
 
                 {/* Pipeline diagnostic checkpoints */}
                 <div className="space-y-2 border-t dash-border pt-3">
-                  <span className="dash-accent block uppercase text-[9px] font-bold">Pipeline Telemetry Lineage</span>
-                  <div className="space-y-1.5 text-[9px]">
+                  <span className="dash-accent block uppercase text-xs font-bold">Processing Status</span>
+                  <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between items-center dash-box p-1.5 rounded">
                       <span className="dash-muted">Processing Stage:</span>
-                      <Badge className="bg-emerald-950 text-emerald-400 border border-emerald-900 text-[8px] uppercase">{drawerData.data.processing_status || "COMPLETE"}</Badge>
+                      <Badge className="bg-emerald-950 text-emerald-400 border border-emerald-900 text-xs uppercase">{drawerData.data.processing_status || "COMPLETE"}</Badge>
                     </div>
                     <div className="flex justify-between items-center dash-box p-1.5 rounded">
                       <span className="dash-muted">Extraction Stage:</span>
