@@ -3,20 +3,27 @@ import type { Theme } from "./ThemeProvider";
 
 /**
  * "Crystalline Glass" (light) / "Smoked Obsidian Glass" (dark) design
- * tokens. Values are copied verbatim from the design spec -- do not
- * reinterpret the shadow/blur/opacity numbers here.
+ * tokens.
+ *
+ * Light-mode revision (post-review): the original spec's `bg-[#F8F9FD]`
+ * body + `bg-white/45` card was near-white-on-white -- cards had almost no
+ * visible edge and the whole surface read as blown out. Deepened the body
+ * to a soft cool-gray canvas, raised card opacity so it reads as a distinct
+ * surface, swapped the white/70 border (invisible against a light body) for
+ * a dark hairline, and gave the shadow real depth instead of a 6%-opacity
+ * whisper. Dark mode is untouched -- it was already reading fine.
  */
 export const glassTokens = {
   light: {
-    body: "bg-[#F8F9FD]",
+    body: "bg-[#EEF0F5]",
     text: "text-zinc-900",
     muted: "text-zinc-600",
-    card: "bg-white/45 backdrop-blur-2xl border border-white/70 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.06),inset_0_1px_1px_1px_rgba(255,255,255,0.9)]",
-    cardHover: "hover:bg-white/60 hover:border-white/95",
+    card: "bg-white/80 backdrop-blur-2xl border border-black/[0.07] shadow-[0_10px_30px_-8px_rgba(15,23,42,0.16),inset_0_1px_1px_1px_rgba(255,255,255,0.9)]",
+    cardHover: "hover:bg-white/95 hover:border-black/[0.12]",
     primaryButton: "bg-zinc-950 text-white hover:bg-zinc-800",
     accentFrom: "#3B82F6",
     accentTo: "#8B5CF6",
-    pill: "bg-white/70 border border-black/[0.06] shadow-sm",
+    pill: "bg-white/90 border border-black/[0.08] shadow-sm",
   },
   dark: {
     body: "bg-[#070709]",
