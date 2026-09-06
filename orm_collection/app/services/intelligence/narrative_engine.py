@@ -5,7 +5,7 @@ import uuid
 import structlog
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.dialects.postgresql import insert
 
 from app.models.document import Document
@@ -557,13 +557,21 @@ class NarrativeEngine:
         client_entities = db.query(Entity).filter(Entity.client_id == client_id).all()
         entity_ids = [e.id for e in client_entities]
         entity_names = [e.name for e in client_entities]
-        
+
         if not entity_ids:
             log.info("narrative_no_entities_found", action="skipping")
             return
 
-        # P3 — Batch Database Access: Preload all document IDs linked to these entities
-        mentions = db.query(EntityMention).filter(EntityMention.entity_id.in_(entity_ids)).all()
+        # P3 — Batch Database Access: Preload all document IDs linked to these entities.
+        # Excludes entity_type='competitor': a tracked competitor's own
+        # coverage (e.g. its own fraud/legal story, zero mention of this
+        # client) was seeding whole narratives attributed to this client --
+        # same reasoning as the Risk Center fix (documents.py/alert_engine.py/
+        # client_intelligence.py). RiskEvent rows for competitors still exist
+        # for benchmark_engine.py's own comparison feature; this only
+        # excludes them from this client's own narrative pool.
+        narrative_entity_ids = [e.id for e in client_entities if e.entity_type != "competitor"]
+        mentions = db.query(EntityMention).filter(EntityMention.entity_id.in_(narrative_entity_ids)).all()
         doc_ids = list(set(m.document_id for m in mentions))
         
         if not doc_ids:
@@ -591,10 +599,17 @@ class NarrativeEngine:
         sentiments = db.query(DocumentSentiment).filter(DocumentSentiment.document_id.in_(doc_ids)).all()
         sentiment_map = {s.document_id: s.sentiment_score for s in sentiments}
 
-        # P3 — Batch Database Access: Preload all RiskEvents
-        risks = db.query(RiskEvent).filter(
+        # P3 — Batch Database Access: Preload all RiskEvents. Same
+        # competitor exclusion as the document pool above -- a document that
+        # mentions both this client's brand AND a tracked competitor (e.g.
+        # a settled dispute story) must not let the competitor's own
+        # RiskEvent row inflate this client's narrative risk_score.
+        risks = db.query(RiskEvent).outerjoin(
+            Entity, Entity.id == RiskEvent.entity_id
+        ).filter(
             RiskEvent.client_id == client_id,
-            RiskEvent.document_id.in_(doc_ids)
+            RiskEvent.document_id.in_(doc_ids),
+            or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
         ).all()
         risk_map = {}
         for r in risks:
