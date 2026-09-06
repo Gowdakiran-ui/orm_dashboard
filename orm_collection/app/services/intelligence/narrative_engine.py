@@ -206,6 +206,78 @@ class NarrativeEngine:
         else:
             return "EMERGING"
 
+    def _rank_prominent_persons(
+        self,
+        cluster_doc_ids: List[Any],
+        mention_map: Dict[Any, List[Any]],
+        risk_map: Dict[Any, List[Any]],
+    ) -> List[Any]:
+        """
+        Rank a narrative cluster's person-entity mentions by prominence --
+        the fraction of the entity's mentions across this cluster where
+        risk_engine.py's LLM role-classification (SELF/BYSTANDER/EXONERATED,
+        already computed per (document, entity) and stored in
+        RiskEvent.explainability -- reused here, zero new LLM calls) found
+        them to be the actual subject of that document, not a bystander or
+        an exonerated party.
+
+        Fixes FINDINGS.md's "narrative attribution is not role-classification
+        -aware" gap: previously any person mentioned in ANY document of a
+        cluster was added as a "key entity"/"executive" unconditionally --
+        confirmed live, a Tesla executive promoted off one incidental mention
+        inherited a whole Tesla narrative as his own top theme. An entity
+        with zero non-bystander documents is excluded entirely here -- mere
+        incidental presence isn't evidence of driving the story. An entity
+        who is the subject in some documents and a bystander in others is
+        kept and ranked by the ratio, not excluded outright, since someone
+        genuinely central to a narrative can still be a bystander in one
+        wire-copy republish of the same story (the exact mirror-image bug a
+        hard binary filter would risk).
+
+        Note on None: role_classification is None whenever risk_engine.py
+        never attempted LLM classification for that (document, entity) pair
+        (its own RISK_ROLE_CLASSIFICATION_MIN_SCORE gate skips low-scoring
+        documents to avoid the LLM cost) or found no confident result.
+        Counted as non-bystander here, matching risk_engine.py's own
+        convention that a missing/failed classification leaves the
+        mechanical result untouched rather than assuming the worst --
+        a strict "must equal SELF" reading would wrongly zero out a
+        genuinely central figure whose coverage just never scored high
+        enough to trigger the (paid) LLM check, the same over-exclusion
+        risk this method exists to avoid.
+
+        Returns (entity_id, entity_name, prominence, non_bystander_count,
+        total_mentions) tuples, ordered by prominence then volume,
+        descending. Each entity appears once.
+        """
+        role_by_doc_entity: Dict[Any, Optional[str]] = {}
+        for did, risks in risk_map.items():
+            for r in risks:
+                role_by_doc_entity[(did, r.entity_id)] = (r.explainability or {}).get("role_classification")
+
+        mentions_by_entity: Dict[Any, Dict[str, Any]] = {}
+        for did in cluster_doc_ids:
+            for m in mention_map.get(did, []):
+                if m.entity.entity_type != "person":
+                    continue
+                info = mentions_by_entity.setdefault(m.entity_id, {"name": m.entity.name, "docs": set()})
+                info["docs"].add(did)
+
+        ranked = []
+        for entity_id, info in mentions_by_entity.items():
+            doc_ids = info["docs"]
+            non_bystander_count = sum(
+                1 for did in doc_ids
+                if role_by_doc_entity.get((did, entity_id)) not in ("BYSTANDER", "EXONERATED")
+            )
+            if non_bystander_count == 0:
+                continue
+            prominence = non_bystander_count / len(doc_ids)
+            ranked.append((entity_id, info["name"], prominence, non_bystander_count, len(doc_ids)))
+
+        ranked.sort(key=lambda x: (x[2], x[3]), reverse=True)
+        return ranked
+
     def _calculate_confidence_and_gate(
         self,
         doc_count: int,
@@ -836,17 +908,28 @@ class NarrativeEngine:
                         cluster_alerts.extend(alert_map[did])
                 alert_ids = [str(a.id) for a in cluster_alerts]
 
-                # Extract Executive & Competitor Mentions from preloaded mention map
-                executors = set()
+                # Extract Executive & Competitor Mentions from preloaded mention map.
+                # Executives are role-classification-aware and ordered by
+                # prominence (see _rank_prominent_persons) -- competitors are
+                # left as a plain per-cluster mention set, unrelated to this
+                # fix's scope (role classification targets people, not orgs).
                 competitors = set()
-                exec_ids = []
+                cluster_entity_ids = set()
                 for did in cluster_doc_ids:
                     for m in mention_map.get(did, []):
-                        if m.entity.entity_type == "person":
-                            executors.add(m.entity.name)
-                            exec_ids.append(str(m.entity_id))
-                        elif m.entity.entity_type == "competitor":
+                        cluster_entity_ids.add(m.entity_id)
+                        if m.entity.entity_type == "competitor":
                             competitors.add(m.entity.name)
+
+                prominent_persons = self._rank_prominent_persons(cluster_doc_ids, mention_map, risk_map)
+                executors = [name for _, name, _, _, _ in prominent_persons]
+                exec_ids = [str(entity_id) for entity_id, _, _, _, _ in prominent_persons]
+                bystander_only_person_ids = {
+                    m.entity_id
+                    for did in cluster_doc_ids
+                    for m in mention_map.get(did, [])
+                    if m.entity.entity_type == "person"
+                } - {entity_id for entity_id, _, _, _, _ in prominent_persons}
 
                 # Calculate Confidence & Gate
                 source_diversity = len(set(d.source_id for d in cluster_docs if d.source_id))
@@ -888,15 +971,34 @@ class NarrativeEngine:
                     is_emerging=is_emerging
                 )
 
-                # Lineage Metadata
+                # Lineage Metadata.
+                # supporting_entities used to be the client's ENTIRE tracked
+                # entity roster (entity_ids, defined once at the top of
+                # calculate_narratives for the whole client), identically on
+                # every single narrative regardless of that narrative's own
+                # documents -- confirmed live, every narrative for a 21-entity
+                # client carried exactly 21 (now 23, stale) ids. Since
+                # executive_reputation_engine.py's Executive Narratives
+                # section attributes a narrative to an executive by checking
+                # `exec_entity.id in supporting_entities`, that check was
+                # trivially true for every executive on every narrative --
+                # the actual mechanism behind FINDINGS.md's Thomas Edison
+                # case (an exec attached to a narrative he was never
+                # mentioned in at all, not merely a bystander in it). Fixed
+                # to the entities genuinely mentioned in THIS cluster's own
+                # documents, with person-type entities further restricted to
+                # non-bystander ones via _rank_prominent_persons.
                 evidence_metadata = {
                     "supporting_documents": [str(did) for did in cluster_doc_ids],
                     "supporting_risks": risk_ids,
                     "supporting_trends": trend_ids,
                     "supporting_alerts": alert_ids,
-                    "supporting_entities": [str(eid) for eid in entity_ids],
+                    "supporting_entities": [
+                        str(eid) for eid in cluster_entity_ids
+                        if eid not in bystander_only_person_ids
+                    ],
                     "supporting_topics": [str(topic_id)],
-                    "supporting_executives": list(set(exec_ids)),
+                    "supporting_executives": exec_ids,
                     "confidence_calculation": confidence_data,
                     "decision_reason": f"Narrative generated with evidence score {evidence_score}.",
                     "evidence_counts": {
@@ -904,7 +1006,7 @@ class NarrativeEngine:
                         "risks": len(risk_ids),
                         "trends": len(trend_ids),
                         "alerts": len(alert_ids),
-                        "entities": len(entity_ids),
+                        "entities": len(cluster_entity_ids) - len(bystander_only_person_ids),
                         "executives": len(exec_ids)
                     }
                 }
