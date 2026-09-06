@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
-import { getRiskLevel } from "@/utils/riskLevel";
+import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, SPECULAR_LINE } from "@/components/theme/tokens";
@@ -91,8 +91,14 @@ export function ReputationSummaryCard({
     const dominantLevel = critical > 0 ? "CRITICAL" : high > 0 ? "HIGH" : medium > 0 ? "MEDIUM" : "LOW";
     // Top 1-2 highest-risk items named directly, same idea as the reference
     // panel naming "LEGAL RISK NARRATIVE - POTATO FARMERS..." rather than
-    // just showing a count.
-    const topRiskDocs = [...riskDocs].sort((a, b) => (b.risk || 0) - (a.risk || 0)).slice(0, 2);
+    // just showing a count. Requires MEDIUM+ (RiskTab.tsx's Incident Command
+    // Register applies the same floor) -- naming a LOW-severity item (e.g. a
+    // profit-surge story that only scored a few points from coverage volume)
+    // as "the highest-risk item" misrepresents it as a real incident.
+    const topRiskDocs = [...riskDocs]
+      .filter(d => (d.risk || 0) > RISK_THRESHOLDS.LOW_TO_MEDIUM)
+      .sort((a, b) => (b.risk || 0) - (a.risk || 0))
+      .slice(0, 2);
     return { total, critical, high, medium, low, avg, dominantLevel, dangerCount: critical + high, topRiskDocs };
   }, [documents]);
 

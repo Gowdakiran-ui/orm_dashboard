@@ -735,6 +735,29 @@ class RiskEngine:
                 final_score = normalized_base * source_reliability
                 final_score = min(100.0, max(0.0, final_score))
 
+                # Risk-relevance gate: trend_weight is pure coverage-volume
+                # velocity with no direction -- a 70%-profit-surge earnings
+                # beat and a fraud arrest both spike "trend" identically, and
+                # Neutral sentiment alone (weight 10) still isn't a risk
+                # signal. Without this gate, any well-covered brand's routine
+                # Positive/Neutral news (an award, a land acquisition, a
+                # dividend) generates a real RiskEvent purely from trend
+                # velocity, and platform-wide ~80-90% of every client's
+                # RiskEvents were exactly this (measured live: 76-92% LOW
+                # severity across Anthropic/Tesla/Godrej Properties/
+                # EaseMyTrip/Google, ~87% average of those on
+                # Positive/Neutral-sentiment documents). A document only
+                # counts as risk-relevant when it's genuinely Negative in
+                # tone, OR its topic itself names an inherently risky subject
+                # (Legal, Fraud, Cybersecurity, Regulatory Action, etc. --
+                # TOPIC_WEIGHTS) even if worded neutrally, e.g. an unresolved
+                # legal dispute reported dispassionately. Gating BEFORE the
+                # LLM role classification below also skips that (paid) call
+                # entirely for non-risk-relevant documents.
+                is_risk_relevant = (ent_sent_label == "Negative") or (topic_weight > 0)
+                if not is_risk_relevant:
+                    final_score = 0.0
+
                 # LLM-assisted role gate: only for documents already scoring
                 # above the LOW/MEDIUM boundary (see
                 # RISK_ROLE_CLASSIFICATION_MIN_SCORE docstring). role is None

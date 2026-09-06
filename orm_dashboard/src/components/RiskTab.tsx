@@ -57,10 +57,21 @@ export function RiskTab({
     return () => { cancelled = true; };
   }, [selectedDocId, clientId]);
 
-  // Filter out documents with valid risk scores
+  // Filter out documents with valid risk scores. Also requires risk above
+  // the LOW band: `risk` defaults to 0 for any matched document with no
+  // RiskEvent row at all, and 0 is a number -- an unfiltered `typeof
+  // d.risk === "number"` check let every matched document into the
+  // Incident Command Register, LOW-severity or not. Combined with
+  // trend velocity being direction-agnostic (risk_engine.py), that meant
+  // routine Positive/Neutral news (a profit surge, a land acquisition)
+  // sat in the register at equal visual weight to genuine incidents --
+  // confirmed live at ~80-90% of every client's risk events. Only
+  // MEDIUM+ is an actual incident; LOW-severity items still exist in the
+  // data (e.g. for Executive Reputation's own per-entity view) but don't
+  // belong in a register titled "incidents".
   const riskDocs = useMemo(() => {
     return (documents || [])
-      .filter(d => d && typeof d.risk === "number")
+      .filter(d => d && typeof d.risk === "number" && d.risk > RISK_THRESHOLDS.LOW_TO_MEDIUM)
       .map(d => {
         // D3/A4: previously derived from sentiment via an invented
         // ((1 - sentiment) / 2) * 100 formula that risk_engine.py never
