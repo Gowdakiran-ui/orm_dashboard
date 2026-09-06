@@ -963,8 +963,15 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 
     # 2. Risk -- full count by severity (not last-50-limited like get_client_risks),
     # plus the single most severe CRITICAL/HIGH event if one exists.
-    risk_counts_raw = db.query(RiskEvent.risk_level, func.count(RiskEvent.id)).filter(
-        RiskEvent.client_id == client_id
+    # Excludes entity_type='competitor' -- same reasoning as documents.py/
+    # alert_engine.py/get_client_risks above: a tracked competitor's own risk
+    # (e.g. its own fraud/legal incident) is not this client's risk, and
+    # must not be named as the client's own "most severe risk".
+    risk_counts_raw = db.query(RiskEvent.risk_level, func.count(RiskEvent.id)).outerjoin(
+        Entity, Entity.id == RiskEvent.entity_id
+    ).filter(
+        RiskEvent.client_id == client_id,
+        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
     ).group_by(RiskEvent.risk_level).all()
     risk_counts = {level: count for level, count in risk_counts_raw}
     risk_total = sum(risk_counts.values())
@@ -972,7 +979,8 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
     most_severe_risk = None
     top_risk = db.query(RiskEvent, Entity).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
         RiskEvent.client_id == client_id,
-        RiskEvent.risk_level.in_(["CRITICAL", "HIGH"])
+        RiskEvent.risk_level.in_(["CRITICAL", "HIGH"]),
+        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
     ).order_by(RiskEvent.risk_score.desc(), RiskEvent.created_at.desc()).first()
     if top_risk:
         event, entity = top_risk
