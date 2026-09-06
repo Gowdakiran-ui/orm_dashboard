@@ -259,11 +259,16 @@ export function NarrativeAnalyticsPanel({
             {normalizedBubbleData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 20, right: 25, bottom: 20, left: 10 }}>
+                  {/* Glow intensity is theme-gated: a blur/alpha tuned to
+                      pop against dark mode's near-black body reads as a
+                      blurry, muddy smudge against light mode's white card --
+                      light mode gets a lower blur radius and lower alpha so
+                      markers stay crisp instead. */}
                   <defs>
                     <filter id="glow-crit" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="4" result="blur" />
+                      <feGaussianBlur stdDeviation={isDark ? "4" : "1.5"} result="blur" />
                       <feComponentTransfer in="blur" result="glow">
-                        <feFuncA type="linear" slope="0.6" />
+                        <feFuncA type="linear" slope={isDark ? "0.6" : "0.35"} />
                       </feComponentTransfer>
                       <feMerge>
                         <feMergeNode in="glow" />
@@ -271,9 +276,9 @@ export function NarrativeAnalyticsPanel({
                       </feMerge>
                     </filter>
                     <filter id="glow-high" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="3.5" result="blur" />
+                      <feGaussianBlur stdDeviation={isDark ? "3.5" : "1.25"} result="blur" />
                       <feComponentTransfer in="blur" result="glow">
-                        <feFuncA type="linear" slope="0.45" />
+                        <feFuncA type="linear" slope={isDark ? "0.45" : "0.28"} />
                       </feComponentTransfer>
                       <feMerge>
                         <feMergeNode in="glow" />
@@ -281,9 +286,9 @@ export function NarrativeAnalyticsPanel({
                       </feMerge>
                     </filter>
                     <filter id="glow-med" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feGaussianBlur stdDeviation={isDark ? "3" : "1"} result="blur" />
                       <feComponentTransfer in="blur" result="glow">
-                        <feFuncA type="linear" slope="0.35" />
+                        <feFuncA type="linear" slope={isDark ? "0.35" : "0.2"} />
                       </feComponentTransfer>
                       <feMerge>
                         <feMergeNode in="glow" />
