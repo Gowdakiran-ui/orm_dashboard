@@ -67,7 +67,20 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    alerts = db.query(Alert).filter(Alert.client_id == client_id, Alert.is_acknowledged == False).order_by(Alert.created_at.desc()).all()
+    # Excludes entity_type='competitor' -- same reasoning as documents.py/
+    # alert_engine.py/get_client_risks/get_client_reputation_summary: a
+    # tracked competitor's own incident (e.g. its own fraud/legal story)
+    # must not surface as this client's own active alert. This endpoint had
+    # no entity filtering at all until now, unlike its sibling risk
+    # endpoints -- confirmed live, a stale "Multi-Signal Incident: Orris
+    # Infrastructure" CRITICAL alert (created before alert_engine.py's own
+    # fix was deployed) was still showing here since this read path never
+    # had the filter to begin with.
+    alerts = db.query(Alert).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
+        Alert.client_id == client_id,
+        Alert.is_acknowledged == False,
+        or_(Entity.entity_type != "competitor", Alert.entity_id.is_(None)),
+    ).order_by(Alert.created_at.desc()).all()
     results = []
     for a in alerts:
         results.append({
