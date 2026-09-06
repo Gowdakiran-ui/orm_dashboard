@@ -9,6 +9,8 @@ import {
 import { fetchDocumentDetails } from "@/lib/api";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 interface NarrativeIntelligenceWorkbenchProps {
   documents: any[];
@@ -27,6 +29,10 @@ export function NarrativeIntelligenceWorkbench({
   clientId,
   onSelectDocument
 }: NarrativeIntelligenceWorkbenchProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent2 = isDark ? "#7B2CBF" : "#8B5CF6";
   // State for selected narrative -- auto-selected below once real data
   // arrives (see the effect after narrativeList/activeNarrative), not here.
   const [selectedNarrativeId, setSelectedNarrativeId] = useState<string | null>(null);
@@ -160,35 +166,36 @@ export function NarrativeIntelligenceWorkbench({
   };
 
   return (
-    <div className="grid grid-cols-12 gap-6 w-full text-slate-200">
-      
+    <div className={`grid grid-cols-12 gap-6 w-full ${bodyText(theme)}`}>
+
       {/* LEFT: Narrative Register (40% space) */}
-      <Card className="col-span-12 lg:col-span-5 bg-[#050B18]/85 border-[#1F2937]/75 shadow-2xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col h-[750px] relative border-l-2 border-l-sky-500/40">
-        <CardHeader className="pb-3 border-b border-[#1F2937]/40 bg-[#030712]/50 p-4">
+      <Card className={`col-span-12 lg:col-span-5 ${glassCard(theme)} overflow-hidden flex flex-col h-[750px]`} style={{ borderLeftWidth: 2, borderLeftColor: `${accent}66` }}>
+        <div className={SPECULAR_LINE} />
+        <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
           <div className="flex justify-between items-center mb-3">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
               <Layers className="h-3.5 w-3.5" /> Narrative Registry
             </CardTitle>
-            <Badge className="bg-[#030712] text-sky-400 border border-[#1F2937] font-mono text-[9px]">
+            <Badge className={glassPill(theme)} style={{ color: accent }}>
               {processedNarratives.length} Classified
             </Badge>
           </div>
-          
+
           <div className="grid grid-cols-12 gap-2 mt-2">
             <div className="col-span-6 relative">
-              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500" />
+              <Search className={`absolute left-2.5 top-2 h-3.5 w-3.5 ${mutedText(theme)}`} />
               <input
                 type="text"
                 placeholder="Query database..."
-                className="w-full bg-[#030712]/80 border border-[#1F2937] text-slate-200 placeholder-slate-500 rounded px-2 py-1.5 pl-8 text-[11px] font-mono focus:outline-none focus:border-[#D4AF37]/50"
+                className={`w-full rounded px-2 py-1.5 pl-8 text-[11px] font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-black/40 border border-white/[0.12] placeholder-zinc-600 focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] placeholder-zinc-400 focus:border-[#3B82F6]/50"}`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            
+
             <div className="col-span-3">
               <select
-                className="w-full bg-[#030712]/80 border border-[#1F2937] text-slate-200 rounded px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:border-[#D4AF37]/50 cursor-pointer"
+                className={`w-full rounded px-2 py-1.5 text-[11px] font-mono focus:outline-none cursor-pointer ${bodyText(theme)} ${isDark ? "bg-black/40 border border-white/[0.12] focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] focus:border-[#3B82F6]/50"}`}
                 value={sortBy}
                 onChange={(e: any) => setSortBy(e.target.value)}
               >
@@ -200,7 +207,7 @@ export function NarrativeIntelligenceWorkbench({
 
             <div className="col-span-3">
               <select
-                className="w-full bg-[#030712]/80 border border-[#1F2937] text-slate-200 rounded px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:border-[#D4AF37]/50 cursor-pointer"
+                className={`w-full rounded px-2 py-1.5 text-[11px] font-mono focus:outline-none cursor-pointer ${bodyText(theme)} ${isDark ? "bg-black/40 border border-white/[0.12] focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] focus:border-[#3B82F6]/50"}`}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -218,9 +225,9 @@ export function NarrativeIntelligenceWorkbench({
           {processedNarratives.length > 0 ? (
             processedNarratives.map((n) => {
               const isSelected = selectedNarrativeId === n.id;
-              const riskColor = n.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : n.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
+              const riskTextColor = n.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : n.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-500" : "";
               const trendSign = n.trend >= 0 ? "+" : "";
-              const statusBadgeColor = n.status === "Critical" ? "bg-red-950/40 text-red-400 border border-red-800/40" : n.status === "Active" ? "bg-amber-950/40 text-amber-400 border border-amber-800/40" : n.status === "Mitigated" ? "bg-emerald-950/40 text-emerald-400 border border-emerald-800/40" : "bg-sky-950/40 text-sky-400 border border-sky-800/40";
+              const statusBadgeColor = n.status === "Critical" ? "bg-red-500/10 text-red-500 border border-red-500/20" : n.status === "Active" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : n.status === "Mitigated" ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border border-white/[0.12]" : "bg-black/[0.03] border border-black/[0.08]"}`;
 
               return (
                 <div
@@ -228,12 +235,12 @@ export function NarrativeIntelligenceWorkbench({
                   onClick={() => handleSelectNarrative(n.id)}
                   className={`border rounded-lg p-3 cursor-pointer transition-all duration-200 ${
                     isSelected
-                      ? "bg-[#060C1E] border-sky-500/60 shadow-[0_0_12px_rgba(56,189,248,0.15)]"
-                      : "bg-[#030712]/40 border-[#1F2937]/60 hover:border-slate-700/60 hover:bg-[#030712]/70"
+                      ? isDark ? "bg-white/[0.06] border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/60"
+                      : isDark ? "bg-black/20 border-white/[0.08] hover:border-white/[0.2] hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-black/[0.15] hover:bg-black/[0.04]"
                   }`}
                 >
                   <div className="flex justify-between items-start gap-2 mb-1.5">
-                    <span className="font-bold text-xs text-slate-100 hover:text-sky-400 transition-colors duration-150">
+                    <span className={`font-bold text-xs transition-colors duration-150 ${bodyText(theme)}`}>
                       {n.name}
                     </span>
                     <Badge variant="outline" className={`font-mono text-[9px] px-1.5 py-0 ${statusBadgeColor}`}>
@@ -241,35 +248,35 @@ export function NarrativeIntelligenceWorkbench({
                     </Badge>
                   </div>
 
-                  <p className="text-[10px] text-slate-400 leading-normal line-clamp-2 mb-2 font-mono">
+                  <p className={`text-[10px] leading-normal line-clamp-2 mb-2 font-mono ${mutedText(theme)}`}>
                     {n.description || "Synthesizing supporting media vectors. Active narrative matches public profile targets."}
                   </p>
 
-                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-[#1F2937]/30 text-[9px] font-mono text-slate-500">
+                  <div className={`grid grid-cols-4 gap-2 pt-2 border-t text-[9px] font-mono ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                     <div>
-                      <span className="block text-[8px] text-slate-600 uppercase">RISK INDEX</span>
-                      <span className={`font-bold ${riskColor}`}>{n.risk} pts</span>
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>RISK INDEX</span>
+                      <span className={`font-bold ${riskTextColor}`} style={riskTextColor ? undefined : { color: accent }}>{Math.round(n.risk)} pts</span>
                     </div>
                     <div>
-                      <span className="block text-[8px] text-slate-600 uppercase">VELOCITY</span>
-                      <span className={`font-bold ${n.trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>VELOCITY</span>
+                      <span className={`font-bold ${n.trend >= 0 ? "text-emerald-500" : "text-red-500"}`}>
                         {trendSign}{n.trend?.toFixed(1)}%
                       </span>
                     </div>
                     <div>
-                      <span className="block text-[8px] text-slate-600 uppercase">VOLUME</span>
-                      <span className="font-bold text-slate-300">{n.mentions} mentions</span>
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>VOLUME</span>
+                      <span className={`font-bold ${bodyText(theme)}`}>{n.mentions} mentions</span>
                     </div>
                     <div className="text-right">
-                      <span className="block text-[8px] text-slate-600 uppercase">CONFIDENCE</span>
-                      <span className="font-bold text-[#D4AF37]">{n.confidence !== null ? `${n.confidence}%` : "Not Available"}</span>
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>CONFIDENCE</span>
+                      <span className="font-bold" style={{ color: accent }}>{n.confidence !== null ? `${n.confidence}%` : "Not Available"}</span>
                     </div>
                   </div>
 
                   {n.affectedExecs.length > 0 && (
-                    <div className="mt-2 pt-1.5 border-t border-dashed border-[#1F2937]/20 flex items-center gap-1.5 text-[8.5px] font-mono text-slate-400">
-                      <Users className="h-3 w-3 text-sky-500" />
-                      <span className="text-slate-600 font-bold uppercase">TARGETS:</span>
+                    <div className={`mt-2 pt-1.5 border-t border-dashed flex items-center gap-1.5 text-[8.5px] font-mono ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                      <Users className="h-3 w-3" style={{ color: accent }} />
+                      <span className={`font-bold uppercase ${mutedText(theme)}`}>TARGETS:</span>
                       <span className="truncate max-w-[220px]">{n.affectedExecs.join(", ")}</span>
                     </div>
                   )}
@@ -277,7 +284,7 @@ export function NarrativeIntelligenceWorkbench({
               );
             })
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono text-xs py-10">
+            <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-10 ${mutedText(theme)}`}>
               No matching narrative vectors found.
             </div>
           )}
@@ -285,14 +292,15 @@ export function NarrativeIntelligenceWorkbench({
       </Card>
 
       {/* CENTER: AI Analysis Details (35% space) */}
-      <Card className="col-span-12 lg:col-span-4 bg-[#050B18]/85 border-[#1F2937]/75 shadow-2xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col h-[750px] relative border-l-2 border-l-[#D4AF37]/40">
-        <CardHeader className="pb-3 border-b border-[#1F2937]/40 bg-[#030712]/50 p-4">
+      <Card className={`col-span-12 lg:col-span-4 ${glassCard(theme)} overflow-hidden flex flex-col h-[750px]`} style={{ borderLeftWidth: 2, borderLeftColor: `${accent}66` }}>
+        <div className={SPECULAR_LINE} />
+        <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
           <div className="flex justify-between items-center">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-[#D4AF37]" /> AI Analysis details
+            <CardTitle className="text-xs font-mono uppercase tracking-wider flex items-center gap-1.5" style={{ color: accent }}>
+              <Sparkles className="h-3.5 w-3.5" style={{ color: accent }} /> AI Analysis details
             </CardTitle>
             {activeNarrative && (
-              <Badge className="bg-purple-950/30 text-purple-400 border border-purple-800/40 font-mono text-[9px]">
+              <Badge className="bg-purple-500/10 text-purple-400 border border-purple-500/20 font-mono text-[9px]">
                 Classification: {activeNarrative.type || "Reputation"}
               </Badge>
             )}
@@ -304,23 +312,23 @@ export function NarrativeIntelligenceWorkbench({
             <>
               {/* Core Header info */}
               <div>
-                <h3 className="text-sm font-bold text-slate-100 uppercase tracking-tight">{activeNarrative.name}</h3>
-                <span className="text-[9px] text-slate-500 block mt-1">LAST AUDITED: {activeNarrative.lastDetected || "TODAY"}</span>
+                <h3 className={`text-sm font-bold uppercase tracking-tight ${bodyText(theme)}`}>{activeNarrative.name}</h3>
+                <span className={`text-[9px] block mt-1 ${mutedText(theme)}`}>LAST AUDITED: {activeNarrative.lastDetected || "TODAY"}</span>
               </div>
 
               {/* AI generated Narrative Executive Summary */}
               <div className="space-y-1.5">
-                <span className="text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block border-b border-[#1F2937]/30 pb-1">AI Executive Summary</span>
+                <span className={`text-[9.5px] font-bold uppercase tracking-wider block border-b pb-1 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`} style={{ color: accent }}>AI Executive Summary</span>
                 {activeNarrative.summary_text ? (
-                  <p className="text-[10px] text-slate-350 leading-relaxed font-mono">
+                  <p className={`text-[10px] leading-relaxed font-mono ${bodyText(theme)}`}>
                     {activeNarrative.summary_text}
                   </p>
                 ) : (
                   <>
-                    <p className="text-[10px] text-slate-350 leading-relaxed font-mono">
-                      This reputation coordinate outlines media anomalies targeting public profiles connected to {clientName}. Public traction focuses on {activeNarrative.name.toLowerCase()} with an index intensity rating of {activeNarrative.risk} pts.
+                    <p className={`text-[10px] leading-relaxed font-mono ${bodyText(theme)}`}>
+                      This reputation coordinate outlines media anomalies targeting public profiles connected to {clientName}. Public traction focuses on {activeNarrative.name.toLowerCase()} with an index intensity rating of {Math.round(activeNarrative.risk)} pts.
                     </p>
-                    <p className="text-[10px] text-slate-400 leading-relaxed font-mono mt-1 border-t border-dashed border-[#1F2937]/20 pt-1.5">
+                    <p className={`text-[10px] leading-relaxed font-mono mt-1 border-t border-dashed pt-1.5 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                       {activeNarrative.description || "Initial media collection traces narrative volume across digital profiles, indicating low structural risk but high volatile trend vectors in forum discussion boards."}
                     </p>
                   </>
@@ -329,35 +337,35 @@ export function NarrativeIntelligenceWorkbench({
 
               {/* Metrics Breakdown Grid */}
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="bg-[#030712]/40 border border-[#1F2937]/45 rounded p-2 text-center">
-                  <span className="text-[8px] text-slate-600 block uppercase font-bold">Risk Index</span>
-                  <span className={`text-sm font-bold block mt-0.5 ${activeNarrative.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" : activeNarrative.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" : "text-sky-400"}`}>{activeNarrative.risk} pts</span>
-                  <span className="text-[8px] text-slate-500 block mt-0.5">{activeNarrative.risk >= 60 ? "HIGH PROFILE" : "MONITORED"}</span>
+                <div className={`rounded-lg p-2 text-center border ${isDark ? "bg-black/20 border-white/[0.08]" : "bg-black/[0.02] border-black/[0.06]"}`}>
+                  <span className={`text-[8px] block uppercase font-bold ${mutedText(theme)}`}>Risk Index</span>
+                  <span className="text-sm font-bold block mt-0.5" style={{ color: activeNarrative.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "#EF4444" : activeNarrative.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "#F59E0B" : accent }}>{Math.round(activeNarrative.risk)} pts</span>
+                  <span className={`text-[8px] block mt-0.5 ${mutedText(theme)}`}>{activeNarrative.risk >= 60 ? "HIGH PROFILE" : "MONITORED"}</span>
                 </div>
-                <div className="bg-[#030712]/40 border border-[#1F2937]/45 rounded p-2 text-center">
-                  <span className="text-[8px] text-slate-600 block uppercase font-bold">Velocity Index</span>
-                  <span className={`text-sm font-bold block mt-0.5 ${activeNarrative.trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                <div className={`rounded-lg p-2 text-center border ${isDark ? "bg-black/20 border-white/[0.08]" : "bg-black/[0.02] border-black/[0.06]"}`}>
+                  <span className={`text-[8px] block uppercase font-bold ${mutedText(theme)}`}>Velocity Index</span>
+                  <span className={`text-sm font-bold block mt-0.5 ${activeNarrative.trend >= 0 ? "text-emerald-500" : "text-red-500"}`}>
                     {activeNarrative.trend >= 0 ? "+" : ""}{activeNarrative.trend?.toFixed(1)}%
                   </span>
-                  <span className="text-[8px] text-slate-500 block mt-0.5">{activeNarrative.trend >= 15 ? "EXPANDING" : "STABLE"}</span>
+                  <span className={`text-[8px] block mt-0.5 ${mutedText(theme)}`}>{activeNarrative.trend >= 15 ? "EXPANDING" : "STABLE"}</span>
                 </div>
               </div>
 
               {/* Entity relationships */}
               <div className="space-y-2">
-                <span className="text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block border-b border-[#1F2937]/30 pb-1">Entity Map</span>
+                <span className={`text-[9.5px] font-bold uppercase tracking-wider block border-b pb-1 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`} style={{ color: accent }}>Entity Map</span>
                 <div className="space-y-1.5 text-[9.5px]">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Primary Targets:</span>
-                    <span className="text-slate-300 font-bold">{activeNarrative.affectedExecs?.join(", ") || "Corporate Management"}</span>
+                    <span className={mutedText(theme)}>Primary Targets:</span>
+                    <span className={`font-bold ${bodyText(theme)}`}>{activeNarrative.affectedExecs?.join(", ") || "Corporate Management"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Connected Sources:</span>
-                    <span className="text-slate-350">{activeNarrative.docsCount} distinct documents</span>
+                    <span className={mutedText(theme)}>Connected Sources:</span>
+                    <span className={bodyText(theme)}>{activeNarrative.docsCount} distinct documents</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Reputation Velocity:</span>
-                    <span className={`font-bold ${activeNarrative.sentiment >= 0.2 ? "text-emerald-400" : activeNarrative.sentiment <= -0.2 ? "text-red-400" : "text-amber-400"}`}>
+                    <span className={mutedText(theme)}>Reputation Velocity:</span>
+                    <span className={`font-bold ${activeNarrative.sentiment >= 0.2 ? "text-emerald-500" : activeNarrative.sentiment <= -0.2 ? "text-red-500" : "text-amber-500"}`}>
                       {activeNarrative.sentiment !== undefined ? activeNarrative.sentiment.toFixed(2) : "0.00"} sentiment
                     </span>
                   </div>
@@ -366,26 +374,26 @@ export function NarrativeIntelligenceWorkbench({
 
               {/* Recommended Response Action Plan */}
               <div className="space-y-2">
-                <span className="text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block border-b border-[#1F2937]/30 pb-1">Action Recommendations</span>
-                <div className="bg-sky-950/20 border border-sky-900/40 rounded p-2.5 text-slate-300 text-[10px] space-y-1.5">
+                <span className={`text-[9.5px] font-bold uppercase tracking-wider block border-b pb-1 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`} style={{ color: accent }}>Action Recommendations</span>
+                <div className={`rounded-lg p-2.5 text-[10px] space-y-1.5 border ${bodyText(theme)}`} style={{ backgroundColor: `${accent}1A`, borderColor: `${accent}40` }}>
                   <div className="flex gap-1.5 items-start">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-sky-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: accent }} />
                     <span>
-                      {activeNarrative.risk >= 70 
-                        ? "Execute press counter-communication and alert executive communications team." 
+                      {activeNarrative.risk >= 70
+                        ? "Execute press counter-communication and alert executive communications team."
                         : "Monitor timeline activity and set alert pipelines for volume spikes above 15%."}
                     </span>
                   </div>
                   <div className="flex gap-1.5 items-start">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-sky-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: accent }} />
                     <span>Audit supporting sources checklist to scan for organized narrative distribution.</span>
                   </div>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono text-xs py-20 text-center">
-              <BarChart2 className="h-8 w-8 text-slate-600 mb-2" />
+            <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
+              <BarChart2 className={`h-8 w-8 mb-2 ${mutedText(theme)}`} />
               Select a narrative from the registry to view detailed intelligence analysis.
             </div>
           )}
@@ -393,13 +401,14 @@ export function NarrativeIntelligenceWorkbench({
       </Card>
 
       {/* RIGHT: Evidence & Documents (25% space) */}
-      <Card className="col-span-12 lg:col-span-3 bg-[#050B18]/85 border-[#1F2937]/75 shadow-2xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col h-[750px] relative border-l-2 border-l-emerald-500/40">
-        <CardHeader className="pb-3 border-b border-[#1F2937]/40 bg-[#030712]/50 p-4">
+      <Card className={`col-span-12 lg:col-span-3 ${glassCard(theme)} overflow-hidden flex flex-col h-[750px]`} style={{ borderLeftWidth: 2, borderLeftColor: "rgba(16,185,129,0.4)" }}>
+        <div className={SPECULAR_LINE} />
+        <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
           <div className="flex justify-between items-center">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
+            <CardTitle className="text-xs font-mono uppercase tracking-wider flex items-center gap-1.5" style={{ color: accent }}>
               <Calendar className="h-3.5 w-3.5" /> Source Evidence
             </CardTitle>
-            <Badge className="bg-[#030712] text-emerald-400 border border-[#1F2937] font-mono text-[9px]">
+            <Badge className={glassPill(theme) + " text-emerald-500"}>
               {activeNarrative ? activeNarrative.docsCount : 0} Sources
             </Badge>
           </div>
@@ -409,8 +418,8 @@ export function NarrativeIntelligenceWorkbench({
           {activeNarrative ? (
             activeNarrative.rawDocs && activeNarrative.rawDocs.length > 0 ? (
               activeNarrative.rawDocs.map((doc: any) => {
-                const docRiskColor = doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 bg-red-950/20" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 bg-amber-950/20" : "text-sky-400 bg-sky-950/20";
-                const formattedDate = doc.timestamp 
+                const docRiskColorClass = doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500 bg-red-500/10" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-500 bg-amber-500/10" : "";
+                const formattedDate = doc.timestamp
                   ? new Date(doc.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
                   : "Unknown";
 
@@ -423,47 +432,40 @@ export function NarrativeIntelligenceWorkbench({
                   else if (s.includes("blog")) typeLabel = "blog";
                   else if (s.includes("forum")) typeLabel = "forum";
                 }
-                
-                let srcBadgeColor = "bg-slate-900/80 text-slate-350 border-slate-800";
-                if (typeLabel === "reddit") srcBadgeColor = "bg-orange-950/30 text-orange-400 border-orange-900/30";
-                else if (typeLabel === "youtube") srcBadgeColor = "bg-red-950/30 text-red-400 border-red-950/30";
-                else if (typeLabel === "news") srcBadgeColor = "bg-blue-950/30 text-blue-400 border-blue-900/30";
-                else if (typeLabel === "blog") srcBadgeColor = "bg-purple-950/30 text-purple-400 border-purple-900/30";
-                else if (typeLabel === "forum") srcBadgeColor = "bg-teal-950/30 text-teal-400 border-teal-900/30";
 
                 return (
                   <div
                     key={doc.id}
                     onClick={() => onSelectDocument(doc)}
-                    className="bg-[#030712]/40 border border-[#1F2937]/55 hover:border-emerald-500/40 hover:bg-[#030712]/75 rounded p-2.5 transition-all duration-150 cursor-pointer space-y-2 group relative"
+                    className={`rounded-lg p-2.5 transition-all duration-150 cursor-pointer space-y-2 group relative border ${isDark ? "bg-black/20 border-white/[0.08] hover:border-emerald-500/40 hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-emerald-500/40 hover:bg-black/[0.04]"}`}
                   >
                     <div className="flex justify-between items-start gap-2">
-                      <span className="font-bold text-[10px] text-slate-200 group-hover:text-sky-400 transition-colors duration-150 line-clamp-2 leading-tight">
+                      <span className={`font-bold text-[10px] transition-colors duration-150 line-clamp-2 leading-tight ${bodyText(theme)}`}>
                         {doc.title}
                       </span>
                     </div>
 
                     {/* Metadata fields requested by user */}
-                    <div className="grid grid-cols-2 gap-y-1 text-[8px] font-mono text-slate-500 border-t border-[#1F2937]/20 pt-1.5">
+                    <div className={`grid grid-cols-2 gap-y-1 text-[8px] font-mono border-t pt-1.5 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                       <div>
-                        <span className="text-slate-600">SOURCE:</span> <span className="text-slate-350">{doc.source || "RSS Feed"}</span>
+                        <span className={mutedText(theme)}>SOURCE:</span> <span className={bodyText(theme)}>{doc.source || "RSS Feed"}</span>
                       </div>
                       <div>
-                        <span className="text-slate-600">TYPE:</span> <span className="text-slate-350 capitalize">{typeLabel}</span>
+                        <span className={mutedText(theme)}>TYPE:</span> <span className={`capitalize ${bodyText(theme)}`}>{typeLabel}</span>
                       </div>
                       <div>
-                        <span className="text-slate-600">DATE:</span> <span className="text-slate-350">{formattedDate}</span>
+                        <span className={mutedText(theme)}>DATE:</span> <span className={bodyText(theme)}>{formattedDate}</span>
                       </div>
                       <div>
-                        <span className="text-slate-600">SENTIMENT:</span> <span className={`font-bold ${doc.sentiment >= 0.2 ? "text-emerald-400" : doc.sentiment <= -0.2 ? "text-red-400" : "text-amber-400"}`}>{doc.sentiment?.toFixed(2) || "0.00"}</span>
+                        <span className={mutedText(theme)}>SENTIMENT:</span> <span className={`font-bold ${doc.sentiment >= 0.2 ? "text-emerald-500" : doc.sentiment <= -0.2 ? "text-red-500" : "text-amber-500"}`}>{doc.sentiment?.toFixed(2) || "0.00"}</span>
                       </div>
                       <div>
-                        <span className="text-slate-600">RISK SCORE:</span> <span className={`font-bold ${docRiskColor}`}>{doc.risk || 0}</span>
+                        <span className={mutedText(theme)}>RISK SCORE:</span> <span className={`font-bold ${docRiskColorClass || bodyText(theme)}`}>{Math.round(doc.risk || 0)}</span>
                       </div>
                     </div>
 
                     {/* Document control actions - Single Button Requested */}
-                    <div className="flex gap-1.5 pt-1.5 border-t border-dashed border-[#1F2937]/25 w-full">
+                    <div className={`flex gap-1.5 pt-1.5 border-t border-dashed w-full ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                       {docUrls[doc.id] !== undefined && isValidOriginalArticleUrl(docUrls[doc.id]) ? (
                         <Button
                           size="sm"
@@ -475,7 +477,8 @@ export function NarrativeIntelligenceWorkbench({
                               window.open(url, "_blank", "noopener,noreferrer");
                             }
                           }}
-                          className="h-5 px-1.5 text-[8.5px] font-mono bg-[#030712] border border-[#1F2937] hover:bg-slate-900 text-sky-400 hover:text-sky-350 flex items-center gap-1 w-full justify-center"
+                          className={`h-5 px-1.5 text-[8.5px] font-mono flex items-center gap-1 w-full justify-center border ${isDark ? "bg-black/40 border-white/[0.12] hover:bg-white/[0.08]" : "bg-white/60 border-black/[0.08] hover:bg-black/[0.04]"}`}
+                          style={{ color: accent }}
                         >
                           <ExternalLink className="h-2 w-2" /> Open Original Article
                         </Button>
@@ -484,7 +487,7 @@ export function NarrativeIntelligenceWorkbench({
                           size="sm"
                           variant="ghost"
                           disabled
-                          className="h-5 px-1.5 text-[8.5px] font-mono bg-[#030712] border border-[#1F2937] text-slate-500 flex items-center gap-1 w-full justify-center cursor-not-allowed opacity-50"
+                          className={`h-5 px-1.5 text-[8.5px] font-mono flex items-center gap-1 w-full justify-center cursor-not-allowed opacity-50 border ${mutedText(theme)} ${isDark ? "bg-black/40 border-white/[0.12]" : "bg-white/60 border-black/[0.08]"}`}
                         >
                           Original article unavailable
                         </Button>
@@ -494,13 +497,13 @@ export function NarrativeIntelligenceWorkbench({
                 );
               })
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono text-xs py-20 text-center">
-                <AlertTriangle className="h-5 w-5 text-slate-600 mb-1" />
+              <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
+                <AlertTriangle className={`h-5 w-5 mb-1 ${mutedText(theme)}`} />
                 No supporting documents found.
               </div>
             )
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono text-xs py-20 text-center">
+            <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
               No narrative selected.
             </div>
           )}

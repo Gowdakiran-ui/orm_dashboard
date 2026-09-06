@@ -489,7 +489,7 @@ export function NarrativesTab({
                     {narratives.map((narr, idx) => (
                       <div key={idx} className="flex justify-between py-1.5 first:pt-0 last:pb-0">
                         <span className="dash-strong truncate max-w-[200px]">{narr.name}</span>
-                        <span className="text-red-400 font-bold">{narr.risk} pts</span>
+                        <span className="text-red-400 font-bold">{Math.round(narr.risk)} pts</span>
                       </div>
                     ))}
                   </div>
@@ -654,7 +654,7 @@ export function NarrativesTab({
                         <div key={idx} className="dash-box border dash-border rounded p-2 flex flex-col justify-between space-y-1 text-[10px]">
                           <span className="dash-strong font-bold truncate block">{doc.title}</span>
                           <div className="flex justify-between items-center text-[9px] dash-muted">
-                            <span>Risk: <b className="text-red-400">{doc.risk}</b></span>
+                            <span>Risk: <b className="text-red-400">{Math.round(doc.risk || 0)}</b></span>
                             <button 
                               onClick={() => setDrawerData({ type: "document", data: doc })}
                               className="text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider"

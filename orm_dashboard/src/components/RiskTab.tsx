@@ -509,7 +509,7 @@ export function RiskTab({
                   <TableCell className={`text-center font-mono text-xs font-black ${
                     doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
                   }`}>
-                    {doc.risk}
+                    {Math.round(doc.risk || 0)}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge className={`font-mono text-[8px] ${
@@ -736,7 +736,7 @@ export function RiskTab({
                           doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
                           "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
                         }`}>
-                          Risk Score: {doc.risk}
+                          Risk Score: {Math.round(doc.risk || 0)}
                         </Badge>
                       </div>
                       <h4 className={`text-xs font-bold leading-snug ${bodyText(theme)}`}>{doc.title}</h4>

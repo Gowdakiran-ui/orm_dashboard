@@ -677,7 +677,7 @@ export function ExecutivesTab({
                   <TableCell className={`text-center font-mono text-xs font-bold ${
                     doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-500"
                   }`}>
-                    {doc.risk}
+                    {Math.round(doc.risk || 0)}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-slate-450 truncate max-w-[100px]">{doc.source}</TableCell>
                   <TableCell className="font-mono text-[10px] text-slate-500">
