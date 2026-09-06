@@ -11,8 +11,13 @@ import {
   AdminUser, CreateUserPayload, PasswordReveal
 } from "@/lib/api";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export function AdminUsersPanel() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,15 +146,15 @@ export function AdminUsersPanel() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-10 bg-[#1E293B]/20 border border-[#1F2937]/60 rounded-lg w-48" />
-        <div className="h-64 bg-[#1E293B]/10 border border-[#1F2937]/60 rounded-lg" />
+        <div className={`h-10 rounded-lg w-48 ${glassTokens[theme].card}`} />
+        <div className={`h-64 rounded-lg ${glassTokens[theme].card}`} />
       </div>
     );
   }
 
   if (error) {
     return (
-      <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+      <Card className={`${glassCard(theme)} border-red-500/20 h-96`}>
         <TelemetryErrorWidget title="User Management Offline" message={error} />
       </Card>
     );
@@ -157,16 +162,17 @@ export function AdminUsersPanel() {
 
   return (
     <div className="space-y-6 font-mono">
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl">
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
         <CardHeader>
-          <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
             <span className="flex items-center">
-              <ShieldCheck className="h-4 w-4 text-[#D4AF37] mr-2" />
+              <ShieldCheck className="h-4 w-4 mr-2" style={{ color: accent }} />
               ACCESS CONTROL — USER MANAGEMENT
             </span>
             <button
               onClick={() => { setCreateOpen(true); setCreateError(null); }}
-              className="flex items-center space-x-1.5 bg-[#D4AF37] hover:bg-[#F3C63F] text-[#030712] font-bold text-[10px] uppercase tracking-wider rounded px-3 py-1.5"
+              className={`flex items-center space-x-1.5 font-bold text-[10px] uppercase tracking-wider px-3 py-1.5 ${glassPrimaryButton(theme)}`}
             >
               <UserPlus className="h-3.5 w-3.5" />
               <span>Create User</span>
@@ -175,40 +181,40 @@ export function AdminUsersPanel() {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader className="border-[#1F2937]/40 bg-[#030712]/50">
-              <TableRow className="border-[#1F2937]/40">
-                <TableHead className="text-slate-500 font-mono text-[10px]">EMAIL</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">ROLE</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-center">STATUS</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px]">ASSIGNED CLIENTS</TableHead>
-                <TableHead className="text-slate-500 font-mono text-[10px] text-right">ACTION</TableHead>
+            <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
+              <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
+                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>EMAIL</TableHead>
+                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>ROLE</TableHead>
+                <TableHead className={`font-mono text-[10px] text-center ${mutedText(theme)}`}>STATUS</TableHead>
+                <TableHead className={`font-mono text-[10px] ${mutedText(theme)}`}>ASSIGNED CLIENTS</TableHead>
+                <TableHead className={`font-mono text-[10px] text-right ${mutedText(theme)}`}>ACTION</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((u) => (
-                <TableRow key={u.id} className="border-[#1F2937]/40 hover:bg-[#060B18] transition-colors">
-                  <TableCell className="font-mono text-xs font-bold text-slate-200">{u.email}</TableCell>
+                <TableRow key={u.id} className={`transition-colors ${isDark ? "border-white/[0.08] hover:bg-white/[0.03]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}>
+                  <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{u.email}</TableCell>
                   <TableCell className="text-center">
                     <Badge className={`font-mono text-[8px] ${
                       u.role === "super_admin"
-                        ? "bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30"
-                        : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                        ? isDark ? "bg-[#00F5D4]/10 text-[#00F5D4] border border-[#00F5D4]/30" : "bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30"
+                        : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
                     }`}>
                       {u.role.toUpperCase()}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     {u.is_active ? (
-                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[8px]">ACTIVE</Badge>
+                      <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono text-[8px]">ACTIVE</Badge>
                     ) : (
-                      <Badge className="bg-slate-500/10 text-slate-400 border border-slate-500/20 font-mono text-[8px]">INACTIVE</Badge>
+                      <Badge className={`font-mono text-[8px] ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>INACTIVE</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="font-mono text-[10px] text-slate-400">
+                  <TableCell className={`font-mono text-[10px] ${mutedText(theme)}`}>
                     {u.role === "super_admin" ? (
-                      <span className="text-[#D4AF37]/70">All clients</span>
+                      <span style={{ color: `${accent}B3` }}>All clients</span>
                     ) : u.client_ids.length === 0 ? (
-                      <span className="text-slate-600">None assigned</span>
+                      <span className={mutedText(theme)}>None assigned</span>
                     ) : (
                       u.client_ids.map((id) => clientName(id)).join(", ")
                     )}
@@ -217,7 +223,8 @@ export function AdminUsersPanel() {
                     <div className="flex items-center justify-end space-x-3">
                       <button
                         onClick={() => { setResetTarget(u); setResetError(null); }}
-                        className="flex items-center space-x-1 text-[#38BDF8] hover:text-[#38BDF8]/80 text-[10px] uppercase"
+                        className="flex items-center space-x-1 text-[10px] uppercase transition-colors"
+                        style={{ color: accent }}
                         title="Reset password"
                       >
                         <KeyRound className="h-3 w-3" />
@@ -225,7 +232,7 @@ export function AdminUsersPanel() {
                       </button>
                       <button
                         onClick={() => { setDeleteTarget(u); setDeleteError(null); }}
-                        className="flex items-center space-x-1 text-red-400 hover:text-red-300 text-[10px] uppercase"
+                        className="flex items-center space-x-1 text-red-500 hover:text-red-400 text-[10px] uppercase"
                         title="Delete user"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -237,7 +244,7 @@ export function AdminUsersPanel() {
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-slate-500 font-mono text-xs">
+                  <TableCell colSpan={5} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
                     No users provisioned yet.
                   </TableCell>
                 </TableRow>
@@ -249,30 +256,30 @@ export function AdminUsersPanel() {
 
       {/* Create User Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="bg-[#060B18] border-[#1F2937] text-slate-100">
+        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90 border-white/[0.12]" : "bg-white/90 border-white/70"}`}>
           <DialogHeader>
-            <DialogTitle className="font-mono text-[#D4AF37]">Create User</DialogTitle>
-            <DialogDescription className="text-slate-400 font-mono text-xs">
+            <DialogTitle className="font-mono" style={{ color: accent }}>Create User</DialogTitle>
+            <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
               A password is generated automatically and shown once after creation — hand it to the user yourself.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2 font-mono text-xs">
             <div className="space-y-2">
-              <label className="text-slate-400">Email</label>
+              <label className={mutedText(theme)}>Email</label>
               <input
                 type="email"
                 placeholder="name@company.com"
                 value={createEmail}
                 onChange={(e) => setCreateEmail(e.target.value)}
-                className="w-full bg-[#030712] border border-[#1F2937] rounded px-3 py-2 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-slate-400">Role</label>
+              <label className={mutedText(theme)}>Role</label>
               <select
                 value={createRole}
                 onChange={(e) => setCreateRole(e.target.value as "client_user" | "super_admin")}
-                className="w-full bg-[#030712] border border-[#1F2937] rounded px-3 py-2 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
               >
                 <option value="client_user">Client User</option>
                 <option value="super_admin">Super Admin</option>
@@ -280,21 +287,21 @@ export function AdminUsersPanel() {
             </div>
             {createRole === "client_user" && (
               <div className="space-y-2">
-                <label className="text-slate-400">Assigned Clients</label>
-                <div className="max-h-40 overflow-y-auto border border-[#1F2937] rounded p-2 space-y-1 bg-[#030712]">
+                <label className={mutedText(theme)}>Assigned Clients</label>
+                <div className={`max-h-40 overflow-y-auto rounded p-2 space-y-1 border ${isDark ? "bg-zinc-950/60 border-white/[0.12]" : "bg-white/60 border-black/[0.08]"}`}>
                   {clients.map((c: any) => (
-                    <label key={c.id} className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                    <label key={c.id} className={`flex items-center space-x-2 cursor-pointer ${bodyText(theme)}`}>
                       <input
                         type="checkbox"
                         checked={createClientIds.includes(c.id)}
                         onChange={() => toggleCreateClient(c.id)}
-                        className="accent-[#D4AF37]"
+                        style={{ accentColor: accent }}
                       />
                       <span>{c.name}</span>
                     </label>
                   ))}
                   {clients.length === 0 && (
-                    <span className="text-slate-600 text-[10px]">No clients available.</span>
+                    <span className={`text-[10px] ${mutedText(theme)}`}>No clients available.</span>
                   )}
                 </div>
               </div>
@@ -304,14 +311,14 @@ export function AdminUsersPanel() {
           <DialogFooter>
             <button
               onClick={() => setCreateOpen(false)}
-              className="font-mono text-xs px-4 py-2 text-slate-400 hover:text-slate-200"
+              className={`font-mono text-xs px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
             >
               Cancel
             </button>
             <button
               onClick={handleCreate}
               disabled={createLoading}
-              className="bg-[#D4AF37] text-black font-bold font-mono text-xs px-4 py-2 rounded disabled:opacity-50 flex items-center space-x-2"
+              className={`font-mono text-xs px-4 py-2 disabled:opacity-50 flex items-center space-x-2 ${glassPrimaryButton(theme)}`}
             >
               {createLoading && <Loader2 className="h-3 w-3 animate-spin" />}
               <span>{createLoading ? "Creating..." : "Create User"}</span>
@@ -322,12 +329,12 @@ export function AdminUsersPanel() {
 
       {/* Reset Password Confirmation Dialog */}
       <Dialog open={resetTarget !== null} onOpenChange={(open) => { if (!open) { setResetTarget(null); setResetError(null); } }}>
-        <DialogContent className="bg-[#060B18] border-[#1F2937] text-slate-100">
+        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90 border-white/[0.12]" : "bg-white/90 border-white/70"}`}>
           <DialogHeader>
-            <DialogTitle className="font-mono text-[#38BDF8]">Reset Password</DialogTitle>
-            <DialogDescription className="text-slate-400 font-mono text-xs">
+            <DialogTitle className="font-mono" style={{ color: accent }}>Reset Password</DialogTitle>
+            <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
               Generate a new password for{" "}
-              <span className="text-slate-200 font-bold">{resetTarget?.email}</span>? Their current password stops working immediately.
+              <span className={`font-bold ${bodyText(theme)}`}>{resetTarget?.email}</span>? Their current password stops working immediately.
             </DialogDescription>
           </DialogHeader>
           {resetError && (
@@ -336,14 +343,14 @@ export function AdminUsersPanel() {
           <DialogFooter>
             <button
               onClick={() => { setResetTarget(null); setResetError(null); }}
-              className="font-mono text-xs px-4 py-2 text-slate-300 hover:text-white"
+              className={`font-mono text-xs px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
             >
               Cancel
             </button>
             <button
               onClick={handleResetPassword}
               disabled={resetLoading}
-              className="bg-[#38BDF8] text-black font-bold font-mono text-xs px-4 py-2 rounded disabled:opacity-50"
+              className={`font-mono text-xs px-4 py-2 disabled:opacity-50 ${glassPrimaryButton(theme)}`}
             >
               {resetLoading ? "Resetting..." : "Reset Password"}
             </button>
@@ -353,12 +360,12 @@ export function AdminUsersPanel() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteError(null); } }}>
-        <DialogContent className="bg-[#060B18] border-[#1F2937] text-slate-100">
+        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90 border-white/[0.12]" : "bg-white/90 border-white/70"}`}>
           <DialogHeader>
             <DialogTitle className="font-mono text-red-500">Delete User</DialogTitle>
-            <DialogDescription className="text-slate-400 font-mono text-xs">
+            <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
               Are you sure you want to permanently delete{" "}
-              <span className="text-slate-200 font-bold">{deleteTarget?.email}</span>? This action is irreversible.
+              <span className={`font-bold ${bodyText(theme)}`}>{deleteTarget?.email}</span>? This action is irreversible.
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
@@ -367,7 +374,7 @@ export function AdminUsersPanel() {
           <DialogFooter>
             <button
               onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
-              className="font-mono text-xs px-4 py-2 text-slate-300 hover:text-white"
+              className={`font-mono text-xs px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
             >
               Cancel
             </button>
@@ -384,32 +391,32 @@ export function AdminUsersPanel() {
 
       {/* One-Time Password Reveal Dialog (after create or reset) */}
       <Dialog open={passwordReveal !== null} onOpenChange={(open) => { if (!open) { setPasswordReveal(null); setCopied(false); } }}>
-        <DialogContent className="bg-[#060B18] border-[#D4AF37]/40 text-slate-100">
+        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90" : "bg-white/90"}`} style={{ borderColor: `${accent}66` }}>
           <DialogHeader>
-            <DialogTitle className="font-mono text-[#D4AF37] flex items-center">
+            <DialogTitle className="font-mono flex items-center" style={{ color: accent }}>
               <KeyRound className="h-4 w-4 mr-2" />
               Password Generated
             </DialogTitle>
-            <DialogDescription className="text-slate-400 font-mono text-xs">
-              For <span className="text-slate-200 font-bold">{passwordReveal?.email}</span>. Copy this now — it will not be shown again.
+            <DialogDescription className={`font-mono text-xs ${mutedText(theme)}`}>
+              For <span className={`font-bold ${bodyText(theme)}`}>{passwordReveal?.email}</span>. Copy this now — it will not be shown again.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
-            <div className="flex items-center space-x-2 bg-[#030712] border border-[#1F2937] rounded p-3">
-              <code className="flex-1 text-sm text-emerald-400 break-all font-mono">{passwordReveal?.password}</code>
+            <div className={`flex items-center space-x-2 rounded p-3 border ${isDark ? "bg-zinc-950/60 border-white/[0.12]" : "bg-white/60 border-black/[0.08]"}`}>
+              <code className="flex-1 text-sm text-emerald-500 break-all font-mono">{passwordReveal?.password}</code>
               <button
                 onClick={handleCopyPassword}
                 title="Copy password"
-                className="shrink-0 text-slate-400 hover:text-[#D4AF37] transition-colors"
+                className={`shrink-0 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-[#00F5D4]" : "hover:text-[#3B82F6]"}`}
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
           </div>
           <DialogFooter>
             <button
               onClick={() => { setPasswordReveal(null); setCopied(false); }}
-              className="bg-[#D4AF37] text-black font-bold font-mono text-xs px-4 py-2 rounded"
+              className={`font-bold font-mono text-xs px-4 py-2 ${glassPrimaryButton(theme)}`}
             >
               Done
             </button>

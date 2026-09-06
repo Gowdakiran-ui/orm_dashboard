@@ -10,6 +10,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export interface NarrativeAnalyticsPanelProps {
   narrativeBubbleData: any[];
@@ -38,24 +40,28 @@ export function NarrativeAnalyticsPanel({
   loading = false,
   error = null
 }: NarrativeAnalyticsPanelProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
 
   // 1. KPI Summaries based on live data
   const kpis = useMemo(() => {
     const totalNarratives = narrativeBubbleData.length;
     const highRiskCount = narrativeBubbleData.filter(n => (n.risk || 0) > RISK_THRESHOLDS.MEDIUM_TO_HIGH).length;
-    
+
     const sortedByMentions = [...narrativeBubbleData].sort((a, b) => b.mentions - a.mentions);
     const topNarrative = sortedByMentions.length > 0 ? sortedByMentions[0].name : "None";
-    
+
     const totalMentions = narrativeBubbleData.reduce((sum, n) => sum + (n.mentions || 0), 0);
 
     return [
       { label: "Total Narratives", value: totalNarratives, desc: "Identified media clusters", icon: MessageSquare, color: "text-purple-400" },
       { label: "High-Risk Clusters", value: highRiskCount, desc: "Critical/High risk narratives", icon: AlertOctagon, color: "text-red-500" },
-      { label: "Top Narrative Theme", value: topNarrative, desc: "Most discussed narrative", icon: Compass, color: "text-[#D4AF37]" },
-      { label: "Aggregate Mentions", value: totalMentions, desc: "Cumulative narratives volume", icon: Users, color: "text-[#38BDF8]" }
+      { label: "Top Narrative Theme", value: topNarrative, desc: "Most discussed narrative", icon: Compass, color: accentColor },
+      { label: "Aggregate Mentions", value: totalMentions, desc: "Cumulative narratives volume", icon: Users, color: accentColor }
     ];
-  }, [narrativeBubbleData]);
+  }, [narrativeBubbleData, accentColor]);
 
   // 2. Normalization & Logarithmic bubble scaling for the Scatter / Bubble chart
   const { normalizedBubbleData, minStrength, maxStrength, minRisk, maxRisk } = useMemo(() => {
@@ -164,22 +170,24 @@ export function NarrativeAnalyticsPanel({
   }, [execTrendChartData, execHistory]);
 
   const getSourceColor = (source: string, index: number) => {
-    const colors = ["#38BDF8", "#D4AF37", "#A855F7", "#F97316", "#10B981", "#EF4444"];
+    const colors = [accent, isDark ? "#7B2CBF" : "#8B5CF6", "#A855F7", "#F97316", "#10B981", "#EF4444"];
     return colors[index % colors.length];
   };
 
   const tooltipStyle = {
-    backgroundColor: 'rgba(11, 15, 25, 0.95)',
-    borderColor: '#1e293b',
+    backgroundColor: isDark ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+    borderColor: isDark ? '#3f3f46' : '#e4e4e7',
     borderRadius: '8px',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.8)',
-    color: '#e2e8f0',
+    boxShadow: isDark ? '0 10px 30px rgba(0, 0, 0, 0.8)' : '0 10px 30px rgba(0, 0, 0, 0.1)',
+    color: isDark ? '#e4e4e7' : '#18181b',
     fontFamily: 'monospace',
     fontSize: '11px',
     padding: '12px'
   };
 
-  const cardStyle = "bg-[#060B18]/60 border-[#1F2937]/70 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.06)] hover:border-[#D4AF37]/35 hover:shadow-[0_0_20px_rgba(212,175,55,0.12)] hover:-translate-y-0.5 transition-all duration-300 rounded-xl";
+  const cardStyle = `${glassCard(theme)} hover:-translate-y-0.5`;
+  const gridStroke = isDark ? "#3f3f46" : "#d4d4d8";
+  const axisStroke = isDark ? "#a1a1aa" : "#71717a";
 
   // Dynamic axis limits with padding to prevent edge clipping
   const xAxisDomain = useMemo(() => {
@@ -198,7 +206,7 @@ export function NarrativeAnalyticsPanel({
     return (
       <div className="grid gap-6 md:grid-cols-2 animate-pulse">
         {[1, 2, 3, 4].map(x => (
-          <div key={x} className="h-[280px] bg-[#060B18]/40 border border-[#1F2937]/60 rounded-xl" />
+          <div key={x} className={`h-[280px] rounded-3xl ${glassTokens[theme].card}`} />
         ))}
       </div>
     );
@@ -206,7 +214,7 @@ export function NarrativeAnalyticsPanel({
 
   if (error) {
     return (
-      <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+      <Card className={`${glassCard(theme)} border-red-500/20 h-96`}>
         <TelemetryErrorWidget title="Narrative Analytics Telemetry Offline" message={error} />
       </Card>
     );
@@ -219,17 +227,18 @@ export function NarrativeAnalyticsPanel({
         {kpis.map((k, idx) => {
           const Icon = k.icon;
           return (
-            <div 
-              key={idx} 
-              className="bg-[#060B18]/60 border border-[#1F2937]/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05)] rounded-xl p-4 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all duration-300"
+            <div
+              key={idx}
+              className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
             >
+              <div className={SPECULAR_LINE} />
               <div className="flex justify-between items-start mb-2">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{k.label}</span>
+                <span className={`text-[10px] uppercase tracking-wider ${mutedText(theme)}`}>{k.label}</span>
                 <Icon className={`h-4 w-4 ${k.color}`} />
               </div>
               <div>
                 <span className={`text-xl font-bold block ${k.color} truncate`}>{k.value}</span>
-                <span className="text-[8px] text-slate-500">{k.desc}</span>
+                <span className={`text-[8px] ${mutedText(theme)}`}>{k.desc}</span>
               </div>
             </div>
           );
@@ -239,8 +248,9 @@ export function NarrativeAnalyticsPanel({
       <div className="grid gap-6 md:grid-cols-2">
         {/* Narrative Landscape Matrix (Bubble Chart with Glow filters) */}
         <Card className={cardStyle}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Narrative Landscape Matrix (Velocity × Risk)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Landscape Matrix (Velocity × Risk)</CardTitle>
           </CardHeader>
           <CardContent className="h-[280px] pl-2">
             {normalizedBubbleData.length > 0 ? (
@@ -278,35 +288,35 @@ export function NarrativeAnalyticsPanel({
                       </feMerge>
                     </filter>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" strokeOpacity={0.2} />
-                  <XAxis type="number" dataKey="strength" name="Velocity" stroke="#94A3B8" fontSize={9} domain={xAxisDomain} label={{ value: 'Narrative Velocity', position: 'bottom', fill: '#94A3B8', offset: 0, fontSize: 9 }} />
-                  <YAxis type="number" dataKey="risk" name="Risk Score" stroke="#94A3B8" fontSize={9} domain={yAxisDomain} label={{ value: 'Risk Score', angle: -90, position: 'left', fill: '#94A3B8', fontSize: 9 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} strokeOpacity={0.4} />
+                  <XAxis type="number" dataKey="strength" name="Velocity" stroke={axisStroke} fontSize={9} domain={xAxisDomain} label={{ value: 'Narrative Velocity', position: 'bottom', fill: axisStroke, offset: 0, fontSize: 9 }} />
+                  <YAxis type="number" dataKey="risk" name="Risk Score" stroke={axisStroke} fontSize={9} domain={yAxisDomain} label={{ value: 'Risk Score', angle: -90, position: 'left', fill: axisStroke, fontSize: 9 }} />
                   <ZAxis type="number" dataKey="logVolume" range={[80, 500]} name="Volume" />
-                  <Tooltip 
-                    cursor={{ strokeDasharray: '3 3' }} 
+                  <Tooltip
+                    cursor={{ strokeDasharray: '3 3' }}
                     contentStyle={tooltipStyle}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length > 0) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-[#0b0f19]/95 border border-[#1e293b] rounded-lg p-3 font-mono text-[10px] space-y-1">
-                            <div className="font-bold text-[#D4AF37] border-b border-[#1F2937] pb-1 mb-1 truncate max-w-[200px]">
+                          <div className={`rounded-lg p-3 font-mono text-[10px] space-y-1 border ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.08]"}`}>
+                            <div className="font-bold border-b pb-1 mb-1 truncate max-w-[200px]" style={{ color: accent, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)" }}>
                               {data.name}
                             </div>
                             <div className="flex justify-between space-x-6">
-                              <span className="text-slate-500">Volume (Mentions):</span>
-                              <span className="text-slate-200 font-bold">{data.mentions}</span>
+                              <span className={mutedText(theme)}>Volume (Mentions):</span>
+                              <span className={`font-bold ${bodyText(theme)}`}>{data.mentions}</span>
                             </div>
                             <div className="flex justify-between space-x-6">
-                              <span className="text-slate-500">Risk Score:</span>
-                              <span className="text-red-400 font-bold">{data.risk}</span>
+                              <span className={mutedText(theme)}>Risk Score:</span>
+                              <span className="text-red-500 font-bold">{data.risk}</span>
                             </div>
                             <div className="flex justify-between space-x-6">
-                              <span className="text-slate-500">Velocity:</span>
-                              <span className="text-slate-200 font-bold">{data.strength?.toFixed(1)}</span>
+                              <span className={mutedText(theme)}>Velocity:</span>
+                              <span className={`font-bold ${bodyText(theme)}`}>{data.strength?.toFixed(1)}</span>
                             </div>
                             <div className="flex justify-between space-x-6">
-                              <span className="text-slate-500">Classification:</span>
+                              <span className={mutedText(theme)}>Classification:</span>
                               <span className="text-purple-400 font-bold">{data.type}</span>
                             </div>
                           </div>
@@ -345,34 +355,35 @@ export function NarrativeAnalyticsPanel({
                 </ScatterChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs">No narratives to map.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No narratives to map.</div>
             )}
           </CardContent>
         </Card>
 
         {/* Competitor Radar Position Compare */}
         <Card className={cardStyle}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Competitor Positioning Radar Grid</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Competitor Positioning Radar Grid</CardTitle>
           </CardHeader>
           <CardContent className="flex justify-center items-center h-[280px]">
             {normalizedBenchmarks.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="75%" data={competitorRadarData}>
-                  <PolarGrid stroke="#1F2937" />
-                  <PolarAngleAxis dataKey="subject" stroke="#94A3B8" fontSize={9} />
-                  <PolarRadiusAxis stroke="#1F2937" tick={false} />
-                  <Radar name={activeClientName} dataKey={activeClientName} stroke="#D4AF37" fill="#D4AF37" fillOpacity={0.25} isAnimationActive={true} />
+                  <PolarGrid stroke={gridStroke} />
+                  <PolarAngleAxis dataKey="subject" stroke={axisStroke} fontSize={9} />
+                  <PolarRadiusAxis stroke={gridStroke} tick={false} />
+                  <Radar name={activeClientName} dataKey={activeClientName} stroke={accent} fill={accent} fillOpacity={0.25} isAnimationActive={true} />
                   {normalizedBenchmarks.map((b, idx) => (
-                    <Radar key={idx} name={b.competitor_name} dataKey={b.competitor_name} stroke="#38BDF8" fill="#38BDF8" fillOpacity={0.06} isAnimationActive={true} />
+                    <Radar key={idx} name={b.competitor_name} dataKey={b.competitor_name} stroke={isDark ? "#7B2CBF" : "#8B5CF6"} fill={isDark ? "#7B2CBF" : "#8B5CF6"} fillOpacity={0.08} isAnimationActive={true} />
                   ))}
                   <Tooltip contentStyle={tooltipStyle} />
                 </RadarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex flex-col items-center justify-center h-full space-y-2">
-                <Compass className="h-6 w-6 text-slate-500 opacity-60" />
-                <p className="text-slate-500 font-mono text-xs">No competitor radar comparative data.</p>
+                <Compass className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+                <p className={`font-mono text-xs ${mutedText(theme)}`}>No competitor radar comparative data.</p>
               </div>
             )}
           </CardContent>
@@ -380,22 +391,23 @@ export function NarrativeAnalyticsPanel({
 
         {/* Executive Historical Trend */}
         <Card className={`${cardStyle} md:col-span-2`}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Executive Figures Historical Trend</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Executive Figures Historical Trend</CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[280px]">
             {trendChartDataWithMA.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsLineChart data={trendChartDataWithMA} margin={{ top: 15, right: 30, bottom: 10, left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1F2937" strokeOpacity={0.2} />
-                  <XAxis dataKey="date" stroke="#94A3B8" fontSize={9} />
-                  <YAxis stroke="#94A3B8" fontSize={9} />
-                  <Tooltip 
-                    shared 
-                    contentStyle={tooltipStyle} 
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
+                  <XAxis dataKey="date" stroke={axisStroke} fontSize={9} />
+                  <YAxis stroke={axisStroke} fontSize={9} />
+                  <Tooltip
+                    shared
+                    contentStyle={tooltipStyle}
                   />
                   {Object.keys(execHistory || {}).map((name, idx) => {
-                    const colors = ["#D4AF37", "#38BDF8", "#EF4444", "#EAB308", "#10B981"];
+                    const colors = [accent, isDark ? "#7B2CBF" : "#8B5CF6", "#EF4444", "#EAB308", "#10B981"];
                     const color = colors[idx % colors.length];
                     const hasMA = trendChartDataWithMA.some(d => d[`${name}_MA`] !== undefined);
 
@@ -433,8 +445,8 @@ export function NarrativeAnalyticsPanel({
               </ResponsiveContainer>
             ) : (
               <div className="flex flex-col items-center justify-center h-full space-y-2">
-                <Users className="h-6 w-6 text-slate-500 opacity-60" />
-                <p className="text-slate-500 font-mono text-xs">No leadership figures data to track.</p>
+                <Users className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+                <p className={`font-mono text-xs ${mutedText(theme)}`}>No leadership figures data to track.</p>
               </div>
             )}
           </CardContent>
@@ -442,27 +454,28 @@ export function NarrativeAnalyticsPanel({
 
         {/* Daily Ingestion Ingestion Volume (Stacked Area Chart) */}
         <Card className={cardStyle}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Daily Ingestion Ingestion Volume</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Daily Ingestion Ingestion Volume</CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[240px]">
             {stackedTimelineData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stackedTimelineData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1F2937" strokeOpacity={0.2} />
-                  <XAxis dataKey="date" stroke="#94A3B8" fontSize={9} />
-                  <YAxis stroke="#94A3B8" fontSize={9} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
+                  <XAxis dataKey="date" stroke={axisStroke} fontSize={9} />
+                  <YAxis stroke={axisStroke} fontSize={9} />
                   <Tooltip contentStyle={tooltipStyle} />
                   {uniqueSources.map((source, index) => (
-                    <Area 
+                    <Area
                       key={source}
-                      type="monotone" 
-                      dataKey={source} 
+                      type="monotone"
+                      dataKey={source}
                       stackId="1"
-                      stroke={getSourceColor(source, index)} 
-                      fill={getSourceColor(source, index)} 
+                      stroke={getSourceColor(source, index)}
+                      fill={getSourceColor(source, index)}
                       fillOpacity={0.25}
-                      strokeWidth={1.5} 
+                      strokeWidth={1.5}
                       isAnimationActive={true}
                       animationDuration={850}
                     />
@@ -470,25 +483,26 @@ export function NarrativeAnalyticsPanel({
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs">No timeline volume data.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No timeline volume data.</div>
             )}
           </CardContent>
         </Card>
 
         {/* Source Distribution (Ranked Horizontal Bar Chart) */}
         <Card className={cardStyle}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Sources Distribution Matrix</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Sources Distribution Matrix</CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[240px]">
             {sortedSourceData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sortedSourceData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1F2937" strokeOpacity={0.2} />
-                  <XAxis type="number" stroke="#94A3B8" fontSize={9} />
-                  <YAxis dataKey="name" type="category" stroke="#94A3B8" fontSize={9} width={90} />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridStroke} strokeOpacity={0.4} />
+                  <XAxis type="number" stroke={axisStroke} fontSize={9} />
+                  <YAxis dataKey="name" type="category" stroke={axisStroke} fontSize={9} width={90} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="value" fill="#38BDF8" radius={[0, 3, 3, 0]} isAnimationActive={true} animationDuration={850}>
+                  <Bar dataKey="value" fill={accent} radius={[0, 3, 3, 0]} isAnimationActive={true} animationDuration={850}>
                     {sortedSourceData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={getSourceColor(entry.name, index)} />
                     ))}
@@ -496,7 +510,7 @@ export function NarrativeAnalyticsPanel({
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs">No source contribution data.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No source contribution data.</div>
             )}
           </CardContent>
         </Card>

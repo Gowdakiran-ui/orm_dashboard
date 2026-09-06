@@ -154,7 +154,7 @@ function DashboardShell() {
   }
 
   return (
-    <div className={`flex ${bodyBg(theme)} ${bodyText(theme)} min-h-screen font-sans selection:bg-[#00F5D4]/40`}>
+    <div data-theme={theme} className={`flex ${bodyBg(theme)} ${bodyText(theme)} min-h-screen font-sans selection:bg-[#00F5D4]/40`}>
 
       <Sidebar
         clientId={data.clientId}

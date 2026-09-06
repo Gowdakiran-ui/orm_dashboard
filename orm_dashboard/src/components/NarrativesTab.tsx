@@ -13,6 +13,8 @@ import {
 } from "recharts";
 import { NarrativeIntelligenceWorkbench } from "@/components/NarrativeIntelligenceWorkbench";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export interface NarrativesTabProps {
   documentsLoading: boolean;
@@ -41,7 +43,11 @@ export function NarrativesTab({
   narrativesError,
   clientId
 }: NarrativesTabProps) {
-  
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
+
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTopic, setSelectedTopic] = useState("all");
@@ -86,16 +92,16 @@ export function NarrativesTab({
       : "0.0";
 
     return [
-      { label: "Monitored Narratives", value: totalNarratives, desc: "Active media clusters", color: "text-[#D4AF37]" },
-      { label: "Tracked Leaders", value: totalExecs, desc: "Monitored corporate heads", color: "text-[#38BDF8]" },
+      { label: "Monitored Narratives", value: totalNarratives, desc: "Active media clusters", color: accentColor },
+      { label: "Tracked Leaders", value: totalExecs, desc: "Monitored corporate heads", color: accentColor },
       { label: "Scanned Documents", value: totalDocs, desc: "Pipeline document pool", color: "text-purple-400" },
       { label: "Highest Risk Narrative", value: highestRiskNarr, desc: "Requires strategic review", color: "text-red-500" },
       { label: "Fastest Growing Narrative", value: fastestGrowingNarr, desc: "High velocity trend", color: "text-orange-400" },
       { label: "Most Mentioned Executive", value: mostMentionedExec, desc: "Core voice proxy", color: "text-indigo-400" },
-      { label: "Average Risk Level", value: `${avgRiskScore} pts`, desc: "Risk index across feed", color: "text-rose-450" },
+      { label: "Average Risk Level", value: `${avgRiskScore} pts`, desc: "Risk index across feed", color: "text-rose-500" },
       { label: "Average Strength", value: `${avgNarrativeStrength}%`, desc: "Narrative velocity rate", color: "text-emerald-400" }
     ];
-  }, [documents, executives, narratives]);
+  }, [documents, executives, narratives, accentColor]);
 
   // Filtering narratives and documents based on selectors
   const filteredNarratives = useMemo(() => {
@@ -154,7 +160,7 @@ export function NarrativesTab({
       .reverse();
   }, [documents]);
 
-  const cardStyle = "bg-[#060B18]/60 border-[#1F2937]/70 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.06)] hover:border-[#D4AF37]/35 hover:shadow-[0_0_20px_rgba(212,175,55,0.12)] transition-all duration-300 rounded-xl";
+  const cardStyle = glassCard(theme);
 
   const handleTraceClick = (narrativeName: string) => {
     setSelectedNarrative(narrativeName);
@@ -198,27 +204,27 @@ export function NarrativesTab({
   const BubbleTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
-      const sentimentColor = data.sentiment >= 0.25 ? "text-emerald-400" : data.sentiment <= -0.25 ? "text-red-400" : "text-amber-400";
+      const sentimentColor = data.sentiment >= 0.25 ? "text-emerald-500" : data.sentiment <= -0.25 ? "text-red-500" : "text-amber-500";
       return (
-        <div className="bg-[#0b0f19]/95 border border-[#1F2937]/90 rounded-lg p-3 font-mono text-[10px] space-y-1.5 shadow-2xl text-slate-200">
-          <div className="font-bold text-[#D4AF37] border-b border-[#1F2937] pb-1 truncate max-w-[200px] uppercase">
+        <div className={`rounded-lg p-3 font-mono text-[10px] space-y-1.5 shadow-2xl border ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.08]"}`}>
+          <div className="font-bold border-b pb-1 truncate max-w-[200px] uppercase" style={{ color: accent, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)" }}>
             {data.name}
           </div>
           <div className="flex justify-between space-x-6">
-            <span className="text-slate-500">Risk Score:</span>
-            <span className="text-red-400 font-bold">{data.risk} pts</span>
+            <span className={mutedText(theme)}>Risk Score:</span>
+            <span className="text-red-500 font-bold">{data.risk} pts</span>
           </div>
           <div className="flex justify-between space-x-6">
-            <span className="text-slate-500">Velocity:</span>
-            <span className="text-slate-200 font-bold">{data.trend?.toFixed(1)}%</span>
+            <span className={mutedText(theme)}>Velocity:</span>
+            <span className={`font-bold ${bodyText(theme)}`}>{data.trend?.toFixed(1)}%</span>
           </div>
           <div className="flex justify-between space-x-6">
-            <span className="text-slate-500">Sentiment:</span>
+            <span className={mutedText(theme)}>Sentiment:</span>
             <span className={`font-bold ${sentimentColor}`}>{data.sentiment?.toFixed(2)}</span>
           </div>
           <div className="flex justify-between space-x-6">
-            <span className="text-slate-500">Volume:</span>
-            <span className="text-slate-200 font-bold">{data.mentions || 0} mentions</span>
+            <span className={mutedText(theme)}>Volume:</span>
+            <span className={`font-bold ${bodyText(theme)}`}>{data.mentions || 0} mentions</span>
           </div>
         </div>
       );
@@ -232,14 +238,15 @@ export function NarrativesTab({
       {/* 1. Top Executive summary KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 font-mono">
         {summaryKpis.map((k, idx) => (
-          <div 
-            key={idx} 
-            className="bg-[#060B18]/60 border border-[#1F2937]/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05)] rounded-xl p-4 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all duration-300"
+          <div
+            key={idx}
+            className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
           >
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-2">{k.label}</span>
+            <div className={SPECULAR_LINE} />
+            <span className={`text-[10px] uppercase tracking-wider block mb-2 ${mutedText(theme)}`}>{k.label}</span>
             <div>
               <span className={`text-lg font-bold block ${k.color} truncate`}>{k.value}</span>
-              <span className="text-[8.5px] text-slate-500 block truncate mt-1">{k.desc}</span>
+              <span className={`text-[8.5px] block truncate mt-1 ${mutedText(theme)}`}>{k.desc}</span>
             </div>
           </div>
         ))}
@@ -261,30 +268,31 @@ export function NarrativesTab({
       <div className="grid gap-6 md:grid-cols-2">
         {/* Bubble Matrix Chart */}
         <Card className={cardStyle}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Narrative Health Bubble Matrix</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Health Bubble Matrix</CardTitle>
           </CardHeader>
           <CardContent className="h-[480px]">
             {healthMatrixData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 30, right: 60, left: 30, bottom: 50 }}>
-                  <XAxis 
-                    type="number" 
-                    dataKey="trend" 
-                    name="Velocity" 
-                    stroke="#94A3B8" 
-                    fontSize={14} 
+                  <XAxis
+                    type="number"
+                    dataKey="trend"
+                    name="Velocity"
+                    stroke={isDark ? "#a1a1aa" : "#71717a"}
+                    fontSize={14}
                     tickLine={true}
-                    label={{ value: 'Velocity Index', position: 'bottom', fill: '#94A3B8', offset: 25, fontSize: 15, fontFamily: 'monospace', fontWeight: 'bold' }} 
+                    label={{ value: 'Velocity Index', position: 'bottom', fill: isDark ? "#a1a1aa" : "#71717a", offset: 25, fontSize: 15, fontFamily: 'monospace', fontWeight: 'bold' }}
                   />
-                  <YAxis 
-                    type="number" 
-                    dataKey="risk" 
-                    name="Risk" 
-                    stroke="#94A3B8" 
-                    fontSize={14} 
+                  <YAxis
+                    type="number"
+                    dataKey="risk"
+                    name="Risk"
+                    stroke={isDark ? "#a1a1aa" : "#71717a"}
+                    fontSize={14}
                     tickLine={true}
-                    label={{ value: 'Risk Score', angle: -90, position: 'left', fill: '#94A3B8', offset: 25, fontSize: 15, fontFamily: 'monospace', fontWeight: 'bold' }} 
+                    label={{ value: 'Risk Score', angle: -90, position: 'left', fill: isDark ? "#a1a1aa" : "#71717a", offset: 25, fontSize: 15, fontFamily: 'monospace', fontWeight: 'bold' }}
                   />
                   <ZAxis type="number" dataKey="mentions" range={[150, 950]} />
                   <Tooltip 
@@ -327,15 +335,16 @@ export function NarrativesTab({
                 </ScatterChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs">No matching narrative vectors.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No matching narrative vectors.</div>
             )}
           </CardContent>
         </Card>
 
         {/* Narrative Creation Timeline */}
         <Card className={cardStyle}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Narrative Spikes Timeline</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Spikes Timeline</CardTitle>
           </CardHeader>
           <CardContent className="h-[480px] pl-2">
             {timelineData.length > 0 ? (
@@ -347,54 +356,55 @@ export function NarrativesTab({
                       <stop offset="95%" stopColor="#A855F7" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" stroke="#94A3B8" fontSize={9} />
-                  <YAxis stroke="#94A3B8" fontSize={9} />
-                  <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff', fontSize: 10, fontFamily: 'monospace' }} />
+                  <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={9} />
+                  <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={9} />
+                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontSize: 10, fontFamily: 'monospace' }} />
                   <Area type="monotone" dataKey="Volume" stroke="#A855F7" strokeWidth={1.8} fillOpacity={1} fill="url(#colorIngestVolume)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs">No historical volume markers.</div>
+              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No historical volume markers.</div>
             )}
           </CardContent>
         </Card>
       </div>
 
       {/* 5. Detailed Table register */}
-      <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl rounded-xl">
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
         <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Narrative Intelligence Table Register</CardTitle>
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Intelligence Table Register</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table className="font-mono text-xs">
-            <TableHeader className="bg-[#030712]/80 border-b border-[#1F2937]/50">
-              <TableRow className="border-b border-[#1F2937]/30 hover:bg-transparent">
-                <TableHead className="w-1/4 text-slate-400">NARRATIVE THEME</TableHead>
-                <TableHead className="text-slate-400 text-center">TYPE</TableHead>
-                <TableHead className="text-slate-400 text-center">MENTIONS</TableHead>
-                <TableHead className="text-slate-400 text-center">RISK</TableHead>
-                <TableHead className="text-slate-400 text-center">VELOCITY</TableHead>
-                <TableHead className="text-slate-400 text-center">SENTIMENT</TableHead>
-                <TableHead className="text-slate-400 text-right pr-6">ACTION</TableHead>
+            <TableHeader className={isDark ? "bg-black/20 border-white/[0.08]" : "bg-black/[0.02] border-black/[0.06]"}>
+              <TableRow className={`hover:bg-transparent ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                <TableHead className={`w-1/4 ${mutedText(theme)}`}>NARRATIVE THEME</TableHead>
+                <TableHead className={`text-center ${mutedText(theme)}`}>TYPE</TableHead>
+                <TableHead className={`text-center ${mutedText(theme)}`}>MENTIONS</TableHead>
+                <TableHead className={`text-center ${mutedText(theme)}`}>RISK</TableHead>
+                <TableHead className={`text-center ${mutedText(theme)}`}>VELOCITY</TableHead>
+                <TableHead className={`text-center ${mutedText(theme)}`}>SENTIMENT</TableHead>
+                <TableHead className={`text-right pr-6 ${mutedText(theme)}`}>ACTION</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredNarratives.map((n, idx) => {
                 const sentimentScore = n.sentiment !== undefined ? n.sentiment : 0.0;
-                const statusColor = sentimentScore >= 0.25 ? "text-emerald-400" : sentimentScore <= -0.25 ? "text-red-400" : "text-amber-400";
-                
+                const statusColor = sentimentScore >= 0.25 ? "text-emerald-500" : sentimentScore <= -0.25 ? "text-red-500" : "text-amber-500";
+
                 return (
-                  <TableRow key={n.id ?? idx} className="border-b border-[#1F2937]/30 hover:bg-[#060B18]/30 transition-all duration-150">
-                    <TableCell className="font-bold text-slate-200 truncate max-w-[200px]">{n.name}</TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className="text-[9px] font-normal uppercase tracking-wider bg-slate-900/40 border-slate-800 text-slate-350">{n.type || "General"}</Badge></TableCell>
-                    <TableCell className="text-center font-bold">{n.mentions || 0}</TableCell>
-                    <TableCell className="text-center font-bold text-red-400">{n.risk || 0}</TableCell>
-                    <TableCell className="text-center text-slate-300">{(n.trend || 0).toFixed(1)}%</TableCell>
+                  <TableRow key={n.id ?? idx} className={`transition-all duration-150 ${isDark ? "border-white/[0.08] hover:bg-white/[0.03]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}>
+                    <TableCell className={`font-bold truncate max-w-[200px] ${bodyText(theme)}`}>{n.name}</TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={`text-[9px] font-normal uppercase tracking-wider ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>{n.type || "General"}</Badge></TableCell>
+                    <TableCell className={`text-center font-bold ${bodyText(theme)}`}>{n.mentions || 0}</TableCell>
+                    <TableCell className="text-center font-bold text-red-500">{n.risk || 0}</TableCell>
+                    <TableCell className={`text-center ${bodyText(theme)}`}>{(n.trend || 0).toFixed(1)}%</TableCell>
                     <TableCell className={`text-center font-bold ${statusColor}`}>{sentimentScore.toFixed(2)}</TableCell>
                     <TableCell className="text-right pr-6">
-                      <Button 
+                      <Button
                         size="sm"
-                        className="bg-purple-950/40 text-purple-400 border border-purple-900/60 hover:bg-purple-800 hover:text-white font-mono text-[9px] h-7 px-3"
+                        className="bg-purple-500/10 text-purple-400 border border-purple-500/30 hover:bg-purple-600 hover:text-white font-mono text-[9px] h-7 px-3"
                         onClick={() => handleTraceClick(n.name)}
                       >
                         TRACE
@@ -405,7 +415,7 @@ export function NarrativesTab({
               })}
               {filteredNarratives.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-slate-500 font-mono">
+                  <TableCell colSpan={7} className={`text-center py-8 font-mono ${mutedText(theme)}`}>
                     No narrative clusters match the search filters.
                   </TableCell>
                 </TableRow>
@@ -417,13 +427,15 @@ export function NarrativesTab({
 
       {/* 6. Slide-over Tactical Intelligence Drawer */}
       {drawerData && (
-        <div className="fixed inset-y-0 right-0 z-50 w-[420px] bg-[#060B18]/95 border-l border-[#1F2937] shadow-2xl backdrop-blur-md transform transition-transform duration-300 ease-out flex flex-col font-mono text-xs text-slate-200">
-          {/* Header */}
-          <div className="flex justify-between items-center p-4 border-b border-[#1F2937] bg-[#030712]/90">
-            <span className="text-[#D4AF37] uppercase tracking-wider font-bold">{drawerData.type} Intelligence Drawer</span>
-            <button 
+        <div className={`fixed inset-y-0 right-0 z-50 w-[420px] backdrop-blur-2xl border-l shadow-2xl transform transition-transform duration-300 ease-out flex flex-col font-mono text-xs ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]"}`}>
+          {/* Header -- kept high-opacity for the same legibility reason as
+              Risk Center's drawers: a full-height panel over dimmed content
+              reads better solid than at the standard glass alpha. */}
+          <div className={`flex justify-between items-center p-4 border-b ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+            <span className="uppercase tracking-wider font-bold" style={{ color: accent }}>{drawerData.type} Intelligence Drawer</span>
+            <button
               onClick={() => setDrawerData(null)}
-              className="text-slate-400 hover:text-slate-200 font-bold text-lg"
+              className={`font-bold text-lg transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
             >
               <X className="h-5 w-5" />
             </button>
@@ -436,47 +448,47 @@ export function NarrativesTab({
             {drawerData.type === "client" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="text-slate-500 block uppercase text-[8px]">Client Entity</span>
-                  <span className="text-[14px] font-bold text-slate-100 block leading-snug">{drawerData.data.name} Corp</span>
+                  <span className="dash-muted block uppercase text-[8px]">Client Entity</span>
+                  <span className="text-[14px] font-bold dash-strong block leading-snug">{drawerData.data.name} Corp</span>
                 </div>
                 
-                <div className="bg-[#030712]/50 p-3 rounded border border-[#1F2937]/40 space-y-2">
+                <div className="dash-box p-3 rounded border dash-border space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Reputation Metric:</span>
-                    <span className="text-[#38BDF8] font-bold">{drawerData.data.avgReputation} / 100</span>
+                    <span className="dash-muted">Reputation Metric:</span>
+                    <span className="dash-accent font-bold">{drawerData.data.avgReputation} / 100</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Total Monitored Executives:</span>
-                    <span className="text-slate-200 font-bold">{drawerData.data.totalExecutives}</span>
+                    <span className="dash-muted">Total Monitored Executives:</span>
+                    <span className="dash-strong font-bold">{drawerData.data.totalExecutives}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Active Narratives:</span>
+                    <span className="dash-muted">Active Narratives:</span>
                     <span className="text-purple-400 font-bold">{drawerData.data.totalNarratives}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Ingested Documents:</span>
-                    <span className="text-slate-200 font-bold">{drawerData.data.totalDocuments}</span>
+                    <span className="dash-muted">Ingested Documents:</span>
+                    <span className="dash-strong font-bold">{drawerData.data.totalDocuments}</span>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="text-slate-500 block uppercase text-[8px]">Monitored Executives</span>
-                  <div className="bg-[#030712] border border-[#1F2937]/50 rounded p-2 divide-y divide-[#1F2937]/30 text-[10px]">
+                  <span className="dash-muted block uppercase text-[8px]">Monitored Executives</span>
+                  <div className="dash-box border dash-border rounded p-2 divide-y divide-[#1F2937]/30 text-[10px]">
                     {executives.map((exec, idx) => (
                       <div key={idx} className="flex justify-between py-1.5 first:pt-0 last:pb-0">
-                        <span className="text-slate-350">{exec.name}</span>
-                        <span className="text-[#38BDF8] font-bold">{exec.score?.toFixed(1)} [{exec.grade}]</span>
+                        <span className="dash-strong">{exec.name}</span>
+                        <span className="dash-accent font-bold">{exec.score?.toFixed(1)} [{exec.grade}]</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="text-slate-500 block uppercase text-[8px]">Active Narratives</span>
-                  <div className="bg-[#030712] border border-[#1F2937]/50 rounded p-2 divide-y divide-[#1F2937]/30 text-[10px]">
+                  <span className="dash-muted block uppercase text-[8px]">Active Narratives</span>
+                  <div className="dash-box border dash-border rounded p-2 divide-y divide-[#1F2937]/30 text-[10px]">
                     {narratives.map((narr, idx) => (
                       <div key={idx} className="flex justify-between py-1.5 first:pt-0 last:pb-0">
-                        <span className="text-slate-350 truncate max-w-[200px]">{narr.name}</span>
+                        <span className="dash-strong truncate max-w-[200px]">{narr.name}</span>
                         <span className="text-red-400 font-bold">{narr.risk} pts</span>
                       </div>
                     ))}
@@ -484,8 +496,8 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-slate-500 block uppercase text-[8px]">Latest Monitored Activity</span>
-                  <div className="bg-[#030712]/45 border border-[#1F2937]/50 rounded p-2.5 text-[10px] text-slate-300 italic">
+                  <span className="dash-muted block uppercase text-[8px]">Latest Monitored Activity</span>
+                  <div className="dash-box border dash-border rounded p-2.5 text-[10px] dash-strong italic">
                     "{drawerData.data.latestActivity}"
                   </div>
                 </div>
@@ -496,37 +508,37 @@ export function NarrativesTab({
             {drawerData.type === "executive" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="text-slate-500 block uppercase text-[8px]">Executive Profile</span>
-                  <span className="text-[14px] font-bold text-slate-100 block leading-snug">{drawerData.data.name}</span>
+                  <span className="dash-muted block uppercase text-[8px]">Executive Profile</span>
+                  <span className="text-[14px] font-bold dash-strong block leading-snug">{drawerData.data.name}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 bg-[#030712]/50 p-3 rounded border border-[#1F2937]/40">
+                <div className="grid grid-cols-2 gap-4 dash-box p-3 rounded border dash-border">
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Reputation Score</span>
-                    <span className="text-[14px] font-bold text-[#38BDF8]">
+                    <span className="dash-muted block uppercase text-[8px]">Reputation Score</span>
+                    <span className="text-[14px] font-bold dash-accent">
                       {drawerData.data.score?.toFixed(1) || "N/A"} [{drawerData.data.grade || "N/A"}]
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Reputation Trend</span>
-                    <span className="text-slate-200 font-bold uppercase">{drawerData.data.reputation_trend || "STABLE"}</span>
+                    <span className="dash-muted block uppercase text-[8px]">Reputation Trend</span>
+                    <span className="dash-strong font-bold uppercase">{drawerData.data.reputation_trend || "STABLE"}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Confidence</span>
-                    <span className="text-slate-200 font-bold">
+                    <span className="dash-muted block uppercase text-[8px]">Confidence</span>
+                    <span className="dash-strong font-bold">
                       {typeof drawerData.data.confidence_score === 'number' ? `${(drawerData.data.confidence_score * 100).toFixed(0)}%` : "85%"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Evidence Coverage</span>
-                    <span className="text-slate-200 font-bold">
+                    <span className="dash-muted block uppercase text-[8px]">Evidence Coverage</span>
+                    <span className="dash-strong font-bold">
                       {typeof drawerData.data.data_coverage === 'number' ? `${(drawerData.data.data_coverage * 100).toFixed(0)}%` : "40%"}
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="text-slate-500 block uppercase text-[8px]">Connected Narratives</span>
+                  <span className="dash-muted block uppercase text-[8px]">Connected Narratives</span>
                   {drawerData.data.connectedNarratives && drawerData.data.connectedNarratives.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {drawerData.data.connectedNarratives.map((narrName: string, idx: number) => (
@@ -559,7 +571,7 @@ export function NarrativesTab({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-slate-500 text-[10px] italic">No directly connected narrative tracks.</div>
+                    <div className="dash-muted text-[10px] italic">No directly connected narrative tracks.</div>
                   )}
                 </div>
               </div>
@@ -569,24 +581,24 @@ export function NarrativesTab({
             {drawerData.type === "narrative" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="text-slate-500 block uppercase text-[8px]">Narrative Theme</span>
-                  <span className="text-[14px] font-bold text-slate-100 block leading-snug">{drawerData.data.name}</span>
+                  <span className="dash-muted block uppercase text-[8px]">Narrative Theme</span>
+                  <span className="text-[14px] font-bold dash-strong block leading-snug">{drawerData.data.name}</span>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-slate-500 block uppercase text-[8px]">Executive Summary</span>
-                  <div className="bg-[#030712] border border-[#1F2937]/50 rounded p-2.5 text-[10px] text-slate-350 leading-relaxed">
+                  <span className="dash-muted block uppercase text-[8px]">Executive Summary</span>
+                  <div className="dash-box border dash-border rounded p-2.5 text-[10px] dash-strong leading-relaxed">
                     {drawerData.data.description || `Active media narrative track focusing on corporate governance and strategic alignment regarding ${drawerData.data.name}.`}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 bg-[#030712]/50 p-2.5 rounded border border-[#1F2937]/40 text-center">
+                <div className="grid grid-cols-3 gap-2 dash-box p-2.5 rounded border dash-border text-center">
                   <div>
-                    <span className="text-slate-500 block uppercase text-[7.5px] mb-0.5">Risk Score</span>
+                    <span className="dash-muted block uppercase text-[7.5px] mb-0.5">Risk Score</span>
                     <span className="text-[13px] font-bold text-red-400">{drawerData.data.risk || 0} pts</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[7.5px] mb-0.5">Sentiment</span>
+                    <span className="dash-muted block uppercase text-[7.5px] mb-0.5">Sentiment</span>
                     <span className={`text-[13px] font-bold ${
                       (drawerData.data.sentiment ?? 0) >= 0.25 ? "text-emerald-400" : (drawerData.data.sentiment ?? 0) <= -0.25 ? "text-red-400" : "text-amber-400"
                     }`}>
@@ -594,24 +606,24 @@ export function NarrativesTab({
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[7.5px] mb-0.5">Velocity</span>
+                    <span className="dash-muted block uppercase text-[7.5px] mb-0.5">Velocity</span>
                     <span className="text-[13px] font-bold text-orange-400">{(drawerData.data.trend || 0).toFixed(1)}%</span>
                   </div>
                 </div>
 
-                <div className="flex justify-between border-b border-[#1F2937]/35 py-1 text-[10px]">
-                  <span className="text-slate-500">Volume Level:</span>
-                  <span className="text-slate-200 font-bold">{drawerData.data.mentions || 0} mentions</span>
+                <div className="flex justify-between border-b dash-border py-1 text-[10px]">
+                  <span className="dash-muted">Volume Level:</span>
+                  <span className="dash-strong font-bold">{drawerData.data.mentions || 0} mentions</span>
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="text-slate-500 block uppercase text-[8px]">Linked Executives</span>
+                  <span className="dash-muted block uppercase text-[8px]">Linked Executives</span>
                   <div className="flex flex-wrap gap-1.5">
                     {drawerData.data.linkedExecutives?.map((execName: string, idx: number) => (
                       <Badge 
                         key={idx} 
                         variant="outline" 
-                        className="text-[9px] font-normal bg-[#38BDF8]/10 border-[#38BDF8]/30 text-sky-300 py-0.5 px-1.5 cursor-pointer hover:bg-[#38BDF8]/25"
+                        className="text-[9px] font-normal dash-accent-bg dash-accent-bg text-sky-300 py-0.5 px-1.5 cursor-pointer hover:dash-accent-bg"
                         onClick={() => {
                           const found = executives.find(e => e.name.toLowerCase() === execName.toLowerCase());
                           if (found) {
@@ -635,13 +647,13 @@ export function NarrativesTab({
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="text-slate-500 block uppercase text-[8px]">Linked Documents ({drawerData.data.linkedDocuments?.length || 0})</span>
+                  <span className="dash-muted block uppercase text-[8px]">Linked Documents ({drawerData.data.linkedDocuments?.length || 0})</span>
                   {drawerData.data.linkedDocuments && drawerData.data.linkedDocuments.length > 0 ? (
                     <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
                       {drawerData.data.linkedDocuments.map((doc: any, idx: number) => (
-                        <div key={idx} className="bg-[#030712]/60 border border-[#1F2937]/50 rounded p-2 flex flex-col justify-between space-y-1 text-[10px]">
-                          <span className="text-slate-200 font-bold truncate block">{doc.title}</span>
-                          <div className="flex justify-between items-center text-[9px] text-slate-500">
+                        <div key={idx} className="dash-box border dash-border rounded p-2 flex flex-col justify-between space-y-1 text-[10px]">
+                          <span className="dash-strong font-bold truncate block">{doc.title}</span>
+                          <div className="flex justify-between items-center text-[9px] dash-muted">
                             <span>Risk: <b className="text-red-400">{doc.risk}</b></span>
                             <button 
                               onClick={() => setDrawerData({ type: "document", data: doc })}
@@ -654,7 +666,7 @@ export function NarrativesTab({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-slate-500 text-[10px] italic">No linked documents found.</div>
+                    <div className="dash-muted text-[10px] italic">No linked documents found.</div>
                   )}
                 </div>
               </div>
@@ -664,36 +676,36 @@ export function NarrativesTab({
             {drawerData.type === "document" && (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <span className="text-slate-500 block uppercase text-[8px]">Headline</span>
-                  <span className="text-[12px] font-bold text-slate-100 block leading-snug">{drawerData.data.title}</span>
+                  <span className="dash-muted block uppercase text-[8px]">Headline</span>
+                  <span className="text-[12px] font-bold dash-strong block leading-snug">{drawerData.data.title}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 bg-[#030712]/50 p-3 rounded border border-[#1F2937]/40">
+                <div className="grid grid-cols-2 gap-4 dash-box p-3 rounded border dash-border">
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Risk Score</span>
+                    <span className="dash-muted block uppercase text-[8px]">Risk Score</span>
                     <span className="text-[14px] font-bold text-red-400">{drawerData.data.risk || 0}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Sentiment</span>
+                    <span className="dash-muted block uppercase text-[8px]">Sentiment</span>
                     <span className={`text-[14px] font-bold ${(drawerData.data.sentiment ?? 0) >= 0.2 ? "text-emerald-400" : (drawerData.data.sentiment ?? 0) <= -0.2 ? "text-red-400" : "text-amber-400"}`}>
                       {drawerData.data.sentiment !== undefined ? drawerData.data.sentiment.toFixed(2) : "0.00"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Source Ingestion</span>
-                    <span className="text-slate-200 font-bold">{drawerData.data.source || "RSS Feed"}</span>
+                    <span className="dash-muted block uppercase text-[8px]">Source Ingestion</span>
+                    <span className="dash-strong font-bold">{drawerData.data.source || "RSS Feed"}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block uppercase text-[8px]">Published Date</span>
-                    <span className="text-slate-200 font-bold block truncate">
+                    <span className="dash-muted block uppercase text-[8px]">Published Date</span>
+                    <span className="dash-strong font-bold block truncate">
                       {drawerData.data.timestamp ? new Date(drawerData.data.timestamp).toLocaleDateString() : "N/A"}
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-slate-500 block uppercase text-[8px]">Context Snippet</span>
-                  <div className="bg-[#030712] border border-[#1F2937]/50 rounded p-3 text-[10px] text-slate-350 max-h-[120px] overflow-y-auto leading-relaxed">
+                  <span className="dash-muted block uppercase text-[8px]">Context Snippet</span>
+                  <div className="dash-box border dash-border rounded p-3 text-[10px] dash-strong max-h-[120px] overflow-y-auto leading-relaxed">
                     {drawerData.data.content || "No summary snippet available."}
                   </div>
                 </div>
@@ -701,10 +713,10 @@ export function NarrativesTab({
                 {/* Extracted Entity references */}
                 {drawerData.data.extracted_entities && drawerData.data.extracted_entities.length > 0 && (
                   <div className="space-y-1.5">
-                    <span className="text-slate-500 block uppercase text-[8px]">Extracted Entities</span>
+                    <span className="dash-muted block uppercase text-[8px]">Extracted Entities</span>
                     <div className="flex flex-wrap gap-1.5">
                       {drawerData.data.extracted_entities.map((ent: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="text-[9px] font-normal uppercase bg-slate-900/40 border-slate-800 text-slate-300">
+                        <Badge key={idx} variant="outline" className="text-[9px] font-normal uppercase bg-slate-900/40 border-slate-800 dash-strong">
                           {ent.name} [{ent.entity_type}]
                         </Badge>
                       ))}
@@ -713,24 +725,24 @@ export function NarrativesTab({
                 )}
 
                 {/* Pipeline diagnostic checkpoints */}
-                <div className="space-y-2 border-t border-[#1F2937] pt-3">
-                  <span className="text-[#D4AF37] block uppercase text-[9px] font-bold">Pipeline Telemetry Lineage</span>
+                <div className="space-y-2 border-t dash-border pt-3">
+                  <span className="dash-accent block uppercase text-[9px] font-bold">Pipeline Telemetry Lineage</span>
                   <div className="space-y-1.5 text-[9px]">
-                    <div className="flex justify-between items-center bg-[#030712]/40 p-1.5 rounded">
-                      <span className="text-slate-500">Processing Stage:</span>
+                    <div className="flex justify-between items-center dash-box p-1.5 rounded">
+                      <span className="dash-muted">Processing Stage:</span>
                       <Badge className="bg-emerald-950 text-emerald-400 border border-emerald-900 text-[8px] uppercase">{drawerData.data.processing_status || "COMPLETE"}</Badge>
                     </div>
-                    <div className="flex justify-between items-center bg-[#030712]/40 p-1.5 rounded">
-                      <span className="text-slate-500">Extraction Stage:</span>
-                      <span className="text-slate-200 font-bold uppercase">{drawerData.data.entity_processing_status || "COMPLETE"}</span>
+                    <div className="flex justify-between items-center dash-box p-1.5 rounded">
+                      <span className="dash-muted">Extraction Stage:</span>
+                      <span className="dash-strong font-bold uppercase">{drawerData.data.entity_processing_status || "COMPLETE"}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-[#030712]/40 p-1.5 rounded">
-                      <span className="text-slate-500">Topic Classification:</span>
-                      <span className="text-slate-200 font-bold uppercase">{drawerData.data.topic_processing_status || "COMPLETE"}</span>
+                    <div className="flex justify-between items-center dash-box p-1.5 rounded">
+                      <span className="dash-muted">Topic Classification:</span>
+                      <span className="dash-strong font-bold uppercase">{drawerData.data.topic_processing_status || "COMPLETE"}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-[#030712]/40 p-1.5 rounded">
-                      <span className="text-slate-500">Sentiment Evaluation:</span>
-                      <span className="text-slate-200 font-bold uppercase">{drawerData.data.sentiment_processing_status || "COMPLETE"}</span>
+                    <div className="flex justify-between items-center dash-box p-1.5 rounded">
+                      <span className="dash-muted">Sentiment Evaluation:</span>
+                      <span className="dash-strong font-bold uppercase">{drawerData.data.sentiment_processing_status || "COMPLETE"}</span>
                     </div>
                   </div>
                 </div>
@@ -739,19 +751,19 @@ export function NarrativesTab({
           </div>
 
           {/* Footer buttons */}
-          <div className="p-4 border-t border-[#1F2937] bg-[#030712]/90 flex space-x-2">
+          <div className={`p-4 border-t flex space-x-2 ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
             {drawerData.type === "document" && drawerData.data.url && (
-              <a 
-                href={drawerData.data.url} 
-                target="_blank" 
-                rel="noreferrer" 
-                className="flex-1 bg-[#D4AF37] hover:bg-[#b8972f] text-black text-center py-2 rounded font-bold transition-all flex items-center justify-center"
+              <a
+                href={drawerData.data.url}
+                target="_blank"
+                rel="noreferrer"
+                className={`flex-1 text-center py-2 rounded-lg flex items-center justify-center ${glassPrimaryButton(theme)}`}
               >
                 View Original <ExternalLink className="h-3 w-3 ml-1.5" />
               </a>
             )}
-            <Button 
-              className="flex-1 bg-[#1F2937]/80 hover:bg-[#2e3e52] text-slate-200 border border-[#1F2937]"
+            <Button
+              className={`flex-1 border ${bodyText(theme)} ${isDark ? "bg-white/[0.06] hover:bg-white/[0.12] border-white/[0.12]" : "bg-black/[0.03] hover:bg-black/[0.06] border-black/[0.08]"}`}
               onClick={() => setDrawerData(null)}
             >
               Close Drawer

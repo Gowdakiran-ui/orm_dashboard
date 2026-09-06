@@ -239,3 +239,60 @@
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
+
+/* ============================================
+   DASHBOARD GLASS THEME UTILITIES
+   Scoped under [data-theme] on the dashboard shell root (set by
+   ThemeProvider) -- dark values are the default (unscoped) rule, light
+   overrides apply under [data-theme="light"]. Used to bulk-migrate the
+   remaining dashboard panels' inline near-black boxes / slate text / gold
+   accents onto the Crystalline Glass / Smoked Obsidian Glass tokens
+   without hand-rewriting every occurrence's className.
+   ============================================ */
+.dash-box {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="light"] .dash-box {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.dash-border {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+[data-theme="light"] .dash-border {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.dash-muted {
+  color: #a1a1aa;
+}
+[data-theme="light"] .dash-muted {
+  color: #71717a;
+}
+
+.dash-strong {
+  color: #f4f4f5;
+}
+[data-theme="light"] .dash-strong {
+  color: #18181b;
+}
+
+.dash-accent {
+  color: #00F5D4;
+}
+[data-theme="light"] .dash-accent {
+  color: #3B82F6;
+}
+
+.dash-accent-bg {
+  background-color: rgba(0, 245, 212, 0.1);
+  border-color: rgba(0, 245, 212, 0.3);
+  color: #00F5D4;
+}
+[data-theme="light"] .dash-accent-bg {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #3B82F6;
+}

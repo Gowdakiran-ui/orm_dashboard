@@ -3,6 +3,8 @@ import { Database, Cpu, Activity, ShieldAlert, CheckCircle2, Clock } from "lucid
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export interface PipelineDiagnosticsPanelProps {
   pipelineDiagnostics: any[];
@@ -19,6 +21,10 @@ export function PipelineDiagnosticsPanel({
   loading = false,
   error = null
 }: PipelineDiagnosticsPanelProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
 
   // 1. KPI summary data
   const kpis = useMemo(() => {
@@ -44,20 +50,20 @@ export function PipelineDiagnosticsPanel({
     const avgLatency = latencyCount > 0 ? `${(totalLatency / latencyCount).toFixed(0)} ms` : "240 ms";
 
     return [
-      { label: "Total Ingested", value: `${totalCount} docs`, desc: "Document pipeline input", icon: Database, color: "text-[#38BDF8]" },
+      { label: "Total Ingested", value: `${totalCount} docs`, desc: "Document pipeline input", icon: Database, color: accentColor },
       { label: "Pipeline Success", value: successRate, desc: "Successful processing runs", icon: CheckCircle2, color: "text-emerald-400" },
       { label: "Average Latency", value: avgLatency, desc: "Engine execution cycle time", icon: Clock, color: "text-amber-500" },
       { label: "Status State", value: "HEALTHY", desc: "No critical failures logged", icon: Cpu, color: "text-purple-400" }
     ];
-  }, [documents, pipelineDiagnostics]);
+  }, [documents, pipelineDiagnostics, accentColor]);
 
-  const cardStyle = "bg-[#060B18]/60 border-[#1F2937]/70 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.06)] hover:border-[#D4AF37]/35 hover:shadow-[0_0_20px_rgba(212,175,55,0.12)] hover:-translate-y-0.5 transition-all duration-300 rounded-xl";
+  const cardStyle = `${glassCard(theme)} hover:-translate-y-0.5`;
 
   if (loading) {
     return (
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 animate-pulse">
         {[1, 2, 3].map(x => (
-          <div key={x} className="h-[220px] bg-[#060B18]/40 border border-[#1F2937]/60 rounded-xl" />
+          <div key={x} className={`h-[220px] rounded-3xl ${glassTokens[theme].card}`} />
         ))}
       </div>
     );
@@ -65,7 +71,7 @@ export function PipelineDiagnosticsPanel({
 
   if (error) {
     return (
-      <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+      <Card className={`${glassCard(theme)} border-red-500/20 h-96`}>
         <TelemetryErrorWidget title="Pipeline Diagnostics Telemetry Offline" message={error} />
       </Card>
     );
@@ -78,17 +84,18 @@ export function PipelineDiagnosticsPanel({
         {kpis.map((k, idx) => {
           const Icon = k.icon;
           return (
-            <div 
-              key={idx} 
-              className="bg-[#060B18]/60 border border-[#1F2937]/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05)] rounded-xl p-4 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all duration-300"
+            <div
+              key={idx}
+              className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
             >
+              <div className={SPECULAR_LINE} />
               <div className="flex justify-between items-start mb-2">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{k.label}</span>
+                <span className={`text-[10px] uppercase tracking-wider ${mutedText(theme)}`}>{k.label}</span>
                 <Icon className={`h-4 w-4 ${k.color}`} />
               </div>
               <div>
                 <span className={`text-xl font-bold block ${k.color}`}>{k.value}</span>
-                <span className="text-[8px] text-slate-500">{k.desc}</span>
+                <span className={`text-[8px] ${mutedText(theme)}`}>{k.desc}</span>
               </div>
             </div>
           );
@@ -112,21 +119,22 @@ export function PipelineDiagnosticsPanel({
 
           const getStatusColor = (status: string) => {
             const s = (status || "").toUpperCase();
-            if (s === "HEALTHY" || s === "COMPLETE") return "text-emerald-400 bg-emerald-950/30 border-emerald-900/60";
-            if (s === "WARNING" || s === "PARTIAL") return "text-orange-400 bg-orange-950/30 border-orange-900/60";
-            if (s === "FAILED") return "text-red-400 bg-red-950/30 border-red-900/60";
-            return "text-slate-400 bg-slate-900/40 border-slate-800/60";
+            if (s === "HEALTHY" || s === "COMPLETE") return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
+            if (s === "WARNING" || s === "PARTIAL") return "text-orange-500 bg-orange-500/10 border-orange-500/20";
+            if (s === "FAILED") return "text-red-500 bg-red-500/10 border-red-500/20";
+            return `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`;
           };
 
           return (
             <Card key={idx} className={`${cardStyle} flex flex-col justify-between`}>
+              <div className={SPECULAR_LINE} />
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
-                    <span className="text-[11px] text-[#D4AF37] uppercase tracking-wider block font-bold font-mono">
+                    <span className="text-[11px] uppercase tracking-wider block font-bold font-mono" style={{ color: accent }}>
                       {engine.name}
                     </span>
-                    <span className="text-[9px] text-slate-500 font-normal block max-w-[90%] leading-relaxed">
+                    <span className={`text-[9px] font-normal block max-w-[90%] leading-relaxed ${mutedText(theme)}`}>
                       {engine.description}
                     </span>
                   </div>
@@ -138,15 +146,15 @@ export function PipelineDiagnosticsPanel({
               <CardContent className="space-y-4 pt-0">
                 {/* Success Rate Telemetry Progress Bar */}
                 <div className="space-y-1.5">
-                  <div className="flex justify-between text-[9px] text-slate-400">
+                  <div className={`flex justify-between text-[9px] ${mutedText(theme)}`}>
                     <span>Execution Success Rate</span>
-                    <span className="font-bold text-slate-200">{pct !== null ? `${pct.toFixed(1)}%` : "Not Available"}</span>
+                    <span className={`font-bold ${bodyText(theme)}`}>{pct !== null ? `${pct.toFixed(1)}%` : "Not Available"}</span>
                   </div>
-                  <div className="w-full bg-[#030712] rounded-full h-1.5 border border-[#1F2937]/45 overflow-hidden">
+                  <div className={`w-full rounded-full h-1.5 border overflow-hidden ${isDark ? "bg-black/40 border-white/[0.08]" : "bg-black/[0.04] border-black/[0.06]"}`}>
                     <div
                       style={{ width: pct !== null ? `${pct}%` : "0%" }}
                       className={`h-full rounded-full transition-all duration-500 ${
-                        pct === null ? "bg-slate-700" :
+                        pct === null ? (isDark ? "bg-zinc-600" : "bg-zinc-400") :
                         pct > 90 ? "bg-emerald-500" :
                         pct > 70 ? "bg-orange-500" : "bg-red-500"
                       }`}
@@ -156,11 +164,11 @@ export function PipelineDiagnosticsPanel({
 
                 {/* Grid metrics list */}
                 {engine.metrics && engine.metrics.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2 bg-[#030712]/50 p-2.5 rounded border border-[#1F2937]/35 text-[9px]">
+                  <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-lg border text-[9px] ${isDark ? "bg-black/20 border-white/[0.08]" : "bg-black/[0.02] border-black/[0.06]"}`}>
                     {engine.metrics.map((m: any, mIdx: number) => (
                       <div key={mIdx} className="space-y-0.5">
-                        <span className="text-slate-500 block uppercase text-[8px]">{m.label}</span>
-                        <span className="text-slate-200 font-bold block">{m.value}</span>
+                        <span className={`block uppercase text-[8px] ${mutedText(theme)}`}>{m.label}</span>
+                        <span className={`font-bold block ${bodyText(theme)}`}>{m.value}</span>
                       </div>
                     ))}
                   </div>
@@ -173,27 +181,28 @@ export function PipelineDiagnosticsPanel({
 
       {/* Pipeline Completion Status Card */}
       <Card className={cardStyle}>
+        <div className={SPECULAR_LINE} />
         <CardHeader>
-          <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center">
-            <Database className="h-4 w-4 text-[#D4AF37] mr-2" />
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+            <Database className="h-4 w-4 mr-2" style={{ color: accent }} />
             Pipeline Completion Telemetry
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 font-mono text-xs">
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="bg-[#030712] p-4 rounded border border-[#1F2937]/45 space-y-1">
-              <span className="text-[10px] text-slate-500 uppercase">Total Ingested</span>
-              <span className="text-lg font-bold text-slate-200">{documents.length} documents</span>
+            <div className={glassPill(theme) + " p-4 space-y-1"}>
+              <span className={`text-[10px] uppercase block ${mutedText(theme)}`}>Total Ingested</span>
+              <span className={`text-lg font-bold ${bodyText(theme)}`}>{documents.length} documents</span>
             </div>
-            <div className="bg-[#030712] p-4 rounded border border-[#1F2937]/45 space-y-1">
-              <span className="text-[10px] text-slate-500 uppercase">System Success Rate</span>
-              <span className="text-lg font-bold text-emerald-400">
+            <div className={glassPill(theme) + " p-4 space-y-1"}>
+              <span className={`text-[10px] uppercase block ${mutedText(theme)}`}>System Success Rate</span>
+              <span className="text-lg font-bold text-emerald-500">
                 {(documents.length > 0 ? ((documents.filter(d => d.status !== "FAILED").length / documents.length) * 100) : 100).toFixed(1)}%
               </span>
             </div>
-            <div className="bg-[#030712] p-4 rounded border border-[#1F2937]/45 space-y-1">
-              <span className="text-[10px] text-slate-500 uppercase">Last Execution Time</span>
-              <span className="text-xs text-slate-200 font-bold block truncate">{lastProcessedTimestamp}</span>
+            <div className={glassPill(theme) + " p-4 space-y-1"}>
+              <span className={`text-[10px] uppercase block ${mutedText(theme)}`}>Last Execution Time</span>
+              <span className={`text-xs font-bold block truncate ${bodyText(theme)}`}>{lastProcessedTimestamp}</span>
             </div>
           </div>
         </CardContent>

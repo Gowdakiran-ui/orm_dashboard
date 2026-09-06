@@ -14,6 +14,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { fetchDocumentDetails } from "@/lib/api";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 
 export interface FeedTabProps {
@@ -35,6 +37,9 @@ export function FeedTab({
   systemStatus,
   clientId
 }: FeedTabProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
   // State for selected document details panel
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedDocDetails, setSelectedDocDetails] = useState<any>(null);
@@ -202,31 +207,31 @@ export function FeedTab({
           {/* Skeleton Executive KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map(x => (
-              <Card key={x} className="bg-[#050B18]/85 border-[#1F2937]/75 h-24 animate-pulse">
+              <Card key={x} className={`${glassTokens[theme].card} rounded-3xl h-24 animate-pulse`}>
                 <CardContent className="h-full flex items-center justify-between p-4">
                   <div className="space-y-2 w-2/3">
-                    <div className="h-3 bg-slate-800 rounded w-1/2" />
-                    <div className="h-5 bg-slate-800 rounded w-3/4" />
+                    <div className={`h-3 rounded w-1/2 ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
+                    <div className={`h-5 rounded w-3/4 ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
                   </div>
-                  <div className="h-10 w-10 bg-slate-800 rounded-full" />
+                  <div className={`h-10 w-10 rounded-full ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
                 </CardContent>
               </Card>
             ))}
           </div>
           {/* Skeleton body */}
-          <Card className="bg-[#050B18]/85 border-[#1F2937]/75 h-96 animate-pulse">
+          <Card className={`${glassTokens[theme].card} rounded-3xl h-96 animate-pulse`}>
             <CardHeader className="space-y-2">
-              <div className="h-4 bg-[#1E293B] rounded w-1/3" />
+              <div className={`h-4 rounded w-1/3 ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
             </CardHeader>
             <CardContent className="space-y-4">
               {[1, 2, 3, 4].map(x => (
-                <div key={x} className="h-10 bg-[#1E293B]/10 rounded" />
+                <div key={x} className={`h-10 rounded ${isDark ? "bg-white/[0.04]" : "bg-black/[0.03]"}`} />
               ))}
             </CardContent>
           </Card>
         </div>
       ) : documentsError ? (
-        <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+        <Card className={`${glassCard(theme)} border-red-500/20 h-96`}>
           <TelemetryErrorWidget title="Intelligence Stream Telemetry Offline" message={documentsError} />
         </Card>
       ) : (
@@ -235,24 +240,25 @@ export function FeedTab({
           {/* SECTION 1 — Intelligence Collection Overview */}
           <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 font-mono">
             {[
-              { label: "Scanned Feed", value: metrics.totalDocs, desc: "Total documents", icon: FileText, color: "text-[#D4AF37] border-l-2 border-[#D4AF37]/50 shadow-[inset_0_1px_2px_rgba(212,175,55,0.05)]", glow: "hover:shadow-[0_0_15px_rgba(212,175,55,0.15)]" },
-              { label: "Active Channels", value: metrics.uniqueSources, desc: "Monitored RSS Feeds", icon: Globe, color: "text-[#38BDF8] border-l-2 border-sky-500/50 shadow-[inset_0_1px_2px_rgba(56,189,248,0.05)]", glow: "hover:shadow-[0_0_15px_rgba(56,189,248,0.15)]" },
-              { label: "Active Narratives", value: metrics.activeNarrativesCount, desc: "Identified story clusters", icon: Layers, color: "text-purple-400 border-l-2 border-purple-500/50 shadow-[inset_0_1px_2px_rgba(168,85,247,0.05)]", glow: "hover:shadow-[0_0_15px_rgba(168,85,247,0.15)]" },
-              { label: "Tracked Leaders", value: metrics.totalExecutivesCount, desc: "Executives mentioned", icon: Users, color: "text-emerald-400 border-l-2 border-emerald-500/50 shadow-[inset_0_1px_2px_rgba(16,185,129,0.05)]", glow: "hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]" },
-              { label: "Avg Risk Level", value: `${metrics.avgRisk} pts`, desc: "Severity risk rating", icon: ShieldAlert, color: "text-rose-450 border-l-2 border-rose-500/50 shadow-[inset_0_1px_2px_rgba(244,63,94,0.05)]", glow: "hover:shadow-[0_0_15px_rgba(244,63,94,0.15)]" },
-              { label: "Ingested Today", value: metrics.processedToday, desc: "Last 24h count", icon: Activity, color: "text-amber-400 border-l-2 border-amber-500/50 shadow-[inset_0_1px_2px_rgba(245,158,11,0.05)]", glow: "hover:shadow-[0_0_15px_rgba(245,158,11,0.15)]" }
+              { label: "Scanned Feed", value: metrics.totalDocs, desc: "Total documents", icon: FileText, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
+              { label: "Active Channels", value: metrics.uniqueSources, desc: "Monitored RSS Feeds", icon: Globe, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
+              { label: "Active Narratives", value: metrics.activeNarrativesCount, desc: "Identified story clusters", icon: Layers, color: "text-purple-400" },
+              { label: "Tracked Leaders", value: metrics.totalExecutivesCount, desc: "Executives mentioned", icon: Users, color: "text-emerald-400" },
+              { label: "Avg Risk Level", value: `${metrics.avgRisk} pts`, desc: "Severity risk rating", icon: ShieldAlert, color: "text-rose-500" },
+              { label: "Ingested Today", value: metrics.processedToday, desc: "Last 24h count", icon: Activity, color: "text-amber-400" }
             ].map((kpi, idx) => (
-              <Card 
-                key={idx} 
-                className={`bg-[#060B18]/70 border-[#1F2937]/75 backdrop-blur-md rounded-xl p-3.5 flex flex-col justify-between transition-all duration-300 transform hover:-translate-y-1 ${kpi.color} ${kpi.glow}`}
+              <Card
+                key={idx}
+                className={`${glassCard(theme)} p-3.5 flex flex-col justify-between`}
               >
+                <div className={SPECULAR_LINE} />
                 <div className="flex justify-between items-start mb-1">
-                  <span className="text-[9px] text-slate-500 uppercase tracking-widest block font-bold">{kpi.label}</span>
-                  <kpi.icon className={`h-4 w-4 ${kpi.color.split(" ")[0]} opacity-70`} />
+                  <span className={`text-[9px] uppercase tracking-widest block font-bold ${mutedText(theme)}`}>{kpi.label}</span>
+                  <kpi.icon className={`h-4 w-4 ${kpi.color} opacity-70`} />
                 </div>
                 <div>
-                  <span className="text-xl font-bold block text-slate-100 font-mono tracking-tight">{kpi.value}</span>
-                  <span className="text-[8px] text-slate-500 block truncate mt-0.5">{kpi.desc}</span>
+                  <span className={`text-xl font-bold block font-mono tracking-tight ${bodyText(theme)}`}>{kpi.value}</span>
+                  <span className={`text-[8px] block truncate mt-0.5 ${mutedText(theme)}`}>{kpi.desc}</span>
                 </div>
               </Card>
             ))}
@@ -262,12 +268,13 @@ export function FeedTab({
           <div className="grid gap-6 md:grid-cols-12">
             
             {/* SECTION 2 — Collection Volume Timeline */}
-            <Card className="col-span-12 lg:col-span-4 bg-[#050B18]/85 border-[#1F2937]/75 shadow-xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col">
-              <CardHeader className="pb-2 border-b border-[#1F2937]/40 bg-[#030712]/40 p-4">
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-[#D4AF37]" /> Collection Volume Timeline
+            <Card className={`col-span-12 lg:col-span-4 ${glassCard(theme)} overflow-hidden flex flex-col`}>
+              <div className={SPECULAR_LINE} />
+              <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
+                  <Calendar className="h-3.5 w-3.5" style={{ color: accent }} /> Collection Volume Timeline
                 </CardTitle>
-                <CardDescription className="text-[9px] font-mono text-slate-500">Document collection frequency</CardDescription>
+                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Document collection frequency</CardDescription>
               </CardHeader>
               <CardContent className="p-4 flex-1 flex flex-col justify-center">
                 <div className="h-40 w-full">
@@ -275,14 +282,14 @@ export function FeedTab({
                     <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorTimeline" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.25}/>
-                          <stop offset="95%" stopColor="#D4AF37" stopOpacity={0}/>
+                          <stop offset="5%" stopColor={accent} stopOpacity={0.25}/>
+                          <stop offset="95%" stopColor={accent} stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <XAxis dataKey="date" stroke="#475569" fontSize={9} tickLine={false} />
-                      <YAxis stroke="#475569" fontSize={9} tickLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: '#060B18', borderColor: '#1F2937', color: '#fff', fontSize: 10, fontFamily: 'monospace' }} />
-                      <Area type="monotone" dataKey="count" name="Documents" stroke="#D4AF37" strokeWidth={1.5} fillOpacity={1} fill="url(#colorTimeline)" />
+                      <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={9} tickLine={false} />
+                      <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={9} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontSize: 10, fontFamily: 'monospace' }} />
+                      <Area type="monotone" dataKey="count" name="Documents" stroke={accent} strokeWidth={1.5} fillOpacity={1} fill="url(#colorTimeline)" />
                       <ReferenceLine y={maxTimelineCount} label={{ value: 'Peak', fill: '#ef4444', fontSize: 8, position: 'top' }} stroke="#ef4444" strokeDasharray="3 3" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -291,24 +298,25 @@ export function FeedTab({
             </Card>
 
             {/* SECTION 3 — Source Distribution */}
-            <Card className="col-span-12 lg:col-span-4 bg-[#050B18]/85 border-[#1F2937]/75 shadow-xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col">
-              <CardHeader className="pb-2 border-b border-[#1F2937]/40 bg-[#030712]/40 p-4">
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <BarChart2 className="h-3.5 w-3.5 text-sky-400" /> Source Distribution
+            <Card className={`col-span-12 lg:col-span-4 ${glassCard(theme)} overflow-hidden flex flex-col`}>
+              <div className={SPECULAR_LINE} />
+              <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
+                  <BarChart2 className="h-3.5 w-3.5" style={{ color: accent }} /> Source Distribution
                 </CardTitle>
-                <CardDescription className="text-[9px] font-mono text-slate-500">Breakdown of ingested media channels</CardDescription>
+                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Breakdown of ingested media channels</CardDescription>
               </CardHeader>
               <CardContent className="p-4 flex-1 flex flex-col justify-center space-y-3 font-mono">
                 {sourceChartData.map((src, i) => (
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between text-[10px]">
-                      <span className="text-slate-350 truncate max-w-[180px] font-bold">{src.name}</span>
-                      <span className="text-slate-500">{src.count} ({src.percentage}%)</span>
+                      <span className={`truncate max-w-[180px] font-bold ${bodyText(theme)}`}>{src.name}</span>
+                      <span className={mutedText(theme)}>{src.count} ({src.percentage}%)</span>
                     </div>
-                    <div className="w-full bg-slate-900/60 rounded-full h-1.5 overflow-hidden border border-[#1F2937]/35">
-                      <div 
-                        className="bg-sky-500/80 h-full rounded-full transition-all duration-1000 ease-out" 
-                        style={{ width: `${src.percentage}%` }}
+                    <div className={`w-full rounded-full h-1.5 overflow-hidden border ${isDark ? "bg-black/40 border-white/[0.08]" : "bg-black/[0.04] border-black/[0.06]"}`}>
+                      <div
+                        className="h-full rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${src.percentage}%`, backgroundColor: accent }}
                       />
                     </div>
                   </div>
@@ -317,23 +325,24 @@ export function FeedTab({
             </Card>
 
             {/* SECTION 4 — Risk Distribution */}
-            <Card className="col-span-12 lg:col-span-4 bg-[#050B18]/85 border-[#1F2937]/75 shadow-xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col">
-              <CardHeader className="pb-2 border-b border-[#1F2937]/40 bg-[#030712]/40 p-4">
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <Card className={`col-span-12 lg:col-span-4 ${glassCard(theme)} overflow-hidden flex flex-col`}>
+              <div className={SPECULAR_LINE} />
+              <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
                   <ShieldAlert className="h-3.5 w-3.5 text-rose-500" /> Risk Severity Distribution
                 </CardTitle>
-                <CardDescription className="text-[9px] font-mono text-slate-500">Telemetry safety categorization</CardDescription>
+                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Telemetry safety categorization</CardDescription>
               </CardHeader>
               <CardContent className="p-4 flex-1 flex flex-col justify-center space-y-3 font-mono">
                 {riskDistribution.map((risk, i) => (
-                  <div key={i} className="flex justify-between items-center bg-[#030712]/40 border border-[#1F2937]/40 rounded p-2 text-xs">
+                  <div key={i} className={`flex justify-between items-center rounded-lg p-2 text-xs border ${isDark ? "bg-black/20 border-white/[0.08]" : "bg-black/[0.02] border-black/[0.06]"}`}>
                     <div className="flex items-center gap-2">
                       <span className={`w-2.5 h-2.5 rounded-full ${risk.color} shadow-sm animate-pulse`} />
-                      <span className="text-slate-300 font-bold">{risk.label.split(" ")[0]}</span>
+                      <span className={`font-bold ${bodyText(theme)}`}>{risk.label.split(" ")[0]}</span>
                     </div>
                     <div className="text-right">
                       <span className={`font-bold ${risk.text}`}>{risk.count} docs</span>
-                      <span className="text-slate-500 text-[10px] block">{risk.percentage}% of feed</span>
+                      <span className={`text-[10px] block ${mutedText(theme)}`}>{risk.percentage}% of feed</span>
                     </div>
                   </div>
                 ))}
@@ -343,14 +352,15 @@ export function FeedTab({
           </div>
 
           {/* SECTION 7 — Pipeline Flow Visualization (Informational & Non-interactive) */}
-          <Card className="bg-[#050B18]/85 border-[#1F2937]/75 shadow-xl backdrop-blur-md rounded-xl overflow-hidden">
-            <CardHeader className="pb-2 border-b border-[#1F2937]/40 bg-[#030712]/40 p-4">
-              <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <Card className={`${glassCard(theme)} overflow-hidden`}>
+            <div className={SPECULAR_LINE} />
+            <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
                 <Server className="h-3.5 w-3.5 text-emerald-400" /> Live Brand Intelligence Pipeline Ingestion flow
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 overflow-x-auto">
-              <div className="flex items-center justify-between min-w-[700px] text-[10px] font-mono text-slate-400 py-2">
+              <div className={`flex items-center justify-between min-w-[700px] text-[10px] font-mono py-2 ${mutedText(theme)}`}>
                 {[
                   { label: "RSS Sources", desc: "Digital collection pool", icon: Globe, status: "Active Ingest" },
                   { label: "Pipeline Collection", desc: "Fetch & Hash matching", icon: Database, status: "Listening" },
@@ -362,17 +372,17 @@ export function FeedTab({
                 ].map((step, idx) => (
                   <React.Fragment key={idx}>
                     <div className="flex flex-col items-center text-center space-y-1.5 w-24">
-                      <div className="h-8 w-8 rounded-lg bg-emerald-950/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]">
+                      <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
                         <step.icon className="h-4 w-4" />
                       </div>
-                      <span className="font-bold text-slate-200 block leading-tight">{step.label}</span>
-                      <span className="text-[8px] text-slate-500 block leading-none">{step.desc}</span>
-                      <Badge className="bg-emerald-950/40 text-emerald-400 border border-emerald-800/40 text-[7.5px] py-0 px-1 rounded-sm">
+                      <span className={`font-bold block leading-tight ${bodyText(theme)}`}>{step.label}</span>
+                      <span className={`text-[8px] block leading-none ${mutedText(theme)}`}>{step.desc}</span>
+                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[7.5px] py-0 px-1 rounded-sm">
                         {step.status}
                       </Badge>
                     </div>
                     {idx < 6 && (
-                      <ArrowRight className="h-3.5 w-3.5 text-slate-600 animate-pulse shrink-0" />
+                      <ArrowRight className={`h-3.5 w-3.5 animate-pulse shrink-0 ${mutedText(theme)}`} />
                     )}
                   </React.Fragment>
                 ))}
@@ -384,12 +394,13 @@ export function FeedTab({
           <div className="grid gap-6 lg:grid-cols-12 items-start">
             
             {/* LEFT COLUMN: Real-Time Ingested Feed List */}
-            <Card className="lg:col-span-5 bg-[#050B18]/85 border-[#1F2937]/75 shadow-xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col h-[780px]">
-              <CardHeader className="pb-3 border-b border-[#1F2937]/40 bg-[#030712]/40 p-4">
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <Card className={`lg:col-span-5 ${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
+              <div className={SPECULAR_LINE} />
+              <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
                   <Activity className="h-3.5 w-3.5 text-emerald-400" /> Real-time Brand Ingest Stream
                 </CardTitle>
-                <CardDescription className="text-[9px] font-mono text-slate-500">Real-time matching documents</CardDescription>
+                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
               </CardHeader>
               <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
                 {documents.map((d, i) => {
@@ -406,34 +417,34 @@ export function FeedTab({
                       key={d.id ?? i}
                       onClick={() => setSelectedDocId(d.id)}
                       className={`border rounded-lg p-3 cursor-pointer transition-all duration-200 font-mono text-[10px] space-y-2 ${
-                        isSelected 
-                          ? "bg-[#060C1E] border-sky-500/60 shadow-[0_0_12px_rgba(56,189,248,0.15)]"
-                          : "bg-[#030712]/40 border-[#1F2937]/60 hover:border-slate-700/60 hover:bg-[#030712]/70"
+                        isSelected
+                          ? isDark ? "bg-white/[0.06] border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/60"
+                          : isDark ? "bg-black/20 border-white/[0.08] hover:border-white/[0.2] hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-black/[0.15] hover:bg-black/[0.04]"
                       }`}
                     >
                       <div className="flex justify-between items-start gap-2">
-                        <span className="font-bold text-xs text-slate-200 line-clamp-2 leading-tight hover:text-sky-400 transition-colors duration-150">
+                        <span className={`font-bold text-xs line-clamp-2 leading-tight transition-colors duration-150 ${bodyText(theme)}`}>
                           {d.title}
                         </span>
-                        <span className="text-[9px] text-slate-500 shrink-0 flex items-center gap-1 font-bold">
+                        <span className={`text-[9px] shrink-0 flex items-center gap-1 font-bold ${mutedText(theme)}`}>
                           <Clock className="h-3 w-3" /> {formattedTime}
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-[#1F2937]/35">
-                        <Badge variant="outline" className="border-sky-500/30 text-sky-400 text-[8px] py-0 px-1 font-bold">
+                      <div className={`flex flex-wrap gap-1.5 pt-1.5 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                        <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] text-[8px] py-0 px-1 font-bold" : "border-[#3B82F6]/30 text-[#3B82F6] text-[8px] py-0 px-1 font-bold"}>
                           {d.source || "RSS"}
                         </Badge>
-                        <Badge variant="outline" className="border-blue-500/30 text-blue-400 text-[8px] py-0 px-1">
+                        <Badge variant="outline" className={`text-[8px] py-0 px-1 ${mutedText(theme)} ${isDark ? "border-white/[0.12]" : "border-black/[0.08]"}`}>
                           {d.topic || "General"}
                         </Badge>
                         <Badge variant="outline" className={`text-[8px] py-0 px-1 ${docRiskColor}`}>
                           Risk: {d.risk}
                         </Badge>
                         <Badge variant="outline" className={`text-[8px] py-0 px-1 ${
-                          d.sentiment > 0.3 ? "bg-emerald-950/20 text-emerald-400 border-emerald-900/30" :
-                          d.sentiment < -0.3 ? "bg-red-950/20 text-red-400 border-red-900/30" :
-                          "bg-slate-900/20 text-slate-355 border-slate-800/30"
+                          d.sentiment > 0.3 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                          d.sentiment < -0.3 ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                          `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`
                         }`}>
                           {d.sentiment > 0.3 ? "+" : ""}{d.sentiment !== undefined && d.sentiment !== null ? d.sentiment.toFixed(2) : "0.00"}
                         </Badge>
@@ -442,8 +453,8 @@ export function FeedTab({
                   );
                 })}
                 {documents.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono text-xs py-20 text-center">
-                    <AlertTriangle className="h-8 w-8 text-slate-600 mb-2" />
+                  <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
+                    <AlertTriangle className={`h-8 w-8 mb-2 ${mutedText(theme)}`} />
                     No intelligence documents matches in database.
                   </div>
                 )}
@@ -451,16 +462,17 @@ export function FeedTab({
             </Card>
 
             {/* MIDDLE-RIGHT COLUMN: Document Intelligence Detail Panel */}
-            <Card className="lg:col-span-5 bg-[#050B18]/85 border-[#1F2937]/75 shadow-xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col h-[780px] border-r-2 border-r-[#D4AF37]/45">
-              <CardHeader className="pb-3 border-b border-[#1F2937]/40 bg-[#030712]/40 p-4">
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-[#D4AF37]" /> Document Intelligence Details
+            <Card className={`lg:col-span-5 ${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`} style={{ borderRightWidth: 2, borderRightColor: `${accent}73` }}>
+              <div className={SPECULAR_LINE} />
+              <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
+                  <Sparkles className="h-3.5 w-3.5" style={{ color: accent }} /> Document Intelligence Details
                 </CardTitle>
-                <CardDescription className="text-[9px] font-mono text-slate-500">Metadata extraction & audit trace</CardDescription>
+                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Metadata extraction & audit trace</CardDescription>
               </CardHeader>
-              <CardContent className="p-4 overflow-y-auto flex-1 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent font-mono text-xs text-slate-300">
+              <CardContent className={`p-4 overflow-y-auto flex-1 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent font-mono text-xs ${bodyText(theme)}`}>
                 {detailsLoading ? (
-                  <div className="flex flex-col items-center justify-center h-full text-[#D4AF37] font-mono">
+                  <div className="flex flex-col items-center justify-center h-full dash-accent font-mono">
                     <Cpu className="animate-spin h-8 w-8 mb-2" />
                     Ingesting Trace Metadata...
                   </div>
@@ -468,26 +480,26 @@ export function FeedTab({
                   <>
                     {/* Title and Date */}
                     <div className="space-y-1">
-                      <h4 className="font-bold text-sm text-slate-100 leading-snug">{selectedDocDetails.title}</h4>
-                      <div className="flex items-center gap-3 text-[9px] text-slate-500 pt-1">
+                      <h4 className="font-bold text-sm dash-strong leading-snug">{selectedDocDetails.title}</h4>
+                      <div className="flex items-center gap-3 text-[9px] dash-muted pt-1">
                         <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> Ingested at {selectedDocDetails.timestamp ? new Date(selectedDocDetails.timestamp).toLocaleString() : "Recent"}</span>
                       </div>
                     </div>
 
                     {/* Metadata breakdown */}
-                    <div className="grid grid-cols-2 gap-3 border-t border-[#1F2937]/45 pt-3">
+                    <div className="grid grid-cols-2 gap-3 border-t dash-border pt-3">
                       <div>
-                        <span className="text-[8px] text-slate-500 uppercase block font-bold">Source Channel</span>
-                        <span className="text-slate-200 font-bold text-[11px]">{selectedDocDetails.source_id || "RSS Feed"}</span>
+                        <span className="text-[8px] dash-muted uppercase block font-bold">Source Channel</span>
+                        <span className="dash-strong font-bold text-[11px]">{selectedDocDetails.source_id || "RSS Feed"}</span>
                       </div>
                       <div>
-                        <span className="text-[8px] text-slate-500 uppercase block font-bold">Topic Mapped</span>
+                        <span className="text-[8px] dash-muted uppercase block font-bold">Topic Mapped</span>
                         <Badge variant="outline" className="border-blue-500/30 text-blue-400 text-[8px] py-0 px-1 mt-0.5">
                           {selectedDocDetails.topics?.[0]?.name || "General"}
                         </Badge>
                       </div>
                       <div>
-                        <span className="text-[8px] text-slate-500 uppercase block font-bold">Sentiment Score</span>
+                        <span className="text-[8px] dash-muted uppercase block font-bold">Sentiment Score</span>
                         <span className={`font-bold text-[11px] ${
                           selectedDocDetails.sentiment >= 0.2 ? "text-emerald-400" :
                           selectedDocDetails.sentiment <= -0.2 ? "text-red-400" :
@@ -497,7 +509,7 @@ export function FeedTab({
                         </span>
                       </div>
                       <div>
-                        <span className="text-[8px] text-slate-500 uppercase block font-bold">Risk Index</span>
+                        <span className="text-[8px] dash-muted uppercase block font-bold">Risk Index</span>
                         <span className={`font-bold text-[11px] ${
                           selectedDocDetails.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" :
                           selectedDocDetails.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" :
@@ -507,45 +519,45 @@ export function FeedTab({
                         </span>
                       </div>
                       <div>
-                        <span className="text-[8px] text-slate-500 uppercase block font-bold">Classification Strength</span>
-                        <span className="text-slate-350 text-[11px]">
+                        <span className="text-[8px] dash-muted uppercase block font-bold">Classification Strength</span>
+                        <span className="dash-strong text-[11px]">
                           {selectedDocDetails.topics?.[0]?.confidence !== undefined 
                             ? `${(selectedDocDetails.topics[0].confidence * 100).toFixed(0)}%` 
                             : "100%"}
                         </span>
                       </div>
                       <div>
-                        <span className="text-[8px] text-slate-500 uppercase block font-bold">Associated Narrative</span>
-                        <span className="text-slate-350 truncate block max-w-[150px]">{selectedDocDetails.narrative?.name || "General Narrative"}</span>
+                        <span className="text-[8px] dash-muted uppercase block font-bold">Associated Narrative</span>
+                        <span className="dash-strong truncate block max-w-[150px]">{selectedDocDetails.narrative?.name || "General Narrative"}</span>
                       </div>
                     </div>
 
                     {/* Entities Mentioned */}
-                    <div className="space-y-1.5 border-t border-[#1F2937]/45 pt-3">
-                      <span className="text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block">Mentioned Targets</span>
+                    <div className="space-y-1.5 border-t dash-border pt-3">
+                      <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">Mentioned Targets</span>
                       {selectedDocDetails.entities && selectedDocDetails.entities.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {selectedDocDetails.entities.map((ent: any, idx: number) => (
-                            <Badge key={idx} variant="outline" className="bg-[#030712]/30 border-sky-500/30 text-sky-400 text-[8.5px]">
+                            <Badge key={idx} variant="outline" className="dash-box border-sky-500/30 text-sky-400 text-[8.5px]">
                               {ent.name}
                             </Badge>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-slate-500 text-[10px]">No corporate leaders or brand entities explicitly extracted.</span>
+                        <span className="dash-muted text-[10px]">No corporate leaders or brand entities explicitly extracted.</span>
                       )}
                     </div>
 
                     {/* AI Classification Summary */}
-                    <div className="space-y-1.5 border-t border-[#1F2937]/45 pt-3">
-                      <span className="text-[9.5px] text-[#D4AF37] font-bold uppercase tracking-wider block">AI Classification Summary</span>
-                      <p className="text-[10px] text-slate-350 leading-relaxed bg-[#030712]/30 border border-[#1F2937]/45 rounded p-2.5">
+                    <div className="space-y-1.5 border-t dash-border pt-3">
+                      <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">AI Classification Summary</span>
+                      <p className="text-[10px] dash-strong leading-relaxed dash-box border dash-border rounded p-2.5">
                         {selectedDocDetails.normalized_content || "Initial pipeline trace reveals standard media publication matching targeted brand profiles. Ingestion diagnostics show complete metadata structure and low volatile risk vectors."}
                       </p>
                     </div>
 
                     {/* Actions: Open Original URL */}
-                    <div className="pt-3 border-t border-dashed border-[#1F2937]/35 w-full flex items-center justify-between">
+                    <div className="pt-3 border-t border-dashed dash-border w-full flex items-center justify-between">
                       {isValidOriginalArticleUrl(selectedDocDetails.url) ? (
                         <Button
                           size="sm"
@@ -556,7 +568,7 @@ export function FeedTab({
                               window.open(selectedDocDetails.url, "_blank", "noopener,noreferrer");
                             }
                           }}
-                          className="h-7 px-3 text-[9.5px] font-mono bg-[#030712] border border-[#1F2937] hover:bg-slate-900 text-sky-400 hover:text-sky-350 flex items-center gap-1 w-full justify-center"
+                          className="h-7 px-3 text-[9.5px] font-mono dash-box border dash-border hover:bg-slate-900 text-sky-400 hover:text-sky-350 flex items-center gap-1 w-full justify-center"
                         >
                           <ExternalLink className="h-3 w-3" /> Open Original Article
                         </Button>
@@ -565,7 +577,7 @@ export function FeedTab({
                           size="sm"
                           variant="ghost"
                           disabled
-                          className="h-7 px-3 text-[9.5px] font-mono bg-[#030712] border border-[#1F2937] text-slate-500 flex items-center gap-1 w-full justify-center cursor-not-allowed opacity-50"
+                          className="h-7 px-3 text-[9.5px] font-mono dash-box border dash-border dash-muted flex items-center gap-1 w-full justify-center cursor-not-allowed opacity-50"
                         >
                           Original article unavailable
                         </Button>
@@ -573,8 +585,8 @@ export function FeedTab({
                     </div>
                   </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono text-center">
-                    <Info className="h-6 w-6 text-slate-650 mb-1" />
+                  <div className="flex flex-col items-center justify-center h-full dash-muted font-mono text-center">
+                    <Info className="h-6 w-6 dash-muted mb-1" />
                     Select a document from the real-time ingest stream to view telemetry logs.
                   </div>
                 )}
@@ -582,29 +594,30 @@ export function FeedTab({
             </Card>
 
             {/* FAR-RIGHT COLUMN: Live Telemetry activity log */}
-            <Card className="lg:col-span-2 bg-[#050B18]/85 border-[#1F2937]/75 shadow-xl backdrop-blur-md rounded-xl overflow-hidden flex flex-col h-[780px]">
-              <CardHeader className="pb-3 border-b border-[#1F2937]/40 bg-[#030712]/40 p-4">
-                <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Activity className="h-3.5 w-3.5 text-sky-500" /> Live Activity Log
+            <Card className={`lg:col-span-2 ${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
+              <div className={SPECULAR_LINE} />
+              <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
+                  <Activity className="h-3.5 w-3.5" style={{ color: accent }} /> Live Activity Log
                 </CardTitle>
-                <CardDescription className="text-[9px] font-mono text-slate-500">Live ingestion events</CardDescription>
+                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Live ingestion events</CardDescription>
               </CardHeader>
               <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 font-mono text-[9px] scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
                 {activityLogs.map((log) => {
-                  let alertColor = "text-sky-400";
-                  if (log.type === "error") alertColor = "text-red-400";
-                  else if (log.type === "warn") alertColor = "text-amber-400";
-                  else if (log.type === "success") alertColor = "text-emerald-400";
+                  let alertColor = accent;
+                  if (log.type === "error") alertColor = "#EF4444";
+                  else if (log.type === "warn") alertColor = "#F59E0B";
+                  else if (log.type === "success") alertColor = "#10B981";
 
                   return (
-                    <div key={log.id} className="border-b border-[#1F2937]/35 pb-2 space-y-0.5">
+                    <div key={log.id} className={`border-b pb-2 space-y-0.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                       <div className="flex justify-between font-bold">
-                        <span className={alertColor}>{log.time}</span>
-                        <Badge variant="outline" className="border-none p-0 text-[8px] text-slate-500 lowercase">
+                        <span style={{ color: alertColor }}>{log.time}</span>
+                        <Badge variant="outline" className={`border-none p-0 text-[8px] lowercase ${mutedText(theme)}`}>
                           {log.type}
                         </Badge>
                       </div>
-                      <p className="text-slate-400 leading-tight">{log.event}</p>
+                      <p className={`leading-tight ${mutedText(theme)}`}>{log.event}</p>
                     </div>
                   );
                 })}

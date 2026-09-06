@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { glassCard, glassTokens, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 
 export interface RiskAnalyticsPanelProps {
   riskMatrixData: any[];
@@ -26,25 +28,29 @@ export function RiskAnalyticsPanel({
   loading = false,
   error = null
 }: RiskAnalyticsPanelProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
   const [selectedCell, setSelectedCell] = useState<{ impact: string; likelihood: string } | null>(null);
 
   // 1. KPI summary data
   const kpis = useMemo(() => {
     const totalIncidents = riskMatrixData.length;
-    const avgRiskVal = totalIncidents > 0 
-      ? (riskMatrixData.reduce((sum, d) => sum + (d.impact || 0), 0) / totalIncidents) 
+    const avgRiskVal = totalIncidents > 0
+      ? (riskMatrixData.reduce((sum, d) => sum + (d.impact || 0), 0) / totalIncidents)
       : 0.0;
-    
+
     const criticalCount = riskMatrixData.filter(d => (d.impact || 0) > RISK_THRESHOLDS.HIGH_TO_CRITICAL).length;
     const alertsStatus = alertTimelineData.length === 0 ? "System Stable" : "Active Alerts";
 
     return [
-      { label: "Total Incidents", value: totalIncidents, desc: "Monitored threat vectors", icon: Shield, color: "text-[#38BDF8]" },
+      { label: "Total Incidents", value: totalIncidents, desc: "Monitored threat vectors", icon: Shield, color: accentColor },
       { label: "Avg Risk Rating", value: avgRiskVal.toFixed(1), desc: "Average severity score", icon: Activity, color: "text-amber-500" },
       { label: "Critical Incidents", value: criticalCount, desc: "Risk score 76+", icon: ShieldAlert, color: "text-red-500" },
       { label: "Ingestion Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400" }
     ];
-  }, [riskMatrixData, alertTimelineData]);
+  }, [riskMatrixData, alertTimelineData, accentColor]);
 
   // 2. 3x3 SOC Heatmap grouping
   const matrixData = useMemo(() => {
@@ -125,23 +131,25 @@ export function RiskAnalyticsPanel({
   }, [alertTimelineData]);
 
   const tooltipStyle = {
-    backgroundColor: 'rgba(11, 15, 25, 0.95)',
-    borderColor: '#1e293b',
+    backgroundColor: isDark ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+    borderColor: isDark ? '#3f3f46' : '#e4e4e7',
     borderRadius: '8px',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.8)',
-    color: '#e2e8f0',
+    boxShadow: isDark ? '0 10px 30px rgba(0, 0, 0, 0.8)' : '0 10px 30px rgba(0, 0, 0, 0.1)',
+    color: isDark ? '#e4e4e7' : '#18181b',
     fontFamily: 'monospace',
     fontSize: '11px',
     padding: '12px'
   };
 
-  const cardStyle = "bg-[#060B18]/60 border-[#1F2937]/70 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.06)] hover:border-[#D4AF37]/35 hover:shadow-[0_0_20px_rgba(212,175,55,0.12)] hover:-translate-y-0.5 transition-all duration-300 rounded-xl";
+  const cardStyle = `${glassCard(theme)} hover:-translate-y-0.5`;
+  const gridStroke = isDark ? "#3f3f46" : "#d4d4d8";
+  const axisStroke = isDark ? "#a1a1aa" : "#71717a";
 
   if (loading) {
     return (
       <div className="grid gap-6 md:grid-cols-2 animate-pulse">
         {[1, 2].map(x => (
-          <div key={x} className="h-[300px] bg-[#060B18]/40 border border-[#1F2937]/60 rounded-xl" />
+          <div key={x} className={`h-[300px] rounded-3xl ${glassTokens[theme].card}`} />
         ))}
       </div>
     );
@@ -149,7 +157,7 @@ export function RiskAnalyticsPanel({
 
   if (error) {
     return (
-      <Card className="bg-[#060B18]/60 border-red-500/20 h-96">
+      <Card className={`${glassCard(theme)} border-red-500/20 h-96`}>
         <TelemetryErrorWidget title="Risk Analytics Telemetry Offline" message={error} />
       </Card>
     );
@@ -162,17 +170,18 @@ export function RiskAnalyticsPanel({
         {kpis.map((k, idx) => {
           const Icon = k.icon;
           return (
-            <div 
-              key={idx} 
-              className="bg-[#060B18]/60 border border-[#1F2937]/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05)] rounded-xl p-4 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all duration-300"
+            <div
+              key={idx}
+              className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
             >
+              <div className={SPECULAR_LINE} />
               <div className="flex justify-between items-start mb-2">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{k.label}</span>
+                <span className={`text-[10px] uppercase tracking-wider ${mutedText(theme)}`}>{k.label}</span>
                 <Icon className={`h-4 w-4 ${k.color}`} />
               </div>
               <div>
                 <span className={`text-xl font-bold block ${k.color}`}>{k.value}</span>
-                <span className="text-[8px] text-slate-500">{k.desc}</span>
+                <span className={`text-[8px] ${mutedText(theme)}`}>{k.desc}</span>
               </div>
             </div>
           );
@@ -182,18 +191,19 @@ export function RiskAnalyticsPanel({
       <div className="grid gap-6 md:grid-cols-12">
         {/* 1. Redesigned 3x3 SOC-style Risk Matrix */}
         <Card className={`${cardStyle} md:col-span-6`}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">SOC Risk Matrix (Impact × Likelihood)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>SOC Risk Matrix (Impact × Likelihood)</CardTitle>
           </CardHeader>
           <CardContent className="p-4">
             <div className="grid grid-cols-12 gap-2 font-mono text-[9px]">
               {/* Y Axis Label */}
               <div className="col-span-1 flex items-center justify-center">
-                <span className="transform -rotate-90 origin-center whitespace-nowrap text-slate-500 uppercase tracking-widest font-bold font-mono">IMPACT</span>
+                <span className={`transform -rotate-90 origin-center whitespace-nowrap uppercase tracking-widest font-bold font-mono ${mutedText(theme)}`}>IMPACT</span>
               </div>
 
               {/* Matrix Grid */}
-              <div className="col-span-11 grid grid-rows-3 gap-1.5 bg-[#030712] p-2 rounded border border-[#1F2937]/45">
+              <div className={`col-span-11 grid grid-rows-3 gap-1.5 p-2 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                 {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
                   <div key={rowKey} className="grid grid-cols-3 gap-1.5 h-[65px]">
                     {["LOW", "MEDIUM", "HIGH"].map((colKey) => {
@@ -226,37 +236,38 @@ export function RiskAnalyticsPanel({
                           key={colKey} 
                           onClick={() => count > 0 && setSelectedCell({ impact: rowKey, likelihood: colKey })}
                           className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center border ${bgClass} ${
-                            isSelected ? "ring-2 ring-[#D4AF37] border-transparent" : ""
+                            isSelected ? `ring-2 border-transparent ${isDark ? "ring-[#00F5D4]" : "ring-[#3B82F6]"}` : ""
                           }`}
                         >
                           {count > 0 ? (
                             <span className="text-[10px] font-bold block">🔴 {count} {count === 1 ? "Incident" : "Incidents"}</span>
                           ) : (
-                            <span className="text-[9px] text-slate-600 block">0</span>
+                            <span className={`text-[9px] block ${mutedText(theme)}`}>0</span>
                           )}
-                          
-                          {/* Hover diagnostics tooltip */}
-                          <div className="absolute z-50 hidden group-hover:block bg-[#030712] border border-[#1F2937] p-3 rounded shadow-2xl font-mono text-[9px] w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none">
-                            <div className="font-bold border-b border-[#1F2937] pb-1 text-[#D4AF37] mb-1">Cell Diagnostics</div>
+
+                          {/* Hover diagnostics tooltip -- kept solid for legibility over an
+                              already-colored matrix cell, same reasoning as Risk Center. */}
+                          <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-[9px] w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
+                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell Diagnostics</div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Impact:</span>
-                              <span className="text-slate-200">{rowKey}</span>
+                              <span className={mutedText(theme)}>Impact:</span>
+                              <span className={bodyText(theme)}>{rowKey}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Likelihood:</span>
-                              <span className="text-slate-200">{colKey}</span>
+                              <span className={mutedText(theme)}>Likelihood:</span>
+                              <span className={bodyText(theme)}>{colKey}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Incidents:</span>
-                              <span className="text-slate-200 font-bold">{count}</span>
+                              <span className={mutedText(theme)}>Incidents:</span>
+                              <span className={`font-bold ${bodyText(theme)}`}>{count}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Avg Risk Score:</span>
-                              <span className="text-slate-250 font-bold">{count > 0 ? avgRisk : "N/A"}</span>
+                              <span className={mutedText(theme)}>Avg Risk Score:</span>
+                              <span className={`font-bold ${bodyText(theme)}`}>{count > 0 ? avgRisk : "N/A"}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Highest Risk:</span>
-                              <span className="text-red-400 font-bold">{count > 0 ? maxRisk : "N/A"}</span>
+                              <span className={mutedText(theme)}>Highest Risk:</span>
+                              <span className="text-red-500 font-bold">{count > 0 ? maxRisk : "N/A"}</span>
                             </div>
                           </div>
                         </div>
@@ -266,28 +277,29 @@ export function RiskAnalyticsPanel({
                 ))}
               </div>
             </div>
-            
+
             {/* Click-through drill down filtered details list */}
             {selectedCell && (
-              <div className="mt-4 border-t border-[#1F2937] pt-4 space-y-2">
+              <div className={`mt-4 border-t pt-4 space-y-2 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-mono text-slate-400 uppercase font-bold">
+                  <span className={`text-[10px] font-mono uppercase font-bold ${mutedText(theme)}`}>
                     Incidents Filtered: Impact [{selectedCell.impact}] × Likelihood [{selectedCell.likelihood}]
                   </span>
-                  <button 
+                  <button
                     onClick={() => setSelectedCell(null)}
-                    className="text-[9px] text-[#D4AF37] hover:underline font-mono"
+                    className="text-[9px] hover:underline font-mono"
+                    style={{ color: accent }}
                   >
                     Clear Filter
                   </button>
                 </div>
                 <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1">
                   {selectedIncidents.map((inc: any, i: number) => (
-                    <div key={i} className="bg-[#030712] border border-[#1F2937]/50 rounded p-2 text-[10px] flex items-center justify-between">
+                    <div key={i} className={`rounded-lg p-2 text-[10px] flex items-center justify-between border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                       <div className="truncate max-w-[80%]">
-                        <span className="font-bold text-slate-200 block truncate">{inc.name}</span>
+                        <span className={`font-bold block truncate ${bodyText(theme)}`}>{inc.name}</span>
                       </div>
-                      <Badge className="bg-red-950/40 text-red-400 border-red-900/60 font-mono text-[9px]">
+                      <Badge className="bg-red-500/10 text-red-500 border-red-500/20 font-mono text-[9px]">
                         Risk {inc.impact}
                       </Badge>
                     </div>
@@ -300,11 +312,12 @@ export function RiskAnalyticsPanel({
 
         {/* 2. Daily Alerts Timeline (Styled for green baseline success if empty) */}
         <Card className={`${cardStyle} md:col-span-6`}>
+          <div className={SPECULAR_LINE} />
           <CardHeader className="pb-1">
             <div className="flex justify-between items-start">
-              <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Daily Alerts Trigger Volume Timeline</CardTitle>
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Daily Alerts Trigger Volume Timeline</CardTitle>
               {alertTimelineData.length === 0 && (
-                <Badge className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 font-mono text-[9px]">
+                <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono text-[9px]">
                   System Stable
                 </Badge>
               )}
@@ -319,36 +332,36 @@ export function RiskAnalyticsPanel({
                     <stop offset="95%" stopColor={alertTimelineData.length === 0 ? "#10B981" : "#EF4444"} stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1F2937" strokeOpacity={0.2} />
-                <XAxis dataKey="date" stroke="#94A3B8" fontSize={9} />
-                <YAxis stroke="#94A3B8" fontSize={9} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
+                <XAxis dataKey="date" stroke={axisStroke} fontSize={9} />
+                <YAxis stroke={axisStroke} fontSize={9} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Area 
-                  type="monotone" 
-                  dataKey="count" 
-                  stroke={alertTimelineData.length === 0 ? "#10B981" : "#EF4444"} 
-                  fillOpacity={1} 
-                  fill="url(#colorAlert)" 
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  stroke={alertTimelineData.length === 0 ? "#10B981" : "#EF4444"}
+                  fillOpacity={1}
+                  fill="url(#colorAlert)"
                   strokeWidth={2}
                   isAnimationActive={true}
                   animationDuration={850}
                 />
-                
+
                 {alertTimelineData.length > 0 && (
                   <>
-                    <ReferenceLine 
-                      y={alertStats.avg} 
-                      stroke="#64748B" 
-                      strokeDasharray="4 4" 
-                      label={{ value: `Avg (${alertStats.avg})`, fill: '#94A3B8', fontSize: 8, position: 'insideBottomRight' }} 
+                    <ReferenceLine
+                      y={alertStats.avg}
+                      stroke={axisStroke}
+                      strokeDasharray="4 4"
+                      label={{ value: `Avg (${alertStats.avg})`, fill: axisStroke, fontSize: 8, position: 'insideBottomRight' }}
                     />
-                    <ReferenceDot 
-                      x={alertStats.peakDate} 
-                      y={alertStats.peakCount} 
-                      r={4} 
-                      fill="#EF4444" 
-                      stroke="#fff" 
-                      label={{ value: `Peak: ${alertStats.peakCount}`, fill: '#EF4444', fontSize: 9, position: 'top' }} 
+                    <ReferenceDot
+                      x={alertStats.peakDate}
+                      y={alertStats.peakCount}
+                      r={4}
+                      fill="#EF4444"
+                      stroke={isDark ? "#09090b" : "#ffffff"}
+                      label={{ value: `Peak: ${alertStats.peakCount}`, fill: '#EF4444', fontSize: 9, position: 'top' }}
                     />
                   </>
                 )}
@@ -357,9 +370,9 @@ export function RiskAnalyticsPanel({
 
             {alertTimelineData.length === 0 && (
               <div className="absolute inset-0 top-12 flex flex-col items-center justify-center pointer-events-none text-center bg-transparent space-y-1">
-                <span className="text-[11px] font-bold font-mono text-emerald-400">System Stable</span>
-                <span className="text-[9px] font-mono text-slate-500">0 Critical Alerts | Monitoring Active</span>
-                <span className="text-[8px] font-mono text-slate-600">Window: Last 7 Days</span>
+                <span className="text-[11px] font-bold font-mono text-emerald-500">System Stable</span>
+                <span className={`text-[9px] font-mono ${mutedText(theme)}`}>0 Critical Alerts | Monitoring Active</span>
+                <span className={`text-[8px] font-mono ${mutedText(theme)}`}>Window: Last 7 Days</span>
               </div>
             )}
           </CardContent>
@@ -367,21 +380,22 @@ export function RiskAnalyticsPanel({
 
         {/* 3. Improved Threat Concentration Heatmap */}
         <Card className={`${cardStyle} md:col-span-12`}>
+          <div className={SPECULAR_LINE} />
           <CardHeader>
-            <CardTitle className="text-xs font-mono uppercase tracking-wider text-slate-400">Threat Concentration Heatmap (Severity × Topic)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Threat Concentration Heatmap (Severity × Topic)</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto p-6">
             {riskHeatmapData && riskHeatmapData.categories && riskHeatmapData.categories.length > 0 ? (
               <div className="min-w-[700px] space-y-3 font-mono text-xs">
                 {/* Headers */}
-                <div className="grid grid-cols-7 border-b border-[#1F2937]/80 pb-3 text-slate-500 text-[10px] font-bold">
+                <div className={`grid grid-cols-7 border-b pb-3 text-[10px] font-bold ${mutedText(theme)} ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
                   <div>TOPIC CATEGORY</div>
                   <div className="text-center">LOW</div>
                   <div className="text-center">MEDIUM</div>
                   <div className="text-center">HIGH</div>
                   <div className="text-center">CRITICAL</div>
-                  <div className="text-center text-[#D4AF37]">ROW TOTAL</div>
-                  <div className="text-center text-slate-400">DIST %</div>
+                  <div className="text-center" style={{ color: accent }}>ROW TOTAL</div>
+                  <div className={`text-center ${mutedText(theme)}`}>DIST %</div>
                 </div>
 
                 {/* Rows */}
@@ -390,12 +404,12 @@ export function RiskAnalyticsPanel({
                   const rowPercent = grandTotal > 0 ? ((rowTot / grandTotal) * 100).toFixed(0) : "0";
 
                   return (
-                    <div key={idx} className="grid grid-cols-7 py-3 items-center border-b border-[#1F2937]/30 hover:bg-[#060B18]/40 transition-colors">
-                      <div className="font-bold text-slate-350 truncate pr-2">{cat}</div>
+                    <div key={idx} className={`grid grid-cols-7 py-3 items-center border-b transition-colors ${isDark ? "border-white/[0.08] hover:bg-white/[0.03]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}>
+                      <div className={`font-bold truncate pr-2 ${bodyText(theme)}`}>{cat}</div>
                       {riskHeatmapData.severities.map((sev: string, sIdx: number) => {
                         const cellData = riskHeatmapData.grid[cat]?.[sev] || { count: 0, avgRisk: 0, avgSentiment: 0 };
                         const cellPercent = rowTot > 0 ? ((cellData.count / rowTot) * 100).toFixed(0) : "0";
-                        
+
                         const bgStyle = cellData.count > 0 ? {
                           backgroundColor: sev === "CRITICAL" ? `rgba(239, 68, 68, ${Math.min(0.12 + cellData.count * 0.15, 0.85)})` :
                                            sev === "HIGH" ? `rgba(249, 115, 22, ${Math.min(0.12 + cellData.count * 0.15, 0.85)})` :
@@ -404,52 +418,52 @@ export function RiskAnalyticsPanel({
                         } : undefined;
 
                         return (
-                          <div 
-                            key={sIdx} 
-                            style={bgStyle} 
-                            className="text-center py-3 border border-[#1F2937]/35 rounded text-slate-200 font-bold hover:opacity-85 transition-all relative group h-12 flex flex-col justify-center mx-1 shadow-sm"
+                          <div
+                            key={sIdx}
+                            style={bgStyle}
+                            className={`text-center py-3 rounded font-bold hover:opacity-85 transition-all relative group h-12 flex flex-col justify-center mx-1 shadow-sm border ${bodyText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"} ${!bgStyle ? (isDark ? "bg-black/20" : "bg-black/[0.02]") : ""}`}
                             title={`Topic: ${cat}\nSeverity: ${sev}\nDocument Count: ${cellData.count}\nAvg Risk Score: ${cellData.avgRisk.toFixed(1)}\nAvg Sentiment: ${cellData.avgSentiment.toFixed(2)}`}
                           >
                             <span className="text-[10px] font-bold">
                               {cellData.count > 0 ? `${cellData.count} (${cellPercent}%)` : "0"}
                             </span>
                             {cellData.count > 0 && (
-                              <span className="text-[7.5px] text-slate-400 mt-0.5 font-normal font-mono">
+                              <span className={`text-[7.5px] mt-0.5 font-normal font-mono ${mutedText(theme)}`}>
                                 R:{cellData.avgRisk.toFixed(0)} S:{cellData.avgSentiment.toFixed(1)}
                               </span>
                             )}
                           </div>
                         );
                       })}
-                      
+
                       {/* Row Total */}
-                      <div className="text-center font-bold text-[#D4AF37]">{rowTot}</div>
+                      <div className="text-center font-bold" style={{ color: accent }}>{rowTot}</div>
                       {/* Row Distribution % */}
-                      <div className="text-center text-slate-400 font-bold">{rowPercent}%</div>
+                      <div className={`text-center font-bold ${mutedText(theme)}`}>{rowPercent}%</div>
                     </div>
                   );
                 })}
 
                 {/* Column Totals Row */}
-                <div className="grid grid-cols-7 pt-3 border-t-2 border-[#1F2937]/80 font-bold text-[10px]">
-                  <div className="text-slate-400 uppercase">COLUMN TOTALS</div>
+                <div className={`grid grid-cols-7 pt-3 border-t-2 font-bold text-[10px] ${isDark ? "border-white/[0.12]" : "border-black/[0.08]"}`}>
+                  <div className={`uppercase ${mutedText(theme)}`}>COLUMN TOTALS</div>
                   {riskHeatmapData.severities.map((sev: string, idx: number) => {
                     const colTot = colTotals[sev] || 0;
                     const colPercent = grandTotal > 0 ? ((colTot / grandTotal) * 100).toFixed(0) : "0";
                     return (
-                      <div key={idx} className="text-center text-slate-200">
+                      <div key={idx} className={`text-center ${bodyText(theme)}`}>
                         <div>{colTot}</div>
-                        <div className="text-[8px] text-slate-500 font-normal">{colPercent}%</div>
+                        <div className={`text-[8px] font-normal ${mutedText(theme)}`}>{colPercent}%</div>
                       </div>
                     );
                   })}
-                  <div className="text-center text-[#D4AF37] font-black">{grandTotal}</div>
-                  <div className="text-center text-slate-400 font-black">100%</div>
+                  <div className="text-center font-black" style={{ color: accent }}>{grandTotal}</div>
+                  <div className={`text-center font-black ${mutedText(theme)}`}>100%</div>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-500 font-mono text-xs flex flex-col items-center space-y-2">
-                <ShieldAlert className="h-6 w-6 text-slate-500 opacity-60" />
+              <div className={`text-center py-8 font-mono text-xs flex flex-col items-center space-y-2 ${mutedText(theme)}`}>
+                <ShieldAlert className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
                 <span>No active risk events.</span>
               </div>
             )}
