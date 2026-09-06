@@ -1,10 +1,9 @@
 import React, { useMemo } from "react";
 import { Compass, Users, MessageSquare, AlertOctagon, TrendingUp, Cpu } from "lucide-react";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
-import { 
-  ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, RadarChart, PolarGrid, 
-  PolarAngleAxis, PolarRadiusAxis, Radar, LineChart as RechartsLineChart, Line,
+import {
+  ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, LineChart as RechartsLineChart, Line,
   AreaChart, Area, BarChart, Bar, Cell
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -246,8 +245,12 @@ export function NarrativeAnalyticsPanel({
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Narrative Landscape Matrix (Bubble Chart with Glow filters) */}
-        <Card className={cardStyle}>
+        {/* Narrative Landscape Matrix (Bubble Chart with Glow filters).
+            Full-width (md:col-span-2): used to share this row with the
+            Competitor Positioning Radar Grid card (removed -- its data was
+            noise), so it now spans the row alone rather than leaving an
+            empty half-width gap next to it. */}
+        <Card className={`${cardStyle} md:col-span-2`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Landscape Matrix (Velocity × Risk)</CardTitle>
@@ -356,35 +359,6 @@ export function NarrativeAnalyticsPanel({
               </ResponsiveContainer>
             ) : (
               <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No narratives to map.</div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Competitor Radar Position Compare */}
-        <Card className={cardStyle}>
-          <div className={SPECULAR_LINE} />
-          <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Competitor Positioning Radar Grid</CardTitle>
-          </CardHeader>
-          <CardContent className="flex justify-center items-center h-[280px]">
-            {normalizedBenchmarks.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="75%" data={competitorRadarData}>
-                  <PolarGrid stroke={gridStroke} />
-                  <PolarAngleAxis dataKey="subject" stroke={axisStroke} fontSize={9} />
-                  <PolarRadiusAxis stroke={gridStroke} tick={false} />
-                  <Radar name={activeClientName} dataKey={activeClientName} stroke={accent} fill={accent} fillOpacity={0.25} isAnimationActive={true} />
-                  {normalizedBenchmarks.map((b, idx) => (
-                    <Radar key={idx} name={b.competitor_name} dataKey={b.competitor_name} stroke={isDark ? "#7B2CBF" : "#8B5CF6"} fill={isDark ? "#7B2CBF" : "#8B5CF6"} fillOpacity={0.08} isAnimationActive={true} />
-                  ))}
-                  <Tooltip contentStyle={tooltipStyle} />
-                </RadarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full space-y-2">
-                <Compass className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
-                <p className={`font-mono text-xs ${mutedText(theme)}`}>No competitor radar comparative data.</p>
-              </div>
             )}
           </CardContent>
         </Card>
