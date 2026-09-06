@@ -33,7 +33,8 @@ def get_client_trend_events(client_id: UUID, db: Session = Depends(get_db)):
     return results
 
 from app.models.risk import RiskEvent
-from sqlalchemy import func
+from app.models.entity import Entity
+from sqlalchemy import func, or_
 
 @router.get("/{client_id}/risks", response_model=Dict[str, Any])
 def get_client_risks(client_id: UUID, db: Session = Depends(get_db)):
@@ -41,8 +42,15 @@ def get_client_risks(client_id: UUID, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    # Aggregate risks (e.g. average risk score over last 30 days, or just recent events)
-    recent_events = db.query(RiskEvent).filter(RiskEvent.client_id == client_id).order_by(RiskEvent.created_at.desc(), RiskEvent.id.desc()).limit(50).all()
+    # Aggregate risks (e.g. average risk score over last 30 days, or just recent events).
+    # Excludes entity_type='competitor' -- same reasoning as documents.py/
+    # alert_engine.py: a tracked competitor's own risk is not this client's risk.
+    recent_events = db.query(RiskEvent).outerjoin(
+        Entity, Entity.id == RiskEvent.entity_id
+    ).filter(
+        RiskEvent.client_id == client_id,
+        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+    ).order_by(RiskEvent.created_at.desc(), RiskEvent.id.desc()).limit(50).all()
     avg_score = sum(e.risk_score for e in recent_events) / len(recent_events) if recent_events else 0.0
     
     return {

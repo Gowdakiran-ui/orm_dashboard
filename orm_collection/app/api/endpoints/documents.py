@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
@@ -58,8 +59,19 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     # and Duolingo's own row (35.41) -- Duolingo's detail view was showing
     # OpenAI's score. risk_engine.py's own upsert already scopes by
     # client_id; this endpoint just wasn't matching that scoping.
-    risk_rec = db.query(RiskEvent).filter(
-        RiskEvent.document_id == doc.id, RiskEvent.client_id == client_id
+    # Risk Center shows the client's own risk, not a tracked competitor's --
+    # RiskEvent rows exist per tracked entity (brand/competitor/person) since
+    # benchmark_engine.py needs competitor-scoped risk for its own comparison
+    # feature. Excluding entity_type='competitor' here only (read side, not
+    # at creation) keeps that feature intact while stopping e.g. a
+    # competitor's own fraud story from being attributed to this client as
+    # its own risk. entity_id IS NULL is kept in (not excluded) since a
+    # RiskEvent without an entity association was never entity-scoped to
+    # begin with.
+    risk_rec = db.query(RiskEvent).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
+        RiskEvent.document_id == doc.id,
+        RiskEvent.client_id == client_id,
+        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
     ).order_by(RiskEvent.risk_score.desc()).first()
     risk_val = getattr(risk_rec, "risk_score", 0.0) if risk_rec else 0.0
     risk_explainability = getattr(risk_rec, "explainability", None) if risk_rec else None
@@ -161,8 +173,12 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
     # the dict (confirmed live on 186 documents matched to more than one
     # client's entities, 2 of which currently carry genuinely different
     # scores).
-    risks = db.query(RiskEvent).filter(
-        RiskEvent.document_id.in_(doc_ids), RiskEvent.client_id == client_id
+    # Same competitor-exclusion as read_document above: a tracked
+    # competitor's own risk must not be attributed to this client.
+    risks = db.query(RiskEvent).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
+        RiskEvent.document_id.in_(doc_ids),
+        RiskEvent.client_id == client_id,
+        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
     ).all()
     risk_map = {}
     risk_explain_map = {}

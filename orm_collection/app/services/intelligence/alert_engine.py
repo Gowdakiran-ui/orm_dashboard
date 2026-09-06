@@ -4,6 +4,7 @@ import os
 import uuid
 import traceback
 import structlog
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -331,9 +332,18 @@ class AlertEngine:
             client_name = client_obj.name if client_obj else "Unknown"
 
             # 1. Fetch raw signals in bulk
-            recent_risks = db.query(RiskEvent).filter(
+            # Excludes entity_type='competitor': a tracked competitor's own
+            # high-risk story (e.g. its own fraud/legal incident) must not
+            # fire an alert framed as this client's own risk. RiskEvent rows
+            # for competitors still exist for benchmark_engine.py's separate
+            # competitive-comparison use -- only excluded here, at the point
+            # alerts get raised for this client.
+            recent_risks = db.query(RiskEvent).outerjoin(
+                Entity, Entity.id == RiskEvent.entity_id
+            ).filter(
                 RiskEvent.client_id == client_id,
-                RiskEvent.risk_score > 50
+                RiskEvent.risk_score > 50,
+                or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
             ).order_by(RiskEvent.created_at.desc()).limit(15).all()
 
             recent_trends = db.query(TrendEvent).filter(
