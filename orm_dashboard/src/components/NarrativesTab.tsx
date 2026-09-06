@@ -407,7 +407,7 @@ export function NarrativesTab({
                     <TableCell className={`font-bold truncate max-w-[200px] ${bodyText(theme)}`}>{n.name}</TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className={`text-xs font-normal uppercase tracking-wider ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>{n.type || "General"}</Badge></TableCell>
                     <TableCell className={`text-center font-bold ${bodyText(theme)}`}>{n.mentions || 0}</TableCell>
-                    <TableCell className="text-center font-bold text-red-500">{n.risk || 0}</TableCell>
+                    <TableCell className="text-center font-bold text-red-500">{Math.round(n.risk || 0)}</TableCell>
                     <TableCell className={`text-center ${bodyText(theme)}`}>{(n.trend || 0).toFixed(1)}%</TableCell>
                     <TableCell className={`text-center font-bold ${statusColor}`}>{sentimentScore.toFixed(2)}</TableCell>
                     <TableCell className="text-right pr-6">
@@ -605,7 +605,7 @@ export function NarrativesTab({
                 <div className="grid grid-cols-3 gap-2 dash-box p-2.5 rounded border dash-border text-center">
                   <div>
                     <span className="dash-muted block uppercase text-xs mb-0.5">Risk Score</span>
-                    <span className="text-[13px] font-bold text-red-400">{drawerData.data.risk || 0} pts</span>
+                    <span className="text-[13px] font-bold text-red-400">{Math.round(drawerData.data.risk || 0)} pts</span>
                   </div>
                   <div>
                     <span className="dash-muted block uppercase text-xs mb-0.5">Sentiment</span>
@@ -693,7 +693,7 @@ export function NarrativesTab({
                 <div className="grid grid-cols-2 gap-4 dash-box p-3 rounded border dash-border">
                   <div>
                     <span className="dash-muted block uppercase text-xs">Risk Score</span>
-                    <span className="text-[14px] font-bold text-red-400">{drawerData.data.risk || 0}</span>
+                    <span className="text-[14px] font-bold text-red-400">{Math.round(drawerData.data.risk || 0)}</span>
                   </div>
                   <div>
                     <span className="dash-muted block uppercase text-xs">Sentiment</span>
