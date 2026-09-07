@@ -50,13 +50,6 @@ function sectionTextClass(isDark: boolean) {
   return `text-xs leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`;
 }
 
-// SOV bands considered notably low/high for the Key Highlights bullet.
-const SOV_LOW_THRESHOLD = 15;
-const SOV_HIGH_THRESHOLD = 40;
-// Same "EXPANDING" velocity threshold as the Narrative Registry's Velocity
-// Index badge (NarrativeIntelligenceWorkbench.tsx line 374).
-const VELOCITY_FLAG_THRESHOLD = 15;
-
 export function ReputationSummaryCard({
   reputationSummaryLoading,
   reputationSummaryError,
@@ -236,27 +229,6 @@ export function ReputationSummaryCard({
     { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: execAlert.open ? (alertNames ?? "Open alert") : "None open", color: execAlert.open ? "text-red-500" : "text-emerald-500" },
   ];
 
-  // Deterministic, threshold-driven bullets -- same idea as the reference
-  // panel's "Action Recommendations", kept to 2-4 and only the ones that apply.
-  const highlights: string[] = [];
-  if (riskStats.dangerCount > 0) {
-    highlights.push(`${riskStats.dangerCount} critical/high risk${riskStats.dangerCount === 1 ? "" : "s"} require review${riskStats.topRiskDocs[0] ? ` (top: "${riskStats.topRiskDocs[0].title}")` : ""}.`);
-  }
-  if (execAlert.open) {
-    highlights.push(`Open executive-risk alert on ${alertNames ?? "an unnamed executive"} needs attention.`);
-  }
-  if (narrativeStats.fastestGrowingTrend !== undefined && narrativeStats.fastestGrowingTrend >= VELOCITY_FLAG_THRESHOLD) {
-    highlights.push(`"${narrativeStats.fastestGrowing}" is expanding fast (+${narrativeStats.fastestGrowingTrend.toFixed(1)}% velocity) -- monitor closely.`);
-  }
-  if (clientSOV > 0 && (clientSOV < SOV_LOW_THRESHOLD || clientSOV > SOV_HIGH_THRESHOLD)) {
-    highlights.push(
-      clientSOV < SOV_LOW_THRESHOLD
-        ? `Share of voice is notably low at ${sovDisplay}%${topCompetitor ? ` versus leader ${topCompetitor.competitor_name}` : ""}.`
-        : `Share of voice is notably strong at ${sovDisplay}%, leading the tracked competitor set.`
-    );
-  }
-  const shownHighlights = highlights.slice(0, 4);
-
   // Only the Reputation Score tile (index 0 -- the single number this whole
   // panel exists to surface) gets the full spotlight + border-beam glass
   // treatment. Everything else, including the other "highlight" tiles, gets
@@ -311,10 +283,9 @@ export function ReputationSummaryCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className={`lg:col-span-2 ${glassCard(theme)}`}>
-          <div className={SPECULAR_LINE} />
-          <CardContent className="p-4 space-y-4">
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
+        <CardContent className="p-4 space-y-4">
             <div>
               <span className={sectionLabelClass(isDark)}>Overview</span>
               <p className={sectionTextClass(isDark)}>
@@ -372,30 +343,8 @@ export function ReputationSummaryCard({
               <span className={sectionLabelClass(isDark)}>Alerts</span>
               <p className={sectionTextClass(isDark)}>{alertLine}</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          <Card className={glassCard(theme)}>
-            <div className={SPECULAR_LINE} />
-            <CardContent className="p-4 space-y-2">
-              <span className={sectionLabelClass(isDark)}>Key Highlights</span>
-              {shownHighlights.length > 0 ? (
-                <ul className="space-y-2 mt-1.5">
-                  {shownHighlights.map((h, idx) => (
-                    <li key={idx} className={`text-xs leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
-                      <span className="shrink-0" style={{ color: accent }}>&#8226;</span>
-                      <span>{h}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className={sectionTextClass(isDark)}>No thresholds breached -- reputation posture is stable.</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       <Card className={glassCard(theme)}>
         <div className={SPECULAR_LINE} />
