@@ -1110,22 +1110,30 @@ def _select_advisory_narratives(db: Session, client_id: UUID):
     return risk_worthy[:5]
 
 
-def _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, alert_titles, client_id, run_id=None):
+def _generate_plan_advisory_text(rep, reputation_text, risk_counts, top_narratives, alert_titles, client_id, run_id=None):
     """
     Calls Claude Haiku 4.5 (via a dedicated OPENROUTER_API_KEY_ADVISOR key,
     separate from role-classification/RCA usage, for its own budget/usage
-    tracking) to compress the given pre-selected context into a short lead
-    sentence + 2-4 action bullets. Reuses each narrative's own root_cause/
-    recommended_action -- never re-derives them, never sees raw documents.
+    tracking) to produce ONLY a short "primary concern" phrase plus 2-4
+    action bullets. Reuses each narrative's own root_cause/recommended_action
+    -- never re-derives them, never sees raw documents.
+
+    The reputation-score/trend clause and the "N <level>-risk narratives are
+    being tracked; the primary concern is ..." framing are built here in
+    Python, not left to the model -- the model previously drifted on this
+    exact phrasing (e.g. "N narratives require attention", wrongly implying
+    every tracked narrative is equally urgent) and occasionally repeated the
+    same point under separate headings. Composing the deterministic parts in
+    code and asking the model for only the one free-text phrase it's needed
+    for removes both failure modes by construction instead of by instruction.
 
     Model choice: evaluated against DeepSeek V4 Pro (reasoning enabled) on
     5 real Godrej Properties narratives -- DeepSeek's reasoning mode burned
     its entire completion budget on internal reasoning and returned zero
     content on every attempt (finish_reason="length", 0 usable output),
-    while Haiku 4.5 passed cleanly on groundedness, length discipline
-    (~60-100 words on the first attempt), and filter discipline (a
-    positive narrative injected into the test input never appeared in its
-    output). See FINDINGS.md-style commit message for the full comparison.
+    while Haiku 4.5 passed cleanly on groundedness, length discipline, and
+    filter discipline (a positive narrative injected into the test input
+    never appeared in its output).
 
     Returns {"lead": str, "bullets": [str, ...]} on success, or None on
     ANY failure -- same fail-safe convention as every other LLM call in
@@ -1163,6 +1171,16 @@ def _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, a
         for n in top_narratives
     ], indent=2)
 
+    # Pick the single dominant severity band to name in the assessment
+    # sentence -- computed here, not left for the model to infer, so the
+    # "N <level>-risk narratives are being tracked" clause is always backed
+    # by a real count rather than the model guessing which band matters.
+    level_order = ["critical", "high", "medium", "low"]
+    dominant_level, dominant_count = next(
+        ((lvl, risk_counts[lvl]) for lvl in level_order if risk_counts.get(lvl, 0) > 0),
+        ("low", risk_counts.get("low", 0)),
+    )
+
     user_prompt = _json.dumps({
         "reputation": reputation_text,
         "risk_counts": risk_counts,
@@ -1171,26 +1189,35 @@ def _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, a
     }, indent=2)
 
     system_prompt = (
-        "You are a Plan Advisory generator for a brand reputation dashboard. "
+        "You are an AI Advisory generator for a brand reputation dashboard. "
         "You are given a compact pre-selected context: the client's reputation "
         "score/trend, risk aggregate counts by severity, a short ranked list of "
         "top risk-worthy narratives (each with an already-computed root_cause "
         "and recommended_action -- reuse these verbatim in spirit, do not "
         "re-derive or invent new ones), and any active alerts.\n\n"
-        "Write ONE short lead sentence stating the overall risk picture (in "
-        "trouble / watch-and-wait / stable), followed by 2-4 prioritized action "
-        "bullets, each tied to one specific narrative from the list (biggest "
-        "risk first), phrased as a concrete next step compressed from that "
-        "narrative's own recommended_action.\n\n"
+        "Return exactly two things, nothing else:\n"
+        "1. primary_concern: a short phrase (under 15 words, no leading capital, "
+        "no trailing period) naming the single biggest issue, drawn from the "
+        "top-ranked narrative. This phrase will be inserted verbatim after the "
+        "words 'the primary concern is ' in a sentence you do not see -- do not "
+        "write that lead-in yourself, do not restate the reputation score/trend "
+        "here, and do not repeat this same point again in the bullets below.\n"
+        "2. bullets: 2-4 action bullets (each under 15 words), one per "
+        "narrative from the list (biggest risk first), phrased as a concrete "
+        "next step compressed from that narrative's own recommended_action. "
+        "Do not repeat the primary_concern point in a bullet -- each bullet "
+        "must add a distinct action, not restate the headline concern.\n\n"
         "Hard rules:\n"
-        "- Total output must be 60-100 words. Count words before answering.\n"
+        "- Do not add any labeled section or heading of any kind -- no "
+        "'Priority:', 'Confidence:', 'Why it matters:', 'Assessment:', or "
+        "similar. No confidence level of any kind (e.g. 'Confidence: "
+        "High/Medium/Low') -- nothing in the input measures confidence, so "
+        "never assert one.\n"
         "- NEVER mention, praise, or reference any positive or neutral-non-risk "
         "narrative, even if one appears in the input. Only the given top_narratives "
         "are eligible for bullets.\n"
         "- Never invent facts, numbers, or events not present in the input data.\n"
-        "- If top_narratives is empty, output exactly: "
-        '{"lead": "Nothing significant to flag right now.", "bullets": []}\n'
-        'Return strict JSON: {"lead": "...", "bullets": ["...", ...]}'
+        'Return strict JSON: {"primary_concern": "...", "bullets": ["...", ...]}'
     )
 
     try:
@@ -1204,7 +1231,11 @@ def _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, a
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.2,
-                "max_tokens": 600,
+                # Hard backstop -- the model now only produces a short phrase
+                # plus a few bullets (the assessment boilerplate is composed
+                # in Python below), so this budget is intentionally tighter
+                # than the old 600-token cap that covered a full lead sentence.
+                "max_tokens": 350,
                 "response_format": {"type": "json_object"},
             },
             timeout=20.0,
@@ -1233,12 +1264,29 @@ def _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, a
             stripped = stripped.strip()
 
         parsed = _json.loads(stripped)
-        if not isinstance(parsed.get("lead"), str) or not isinstance(parsed.get("bullets"), list):
+        primary_concern = parsed.get("primary_concern")
+        bullets = parsed.get("bullets")
+        if not isinstance(primary_concern, str) or not primary_concern.strip() or not isinstance(bullets, list):
             log.warning("plan_advisory_malformed", raw=str(content)[:400])
             _record(success=False, usage=usage)
             return None
 
-        result = {"lead": parsed["lead"].strip(), "bullets": [str(b).strip() for b in parsed["bullets"]]}
+        # The reputation clause and the "N <level>-risk narratives are being
+        # tracked; the primary concern is ..." framing are composed here in
+        # Python, not by the model -- see the docstring above for why.
+        if rep and rep.score is not None:
+            reputation_clause = f"Reputation is {rep.score:.1f} ({rep.grade}), trending {(rep.reputation_trend or 'STABLE').lower()}."
+        else:
+            reputation_clause = "Reputation data is currently insufficient."
+        narrative_noun = "narrative" if dominant_count == 1 else "narratives"
+        narrative_verb = "is" if dominant_count == 1 else "are"
+        risk_clause = (
+            f"{dominant_count} {dominant_level}-risk {narrative_noun} {narrative_verb} being tracked; "
+            f"the primary concern is {primary_concern.strip().rstrip('.')}."
+        )
+        lead = f"{reputation_clause} {risk_clause}"
+
+        result = {"lead": lead, "bullets": [str(b).strip() for b in bullets]}
         log.info("plan_advisory_generated")
         _record(success=True, usage=usage)
         return result
@@ -1318,14 +1366,23 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
     }, sort_keys=True)
     cache_key = f"plan_advisory:{client_id}:{hashlib.sha256(cache_key_material.encode()).hexdigest()[:16]}"
 
+    # Evidence link is built here in code from the actual top-ranked
+    # narrative, never generated as free text by the model -- avoids the
+    # model hallucinating link text or being inconsistent about which
+    # narrative it points to.
+    top_narrative_name = top_narratives[0].narrative_name
+    top_narrative_id = str(top_narratives[0].id)
+
     cached = redis_client.get(cache_key)
     if cached:
         result = _json.loads(cached)
         result["cache_hit"] = True
         result["narrative_count"] = len(top_narratives)
+        result["top_narrative_name"] = top_narrative_name
+        result["top_narrative_id"] = top_narrative_id
         return result
 
-    generated = _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, alert_titles, client_id)
+    generated = _generate_plan_advisory_text(rep, reputation_text, risk_counts, top_narratives, alert_titles, client_id)
     if generated is None:
         # Deterministic fallback -- never surface an LLM outage as an error.
         generated = {
@@ -1336,6 +1393,8 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
     redis_client.set(cache_key, _json.dumps(generated), ex=7 * 24 * 60 * 60)
     generated["cache_hit"] = False
     generated["narrative_count"] = len(top_narratives)
+    generated["top_narrative_name"] = top_narrative_name
+    generated["top_narrative_id"] = top_narrative_id
     return generated
 
 

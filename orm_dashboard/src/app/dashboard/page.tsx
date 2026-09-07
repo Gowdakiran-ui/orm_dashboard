@@ -248,6 +248,7 @@ function DashboardShell() {
                         planAdvisory={data.planAdvisory}
                         planAdvisoryLoading={data.planAdvisoryLoading}
                         planAdvisoryError={data.planAdvisoryError}
+                        onViewNarrative={(name: string) => { data.setSelectedNarrative(name); setActiveTab("narratives"); }}
                         documents={data.documents}
                         documentsLoading={data.documentsLoading}
                         narratives={data.narratives}

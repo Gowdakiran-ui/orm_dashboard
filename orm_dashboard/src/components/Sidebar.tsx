@@ -101,7 +101,6 @@ export function Sidebar({
               AI Monitoring
             </p>
           </div>
-          <ThemeToggle />
           <button
             onClick={onClose}
             title="Close Menu"
@@ -237,6 +236,13 @@ export function Sidebar({
               </button>
             );
           })}
+        </div>
+
+        {/* Display Settings -- kept away from the header's Sign Out button
+            (misclick risk) since this section is scrolled well below it. */}
+        <div className={`px-4 pb-4 pt-2 border-t flex items-center justify-between ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
+          <span className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Theme</span>
+          <ThemeToggle />
         </div>
       </div>
 
