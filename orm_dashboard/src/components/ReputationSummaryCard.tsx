@@ -322,41 +322,6 @@ export function ReputationSummaryCard({
               </p>
             </div>
 
-            <div className={`rounded-lg p-3 -mx-1 ${isDark ? "bg-white/[0.03] border border-white/[0.08]" : "bg-black/[0.02] border border-black/[0.05]"}`}>
-              <span className={sectionLabelClass(isDark)}>AI Advisory</span>
-              {planAdvisoryLoading ? (
-                <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Analyzing current risk posture...</p>
-              ) : planAdvisoryError ? (
-                <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Advisory temporarily unavailable.</p>
-              ) : planAdvisory?.lead ? (
-                <>
-                  <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-200" : "text-zinc-700"}`}>{planAdvisory.lead}</p>
-                  {Array.isArray(planAdvisory.bullets) && planAdvisory.bullets.length > 0 && (
-                    <ul className="space-y-1.5 mt-2">
-                      {planAdvisory.bullets.map((b: string, idx: number) => (
-                        <li key={idx} className={`text-sm leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
-                          <span className="shrink-0" style={{ color: accent }}>&#8226;</span>
-                          <span>{b}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {planAdvisory.top_narrative_name && onViewNarrative && (
-                    <button
-                      type="button"
-                      onClick={() => onViewNarrative(planAdvisory.top_narrative_name)}
-                      className="text-sm font-mono font-semibold mt-2 hover:underline"
-                      style={{ color: accent }}
-                    >
-                      View full narrative &rarr;
-                    </button>
-                  )}
-                </>
-              ) : (
-                <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Nothing significant to flag right now.</p>
-              )}
-            </div>
-
             <div>
               <span className={sectionLabelClass(isDark)}>Risk Profile</span>
               <p className={sectionTextClass(isDark)}>
@@ -431,6 +396,44 @@ export function ReputationSummaryCard({
           </Card>
         </div>
       </div>
+
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
+        <CardContent className="p-4 space-y-2">
+          <span className={sectionLabelClass(isDark)}>AI Advisory</span>
+          {planAdvisoryLoading ? (
+            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Analyzing current risk posture...</p>
+          ) : planAdvisoryError ? (
+            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Advisory temporarily unavailable.</p>
+          ) : planAdvisory?.lead ? (
+            <>
+              <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-200" : "text-zinc-700"}`}>{planAdvisory.lead}</p>
+              {Array.isArray(planAdvisory.bullets) && planAdvisory.bullets.length > 0 && (
+                <ul className="space-y-1.5 mt-2">
+                  {planAdvisory.bullets.map((b: string, idx: number) => (
+                    <li key={idx} className={`text-sm leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
+                      <span className="shrink-0" style={{ color: accent }}>&#8226;</span>
+                      <span>{b}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {planAdvisory.top_narrative_name && onViewNarrative && (
+                <button
+                  type="button"
+                  onClick={() => onViewNarrative(planAdvisory.top_narrative_name)}
+                  className="text-sm font-mono font-semibold mt-2 hover:underline"
+                  style={{ color: accent }}
+                >
+                  View full narrative &rarr;
+                </button>
+              )}
+            </>
+          ) : (
+            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Nothing significant to flag right now.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
