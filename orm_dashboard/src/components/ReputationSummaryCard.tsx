@@ -2,7 +2,6 @@ import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
-import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, SPECULAR_LINE } from "@/components/theme/tokens";
 import { HeroGlass } from "@/components/theme/HeroGlass";
@@ -73,10 +72,17 @@ export function ReputationSummaryCard({
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
-  // Total risks + severity breakdown + avg risk score, same computation as
-  // Risk Center's stat cards (RiskTab.tsx `stats`), driven off documents.
+  // Total risks + severity breakdown + avg risk score. Requires MEDIUM+
+  // (RiskTab.tsx's Incident Command Register applies the same floor) --
+  // a matched document with no RiskEvent row defaults to risk=0, and a
+  // routine Positive/Neutral document can still score a few LOW points
+  // from coverage volume alone (risk_engine.py); neither is a real risk.
+  // Previously counted every scored document unconditionally, so this
+  // panel reported "262 risks tracked" (244 of them LOW) in the same
+  // breath Risk Center reported 18 -- same underlying data, two
+  // contradictory totals for what counts as "a risk".
   const riskStats = useMemo(() => {
-    const riskDocs = (documents || []).filter(d => d && typeof d.risk === "number");
+    const riskDocs = (documents || []).filter(d => d && typeof d.risk === "number" && d.risk > RISK_THRESHOLDS.LOW_TO_MEDIUM);
     const total = riskDocs.length;
     let critical = 0, high = 0, medium = 0, low = 0, sumScore = 0;
     riskDocs.forEach(d => {
@@ -356,29 +362,6 @@ export function ReputationSummaryCard({
         </Card>
 
         <div className="space-y-6">
-          {repHistory.length > 0 && (
-            <Card className={glassCard(theme)}>
-              <div className={SPECULAR_LINE} />
-              <CardContent className="p-4">
-                <span className={`text-xs font-bold uppercase tracking-wider block mb-2 ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Reputation Trend</span>
-                <div className="h-20 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={repHistory}>
-                      <defs>
-                        <linearGradient id="repTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={accent} stopOpacity={0.3} />
-                          <stop offset="95%" stopColor={accent} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Tooltip contentStyle={{ backgroundColor: isDark ? "#18181b" : "#ffffff", borderColor: isDark ? "#3f3f46" : "#e4e4e7", color: isDark ? "#fff" : "#18181b", fontSize: 10 }} />
-                      <Area type="monotone" dataKey="score" stroke={accent} strokeWidth={1.5} fillOpacity={1} fill="url(#repTrendGradient)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           <Card className={glassCard(theme)}>
             <div className={SPECULAR_LINE} />
             <CardContent className="p-4 space-y-2">
