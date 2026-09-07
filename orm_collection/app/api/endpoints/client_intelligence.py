@@ -1,3 +1,6 @@
+import os
+import time
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -8,6 +11,7 @@ from app.models.client import Client
 from app.models.trends import TrendEvent
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 @router.get("/{client_id}/trend-events", response_model=List[Dict[str, Any]])
 def get_client_trend_events(client_id: UUID, db: Session = Depends(get_db)):
@@ -1017,9 +1021,16 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
     }
 
     # 3. Sentiment -- per-entity sentiment labels scoped to this client's entities.
+    # Excludes entity_type='competitor' -- same reasoning as every other
+    # aggregate on this endpoint: a tracked competitor's own sentiment
+    # (Orris Infrastructure, DLF, Tata Projects, etc.) is not this client's
+    # sentiment. Confirmed live: the unfiltered count (73 positive / 174
+    # neutral / 33 negative) matched exactly across all entity types, while
+    # brand+person alone was 63/128/25 -- competitor sentiment was silently
+    # blended into "this client's" dominant sentiment and Overview text.
     sentiment_counts_raw = db.query(EntitySentiment.sentiment_label, func.count(EntitySentiment.id)).join(
         Entity, Entity.id == EntitySentiment.entity_id
-    ).filter(Entity.client_id == client_id).group_by(EntitySentiment.sentiment_label).all()
+    ).filter(Entity.client_id == client_id, Entity.entity_type != "competitor").group_by(EntitySentiment.sentiment_label).all()
     sentiment_counts = {label: count for label, count in sentiment_counts_raw}
     positive = sentiment_counts.get("Positive", 0)
     neutral = sentiment_counts.get("Neutral", 0)
@@ -1077,6 +1088,256 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         "trends": trends,
         "executive_alert": executive_alert
     }
+
+def _select_advisory_narratives(db: Session, client_id: UUID):
+    """
+    Risk-worthy narratives with a real RCA (evidence_metadata.rca is an
+    object, not the JSON-null placeholder narrative_engine.py stores for
+    non-risk-relevant narratives), ranked by severity x coverage/velocity
+    and capped to the top 5 -- keeps the Advisor's output short by
+    construction, not by asking the LLM to compress a long list.
+    """
+    all_narratives = db.query(Narrative).filter(Narrative.client_id == client_id).all()
+    risk_worthy = [n for n in all_narratives if isinstance((n.evidence_metadata or {}).get("rca"), dict)]
+
+    def severity_score(n):
+        risk = n.risk_score or 0.0
+        mentions = n.mention_count or 0
+        trend = max(n.trend_strength or 0.0, 0.0)
+        return risk * mentions * (1 + trend / 100.0)
+
+    risk_worthy.sort(key=severity_score, reverse=True)
+    return risk_worthy[:5]
+
+
+def _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, alert_titles, client_id, run_id=None):
+    """
+    Calls Claude Haiku 4.5 (via a dedicated OPENROUTER_API_KEY_ADVISOR key,
+    separate from role-classification/RCA usage, for its own budget/usage
+    tracking) to compress the given pre-selected context into a short lead
+    sentence + 2-4 action bullets. Reuses each narrative's own root_cause/
+    recommended_action -- never re-derives them, never sees raw documents.
+
+    Model choice: evaluated against DeepSeek V4 Pro (reasoning enabled) on
+    5 real Godrej Properties narratives -- DeepSeek's reasoning mode burned
+    its entire completion budget on internal reasoning and returned zero
+    content on every attempt (finish_reason="length", 0 usable output),
+    while Haiku 4.5 passed cleanly on groundedness, length discipline
+    (~60-100 words on the first attempt), and filter discipline (a
+    positive narrative injected into the test input never appeared in its
+    output). See FINDINGS.md-style commit message for the full comparison.
+
+    Returns {"lead": str, "bullets": [str, ...]} on success, or None on
+    ANY failure -- same fail-safe convention as every other LLM call in
+    this codebase. None means "show the deterministic fallback", never an
+    error surfaced to the user.
+    """
+    import requests
+    import json as _json
+    from app.utils.llm_call_logging import log_llm_call
+
+    api_key = os.environ.get("OPENROUTER_API_KEY_ADVISOR")
+    if not api_key:
+        return None
+
+    log = logger.bind(run_id=run_id, task="plan_advisory_generate", client_id=str(client_id))
+    t_call_start = time.perf_counter()
+
+    def _record(success, usage=None):
+        log_llm_call(
+            call_type="plan_advisory_generate",
+            client_id=client_id,
+            run_id=run_id,
+            tokens_prompt=(usage or {}).get("prompt_tokens"),
+            tokens_completion=(usage or {}).get("completion_tokens"),
+            latency_ms=(time.perf_counter() - t_call_start) * 1000,
+            success=success,
+        )
+
+    narratives_block = _json.dumps([
+        {
+            "name": n.narrative_name,
+            "root_cause": (n.evidence_metadata or {}).get("rca", {}).get("root_cause", ""),
+            "recommended_action": (n.evidence_metadata or {}).get("rca", {}).get("recommended_action", ""),
+        }
+        for n in top_narratives
+    ], indent=2)
+
+    user_prompt = _json.dumps({
+        "reputation": reputation_text,
+        "risk_counts": risk_counts,
+        "top_narratives": _json.loads(narratives_block),
+        "active_alerts": alert_titles,
+    }, indent=2)
+
+    system_prompt = (
+        "You are a Plan Advisory generator for a brand reputation dashboard. "
+        "You are given a compact pre-selected context: the client's reputation "
+        "score/trend, risk aggregate counts by severity, a short ranked list of "
+        "top risk-worthy narratives (each with an already-computed root_cause "
+        "and recommended_action -- reuse these verbatim in spirit, do not "
+        "re-derive or invent new ones), and any active alerts.\n\n"
+        "Write ONE short lead sentence stating the overall risk picture (in "
+        "trouble / watch-and-wait / stable), followed by 2-4 prioritized action "
+        "bullets, each tied to one specific narrative from the list (biggest "
+        "risk first), phrased as a concrete next step compressed from that "
+        "narrative's own recommended_action.\n\n"
+        "Hard rules:\n"
+        "- Total output must be 60-100 words. Count words before answering.\n"
+        "- NEVER mention, praise, or reference any positive or neutral-non-risk "
+        "narrative, even if one appears in the input. Only the given top_narratives "
+        "are eligible for bullets.\n"
+        "- Never invent facts, numbers, or events not present in the input data.\n"
+        "- If top_narratives is empty, output exactly: "
+        '{"lead": "Nothing significant to flag right now.", "bullets": []}\n'
+        'Return strict JSON: {"lead": "...", "bullets": ["...", ...]}'
+    )
+
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "anthropic/claude-haiku-4.5",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 600,
+                "response_format": {"type": "json_object"},
+            },
+            timeout=20.0,
+        )
+        if resp.status_code != 200:
+            log.warning("plan_advisory_http_error", status=resp.status_code, body=resp.text[:300])
+            _record(success=False)
+            return None
+
+        resp_json = resp.json()
+        usage = resp_json.get("usage")
+        content = resp_json["choices"][0]["message"]["content"]
+        if content is None:
+            log.warning("plan_advisory_null_content")
+            _record(success=False, usage=usage)
+            return None
+
+        # Haiku wraps JSON in ```json fences despite response_format being
+        # requested -- confirmed live during model evaluation. Strip
+        # defensively rather than relying on strict compliance.
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.split("```")[1]
+            if stripped.startswith("json"):
+                stripped = stripped[4:]
+            stripped = stripped.strip()
+
+        parsed = _json.loads(stripped)
+        if not isinstance(parsed.get("lead"), str) or not isinstance(parsed.get("bullets"), list):
+            log.warning("plan_advisory_malformed", raw=str(content)[:400])
+            _record(success=False, usage=usage)
+            return None
+
+        result = {"lead": parsed["lead"].strip(), "bullets": [str(b).strip() for b in parsed["bullets"]]}
+        log.info("plan_advisory_generated")
+        _record(success=True, usage=usage)
+        return result
+
+    except Exception as exc:
+        log.warning("plan_advisory_failed", error=str(exc))
+        _record(success=False)
+        return None
+
+
+@router.get("/{client_id}/plan-advisory", response_model=Dict[str, Any])
+def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
+    """
+    Brand Equity page's "Plan Advisory" card: a ~60-100 word digest of
+    what's actually wrong right now and what to do about it, sitting
+    directly below the Overview card. Reuses already-computed data only --
+    reputation summary, risk counts, top risk-worthy narratives' own
+    root_cause/recommended_action fields, active alerts -- never re-derives
+    root cause from raw documents itself.
+
+    Cached in Redis, keyed by a hash of the selected top-narrative set (not
+    a flat TTL): regenerates only when that set changes materially, not on
+    every page load. A 7-day TTL on the cache entry is a safety net against
+    unbounded growth, not the real invalidation mechanism.
+    """
+    import hashlib
+    import json as _json
+    from app.utils.redis_client import redis_client
+    from app.models.entity import Entity
+
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Reputation summary text, same source as the Overview card.
+    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(
+        ReputationScore.created_at.desc(), ReputationScore.id.desc()
+    ).first()
+    if rep and rep.score is not None:
+        reputation_text = f"{rep.score:.1f} ({rep.grade}), trending {rep.reputation_trend}"
+    else:
+        reputation_text = "insufficient data"
+
+    # Risk counts, same competitor exclusion as every other risk aggregate.
+    risk_counts_raw = db.query(RiskEvent.risk_level, func.count(RiskEvent.id)).outerjoin(
+        Entity, Entity.id == RiskEvent.entity_id
+    ).filter(
+        RiskEvent.client_id == client_id,
+        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+    ).group_by(RiskEvent.risk_level).all()
+    risk_counts_map = {level: count for level, count in risk_counts_raw}
+    risk_counts = {
+        "critical": risk_counts_map.get("CRITICAL", 0),
+        "high": risk_counts_map.get("HIGH", 0),
+        "medium": risk_counts_map.get("MEDIUM", 0),
+        "low": risk_counts_map.get("LOW", 0),
+    }
+
+    top_narratives = _select_advisory_narratives(db, client_id)
+
+    alert_titles = [
+        a.title for a in db.query(Alert).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
+            Alert.client_id == client_id,
+            Alert.is_acknowledged == False,
+            or_(Entity.entity_type != "competitor", Alert.entity_id.is_(None)),
+        ).all()
+    ]
+
+    if not top_narratives:
+        return {"lead": "Nothing significant to flag right now.", "bullets": [], "cache_hit": False, "narrative_count": 0}
+
+    cache_key_material = _json.dumps({
+        "narrative_ids": sorted(str(n.id) for n in top_narratives),
+        "risk_counts": risk_counts,
+        "reputation_text": reputation_text,
+        "alert_titles": sorted(alert_titles),
+    }, sort_keys=True)
+    cache_key = f"plan_advisory:{client_id}:{hashlib.sha256(cache_key_material.encode()).hexdigest()[:16]}"
+
+    cached = redis_client.get(cache_key)
+    if cached:
+        result = _json.loads(cached)
+        result["cache_hit"] = True
+        result["narrative_count"] = len(top_narratives)
+        return result
+
+    generated = _generate_plan_advisory_text(reputation_text, risk_counts, top_narratives, alert_titles, client_id)
+    if generated is None:
+        # Deterministic fallback -- never surface an LLM outage as an error.
+        generated = {
+            "lead": f"{len(top_narratives)} risk-relevant narrative{'s' if len(top_narratives) != 1 else ''} currently tracked.",
+            "bullets": [n.narrative_name for n in top_narratives[:3]],
+        }
+
+    redis_client.set(cache_key, _json.dumps(generated), ex=7 * 24 * 60 * 60)
+    generated["cache_hit"] = False
+    generated["narrative_count"] = len(top_narratives)
+    return generated
+
 
 @router.get("/{client_id}/telemetry", response_model=Dict[str, Any])
 @cached_by_client("telemetry")

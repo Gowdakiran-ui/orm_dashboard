@@ -17,6 +17,7 @@ from app.models.alert import Alert
 from app.models.narrative import Narrative
 from app.models.entity import EntityMention, Entity
 from app.models.client import Client
+from app.core.risk_config import TOPIC_WEIGHTS
 
 logger = structlog.get_logger()
 
@@ -596,6 +597,130 @@ class NarrativeEngine:
             return result
         return None
 
+    def _generate_rca(
+        self, narrative_name, topic_name, narrative_type, avg_sentiment,
+        avg_risk, mention_count, status, summary_text, sample_titles,
+        client_name, client_id, run_id=None,
+    ):
+        """
+        Generates a short root-cause analysis for one risk-worthy narrative:
+        problem_statement, impact, root_cause, recommended_action (each one
+        sentence). Grounded ONLY in the narrative's own already-computed
+        data (topic, sentiment, risk, status, summary_text, a few real
+        document titles from its cluster) -- no raw-document re-analysis,
+        no invented facts. Consumed by the AI Advisor card, which reuses
+        these fields rather than re-deriving them itself.
+
+        Same fail-safe convention as _llm_classify_role/
+        _llm_verify_and_split_cluster: returns None on ANY failure (missing
+        key, timeout, network error, non-200, malformed/incomplete JSON).
+        None means "no RCA available this run" -- the caller (and the
+        Advisor) must treat a missing RCA as "skip this narrative", never
+        as an error or a reason to fall back to inventing one client-side.
+        """
+        import requests
+        import json as _json
+        from app.utils.llm_call_logging import log_llm_call
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            return None
+
+        log = logger.bind(run_id=run_id, task="narrative_rca_generate", client=client_name, narrative=narrative_name)
+        t_call_start = time.perf_counter()
+
+        def _record(success, usage=None):
+            log_llm_call(
+                call_type="narrative_rca_generate",
+                client_id=client_id,
+                run_id=run_id,
+                tokens_prompt=(usage or {}).get("prompt_tokens"),
+                tokens_completion=(usage or {}).get("completion_tokens"),
+                latency_ms=(time.perf_counter() - t_call_start) * 1000,
+                success=success,
+            )
+
+        titles_block = "\n".join(f'- "{t[:150]}"' for t in sample_titles[:8]) or "(no sample titles available)"
+        user_prompt = (
+            f"Client: {client_name}\n"
+            f"Narrative: {narrative_name}\n"
+            f"Type: {narrative_type} | Topic: {topic_name}\n"
+            f"Documents: {mention_count} | Avg sentiment: {avg_sentiment:.2f} (-1 to 1) | "
+            f"Risk score: {avg_risk:.1f}/100 | Status: {status}\n"
+            f"Summary: {summary_text}\n"
+            f"Sample document titles from this narrative's own cluster:\n{titles_block}"
+        )
+        system_prompt = (
+            "You write a short root-cause analysis for one negative/risk-relevant "
+            "brand narrative, using ONLY the data given to you. Never invent facts, "
+            "numbers, names, or events not present in the input. If the input is too "
+            "thin to support a claim, keep that field brief and generic rather than "
+            "fabricating specifics.\n"
+            "Return strict JSON with exactly these four keys, each ONE sentence:\n"
+            '{"problem_statement": "...", "impact": "...", "root_cause": "...", '
+            '"recommended_action": "..."}\n'
+            "problem_statement: what is actually happening, in plain terms.\n"
+            "impact: why this matters for the client's reputation right now.\n"
+            "root_cause: the likely driver, grounded in the topic/sentiment/titles given.\n"
+            "recommended_action: one concrete next step someone could take today."
+        )
+
+        try:
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "deepseek/deepseek-v4-pro",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 800,
+                    # Disabled, not just a low token budget: this is a
+                    # bounded, templated task (fill 4 short fields from
+                    # context already given, not open-ended analysis) --
+                    # confirmed live that reasoning=True here burns the
+                    # completion budget on chain-of-thought before reaching
+                    # the actual JSON, producing null/truncated content on
+                    # ~90% of real calls. Mirrors _llm_classify_role's own
+                    # proven-reliable reasoning=False choice for a similarly
+                    # bounded classification task.
+                    "reasoning": {"enabled": False},
+                    "response_format": {"type": "json_object"},
+                },
+                timeout=15.0,
+            )
+            if resp.status_code != 200:
+                log.warning("narrative_rca_http_error", status=resp.status_code, body=resp.text[:300])
+                _record(success=False)
+                return None
+
+            resp_json = resp.json()
+            usage = resp_json.get("usage")
+            content = resp_json["choices"][0]["message"]["content"]
+            if content is None:
+                log.warning("narrative_rca_null_content", raw=str(resp_json)[:400])
+                _record(success=False, usage=usage)
+                return None
+
+            parsed = _json.loads(content)
+            required = ("problem_statement", "impact", "root_cause", "recommended_action")
+            if not all(isinstance(parsed.get(k), str) and parsed.get(k).strip() for k in required):
+                log.warning("narrative_rca_malformed", raw=str(content)[:400])
+                _record(success=False, usage=usage)
+                return None
+
+            result = {k: parsed[k].strip() for k in required}
+            log.info("narrative_rca_generated")
+            _record(success=True, usage=usage)
+            return result
+
+        except Exception as exc:
+            log.warning("narrative_rca_failed", error=str(exc))
+            _record(success=False)
+            return None
+
     def calculate_narratives(
         self,
         db: Session,
@@ -988,6 +1113,48 @@ class NarrativeEngine:
                 # to the entities genuinely mentioned in THIS cluster's own
                 # documents, with person-type entities further restricted to
                 # non-bystander ones via _rank_prominent_persons.
+
+                # RCA (problem_statement/impact/root_cause/recommended_action),
+                # consumed by the AI Advisor card. Only generated for
+                # risk-worthy narratives -- genuinely negative sentiment, OR a
+                # named risk-category topic even if worded neutrally -- the
+                # same "is this actually a risk" definition already used to
+                # stop routine positive/neutral coverage from being treated
+                # as risk elsewhere (risk_engine.py's is_risk_relevant gate).
+                # A positive/neutral, non-risk-topic narrative gets no RCA at
+                # all: there is nothing to root-cause, and the Advisor must
+                # never be able to manufacture a problem out of good news.
+                is_risk_worthy = avg_sentiment < 0 or TOPIC_WEIGHTS.get(topic.name, 0) > 0
+                rca = None
+                if is_risk_worthy:
+                    # Cache: reuse the existing row's RCA when this exact
+                    # narrative (same conflict key) already has one and its
+                    # mention_count hasn't changed -- regenerate only when
+                    # the underlying narrative set changes materially, not
+                    # on every pipeline run.
+                    existing = db.query(Narrative).filter(
+                        Narrative.client_id == client_id,
+                        Narrative.narrative_name == narrative_name,
+                    ).first()
+                    existing_rca = (existing.evidence_metadata or {}).get("rca") if existing else None
+                    if existing and existing.mention_count == len(cluster_docs) and existing_rca:
+                        rca = existing_rca
+                    else:
+                        rca = self._generate_rca(
+                            narrative_name=narrative_name,
+                            topic_name=topic.name,
+                            narrative_type=narrative_type,
+                            avg_sentiment=avg_sentiment,
+                            avg_risk=avg_risk,
+                            mention_count=len(cluster_docs),
+                            status=status,
+                            summary_text=summary_text,
+                            sample_titles=[d.title for d in cluster_docs if d.title],
+                            client_name=client.name,
+                            client_id=client_id,
+                            run_id=rid,
+                        )
+
                 evidence_metadata = {
                     "supporting_documents": [str(did) for did in cluster_doc_ids],
                     "supporting_risks": risk_ids,
@@ -1001,6 +1168,7 @@ class NarrativeEngine:
                     "supporting_executives": exec_ids,
                     "confidence_calculation": confidence_data,
                     "decision_reason": f"Narrative generated with evidence score {evidence_score}.",
+                    "rca": rca,
                     "evidence_counts": {
                         "documents": len(cluster_doc_ids),
                         "risks": len(risk_ids),

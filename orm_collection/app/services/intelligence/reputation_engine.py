@@ -7,7 +7,7 @@ import structlog
 from urllib.parse import urlparse
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.dialects.postgresql import insert
 
 from app.models.document import Document
@@ -147,8 +147,17 @@ class ReputationEngine:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         lookback_date = now_utc - datetime.timedelta(days=30)
 
-        # P3: Batch preloading of all client entities
-        entities = db.query(Entity).filter(Entity.client_id == client_id).all()
+        # P3: Batch preloading of all client entities. Excludes
+        # entity_type='competitor' -- this feeds doc_ids below, which in
+        # turn feeds the Sentiment, Source Quality, and Visibility
+        # components: a tracked competitor's own documents (its own
+        # coverage, sentiment, mention volume) is not this client's
+        # reputation signal. Same reasoning as every other client_id-scoped
+        # aggregate fixed this session (Risk Center, Narrative Cluster,
+        # Active Alerts, Brand Equity sentiment).
+        entities = db.query(Entity).filter(
+            Entity.client_id == client_id, Entity.entity_type != "competitor"
+        ).all()
         entity_ids = [e.id for e in entities]
 
         doc_ids = []
@@ -183,13 +192,22 @@ class ReputationEngine:
             except Exception as e:
                 log.warning("reputation_sentiment_calculation_failed", error=str(e))
 
-        # 2. Risk Component (R5 Isolated)
+        # 2. Risk Component (R5 Isolated). Excludes entity_type='competitor'
+        # -- a tracked competitor's own risk (its own fraud/legal incident)
+        # must not drag down this client's own reputation score. This was
+        # completely unfiltered before -- unlike the read-side risk
+        # endpoints (documents.py/alert_engine.py/get_client_risks) fixed
+        # earlier this session, this one feeds the actual stored
+        # ReputationScore, not just a display.
         risk_component = None
         supporting_risks = []
         try:
-            supporting_risks = db.query(RiskEvent).filter(
+            supporting_risks = db.query(RiskEvent).outerjoin(
+                Entity, Entity.id == RiskEvent.entity_id
+            ).filter(
                 RiskEvent.client_id == client_id,
-                RiskEvent.created_at >= lookback_date
+                RiskEvent.created_at >= lookback_date,
+                or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
             ).all()
             if supporting_risks:
                 avg_risk = sum(r.risk_score for r in supporting_risks) / len(supporting_risks)
@@ -216,13 +234,20 @@ class ReputationEngine:
         except Exception as e:
             log.warning("reputation_narrative_calculation_failed", error=str(e))
 
-        # 4. Trend Component (R5 Isolated)
+        # 4. Trend Component (R5 Isolated). Excludes entity_type='competitor'
+        # -- entity_id is nullable on TrendEvent (Topic-type trends have
+        # none; Mention-type trends carry the entity they're tracking
+        # volume for, which can be a competitor's) -- same reasoning as
+        # the Risk Component above.
         trend_component = None
         supporting_trends = []
         try:
-            supporting_trends = db.query(TrendEvent).filter(
+            supporting_trends = db.query(TrendEvent).outerjoin(
+                Entity, Entity.id == TrendEvent.entity_id
+            ).filter(
                 TrendEvent.client_id == client_id,
-                TrendEvent.created_at >= lookback_date
+                TrendEvent.created_at >= lookback_date,
+                or_(Entity.entity_type != "competitor", TrendEvent.entity_id.is_(None)),
             ).order_by(TrendEvent.created_at.desc()).limit(10).all()
             
             if supporting_trends:

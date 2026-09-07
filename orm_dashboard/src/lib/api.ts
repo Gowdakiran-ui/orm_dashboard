@@ -383,6 +383,11 @@ export async function fetchReputationSummary(clientId: string, signal?: AbortSig
   return parseOrThrow(res);
 }
 
+export async function fetchPlanAdvisory(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/plan-advisory`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function fetchActiveAlerts(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/active-alerts`, { signal });
   return parseOrThrow(res);

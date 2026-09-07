@@ -17,7 +17,6 @@ import { OverviewAnalyticsPanel } from "@/components/OverviewAnalyticsPanel";
 import { RiskAnalyticsPanel } from "@/components/RiskAnalyticsPanel";
 import { NarrativeAnalyticsPanel } from "@/components/NarrativeAnalyticsPanel";
 import { PipelineDiagnosticsPanel } from "@/components/PipelineDiagnosticsPanel";
-import { HistoricalCharts } from "@/components/HistoricalCharts";
 import { ReputationSummaryCard } from "@/components/ReputationSummaryCard";
 import { Sidebar } from "@/components/Sidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -246,6 +245,9 @@ function DashboardShell() {
                         reputationSummaryLoading={data.reputationSummaryLoading}
                         reputationSummaryError={data.reputationSummaryError}
                         reputationSummary={data.reputationSummary}
+                        planAdvisory={data.planAdvisory}
+                        planAdvisoryLoading={data.planAdvisoryLoading}
+                        planAdvisoryError={data.planAdvisoryError}
                         documents={data.documents}
                         documentsLoading={data.documentsLoading}
                         narratives={data.narratives}
@@ -260,15 +262,6 @@ function DashboardShell() {
                       />
                     </ErrorBoundary>
                   </div>
-
-                  {/* Historical Reputation Trend Chart */}
-                  <ErrorBoundary fallback={<TelemetryErrorWidget title="History Chart Error" />}>
-                    <HistoricalCharts
-                      historyLoading={data.historyLoading}
-                      historyError={data.historyError}
-                      repHistory={data.repHistory}
-                    />
-                  </ErrorBoundary>
                 </div>
               )}
 

@@ -516,10 +516,20 @@ class TrendDetector:
         Detect topic-volume spikes per active topic (client-aware topic list).
         Returns count of TrendEvents created or updated.
         """
+        # Excludes entity_type='competitor': this pool defines "this
+        # client's documents" for client-wide Topic/Sentiment trend
+        # detection (no entity_id on the resulting TrendEvent, unlike the
+        # per-entity Mention-trend detector, which legitimately keeps
+        # competitor entities for benchmark_engine.py's own comparison
+        # feature). A competitor's own topic coverage or sentiment spike
+        # must not be detected as *this client's* trend -- confirmed this
+        # session that a client-level Sentiment-type trend directly
+        # deducts from that client's own reputation score (reputation_
+        # engine.py's Trend Component).
         client_docs_query = (
             db.query(EntityMention.document_id)
             .join(Entity, Entity.id == EntityMention.entity_id)
-            .filter(Entity.client_id == client_id)
+            .filter(Entity.client_id == client_id, Entity.entity_type != "competitor")
             .scalar_subquery()
         )
 
@@ -646,10 +656,20 @@ class TrendDetector:
         Detect negative and positive sentiment volume spikes at the client level.
         Returns count of TrendEvents created/updated.
         """
+        # Excludes entity_type='competitor': this pool defines "this
+        # client's documents" for client-wide Topic/Sentiment trend
+        # detection (no entity_id on the resulting TrendEvent, unlike the
+        # per-entity Mention-trend detector, which legitimately keeps
+        # competitor entities for benchmark_engine.py's own comparison
+        # feature). A competitor's own topic coverage or sentiment spike
+        # must not be detected as *this client's* trend -- confirmed this
+        # session that a client-level Sentiment-type trend directly
+        # deducts from that client's own reputation score (reputation_
+        # engine.py's Trend Component).
         client_docs_query = (
             db.query(EntityMention.document_id)
             .join(Entity, Entity.id == EntityMention.entity_id)
-            .filter(Entity.client_id == client_id)
+            .filter(Entity.client_id == client_id, Entity.entity_type != "competitor")
             .scalar_subquery()
         )
 

@@ -187,17 +187,6 @@ export function Sidebar({
               {pipelineError}
             </div>
           )}
-          {/* Phase 15: collection/processing is now Run-Pipeline-gated, not
-              continuous -- these numbers only move when this button is
-              clicked. Without this, a frozen number between runs reads as
-              broken rather than as the intended behavior. */}
-          {!pipelineRunning && (
-            <div className={`mt-2 text-xs font-mono ${mutedText(theme)}`} title="Data only updates when Run Pipeline is triggered">
-              {lastUpdatedAt && lastUpdatedAt !== "N/A"
-                ? <>Last updated: {lastUpdatedAt} — click Run Pipeline for fresh data</>
-                : <>No data yet — click Run Pipeline to collect and process</>}
-            </div>
-          )}
         </div>
 
         {/* Threat Indicator */}

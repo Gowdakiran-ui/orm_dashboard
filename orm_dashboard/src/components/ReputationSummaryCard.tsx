@@ -10,6 +10,9 @@ export interface ReputationSummaryCardProps {
   reputationSummaryLoading: boolean;
   reputationSummaryError: string | null;
   reputationSummary: any;
+  planAdvisory?: any;
+  planAdvisoryLoading?: boolean;
+  planAdvisoryError?: string | null;
   documents: any[];
   documentsLoading?: boolean;
   narratives: any[];
@@ -57,6 +60,9 @@ export function ReputationSummaryCard({
   reputationSummaryLoading,
   reputationSummaryError,
   reputationSummary,
+  planAdvisory,
+  planAdvisoryLoading = false,
+  planAdvisoryError = null,
   documents = [],
   documentsLoading = false,
   narratives = [],
@@ -111,7 +117,13 @@ export function ReputationSummaryCard({
   // Highest risk / fastest growing narrative + monitored count, same
   // computation as Narrative Cluster's stat cards (NarrativesTab.tsx `summaryKpis`).
   const narrativeStats = useMemo(() => {
-    const sortedByRisk = [...narratives].sort((a, b) => (b.risk || 0) - (a.risk || 0));
+    // Requires MEDIUM+ (same RISK_THRESHOLDS.LOW_TO_MEDIUM floor as
+    // riskStats.topRiskDocs above) -- without it, "highest risk narrative"
+    // just meant "whichever narrative scored the most, even 0", which
+    // could name a trivial or entirely risk-free narrative as one
+    // "requiring strategic review".
+    const riskyNarratives = narratives.filter(n => (n.risk || 0) > RISK_THRESHOLDS.LOW_TO_MEDIUM);
+    const sortedByRisk = [...riskyNarratives].sort((a, b) => (b.risk || 0) - (a.risk || 0));
     const sortedByTrend = [...narratives].sort((a, b) => (b.trend || 0) - (a.trend || 0));
     const highest = sortedByRisk[0] || null;
     const fastest = sortedByTrend[0] || null;
@@ -362,6 +374,34 @@ export function ReputationSummaryCard({
         </Card>
 
         <div className="space-y-6">
+          <Card className={glassCard(theme)}>
+            <div className={SPECULAR_LINE} />
+            <CardContent className="p-4 space-y-2">
+              <span className={sectionLabelClass(isDark)}>Plan Advisory</span>
+              {planAdvisoryLoading ? (
+                <p className={sectionTextClass(isDark)}>Analyzing current risk posture...</p>
+              ) : planAdvisoryError ? (
+                <p className={sectionTextClass(isDark)}>Advisory temporarily unavailable.</p>
+              ) : planAdvisory?.lead ? (
+                <>
+                  <p className={sectionTextClass(isDark)}>{planAdvisory.lead}</p>
+                  {Array.isArray(planAdvisory.bullets) && planAdvisory.bullets.length > 0 && (
+                    <ul className="space-y-2 mt-1.5">
+                      {planAdvisory.bullets.map((b: string, idx: number) => (
+                        <li key={idx} className={`text-xs leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
+                          <span className="shrink-0" style={{ color: accent }}>&#8226;</span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <p className={sectionTextClass(isDark)}>Nothing significant to flag right now.</p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className={glassCard(theme)}>
             <div className={SPECULAR_LINE} />
             <CardContent className="p-4 space-y-2">

@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react";
-import { 
+import {
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
-  fetchActiveAlerts, fetchNarratives, fetchCompetitorBenchmarks, fetchRisks, 
+  fetchPlanAdvisory,
+  fetchActiveAlerts, fetchNarratives, fetchCompetitorBenchmarks, fetchRisks,
   fetchExecutives, fetchExecutiveHistory, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed,
   fetchCommandCenterStats,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
@@ -17,6 +18,8 @@ const DEFAULT_REPUTATION_SUMMARY = {
   executive_alert: { open: false, alert: null }
 };
 
+const DEFAULT_PLAN_ADVISORY = { lead: "", bullets: [] as string[], narrative_count: 0 };
+
 export function useDashboardData() {
   const [clients, setClients] = useState<any[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
@@ -31,6 +34,10 @@ export function useDashboardData() {
   const [reputationSummary, setReputationSummary] = useState<any>(DEFAULT_REPUTATION_SUMMARY);
   const [reputationSummaryLoading, setReputationSummaryLoading] = useState(true);
   const [reputationSummaryError, setReputationSummaryError] = useState<string | null>(null);
+
+  const [planAdvisory, setPlanAdvisory] = useState<any>(DEFAULT_PLAN_ADVISORY);
+  const [planAdvisoryLoading, setPlanAdvisoryLoading] = useState(true);
+  const [planAdvisoryError, setPlanAdvisoryError] = useState<string | null>(null);
 
   const [repHistory, setRepHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -191,6 +198,7 @@ export function useDashboardData() {
       // Clear stale data immediately when switching companies
       setReputation({ score: 0, grade: 'N/A', trend: 'STABLE' });
       setReputationSummary(DEFAULT_REPUTATION_SUMMARY);
+      setPlanAdvisory(DEFAULT_PLAN_ADVISORY);
       setRepHistory([]);
       setRepBreakdown({ sentiment: 0, risk: 0, narrative: 0, trend: 0, source: 0, visibility: 0 });
       setAlerts([]);
@@ -209,6 +217,7 @@ export function useDashboardData() {
     // Reset Loading & Error States for Asynchronous Fetching
     setReputationLoading(true);
     setReputationSummaryLoading(true);
+    setPlanAdvisoryLoading(true);
     setHistoryLoading(true);
     setBreakdownLoading(true);
     setAlertsLoading(true);
@@ -226,6 +235,7 @@ export function useDashboardData() {
 
     setReputationError(null);
     setReputationSummaryError(null);
+    setPlanAdvisoryError(null);
     setHistoryError(null);
     setBreakdownError(null);
     setAlertsError(null);
@@ -305,6 +315,18 @@ export function useDashboardData() {
             })
             .catch(() => { if (!signal.aborted) { setReputationSummary(null); setReputationSummaryError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setReputationSummaryLoading(false); }),
+
+          fetchPlanAdvisory(activeClientId, signal)
+            .then(data => {
+              if (!signal.aborted) {
+                const nextVal = data || DEFAULT_PLAN_ADVISORY;
+                if (hasChanged(planAdvisory, nextVal)) {
+                  setPlanAdvisory(nextVal);
+                }
+              }
+            })
+            .catch(() => { if (!signal.aborted) { setPlanAdvisory(null); setPlanAdvisoryError("Telemetry Offline"); } })
+            .finally(() => { if (!signal.aborted) setPlanAdvisoryLoading(false); }),
 
           fetchNarratives(activeClientId, signal)
             .then(data => {
@@ -507,6 +529,7 @@ export function useDashboardData() {
         const results = await Promise.allSettled([
           fetchReputation(clientId, signal).then(data => { if (!signal.aborted) { setReputation(data); setReputationError(null); } }),
           fetchReputationSummary(clientId, signal).then(data => { if (!signal.aborted) { setReputationSummary(data || DEFAULT_REPUTATION_SUMMARY); setReputationSummaryError(null); } }),
+          fetchPlanAdvisory(clientId, signal).then(data => { if (!signal.aborted) { setPlanAdvisory(data || DEFAULT_PLAN_ADVISORY); setPlanAdvisoryError(null); } }).finally(() => { if (!signal.aborted) setPlanAdvisoryLoading(false); }),
           fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) { setAlerts(data || []); setAlertsError(null); } }),
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
@@ -564,6 +587,7 @@ export function useDashboardData() {
     // Clear all dashboard data states BEFORE setting loading or clientId
     setReputation(null);
     setReputationSummary(null);
+    setPlanAdvisory(null);
     setRepHistory([]);
     setRepBreakdown(null);
     setAlerts([]);
@@ -584,6 +608,7 @@ export function useDashboardData() {
     const isLoading = id !== null;
     setReputationLoading(isLoading);
     setReputationSummaryLoading(isLoading);
+    setPlanAdvisoryLoading(isLoading);
     setHistoryLoading(isLoading);
     setBreakdownLoading(isLoading);
     setAlertsLoading(isLoading);
@@ -602,6 +627,7 @@ export function useDashboardData() {
     // Reset error states
     setReputationError(null);
     setReputationSummaryError(null);
+    setPlanAdvisoryError(null);
     setHistoryError(null);
     setBreakdownError(null);
     setAlertsError(null);
@@ -639,6 +665,9 @@ export function useDashboardData() {
     reputationSummary,
     reputationSummaryLoading,
     reputationSummaryError,
+    planAdvisory,
+    planAdvisoryLoading,
+    planAdvisoryError,
     repHistory,
     historyLoading,
     historyError,

@@ -346,9 +346,17 @@ class AlertEngine:
                 or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
             ).order_by(RiskEvent.created_at.desc()).limit(15).all()
 
-            recent_trends = db.query(TrendEvent).filter(
+            # Same competitor exclusion as recent_risks above -- entity_id is
+            # nullable on TrendEvent (Topic-type trends have none; Mention-
+            # type trends carry the entity being tracked, which can be a
+            # competitor's). A competitor's own trend spike must not feed
+            # an alert's evidence score for this client.
+            recent_trends = db.query(TrendEvent).outerjoin(
+                Entity, Entity.id == TrendEvent.entity_id
+            ).filter(
                 TrendEvent.client_id == client_id,
-                TrendEvent.percentage_change > 30.0
+                TrendEvent.percentage_change > 30.0,
+                or_(Entity.entity_type != "competitor", TrendEvent.entity_id.is_(None)),
             ).order_by(TrendEvent.created_at.desc()).limit(15).all()
 
             exec_risks = db.query(RiskEvent, Entity).join(Entity, Entity.id == RiskEvent.entity_id).filter(
