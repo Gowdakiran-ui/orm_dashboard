@@ -17,7 +17,7 @@ from app.models.alert import Alert
 from app.models.narrative import Narrative
 from app.models.entity import EntityMention, Entity
 from app.models.client import Client
-from app.core.risk_config import TOPIC_WEIGHTS
+from app.core.risk_config import TOPIC_WEIGHTS, RISK_THRESHOLDS
 
 logger = structlog.get_logger()
 
@@ -597,30 +597,105 @@ class NarrativeEngine:
             return result
         return None
 
+    @staticmethod
+    def _severity_label(risk_score: float) -> str:
+        """Same 4-band classification risk_engine.py's own get_risk_level uses
+        (RISK_THRESHOLDS), so a narrative's RCA never disagrees with the
+        severity shown for its own risk score elsewhere in the product."""
+        if risk_score <= RISK_THRESHOLDS["LOW_TO_MEDIUM"]:
+            return "LOW"
+        elif risk_score <= RISK_THRESHOLDS["MEDIUM_TO_HIGH"]:
+            return "MEDIUM"
+        elif risk_score <= RISK_THRESHOLDS["HIGH_TO_CRITICAL"]:
+            return "HIGH"
+        else:
+            return "CRITICAL"
+
+    @staticmethod
+    def _sentiment_label(avg_sentiment: float) -> str:
+        # Same -0.25/+0.25 bucketing NarrativesTab.tsx already uses to color
+        # sentiment elsewhere in the product, so this wording never disagrees
+        # with what the UI shows for the same number.
+        if avg_sentiment <= -0.25:
+            return "negative"
+        elif avg_sentiment >= 0.25:
+            return "positive"
+        else:
+            return "mixed/neutral"
+
+    def _build_problem_statement_and_impact(
+        self, narrative_name, topic_name, mention_count, source_diversity,
+        avg_sentiment, avg_risk, status, trend_strength,
+    ):
+        """
+        Deterministic template for problem_statement/impact, built only from
+        numbers already computed elsewhere in this pipeline run (document
+        count, outlet count, sentiment, risk score, status, velocity) --
+        no LLM call. This is the numeric-misstatement fix: these two fields
+        can never contain a figure the model invented or paraphrased,
+        because no model ever sees them.
+        """
+        severity = self._severity_label(avg_risk)
+        sentiment_desc = self._sentiment_label(avg_sentiment)
+        outlet_word = "outlet" if source_diversity == 1 else "outlets"
+        doc_word = "document" if mention_count == 1 else "documents"
+
+        problem_statement = (
+            f"{mention_count} {doc_word} across {source_diversity} {outlet_word} are covering "
+            f"'{narrative_name}' ({topic_name}), with {sentiment_desc} sentiment "
+            f"(avg {avg_sentiment:.2f} on a -1 to 1 scale)."
+        )
+
+        if trend_strength > 0:
+            velocity_clause = f"coverage is up {trend_strength:.1f}%"
+        elif trend_strength < 0:
+            velocity_clause = f"coverage is down {abs(trend_strength):.1f}%"
+        else:
+            velocity_clause = "coverage velocity is flat"
+        impact = (
+            f"This narrative carries a risk score of {avg_risk:.1f}/100 ({severity}) and is "
+            f"currently classified {status}; {velocity_clause}."
+        )
+
+        return problem_statement, impact
+
     def _generate_rca(
         self, narrative_name, topic_name, narrative_type, avg_sentiment,
-        avg_risk, mention_count, status, summary_text, sample_titles,
-        client_name, client_id, run_id=None,
+        avg_risk, mention_count, source_diversity, trend_strength, status,
+        summary_text, sample_titles, client_name, client_id, run_id=None,
     ):
         """
         Generates a short root-cause analysis for one risk-worthy narrative:
         problem_statement, impact, root_cause, recommended_action (each one
-        sentence). Grounded ONLY in the narrative's own already-computed
-        data (topic, sentiment, risk, status, summary_text, a few real
-        document titles from its cluster) -- no raw-document re-analysis,
-        no invented facts. Consumed by the AI Advisor card, which reuses
-        these fields rather than re-deriving them itself.
+        sentence). problem_statement/impact are built deterministically in
+        Python from real computed numbers (see
+        _build_problem_statement_and_impact) -- no LLM call is involved in
+        producing them, by construction, not just by prompt instruction.
+        Only root_cause/recommended_action are LLM-generated, grounded in
+        the narrative's own already-computed data (topic, sentiment, risk,
+        status, summary_text, a few real document titles from its cluster)
+        -- no raw-document re-analysis, no invented facts. Consumed by the
+        AI Advisor card, which reuses these fields rather than re-deriving
+        them itself.
 
         Same fail-safe convention as _llm_classify_role/
-        _llm_verify_and_split_cluster: returns None on ANY failure (missing
-        key, timeout, network error, non-200, malformed/incomplete JSON).
-        None means "no RCA available this run" -- the caller (and the
-        Advisor) must treat a missing RCA as "skip this narrative", never
-        as an error or a reason to fall back to inventing one client-side.
+        _llm_verify_and_split_cluster: returns None on ANY LLM failure
+        (missing key, timeout, network error, non-200, malformed/incomplete
+        JSON) -- the deterministic fields are cheap and never the failure
+        point, but this method still returns nothing rather than a
+        half-complete RCA, so the caller (and the Advisor) can keep treating
+        a missing RCA as "skip this narrative", never as an error or a
+        reason to fall back to inventing root_cause/recommended_action
+        client-side.
         """
         import requests
         import json as _json
         from app.utils.llm_call_logging import log_llm_call
+
+        problem_statement, impact = self._build_problem_statement_and_impact(
+            narrative_name, topic_name, mention_count, source_diversity,
+            avg_sentiment, avg_risk, status, trend_strength,
+        )
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -648,7 +723,9 @@ class NarrativeEngine:
             f"Documents: {mention_count} | Avg sentiment: {avg_sentiment:.2f} (-1 to 1) | "
             f"Risk score: {avg_risk:.1f}/100 | Status: {status}\n"
             f"Summary: {summary_text}\n"
-            f"Sample document titles from this narrative's own cluster:\n{titles_block}"
+            f"Sample document titles from this narrative's own cluster:\n{titles_block}\n\n"
+            f"Already-established problem statement (do not restate, use only as context): "
+            f"{problem_statement}"
         )
         system_prompt = (
             "You write a short root-cause analysis for one negative/risk-relevant "
@@ -656,13 +733,12 @@ class NarrativeEngine:
             "numbers, names, or events not present in the input. If the input is too "
             "thin to support a claim, keep that field brief and generic rather than "
             "fabricating specifics.\n"
-            "Return strict JSON with exactly these four keys, each ONE sentence:\n"
-            '{"problem_statement": "...", "impact": "...", "root_cause": "...", '
-            '"recommended_action": "..."}\n'
-            "problem_statement: what is actually happening, in plain terms.\n"
-            "impact: why this matters for the client's reputation right now.\n"
+            "Return strict JSON with exactly these two keys, each ONE sentence:\n"
+            '{"root_cause": "...", "recommended_action": "..."}\n'
             "root_cause: the likely driver, grounded in the topic/sentiment/titles given.\n"
-            "recommended_action: one concrete next step someone could take today."
+            "recommended_action: one concrete next step someone could take today.\n"
+            "Do not restate the problem statement you were given as context -- add new "
+            "analysis, not a repeat of it."
         )
 
         try:
@@ -676,9 +752,9 @@ class NarrativeEngine:
                         {"role": "user", "content": user_prompt},
                     ],
                     "temperature": 0.2,
-                    "max_tokens": 800,
+                    "max_tokens": 500,
                     # Disabled, not just a low token budget: this is a
-                    # bounded, templated task (fill 4 short fields from
+                    # bounded, templated task (fill 2 short fields from
                     # context already given, not open-ended analysis) --
                     # confirmed live that reasoning=True here burns the
                     # completion budget on chain-of-thought before reaching
@@ -705,13 +781,18 @@ class NarrativeEngine:
                 return None
 
             parsed = _json.loads(content)
-            required = ("problem_statement", "impact", "root_cause", "recommended_action")
+            required = ("root_cause", "recommended_action")
             if not all(isinstance(parsed.get(k), str) and parsed.get(k).strip() for k in required):
                 log.warning("narrative_rca_malformed", raw=str(content)[:400])
                 _record(success=False, usage=usage)
                 return None
 
-            result = {k: parsed[k].strip() for k in required}
+            result = {
+                "problem_statement": problem_statement,
+                "impact": impact,
+                "root_cause": parsed["root_cause"].strip(),
+                "recommended_action": parsed["recommended_action"].strip(),
+            }
             log.info("narrative_rca_generated")
             _record(success=True, usage=usage)
             return result
@@ -779,8 +860,17 @@ class NarrativeEngine:
         documents = db.query(Document).filter(Document.id.in_(doc_ids)).all()
         doc_map = {d.id: d for d in documents}
 
-        # P3 — Batch Database Access: Preload all topic associations
-        doc_topics = db.query(DocumentTopic).filter(DocumentTopic.document_id.in_(doc_ids)).all()
+        # P3 — Batch Database Access: Preload all topic associations.
+        # Explicit ORDER BY (document_id as a stable tiebreak) -- an
+        # unordered IN(...) query has no guaranteed row order across runs
+        # with identical data (plan change, autovacuum, etc.), and this
+        # list seeds topic_docs_map below, which the per-topic cluster-build
+        # loop further sorts by published_at with its own tiebreak (see
+        # docs.sort() below) -- ordering it here too keeps every stage of
+        # this pipeline deterministic, not just the final sort.
+        doc_topics = db.query(DocumentTopic).filter(
+            DocumentTopic.document_id.in_(doc_ids)
+        ).order_by(DocumentTopic.document_id, DocumentTopic.topic_id).all()
         topic_ids = list(set(dt.topic_id for dt in doc_topics))
         topics = db.query(Topic).filter(Topic.id.in_(topic_ids)).all()
         topic_map = {t.id: t for t in topics}
@@ -868,8 +958,18 @@ class NarrativeEngine:
             if not topic or not docs:
                 continue
 
-            # Sort documents by publication date to ensure identical incident grouping order
-            docs.sort(key=lambda d: d.published_at or d.collected_at)
+            # Sort documents by publication date to ensure identical incident
+            # grouping order. `str(d.id)` tiebreak: two documents can share
+            # the exact same published_at/collected_at timestamp, and a bare
+            # date-only sort key leaves ties in whatever order they arrived
+            # in (itself not guaranteed stable across runs -- see the
+            # doc_topics query above). Without a total order here, which
+            # document lands first in a cluster -- and therefore which one
+            # becomes `ref_doc`/seeds `narrative_name` below -- could change
+            # between two runs over identical data, breaking both the RCA
+            # cache-reuse lookup (keyed on narrative_name) and the
+            # uq_client_narrative upsert target.
+            docs.sort(key=lambda d: (d.published_at or d.collected_at, str(d.id)))
 
             # Dominant-entity exclusion (generalizes the brand-entity
             # exclusion above to any entity, not just the client's own
@@ -1147,6 +1247,8 @@ class NarrativeEngine:
                             avg_sentiment=avg_sentiment,
                             avg_risk=avg_risk,
                             mention_count=len(cluster_docs),
+                            source_diversity=source_diversity,
+                            trend_strength=trend_strength,
                             status=status,
                             summary_text=summary_text,
                             sample_titles=[d.title for d in cluster_docs if d.title],

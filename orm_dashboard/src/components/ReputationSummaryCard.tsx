@@ -371,7 +371,7 @@ export function ReputationSummaryCard({
                 <button
                   type="button"
                   onClick={() => onViewNarrative(planAdvisory.top_narrative_name)}
-                  className="text-sm font-mono font-semibold mt-2 hover:underline"
+                  className="flex items-center min-h-[44px] text-sm font-mono font-semibold mt-2 hover:underline"
                   style={{ color: accent }}
                 >
                   View full narrative &rarr;

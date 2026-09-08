@@ -24,6 +24,7 @@ export interface RiskTabProps {
   documentsError: string | null;
   documents: any[];
   clientId?: string | null;
+  onViewNarrative?: (narrativeName: string) => void;
 }
 
 export function RiskTab({
@@ -33,7 +34,8 @@ export function RiskTab({
   documentsLoading,
   documentsError,
   documents,
-  clientId
+  clientId,
+  onViewNarrative
 }: RiskTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -682,12 +684,30 @@ export function RiskTab({
                   </div>
                 </div>
 
-                {/* Related Narratives */}
+                {/* Related Narratives -- real cluster membership from the
+                    backend (documents.py joins against each narrative's
+                    evidence_metadata.supporting_documents), not a topic-name
+                    guess. No badge when this document isn't part of any
+                    narrative's cluster -- an expected state, not an error. */}
                 <div className="space-y-2">
                   <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Related Narrative Tracks</span>
-                  <div className={`p-3 rounded-2xl border text-xs ${bodyText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
-                    {selectedDoc.narrative || "General Narrative"}
-                  </div>
+                  {selectedDoc.narrative ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewNarrative?.(selectedDoc.narrative)}
+                      disabled={!onViewNarrative}
+                      className={`w-full text-left p-3 rounded-2xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
+                        isDark ? "bg-black/30 border-white/[0.08] hover:border-[#00F5D4]/40" : "bg-black/[0.03] border-black/[0.06] hover:border-[#3B82F6]/40"
+                      } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
+                    >
+                      <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Part of:</span>{" "}
+                      {selectedDoc.narrative}
+                    </button>
+                  ) : (
+                    <div className={`p-3 rounded-2xl border text-xs italic ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+                      Not part of a tracked narrative.
+                    </div>
+                  )}
                 </div>
 
               </div>

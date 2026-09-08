@@ -28,6 +28,8 @@ export interface NarrativesTabProps {
   setSelectedNarrative: (narrative: string | null) => void;
   narrativesError: string | null;
   clientId: string | null;
+  narrativeDrawerRequest?: { name: string; requestId: number } | null;
+  onNarrativeDrawerRequestHandled?: () => void;
 }
 
 export function NarrativesTab({
@@ -41,7 +43,9 @@ export function NarrativesTab({
   selectedNarrative,
   setSelectedNarrative,
   narrativesError,
-  clientId
+  clientId,
+  narrativeDrawerRequest,
+  onNarrativeDrawerRequestHandled
 }: NarrativesTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -199,6 +203,22 @@ export function NarrativesTab({
       });
     }
   };
+
+  // Opens the drawer for a specific narrative on request from outside this
+  // component (the AI Advisory card's "View full narrative ->" link, and
+  // Risk Center's "Part of:" badge) -- previously those callers only set
+  // selectedNarrative, which this component used solely to bold a bubble-
+  // chart label, never to actually open drawerData. Keyed on requestId (not
+  // just the name) so a second click on the same narrative still fires this
+  // -- a plain name-keyed effect would silently no-op on a repeat click
+  // since the dependency wouldn't have changed.
+  React.useEffect(() => {
+    if (narrativeDrawerRequest) {
+      handleTraceClick(narrativeDrawerRequest.name);
+      onNarrativeDrawerRequestHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrativeDrawerRequest]);
 
   // Custom hover-only tooltip for Narrative Health Bubble Matrix
   const BubbleTooltip = ({ active, payload }: any) => {
@@ -620,6 +640,39 @@ export function NarrativesTab({
                     <span className="text-[13px] font-bold text-orange-400">{(drawerData.data.trend || 0).toFixed(1)}%</span>
                   </div>
                 </div>
+
+                {/* Root Cause Analysis -- the full explanation this data has
+                    always had (narrative_engine.py computes and stores it
+                    per risk-worthy narrative in evidence_metadata.rca) but
+                    the drawer never rendered until now. The AI Advisory card
+                    on the Overview page is only a short digest built from
+                    this same data; this drawer is its actual home. Absent
+                    (not shown at all) for narratives with no RCA -- e.g.
+                    positive/neutral, non-risk-worthy narratives, which
+                    narrative_engine.py deliberately never generates one for. */}
+                {drawerData.data.evidence_metadata?.rca && (
+                  <div className="space-y-2.5 dash-box p-3 rounded border dash-border">
+                    <span className="dash-accent block uppercase text-xs font-bold">Root Cause Analysis</span>
+                    <div className="space-y-2">
+                      <div className="space-y-0.5">
+                        <span className="dash-muted block uppercase text-xs">Problem Statement</span>
+                        <p className="dash-strong text-xs leading-relaxed">{drawerData.data.evidence_metadata.rca.problem_statement}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="dash-muted block uppercase text-xs">Impact</span>
+                        <p className="dash-strong text-xs leading-relaxed">{drawerData.data.evidence_metadata.rca.impact}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="dash-muted block uppercase text-xs">Root Cause</span>
+                        <p className="dash-strong text-xs leading-relaxed">{drawerData.data.evidence_metadata.rca.root_cause}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="dash-muted block uppercase text-xs">Recommended Action</span>
+                        <p className="dash-strong text-xs leading-relaxed">{drawerData.data.evidence_metadata.rca.recommended_action}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-between border-b dash-border py-1 text-xs">
                   <span className="dash-muted">Volume Level:</span>

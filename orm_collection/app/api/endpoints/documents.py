@@ -93,26 +93,29 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
         "severity": getattr(alert_rec, "severity", "INFO")
     } if alert_rec else None
     
-    narrative_name = "General Narrative"
-    # Authoritative mention count: Narrative.mention_count, the same column
-    # get_client_narratives (client_intelligence.py) reports as "mentions" --
-    # not the EntityMention row count queried above (that's per-document
-    # entity extraction, a different concept). Defaults to 0 when no
-    # narrative record matches this document's topic, same as the "General
-    # Narrative" placeholder name it pairs with.
+    # Real cluster membership, not a topic-name guess: a narrative's
+    # evidence_metadata.supporting_documents is the exact list of document
+    # ids narrative_engine.py put in that narrative's own cluster (see
+    # calculate_narratives), so matching against it is the actual
+    # relationship rather than the previous Narrative.narrative_name.ilike
+    # topic-substring heuristic, which could match a narrative this document
+    # was never actually clustered into. None (not a placeholder name) when
+    # this document isn't part of any narrative's cluster -- an expected,
+    # not-yet-narrative-worthy state, not an error.
+    narrative_name = None
+    narrative_id = None
     narrative_mentions = 0
-    if doc_topic and doc_topic.topic:
-        t_name = getattr(doc_topic.topic, "name", None)
-        if t_name:
-            narr_rec = db.query(Narrative).filter(
-                Narrative.client_id == client_id,
-                Narrative.narrative_name.ilike(f"%{t_name}%")
-            ).first()
-            if narr_rec:
-                narrative_name = getattr(narr_rec, "narrative_name", "General Narrative")
-                narrative_mentions = getattr(narr_rec, "mention_count", 0) or 0
+    doc_id_str = str(doc.id)
+    narrative_candidates = db.query(Narrative).filter(Narrative.client_id == client_id).all()
+    for narr_rec in narrative_candidates:
+        supporting_docs = (narr_rec.evidence_metadata or {}).get("supporting_documents") or []
+        if doc_id_str in supporting_docs:
+            narrative_name = narr_rec.narrative_name
+            narrative_id = str(narr_rec.id)
+            narrative_mentions = narr_rec.mention_count or 0
+            break
 
-    narrative_data = {"name": narrative_name, "mentions": narrative_mentions}
+    narrative_data = {"name": narrative_name, "id": narrative_id, "mentions": narrative_mentions}
     rep_impact = f"{'+' if sentiment_val >= 0 else ''}{sentiment_val * 10:.1f}"
     
     return {
@@ -202,17 +205,18 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
                 "entity_type": getattr(m.entity, "entity_type", "unknown")
             })
         
-    unique_topic_names = {dt.topic.name for dt in doc_topics if dt and dt.topic and getattr(dt.topic, "name", None)}
-    narrative_cache = {}
-    for t_name in unique_topic_names:
-        if t_name:
-            narr_rec = db.query(Narrative).filter(
-                Narrative.client_id == client_id,
-                Narrative.narrative_name.ilike(f"%{t_name}%")
-            ).first()
-            if narr_rec:
-                narrative_cache[t_name] = getattr(narr_rec, "narrative_name", "General Narrative")
-            
+    # Real cluster membership, not a topic-name guess -- same reasoning as
+    # read_document above. Built once as a doc_id -> (name, id) reverse
+    # index off every client narrative's evidence_metadata.supporting_documents,
+    # so this stays a single query for the whole page instead of one per
+    # document.
+    client_narratives = db.query(Narrative).filter(Narrative.client_id == client_id).all()
+    doc_to_narrative: dict = {}
+    for narr_rec in client_narratives:
+        supporting_docs = (narr_rec.evidence_metadata or {}).get("supporting_documents") or []
+        for supporting_doc_id in supporting_docs:
+            doc_to_narrative.setdefault(supporting_doc_id, (narr_rec.narrative_name, str(narr_rec.id)))
+
     matches = db.query(DocumentMatch).filter(DocumentMatch.document_id.in_(doc_ids)).all()
     confidence_map = {getattr(m, "document_id", None): getattr(m, "match_confidence", 1.0) for m in matches if m}
 
@@ -232,15 +236,13 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
             topic_name = getattr(dt.topic, "name", "General")
         
         extracted_entities = mention_map.get(doc.id, [])
-        
-        narrative_name = "General Narrative"
-        if dt and dt.topic:
-            t_name = getattr(dt.topic, "name", None)
-            if t_name and t_name in narrative_cache:
-                narrative_name = narrative_cache[t_name]
-        
+
+        narrative_match = doc_to_narrative.get(str(doc.id))
+        narrative_name = narrative_match[0] if narrative_match else None
+        narrative_id = narrative_match[1] if narrative_match else None
+
         rep_impact = f"{'+' if sentiment_val >= 0 else ''}{sentiment_val * 10:.1f}"
-        
+
         results.append({
             "id": str(doc.id),
             "title": doc.title or "Untitled Document",
@@ -251,6 +253,7 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
             "risk": round(risk_val),  # was int() -- see read_document above
             "risk_explainability": risk_explainability,
             "narrative": narrative_name,
+            "narrative_id": narrative_id,
             "original_content": doc.normalized_content,
             "extracted_entities": extracted_entities,
             "topic": topic_name,

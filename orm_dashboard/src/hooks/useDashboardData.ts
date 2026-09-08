@@ -99,6 +99,18 @@ export function useDashboardData() {
   const [livePollDegraded, setLivePollDegraded] = useState(false);
 
   const [selectedNarrative, setSelectedNarrative] = useState<string | null>(null);
+  // A request to actually open the narrative drawer (not just highlight it
+  // on the bubble chart, which is all selectedNarrative alone drives in
+  // NarrativesTab). Carries a monotonically-increasing id so a second
+  // request for the *same* narrative name still fires NarrativesTab's
+  // open-drawer effect -- a plain name-keyed effect would silently no-op
+  // on a repeat click since the dependency wouldn't have changed.
+  const [narrativeDrawerRequest, setNarrativeDrawerRequest] = useState<{ name: string; requestId: number } | null>(null);
+  const openNarrativeDrawer = (name: string) => {
+    setSelectedNarrative(name);
+    setNarrativeDrawerRequest({ name, requestId: Date.now() });
+  };
+  const clearNarrativeDrawerRequest = () => setNarrativeDrawerRequest(null);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [clientsRefreshKey, setClientsRefreshKey] = useState(0);
 
@@ -713,6 +725,9 @@ export function useDashboardData() {
     livePollDegraded,
     selectedNarrative,
     setSelectedNarrative,
+    narrativeDrawerRequest,
+    openNarrativeDrawer,
+    clearNarrativeDrawerRequest,
     dashboardRefreshKey,
     setDashboardRefreshKey,
     clientsRefreshKey,

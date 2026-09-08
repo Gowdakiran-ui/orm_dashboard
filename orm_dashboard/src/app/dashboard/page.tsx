@@ -248,7 +248,7 @@ function DashboardShell() {
                         planAdvisory={data.planAdvisory}
                         planAdvisoryLoading={data.planAdvisoryLoading}
                         planAdvisoryError={data.planAdvisoryError}
-                        onViewNarrative={(name: string) => { data.setSelectedNarrative(name); setActiveTab("narratives"); }}
+                        onViewNarrative={(name: string) => { data.openNarrativeDrawer(name); setActiveTab("narratives"); }}
                         documents={data.documents}
                         documentsLoading={data.documentsLoading}
                         narratives={data.narratives}
@@ -348,6 +348,7 @@ function DashboardShell() {
                     documentsError={data.documentsError}
                     documents={data.documents}
                     clientId={data.clientId}
+                    onViewNarrative={(name: string) => { data.openNarrativeDrawer(name); setActiveTab("narratives"); }}
                   />
                 </ErrorBoundary>
               )}
@@ -407,6 +408,8 @@ function DashboardShell() {
                     setSelectedNarrative={data.setSelectedNarrative}
                     narrativesError={data.narrativesError}
                     clientId={data.clientId}
+                    narrativeDrawerRequest={data.narrativeDrawerRequest}
+                    onNarrativeDrawerRequestHandled={data.clearNarrativeDrawerRequest}
                   />
                 </ErrorBoundary>
               )}
