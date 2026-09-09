@@ -291,6 +291,7 @@ function DashboardShell() {
                         sentimentTrendData={analytics.sentimentTrendData}
                         loading={data.documentsLoading || data.historyLoading}
                         error={data.documentsError || data.historyError}
+                        onViewNarrative={(name: string) => { data.openNarrativeDrawer(name); setActiveTab("narratives"); }}
                       />
                     </ErrorBoundary>
                   )}

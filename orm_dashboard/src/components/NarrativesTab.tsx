@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { NarrativeIntelligenceWorkbench } from "@/components/NarrativeIntelligenceWorkbench";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
+import { fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
@@ -71,6 +72,27 @@ export function NarrativesTab({
 
   // Hover state for Scatter chart bubbles
   const [hoveredScatterIndex, setHoveredScatterIndex] = useState<number | null>(null);
+
+  // Tier 3 Part B: the `documents` prop (GET /documents/client/{id}) never
+  // includes `url` -- only the single-document detail endpoint does. This
+  // drawer's "linked documents" were built straight from that prop, so
+  // `doc.url` was always undefined and "View Original" never rendered here
+  // even though the same document had a real URL. RiskTab/ExecutivesTab/
+  // FeedTab already fetch the real URL per-selection this same way; this
+  // mirrors that exact pattern instead of inventing a new one.
+  const [selectedDocUrl, setSelectedDocUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!drawerData || drawerData.type !== "document" || !drawerData.data?.id || !clientId) {
+      setSelectedDocUrl(null);
+      return;
+    }
+    let cancelled = false;
+    fetchDocumentDetails(clientId, drawerData.data.id)
+      .then(details => { if (!cancelled) setSelectedDocUrl(details?.url || null); })
+      .catch(() => { if (!cancelled) setSelectedDocUrl(null); });
+    return () => { cancelled = true; };
+  }, [drawerData, clientId]);
 
   // Dynamic Topics list
   const topicsList = useMemo(() => {
@@ -828,9 +850,9 @@ export function NarrativesTab({
 
           {/* Footer buttons */}
           <div className={`p-4 border-t flex space-x-2 ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-            {drawerData.type === "document" && drawerData.data.url && (
+            {drawerData.type === "document" && selectedDocUrl && (
               <a
-                href={drawerData.data.url}
+                href={selectedDocUrl}
                 target="_blank"
                 rel="noreferrer"
                 className={`flex-1 text-center py-2 rounded-lg flex items-center justify-center ${glassPrimaryButton(theme)}`}

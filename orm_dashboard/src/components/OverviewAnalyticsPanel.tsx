@@ -19,6 +19,10 @@ export interface OverviewAnalyticsPanelProps {
   sentimentTrendData: any[];
   loading?: boolean;
   error?: string | null;
+  /** Tier 3 Part A: deep-link a sentiment-trend point's driving narrative into
+   *  the narrative drawer -- same navigateTo/openNarrativeDrawer mechanism
+   *  RiskTab and ReputationSummaryCard already use, not a new nav pattern. */
+  onViewNarrative?: (narrativeName: string) => void;
 }
 
 export function OverviewAnalyticsPanel({
@@ -27,7 +31,8 @@ export function OverviewAnalyticsPanel({
   repHistory = [],
   sentimentTrendData = [],
   loading = false,
-  error = null
+  error = null,
+  onViewNarrative
 }: OverviewAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -69,6 +74,59 @@ export function OverviewAnalyticsPanel({
   const cardStyle = `${glassCard(theme)} hover:-translate-y-0.5`;
   const gridStroke = isDark ? "#3f3f46" : "#d4d4d8";
   const axisStroke = isDark ? "#a1a1aa" : "#71717a";
+
+  // Tier 3 Part A: real hover explanation for the sentiment trend, built
+  // from the driver useAnalytics.sentimentTrendData already computed
+  // (narrative name + narrative_engine.py's own root_cause) -- this
+  // replaces recharts' default single-value tooltip on this one chart
+  // instead of introducing a second popover pattern next to it.
+  const SentimentTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    const point = payload[0].payload;
+    const driver = point.driver as { name: string; rootCause: string | null; mentions: number } | null;
+    return (
+      <div style={tooltipStyle} className="space-y-1 max-w-[260px]">
+        <div className="font-bold">{label}</div>
+        <div>Sentiment: {point.Sentiment >= 0 ? "+" : ""}{point.Sentiment.toFixed(2)}</div>
+        {point.meaningful && driver && driver.rootCause ? (
+          <div className="pt-1 border-t border-current/10 space-y-0.5">
+            <div className="text-[10px] uppercase opacity-70">Driving narrative ({driver.mentions} doc{driver.mentions === 1 ? "" : "s"})</div>
+            <div className="font-bold">{driver.name}</div>
+            <div className="text-[10px] opacity-80 leading-snug">{driver.rootCause}</div>
+            {onViewNarrative && <div className="text-[9px] opacity-60 italic">Click point to open narrative &rarr;</div>}
+          </div>
+        ) : point.meaningful ? (
+          <div className="pt-1 border-t border-current/10 text-[10px] italic opacity-70">
+            Sentiment moved but no specific narrative or risk event is linked to it in the data.
+          </div>
+        ) : (
+          <div className="pt-1 border-t border-current/10 text-[10px] italic opacity-70">
+            Normal day-to-day fluctuation — nothing significant to flag.
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const SentimentDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (cx === undefined || cy === undefined) return null;
+    const hasDriver = Boolean(payload?.meaningful && payload?.driver?.rootCause && onViewNarrative);
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={3.5}
+        stroke={accent}
+        strokeWidth={1.5}
+        fill={isDark ? "#09090b" : "#ffffff"}
+        style={{ cursor: hasDriver ? "pointer" : "default" }}
+        onClick={() => {
+          if (hasDriver) onViewNarrative!(payload.driver.name);
+        }}
+      />
+    );
+  };
 
   if (loading) {
     return (
@@ -227,13 +285,13 @@ export function OverviewAnalyticsPanel({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
                   <XAxis dataKey="date" stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} />
                   <YAxis stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} domain={[-1, 1]} />
-                  <Tooltip contentStyle={tooltipStyle} />
+                  <Tooltip content={<SentimentTooltip />} />
                   <Line
                     type="monotone"
                     dataKey="Sentiment"
                     stroke={accent}
                     strokeWidth={2}
-                    dot={{ r: 3.5, stroke: accent, fill: isDark ? '#09090b' : '#ffffff', strokeWidth: 1.5 }}
+                    dot={<SentimentDot />}
                     activeDot={{ r: 6 }}
                     isAnimationActive={true}
                     animationDuration={850}

@@ -328,25 +328,75 @@ export function useAnalytics({
     });
   }, [execHistory]);
 
+  // Tier 3 Part A: per-bucket driving narrative, reusing the same
+  // narrative_engine.py RCA (evidence_metadata.rca.root_cause) the
+  // narrative drawer already renders -- not a second, independently
+  // computed explanation. Each document already carries the exact
+  // narrative_name it was clustered into (client_intelligence.py
+  // read_client_documents), so the driver for a given day is just "which
+  // narrative do this day's documents mostly belong to," tie-broken
+  // toward whichever pulled more negative-sentiment documents that day.
+  // Narratives only get an RCA when narrative_engine.py judged them
+  // risk-worthy (avg_sentiment < 0 or a weighted topic) -- a day whose
+  // narrative has no RCA, or no narrative-linked documents at all, is a
+  // real "no material driver" case, not a gap to paper over.
   const sentimentTrendData = useMemo(() => {
-    const buckets: Record<string, { sum: number, count: number }> = {};
+    const buckets: Record<string, { sum: number, count: number, narrativeCounts: Record<string, { count: number; negCount: number }> }> = {};
     (documents || []).forEach(d => {
       if (d && d.timestamp) {
         const dateStr = new Date(d.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         if (!buckets[dateStr]) {
-          buckets[dateStr] = { sum: 0, count: 0 };
+          buckets[dateStr] = { sum: 0, count: 0, narrativeCounts: {} };
         }
-        buckets[dateStr].sum += d.sentiment ?? 0;
+        const sentimentVal = d.sentiment ?? 0;
+        buckets[dateStr].sum += sentimentVal;
         buckets[dateStr].count += 1;
+        if (d.narrative) {
+          const nc = buckets[dateStr].narrativeCounts[d.narrative] || { count: 0, negCount: 0 };
+          nc.count += 1;
+          if (sentimentVal < 0) nc.negCount += 1;
+          buckets[dateStr].narrativeCounts[d.narrative] = nc;
+        }
       }
     });
-    return Object.entries(buckets)
-      .map(([date, info]) => ({
-        date,
-        Sentiment: Number((info.sum / info.count).toFixed(2))
-      }))
+
+    const narrativeByName = new Map<string, any>();
+    (narratives || []).forEach(n => {
+      if (n?.name) narrativeByName.set(n.name.toLowerCase(), n);
+    });
+
+    const rows = Object.entries(buckets)
+      .map(([date, info]) => {
+        const narrativeEntries = Object.entries(info.narrativeCounts);
+        let driver: { name: string; rootCause: string | null; mentions: number } | null = null;
+        if (narrativeEntries.length > 0) {
+          const [topName, topStats] = narrativeEntries.sort((a, b) =>
+            b[1].negCount - a[1].negCount || b[1].count - a[1].count
+          )[0];
+          const narr = narrativeByName.get(topName.toLowerCase());
+          const rootCause = narr?.evidence_metadata?.rca?.root_cause ?? null;
+          driver = { name: topName, rootCause, mentions: topStats.count };
+        }
+        return {
+          date,
+          Sentiment: Number((info.sum / info.count).toFixed(2)),
+          driver
+        };
+      })
       .reverse();
-  }, [documents]);
+
+    // Day-over-day delta decides whether a movement is even worth
+    // explaining -- a driver only surfaces on a meaningful swing (>=0.15
+    // on the -1..1 scale); small day-to-day noise says so honestly
+    // instead of forcing an explanation onto it (Tier 3 Part A #4).
+    const MEANINGFUL_DELTA = 0.15;
+    return rows.map((row, idx) => {
+      const prev = idx > 0 ? rows[idx - 1] : null;
+      const delta = prev ? Number((row.Sentiment - prev.Sentiment).toFixed(2)) : null;
+      const meaningful = delta !== null && Math.abs(delta) >= MEANINGFUL_DELTA;
+      return { ...row, delta, meaningful };
+    });
+  }, [documents, narratives]);
 
   const alertTimelineData = useMemo(() => {
     const buckets: Record<string, number> = {};
