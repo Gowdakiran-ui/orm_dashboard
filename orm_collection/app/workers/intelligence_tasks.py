@@ -336,6 +336,38 @@ def process_document_intelligence(self, document_id: str, client_id: str = None,
         raise exc
 
 
+@shared_task(bind=True, queue="nlp_queue", max_retries=0)
+def pipeline_process_one_document(self, document_id: str, client_id: str, run_id: str = None) -> dict:
+    """
+    Fan-out unit for run_client_pipeline's PROCESSING stage (see
+    pipeline_stage_process / pipeline_stage_process_gather in
+    aggregation_tasks.py) -- one Celery task per document, dispatched as a
+    chord so nlp_queue's concurrency actually parallelizes a run's
+    documents instead of a single task looping over them serially.
+
+    Deliberately NOT the same task as process_document_intelligence above:
+    that task retries (3x) and re-raises on final failure, which is correct
+    for its own callers (document_processing_watchdog's fire-and-forget
+    recovery dispatch, where nothing downstream waits on or aggregates its
+    result). A chord member is different -- Celery only invokes the chord's
+    callback once every member has completed, and by default treats a
+    member's unhandled exception as reason to withhold/error the callback.
+    The PROCESSING stage's existing (pre-fan-out) semantics were "a single
+    document's NLP failure is logged and counted, never something that
+    aborts the stage" -- so this task catches everything itself and always
+    returns a result dict, preserving that behavior under the chord.
+    """
+    log = logger.bind(
+        run_id=run_id, client_id=client_id, document_id=document_id, task="pipeline_process_one_document"
+    )
+    try:
+        execute_document_intelligence_sync(document_id, client_id=client_id)
+        return {"document_id": document_id, "success": True}
+    except Exception as exc:
+        log.error("doc_nlp_failed", error=str(exc))
+        return {"document_id": document_id, "success": False, "error": str(exc)}
+
+
 # ---------------------------------------------------------------------------
 # Document processing watchdog
 # ---------------------------------------------------------------------------

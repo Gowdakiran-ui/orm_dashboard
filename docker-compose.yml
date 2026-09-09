@@ -97,6 +97,22 @@ services:
       # barely touches the DB, so it gets the smallest per-process pool.
       - DB_POOL_SIZE=1
       - DB_MAX_OVERFLOW=1
+      # 2026-09-09: routed through DigitalOcean's PgBouncer pool, same as
+      # backend/cpu/nlp/aggregation (see the matching note on the backend
+      # service above) -- confirmed safe first: grepped every io_queue task
+      # (fetch_feed_task, the watchdogs, pipeline_stage_collect) for any
+      # session-scoped Postgres feature (LISTEN/NOTIFY, session-level
+      # pg_advisory_lock, SET SESSION) that wouldn't survive PgBouncer's
+      # transaction-pooling mode -- none exist; the only advisory locks in
+      # the codebase (entity_discovery.py) are pg_advisory_xact_lock,
+      # transaction-scoped, released at COMMIT, which is exactly the
+      # boundary transaction pooling hands connections back on. This does
+      # NOT touch DATABASE_URL itself -- backup_tasks.py's pg_dump call
+      # reads settings.DATABASE_URL directly via subprocess, bypassing this
+      # engine selection entirely, so it keeps using the direct connection
+      # unaffected by DB_USE_POOLED_URL below.
+      - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
+      - DB_USE_POOLED_URL=true
     volumes:
       # app.workers.backup_tasks.run_backup (Section 10) is routed to
       # io_queue and writes its pg_dump output here. Named volume, not a
@@ -245,9 +261,26 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
-    # Hourly trend/risk/alert/narrative/reputation aggregation across all
-    # clients -- concurrency=2 for the same headroom reasoning as cpu_queue.
-    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=aggregation@%h", "--pool=prefork", "--concurrency=2", "-Q", "aggregation_queue"]
+    # This queue's name is legacy: the 7 standalone calculate_client_trends/
+    # .../calculate_competitor_benchmarks tasks it was originally sized for
+    # are dead code (no beat schedule entry, no caller -- confirmed via
+    # grep, Phase 15 Run-Pipeline-gated architecture). What actually runs
+    # here today are 7 of run_client_pipeline's 10 per-client chain stages
+    # -- pipeline_stage_trend/risk/alert/narrative/reputation/executive/
+    # benchmark (aggregation_tasks.py, same "aggregation_queue" name,
+    # different task) -- so this queue is live, not idle, on every single
+    # pipeline run. concurrency 2 -> 3 (2026-09-09): this is the queue that
+    # actually gates how many clients can have an active pipeline stage
+    # running at once (7 of the chain's 10 stages route here vs. 2 on
+    # cpu_queue), so it -- not celery-worker-pipeline's orchestration-only
+    # solo pool -- was the real multi-client concurrency ceiling. Matching
+    # nlp_queue's already-accepted concurrency=3 on this same 2-vCPU box;
+    # lower CPU risk than nlp_queue's 3, since this queue's work is DB
+    # queries + network-bound LLM calls (risk role classification, RCA,
+    # narrative splitting), not CPU-bound transformer inference, and it
+    # already routes through the pooled DB URL above so the extra process
+    # doesn't add direct Postgres connections.
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=aggregation@%h", "--pool=prefork", "--concurrency=3", "-Q", "aggregation_queue"]
     healthcheck:
       test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d aggregation@$(hostname) --timeout 10 | grep -q OK"]
       interval: 15s
@@ -255,6 +288,27 @@ services:
       retries: 5
       start_period: 40s
 
+  # celery-worker-pipeline runs run_client_pipeline (the per-client
+  # orchestrator: acquire the pipeline:lock:{client_id} Redis lock, build
+  # the stage chain, dispatch, return) plus pipeline_stage_finalize/
+  # pipeline_stage_error_handler -- all three are lightweight DB-only tasks
+  # that never block waiting on the chain they dispatch (confirmed via
+  # direct read: run_client_pipeline's apply_async() is fire-and-forget, no
+  # .get()/blocking wait). --pool=solo can only ever run one task at a
+  # time; scaling it is by replica count, not --concurrency (solo doesn't
+  # support >1). Two identical replicas below (distinct --hostname for
+  # per-replica healthchecks, matching this file's existing per-worker
+  # hostname convention) so a second client's Run Pipeline call doesn't
+  # queue behind an in-flight orchestration/finalize task on the same
+  # single process. NOTE (2026-09-09 investigation): this was NOT actually
+  # the platform-wide "only one pipeline stage can execute at a time"
+  # bottleneck it was first assumed to be -- the real per-client-run stage
+  # work (collect/process/trend/risk/.../benchmark) already runs on
+  # io_queue/nlp_queue/aggregation_queue, not here; see the
+  # celery-worker-aggregation concurrency comment above for where the real
+  # multi-client concurrency ceiling actually was. This replica is a small,
+  # cheap addition for orchestration-dispatch throughput under near-
+  # simultaneous multi-client triggers, not the primary fix.
   celery-worker-pipeline:
     image: orm-platform-backend:dev-review
     restart: unless-stopped
@@ -264,6 +318,14 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DB_POOL_SIZE=1
       - DB_MAX_OVERFLOW=1
+      # 2026-09-09: routed through DigitalOcean's PgBouncer pool -- see the
+      # matching note on celery-worker-io above (same investigation, same
+      # conclusion: no session-scoped Postgres feature in this queue's task
+      # code). Does not affect backup_tasks.py -- that task is routed to
+      # io_queue, not pipeline_queue, and reads settings.DATABASE_URL
+      # directly regardless of either worker's pooling setting.
+      - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
+      - DB_USE_POOLED_URL=true
     depends_on:
       redis:
         condition: service_healthy
@@ -272,6 +334,30 @@ services:
     command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=pipeline@%h", "--pool=solo", "--concurrency=1", "-Q", "pipeline_queue"]
     healthcheck:
       test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d pipeline@$(hostname) --timeout 10 | grep -q OK"]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+      start_period: 40s
+
+  celery-worker-pipeline-2:
+    image: orm-platform-backend:dev-review
+    restart: unless-stopped
+    mem_limit: 1g
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DB_POOL_SIZE=1
+      - DB_MAX_OVERFLOW=1
+      - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
+      - DB_USE_POOLED_URL=true
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=pipeline2@%h", "--pool=solo", "--concurrency=1", "-Q", "pipeline_queue"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d pipeline2@$(hostname) --timeout 10 | grep -q OK"]
       interval: 15s
       timeout: 20s
       retries: 5

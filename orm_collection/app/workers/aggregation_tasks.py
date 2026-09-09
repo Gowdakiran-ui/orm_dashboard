@@ -102,10 +102,10 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, Dict, List
 
 import structlog
-from celery import shared_task, chain
+from celery import shared_task, chain, chord, group
 
 from app.core.db import SessionLocal
 from app.models.client import Client
@@ -1292,6 +1292,11 @@ def _stage_process(ctx: PipelineContext, db, doc_ids: List[str]) -> None:
     """
     PROCESSING stage: run NLP pipeline on collected document IDs only.
     Never rescans the entire DB.
+
+    No longer called from pipeline_stage_process (which now fans out via a
+    chord -- see pipeline_stage_process_gather below). Left defined, not
+    deleted, matching this file's existing pattern for superseded-but-not-
+    dead-code-swept functions (e.g. schedule_feeds in collection_tasks.py).
     """
     from app.models.document import Document
     from app.workers.intelligence_tasks import execute_document_intelligence_sync
@@ -1512,25 +1517,95 @@ def pipeline_stage_collect(self, run_id: str, client_id: str, owner_id: str) -> 
 
 @shared_task(bind=True, queue="nlp_queue", max_retries=0)
 def pipeline_stage_process(self, doc_ids: List[str], run_id: str, client_id: str, owner_id: str) -> None:
+    """
+    PROCESSING stage entry point. Does the FSM transition and the bulk
+    PROCESSING-status pre-mark itself (both cheap, DB-only), then hands the
+    actual per-document NLP fan-out to a dynamically-built chord via
+    self.replace() -- doc_ids is only known at this point (it's the
+    previous chain link's return value), so the chord can't be built
+    up-front in run_client_pipeline's static chain() call. self.replace()
+    splices the chord into the outer chain in place of this task: the
+    chain's next link (pipeline_stage_trend) only fires once every
+    fan-out task has completed and pipeline_stage_process_gather (the
+    chord callback) has run. See pipeline_process_one_document
+    (intelligence_tasks.py) for the fan-out unit and
+    pipeline_stage_process_gather below for the gather/callback.
+    """
     worker_id = f"worker-{os.getpid()}"
     log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task="pipeline_stage_process")
     db = SessionLocal()
     try:
-        ctx = _load_context(db, run_id, client_id, worker_id)
         if not _update_run(db, run_id, "PROCESSING", f"Running NLP on {len(doc_ids)} documents"):
             log.warning("stage_skipped_stale_duplicate", stage="PROCESSING")
             db.commit()
             return
-        _stage_process(ctx, db, doc_ids)
         run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
         if run:
             run.current_worker = worker_id
-            db.commit()
+        db.commit()
+
+        if not doc_ids:
+            log.info("stage_skipped_no_documents")
+            return
+
+        # Bulk-mark PROCESSING up front (unchanged from the old serial
+        # _stage_process) so documents still queued on nlp_queue -- not yet
+        # picked up by their own fan-out task -- show as PROCESSING
+        # immediately, not only once their individual task starts.
+        from app.models.document import Document
+        chunk_size = 100
+        for i in range(0, len(doc_ids), chunk_size):
+            chunk = doc_ids[i:i + chunk_size]
+            db.query(Document).filter(Document.id.in_(chunk)).update(
+                {"processing_status": "PROCESSING"}, synchronize_session=False
+            )
+        db.commit()
+
+        from app.workers.intelligence_tasks import pipeline_process_one_document
+        header = group(
+            pipeline_process_one_document.s(doc_id, client_id, run_id) for doc_id in doc_ids
+        )
+        callback = pipeline_stage_process_gather.s(run_id, client_id, owner_id, len(doc_ids))
+        raise self.replace(chord(header, callback))
     except Exception:
         db.rollback()
         raise
     finally:
         db.close()
+
+
+@shared_task(bind=True, queue="pipeline_queue", max_retries=0)
+def pipeline_stage_process_gather(
+    self, results: List[Dict[str, Any]], run_id: str, client_id: str, owner_id: str, total: int
+) -> None:
+    """
+    Chord callback for the PROCESSING stage fan-out (see pipeline_stage_process
+    above). Runs once every pipeline_process_one_document task in the group
+    has returned -- Celery collects their return values into `results`.
+
+    Never raises regardless of how many documents failed: matching the old
+    serial loop's semantics exactly, a document's NLP failure was always
+    logged-and-counted, never something that aborted the PROCESSING stage or
+    blocked the chain from continuing to TREND. pipeline_process_one_document
+    already catches its own exceptions and always returns a result dict for
+    exactly this reason -- a member task raising here would make Celery skip
+    this callback (or error it, depending on chord error handling), which
+    would be a real behavior change from today's tolerate-partial-failure
+    design, not just a mechanical swap of loop for fan-out.
+    """
+    worker_id = f"worker-{os.getpid()}"
+    log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task="pipeline_stage_process_gather")
+    processed = sum(1 for r in results if r and r.get("success"))
+    failed = total - processed
+    db = SessionLocal()
+    try:
+        # Matches the old loop's cap at 39 (not 40) so an in-progress
+        # PROCESSING stage is never visually indistinguishable from having
+        # already completed into TREND (which sets progress_pct to 40 itself).
+        _update_progress(db, run_id, 39, f"Processed {processed}/{total} documents ({failed} failed)")
+    finally:
+        db.close()
+    log.info("stage_complete", processed=processed, failed=failed)
 
 
 def _make_aggregation_stage_task(stage_name: str, stage_fn, log_line: str, task_name: str):
