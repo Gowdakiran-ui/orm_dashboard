@@ -386,10 +386,16 @@ export function useAnalytics({
       .reverse();
 
     // Day-over-day delta decides whether a movement is even worth
-    // explaining -- a driver only surfaces on a meaningful swing (>=0.15
-    // on the -1..1 scale); small day-to-day noise says so honestly
-    // instead of forcing an explanation onto it (Tier 3 Part A #4).
-    const MEANINGFUL_DELTA = 0.15;
+    // explaining. There is no existing "delta significance" constant
+    // anywhere in this codebase to borrow (narrative_engine.py's
+    // trend_strength thresholds are a %-coverage-change metric, a
+    // different unit than this -1..1 sentiment average). 0.25 instead
+    // reuses the codebase's own most-repeated real precedent for "a
+    // meaningful magnitude on this exact sentiment scale" -- the
+    // positive/negative color-coding cutoff NarrativesTab already applies
+    // in four places (bubble matrix, badges, drawer headers), rather than
+    // inventing a new number for this one chart.
+    const MEANINGFUL_DELTA = 0.25;
     return rows.map((row, idx) => {
       const prev = idx > 0 ? rows[idx - 1] : null;
       const delta = prev ? Number((row.Sentiment - prev.Sentiment).toFixed(2)) : null;

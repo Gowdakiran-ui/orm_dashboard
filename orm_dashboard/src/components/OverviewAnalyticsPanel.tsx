@@ -75,11 +75,26 @@ export function OverviewAnalyticsPanel({
   const gridStroke = isDark ? "#3f3f46" : "#d4d4d8";
   const axisStroke = isDark ? "#a1a1aa" : "#71717a";
 
-  // Tier 3 Part A: real hover explanation for the sentiment trend, built
-  // from the driver useAnalytics.sentimentTrendData already computed
-  // (narrative name + narrative_engine.py's own root_cause) -- this
-  // replaces recharts' default single-value tooltip on this one chart
-  // instead of introducing a second popover pattern next to it.
+  // Tier 3 follow-up: root_cause is written as full-paragraph narrative-
+  // drawer content (problem_statement/impact/root_cause/recommended_action
+  // are meant to be read together there), not sized for a hover popup --
+  // shipping it verbatim regressed the "trailer, not the movie" restraint
+  // the AI Advisory digest already applies. This trims to the first
+  // sentence (or ~110 chars, whichever is shorter) so the hover stays a
+  // trailer; "Click point to open narrative" is the movie.
+  const excerpt = (text: string, maxLen = 110) => {
+    const firstSentence = text.split(/(?<=[.!?])\s/)[0];
+    const base = firstSentence.length <= maxLen ? firstSentence : text;
+    if (base.length <= maxLen) return base;
+    const cut = base.slice(0, maxLen);
+    return `${cut.slice(0, cut.lastIndexOf(" "))}…`;
+  };
+
+  // Real hover explanation for the sentiment trend, built from the driver
+  // useAnalytics.sentimentTrendData already computed (narrative name +
+  // narrative_engine.py's own root_cause) -- this replaces recharts'
+  // default single-value tooltip on this one chart instead of introducing
+  // a second popover pattern next to it.
   const SentimentTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
     const point = payload[0].payload;
@@ -91,9 +106,9 @@ export function OverviewAnalyticsPanel({
         {point.meaningful && driver && driver.rootCause ? (
           <div className="pt-1 border-t border-current/10 space-y-0.5">
             <div className="text-[10px] uppercase opacity-70">Driving narrative ({driver.mentions} doc{driver.mentions === 1 ? "" : "s"})</div>
-            <div className="font-bold">{driver.name}</div>
-            <div className="text-[10px] opacity-80 leading-snug">{driver.rootCause}</div>
-            {onViewNarrative && <div className="text-[9px] opacity-60 italic">Click point to open narrative &rarr;</div>}
+            <div className="font-bold truncate">{driver.name}</div>
+            <div className="text-[10px] opacity-80 leading-snug">{excerpt(driver.rootCause)}</div>
+            {onViewNarrative && <div className="text-[9px] opacity-60 italic">Click point for full root-cause detail &rarr;</div>}
           </div>
         ) : point.meaningful ? (
           <div className="pt-1 border-t border-current/10 text-[10px] italic opacity-70">
