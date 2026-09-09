@@ -16,6 +16,8 @@ import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { ReputationScoreDefinition } from "@/lib/metricDefinitions";
 
 export interface ExecutivesTabProps {
   execHistoryLoading: boolean;
@@ -241,7 +243,7 @@ export function ExecutivesTab({
     }, {} as Record<string, number>);
     const activeTopic = Object.entries(topicCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || "General";
     return {
-      score: exec.score !== undefined && exec.score !== null ? exec.score.toFixed(1) : "N/A",
+      score: exec.score !== undefined && exec.score !== null ? exec.score.toFixed(2) : "N/A",
       latestEvent,
       activeTopic
     };
@@ -351,7 +353,7 @@ export function ExecutivesTab({
                   <div>
                     <span className={`block ${mutedText(theme)}`}>Score</span>
                     <span className="text-[#D4AF37] font-bold text-sm">
-                      {searchResult.executive.score !== null ? searchResult.executive.score.toFixed(1) : 'N/A'}
+                      {searchResult.executive.score !== null ? searchResult.executive.score.toFixed(2) : 'N/A'}
                     </span>
                   </div>
                   <div>
@@ -440,7 +442,10 @@ export function ExecutivesTab({
         </CardHeader>
         <CardContent className="pt-4 grid gap-4 sm:grid-cols-3 text-xs">
           <div>
-            <span className={`block ${mutedText(theme)}`}>Reputation Score:</span>
+            <span className={`flex items-center gap-1 ${mutedText(theme)}`}>
+              Reputation Score:
+              <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
+            </span>
             <span className={`font-bold ${bodyText(theme)}`}>{summary.score}</span>
           </div>
           <div>
@@ -610,7 +615,7 @@ export function ExecutivesTab({
                       <TableRow key={e.id ?? i} className={`${rowBorder} ${rowHoverBg} transition-colors`}>
                         <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{e.name}</TableCell>
                         <TableCell className="text-center font-mono text-xs font-black text-[#D4AF37]">
-                          {e.score !== undefined && e.score !== null ? e.score.toFixed(1) : 'N/A'}
+                          {e.score !== undefined && e.score !== null ? e.score.toFixed(2) : 'N/A'}
                         </TableCell>
                         <TableCell className={`text-center font-mono text-xs ${bodyText(theme)}`}>
                           {e.confidence_score !== undefined ? `${(e.confidence_score * 100).toFixed(0)}%` : "100%"}

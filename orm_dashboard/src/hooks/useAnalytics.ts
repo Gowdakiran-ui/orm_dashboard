@@ -211,11 +211,18 @@ export function useAnalytics({
     return data;
   }, [normalizedBenchmarks, reputation, risks, documents, activeClientName]);
 
+  // D3/A4 (RiskTab.tsx riskDocs): Likelihood here used to be an invented
+  // ((1 - sentiment) / 2) * 100 formula risk_engine.py never computes --
+  // RiskTab.tsx's own Risk Matrix card was already fixed to read the real
+  // confidence_modifier the engine stores in explainability.confidence
+  // instead, and this chart (SOC Risk Matrix) is now brought in line with
+  // that same fix so the two Risk Center matrices agree on what
+  // "Likelihood" means for the same document.
   const riskMatrixData = useMemo(() => {
     return (documents || []).map(d => {
       if (!d) return { name: "Incident", impact: 0, likelihood: 0, z: 0, severity: "MEDIUM" };
       const impact = d.risk || 0;
-      const likelihood = Math.round(((1 - (d.sentiment ?? 0)) / 2) * 100);
+      const likelihood = Math.round((d.risk_explainability?.confidence ?? 0) * 100);
       return {
         name: d.title || "Incident",
         impact,

@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { ReputationScoreDefinition, SentimentScaleDefinition } from "@/lib/metricDefinitions";
 
 export interface OverviewAnalyticsPanelProps {
   sentimentDistData: any[];
@@ -34,7 +36,7 @@ export function OverviewAnalyticsPanel({
   // 1. KPI Summaries based on live prop telemetry
   const kpis = useMemo(() => {
     const latestRep = repHistory.length > 0 ? repHistory[0].score : 0;
-    const latestRepScore = latestRep > 0 ? latestRep.toFixed(1) : "0.0";
+    const latestRepScore = latestRep > 0 ? latestRep.toFixed(2) : "0.00";
     
     const latestSent = sentimentTrendData.length > 0 ? sentimentTrendData[0].Sentiment : 0.0;
     const latestSentScore = latestSent > 0 ? `+${latestSent.toFixed(2)}` : latestSent.toFixed(2);
@@ -46,10 +48,10 @@ export function OverviewAnalyticsPanel({
     const posRatio = totalVal > 0 ? `${((posVal / totalVal) * 100).toFixed(0)}%` : "0%";
 
     return [
-      { label: "Avg Reputation", value: latestRepScore, desc: "Overall reputation score", icon: Activity, color: accentColor },
-      { label: "Sentiment Score", value: latestSentScore, desc: "How positive coverage is (-1.0 to +1.0)", icon: Smile, color: accentColor },
-      { label: "Topics Covered", value: dimensionsCount, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400" },
-      { label: "Positive Share", value: posRatio, desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400" }
+      { label: "Avg Reputation", value: latestRepScore, desc: "Overall reputation score", icon: Activity, color: accentColor, def: <ReputationScoreDefinition /> },
+      { label: "Sentiment Score", value: latestSentScore, desc: "How positive coverage is (-1.0 to +1.0)", icon: Smile, color: accentColor, def: <SentimentScaleDefinition /> },
+      { label: "Topics Covered", value: dimensionsCount, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400", def: undefined as React.ReactNode },
+      { label: "Positive Share", value: posRatio, desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400", def: undefined as React.ReactNode }
     ];
   }, [repHistory, sentimentTrendData, topicDistData, sentimentDistData, accentColor]);
 
@@ -99,7 +101,10 @@ export function OverviewAnalyticsPanel({
             >
               <div className={SPECULAR_LINE} />
               <div className="flex justify-between items-start mb-2">
-                <span className={`text-xs uppercase tracking-wider ${mutedText(theme)}`}>{k.label}</span>
+                <span className={`text-xs uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
+                  {k.label}
+                  {k.def && <InfoTooltip label={`About ${k.label}`}>{k.def}</InfoTooltip>}
+                </span>
                 <Icon className={`h-4 w-4 ${k.color}`} />
               </div>
               <div>
@@ -187,7 +192,7 @@ export function OverviewAnalyticsPanel({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
                   <XAxis dataKey="date" stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} />
                   <YAxis stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} />
-                  <Tooltip contentStyle={tooltipStyle} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value: unknown) => (typeof value === "number" ? value.toFixed(2) : (value as React.ReactNode))} />
                   <Line
                     type="monotone"
                     dataKey="score"

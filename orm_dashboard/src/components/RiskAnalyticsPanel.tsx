@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Shield, ShieldAlert, AlertTriangle, CheckCircle, Activity, Info, BarChart3 } from "lucide-react";
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, 
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,13 @@ import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { useTabNavigation } from "@/hooks/useTabNavigation";
+import {
+  RiskSeverityDefinition,
+  AverageRiskScoreFeedDefinition,
+  RiskMatrixAxesDefinition,
+} from "@/lib/metricDefinitions";
 
 export interface RiskAnalyticsPanelProps {
   riskMatrixData: any[];
@@ -32,7 +39,7 @@ export function RiskAnalyticsPanel({
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
-  const [selectedCell, setSelectedCell] = useState<{ impact: string; likelihood: string } | null>(null);
+  const { navigateTo } = useTabNavigation();
 
   // 1. KPI summary data
   const kpis = useMemo(() => {
@@ -45,10 +52,10 @@ export function RiskAnalyticsPanel({
     const alertsStatus = alertTimelineData.length === 0 ? "System Stable" : "Active Alerts";
 
     return [
-      { label: "Total Incidents", value: totalIncidents, desc: "Monitored threat vectors", icon: Shield, color: accentColor },
-      { label: "Avg Risk Rating", value: avgRiskVal.toFixed(1), desc: "Average severity score", icon: Activity, color: "text-amber-500" },
-      { label: "Critical Incidents", value: criticalCount, desc: "Risk score 76+", icon: ShieldAlert, color: "text-red-500" },
-      { label: "Ingestion Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400" }
+      { label: "Total Incidents", value: totalIncidents, desc: "Monitored threat vectors", icon: Shield, color: accentColor, def: undefined as React.ReactNode },
+      { label: "Avg Risk Rating", value: avgRiskVal.toFixed(2), desc: "Average severity score", icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
+      { label: "Critical Incidents", value: criticalCount, desc: `Risk score ${RISK_THRESHOLDS.HIGH_TO_CRITICAL + 1}+`, icon: ShieldAlert, color: "text-red-500", def: <RiskSeverityDefinition /> },
+      { label: "Ingestion Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400", def: undefined as React.ReactNode }
     ];
   }, [riskMatrixData, alertTimelineData, accentColor]);
 
@@ -68,12 +75,6 @@ export function RiskAnalyticsPanel({
     });
     return grid;
   }, [riskMatrixData]);
-
-  // Selected cell documents for click-through drill down
-  const selectedIncidents = useMemo(() => {
-    if (!selectedCell) return [];
-    return matrixData[selectedCell.impact]?.[selectedCell.likelihood] || [];
-  }, [selectedCell, matrixData]);
 
   // 3. Threat Concentration Heatmap totals and percentages
   const { rowTotals, colTotals, grandTotal } = useMemo(() => {
@@ -176,11 +177,24 @@ export function RiskAnalyticsPanel({
             >
               <div className={SPECULAR_LINE} />
               <div className="flex justify-between items-start mb-2">
-                <span className={`text-[10px] uppercase tracking-wider ${mutedText(theme)}`}>{k.label}</span>
+                <span className={`text-[10px] uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
+                  {k.label}
+                  {k.def && <InfoTooltip label={`About ${k.label}`}>{k.def}</InfoTooltip>}
+                </span>
                 <Icon className={`h-4 w-4 ${k.color}`} />
               </div>
               <div>
-                <span className={`text-xl font-bold block ${k.color}`}>{k.value}</span>
+                {k.label === "Avg Risk Rating" ? (
+                  <button
+                    type="button"
+                    onClick={() => navigateTo("feed")}
+                    className={`text-xl font-bold block text-left hover:underline ${k.color}`}
+                  >
+                    {k.value}
+                  </button>
+                ) : (
+                  <span className={`text-xl font-bold block ${k.color}`}>{k.value}</span>
+                )}
                 <span className={`text-[8px] ${mutedText(theme)}`}>{k.desc}</span>
               </div>
             </div>
@@ -193,7 +207,10 @@ export function RiskAnalyticsPanel({
         <Card className={`${cardStyle} md:col-span-6`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>SOC Risk Matrix (Impact × Likelihood)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
+              SOC Risk Matrix (Impact × Likelihood)
+              <InfoTooltip label="About Impact and Likelihood"><RiskMatrixAxesDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
             <div className="grid grid-cols-12 gap-2 font-mono text-[9px]">
@@ -229,15 +246,11 @@ export function RiskAnalyticsPanel({
                         }
                       }
 
-                      const isSelected = selectedCell?.impact === rowKey && selectedCell?.likelihood === colKey;
-
                       return (
-                        <div 
-                          key={colKey} 
-                          onClick={() => count > 0 && setSelectedCell({ impact: rowKey, likelihood: colKey })}
-                          className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center border ${bgClass} ${
-                            isSelected ? `ring-2 border-transparent ${isDark ? "ring-[#00F5D4]" : "ring-[#3B82F6]"}` : ""
-                          }`}
+                        <div
+                          key={colKey}
+                          onClick={() => count > 0 && navigateTo("risk", { impact: rowKey, likelihood: colKey })}
+                          className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center border ${bgClass}`}
                         >
                           {count > 0 ? (
                             <span className="text-[10px] font-bold block">🔴 {count} {count === 1 ? "Incident" : "Incidents"}</span>
@@ -277,36 +290,6 @@ export function RiskAnalyticsPanel({
                 ))}
               </div>
             </div>
-
-            {/* Click-through drill down filtered details list */}
-            {selectedCell && (
-              <div className={`mt-4 border-t pt-4 space-y-2 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-                <div className="flex justify-between items-center">
-                  <span className={`text-[10px] font-mono uppercase font-bold ${mutedText(theme)}`}>
-                    Incidents Filtered: Impact [{selectedCell.impact}] × Likelihood [{selectedCell.likelihood}]
-                  </span>
-                  <button
-                    onClick={() => setSelectedCell(null)}
-                    className="text-[9px] hover:underline font-mono"
-                    style={{ color: accent }}
-                  >
-                    Clear Filter
-                  </button>
-                </div>
-                <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1">
-                  {selectedIncidents.map((inc: any, i: number) => (
-                    <div key={i} className={`rounded-lg p-2 text-[10px] flex items-center justify-between border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
-                      <div className="truncate max-w-[80%]">
-                        <span className={`font-bold block truncate ${bodyText(theme)}`}>{inc.name}</span>
-                      </div>
-                      <Badge className="bg-red-500/10 text-red-500 border-red-500/20 font-mono text-[9px]">
-                        Risk {inc.impact}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 

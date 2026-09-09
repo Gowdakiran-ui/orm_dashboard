@@ -15,6 +15,9 @@ import { NarrativeIntelligenceWorkbench } from "@/components/NarrativeIntelligen
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { AverageRiskScoreFeedDefinition } from "@/lib/metricDefinitions";
+import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface NarrativesTabProps {
   documentsLoading: boolean;
@@ -51,6 +54,7 @@ export function NarrativesTab({
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
+  const { navigateTo } = useTabNavigation();
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -96,14 +100,14 @@ export function NarrativesTab({
       : "0.0";
 
     return [
-      { label: "Monitored Narratives", value: totalNarratives, desc: "Active media clusters", color: accentColor },
-      { label: "Tracked Leaders", value: totalExecs, desc: "Monitored corporate heads", color: accentColor },
-      { label: "Scanned Documents", value: totalDocs, desc: "Pipeline document pool", color: "text-purple-400" },
-      { label: "Highest Risk Narrative", value: highestRiskNarr, desc: "Requires strategic review", color: "text-red-500" },
-      { label: "Fastest Growing Narrative", value: fastestGrowingNarr, desc: "High velocity trend", color: "text-orange-400" },
-      { label: "Most Mentioned Executive", value: mostMentionedExec, desc: "Overall visibility", color: "text-indigo-400" },
-      { label: "Average Risk Level", value: `${avgRiskScore} pts`, desc: "Risk index across feed", color: "text-rose-500" },
-      { label: "Average Strength", value: `${avgNarrativeStrength}%`, desc: "Narrative velocity rate", color: "text-emerald-400" }
+      { label: "Monitored Narratives", value: totalNarratives, desc: "Active media clusters", color: accentColor, def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Tracked Leaders", value: totalExecs, desc: "Monitored corporate heads", color: accentColor, def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Scanned Documents", value: totalDocs, desc: "Pipeline document pool", color: "text-purple-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Highest Risk Narrative", value: highestRiskNarr, desc: "Requires strategic review", color: "text-red-500", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Fastest Growing Narrative", value: fastestGrowingNarr, desc: "High velocity trend", color: "text-orange-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Most Mentioned Executive", value: mostMentionedExec, desc: "Overall visibility", color: "text-indigo-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Average Risk Level", value: `${avgRiskScore} pts`, desc: "Risk index across feed", color: "text-rose-500", def: <AverageRiskScoreFeedDefinition />, onClick: () => navigateTo("feed") },
+      { label: "Average Strength", value: `${avgNarrativeStrength}%`, desc: "Narrative velocity rate", color: "text-emerald-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined }
     ];
   }, [documents, executives, narratives, accentColor]);
 
@@ -263,9 +267,18 @@ export function NarrativesTab({
             className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
           >
             <div className={SPECULAR_LINE} />
-            <span className={`text-xs uppercase tracking-wider block mb-2 ${mutedText(theme)}`}>{k.label}</span>
+            <span className={`text-xs uppercase tracking-wider flex items-center gap-1 mb-2 ${mutedText(theme)}`}>
+              {k.label}
+              {k.def && <InfoTooltip label={`About ${k.label}`}>{k.def}</InfoTooltip>}
+            </span>
             <div>
-              <span className={`text-lg font-bold block ${k.color} truncate`}>{k.value}</span>
+              {k.onClick ? (
+                <button type="button" onClick={k.onClick} className={`text-lg font-bold block truncate text-left hover:underline ${k.color}`}>
+                  {k.value}
+                </button>
+              ) : (
+                <span className={`text-lg font-bold block ${k.color} truncate`}>{k.value}</span>
+              )}
               <span className={`text-xs block truncate mt-1 ${mutedText(theme)}`}>{k.desc}</span>
             </div>
           </div>

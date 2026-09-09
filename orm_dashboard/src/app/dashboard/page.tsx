@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { Suspense, useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -38,6 +38,7 @@ import { useExecutiveData } from "@/hooks/useExecutiveData";
 import { useCompanyManagement } from "@/hooks/useCompanyManagement";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useTabNavigation } from "@/hooks/useTabNavigation";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
 import { bodyBg, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, mutedText, glassPrimaryButton } from "@/components/theme/tokens";
@@ -45,7 +46,13 @@ import { bodyBg, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, mutedTe
 export default function Home() {
   return (
     <ThemeProvider>
-      <DashboardShell />
+      {/* useTabNavigation (in DashboardShell and several child tabs) calls
+          next/navigation's useSearchParams(), which Next requires to sit
+          under a Suspense boundary -- same pattern src/app/login/page.tsx
+          already uses for its own useSearchParams() call. */}
+      <Suspense fallback={null}>
+        <DashboardShell />
+      </Suspense>
     </ThemeProvider>
   );
 }
@@ -53,8 +60,7 @@ export default function Home() {
 function DashboardShell() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const [activeTab, setActiveTab] = useState("reputation");
-  const [analyticsSubTab, setAnalyticsSubTab] = useState("overview");
+  const { activeTab, analyticsSubTab, setActiveTab, setAnalyticsSubTab } = useTabNavigation();
   const [currentTime, setCurrentTime] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 

@@ -5,6 +5,9 @@ import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, SPECULAR_LINE } from "@/components/theme/tokens";
 import { HeroGlass } from "@/components/theme/HeroGlass";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition } from "@/lib/metricDefinitions";
+import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface ReputationSummaryCardProps {
   reputationSummaryLoading: boolean;
@@ -41,8 +44,8 @@ const RISK_COLOR: Record<string, string> = {
 // LLM call, so this panel's text stays deterministic/template-based too.
 // Theme-aware functions instead of static strings since the accent + border
 // now depend on light/dark glass mode.
-function sectionLabelClass(isDark: boolean) {
-  return `text-xs font-bold uppercase tracking-wider block border-b pb-1 ${
+function sectionLabelClass(isDark: boolean, withInlineIcon = false) {
+  return `text-xs font-bold uppercase tracking-wider ${withInlineIcon ? "flex items-center gap-1" : "block"} border-b pb-1 ${
     isDark ? "text-[#00F5D4] border-white/[0.12]" : "text-[#3B82F6] border-black/[0.06]"
   }`;
 }
@@ -73,6 +76,7 @@ export function ReputationSummaryCard({
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const { navigateTo } = useTabNavigation();
   // Total risks + severity breakdown + avg risk score. Requires MEDIUM+
   // (RiskTab.tsx's Incident Command Register applies the same floor) --
   // a matched document with no RiskEvent row defaults to risk=0, and a
@@ -194,7 +198,7 @@ export function ReputationSummaryCard({
   const execAlert = reputationSummary.executive_alert || { open: false, alert: null };
 
   const scoreKnown = rep.status === "ok" && rep.score != null;
-  const scoreDisplay = scoreKnown ? rep.score.toFixed(1) : "N/A";
+  const scoreDisplay = scoreKnown ? rep.score.toFixed(2) : "N/A";
   const gradeDisplay = scoreKnown ? (rep.grade ?? "N/A") : "N/A";
   const trendDisplay = rep.trend ?? "STABLE";
   const sovDisplay = clientSOV.toFixed(1);
@@ -213,14 +217,55 @@ export function ReputationSummaryCard({
   // misread risk, not a one-off glitch. "—" while loading is honest;
   // rendering the real zero before the real data has arrived is not.
   const LOADING_PLACEHOLDER = "—";
-  const cards = [
-    { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}` : "", color: "text-[#D4AF37]", highlight: true },
+  const reputationScoreAndGradeDef = (
+    <>
+      <ReputationScoreDefinition />
+      <span className="mt-2 block" />
+      <ReputationGradeDefinition />
+    </>
+  );
+
+  // Overview risk-count breakdown drill-through: each severity count
+  // navigates to Risk Center pre-filtered to that severity band. Same
+  // `navigateTo` helper every other drill-through in this task uses --
+  // no one-off click handler.
+  const severityCountLink = (count: number, letter: string, severity: string, colorClass: string) => (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); navigateTo("risk", { severity }); }}
+      className={`hover:underline ${colorClass}`}
+    >
+      {count}{letter}
+    </button>
+  );
+  const severityBreakdownSub = documentsLoading ? (
+    "Loading..."
+  ) : (
+    <span className="inline-flex items-center gap-0.5">
+      {severityCountLink(riskStats.critical, "C", "critical", "text-red-500")}/
+      {severityCountLink(riskStats.high, "H", "high", "text-orange-500")}/
+      {severityCountLink(riskStats.medium, "M", "medium", "text-yellow-600")}/
+      {severityCountLink(riskStats.low, "L", "low", "text-emerald-500")}
+    </span>
+  );
+
+  const cards: Array<{
+    label: string;
+    value: React.ReactNode;
+    sub: React.ReactNode;
+    color: string;
+    highlight?: boolean;
+    compactValue?: boolean;
+    def?: React.ReactNode;
+    onClick?: () => void;
+  }> = [
+    { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}` : "", color: "text-[#D4AF37]", highlight: true, def: reputationScoreAndGradeDef },
     { label: "Risk Signals", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.dangerCount, sub: "Critical + High", color: riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
     { label: "Trend Direction", value: trendDisplay, sub: "Reputation momentum", color: "text-sky-500", highlight: true, compactValue: true },
-    { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: documentsLoading ? "Loading..." : `${riskStats.critical}C/${riskStats.high}H/${riskStats.medium}M/${riskStats.low}L`, color: RISK_COLOR[riskStats.dominantLevel] },
+    { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: severityBreakdownSub, color: RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment docs", color: "text-emerald-400" },
     { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative}`, color: "text-emerald-400" },
-    { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-sky-500" },
+    { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-sky-500", onClick: () => navigateTo("narratives") },
     { label: "Highest Risk Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.highestRisk, sub: "Requires strategic review", color: "text-red-500" },
     { label: "Fastest Growing Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
     { label: "Most Mentioned Executive", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
@@ -235,9 +280,22 @@ export function ReputationSummaryCard({
   // the plain glass-card base style -- see the redesign report for why.
   const statCardBody = (card: (typeof cards)[number]) => (
     <>
-      <span className={`${card.highlight ? "text-xs" : "text-xs"} ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
+      <span className={`${card.highlight ? "text-xs" : "text-xs"} ${mutedText(theme)} uppercase tracking-wider flex items-center gap-1 mb-2`}>
+        {card.label}
+        {card.def && <InfoTooltip label={`About ${card.label}`}>{card.def}</InfoTooltip>}
+      </span>
       <div>
-        <span className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
+        {card.onClick ? (
+          <button
+            type="button"
+            onClick={card.onClick}
+            className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate text-left hover:underline ${card.color}`}
+          >
+            {card.value}
+          </button>
+        ) : (
+          <span className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
+        )}
         {card.sub && <span className={`text-xs ${mutedText(theme)} block truncate mt-1`}>{card.sub}</span>}
       </div>
     </>
@@ -294,9 +352,13 @@ export function ReputationSummaryCard({
             </div>
 
             <div>
-              <span className={sectionLabelClass(isDark)}>Risk Profile</span>
+              <span className={sectionLabelClass(isDark, true)}>
+                Risk Profile
+                <InfoTooltip label="About Average Risk Score"><AverageRiskScoreTrackedDefinition /></InfoTooltip>
+              </span>
               <p className={sectionTextClass(isDark)}>
-                {riskStats.total} risks are being tracked ({riskStats.critical} critical, {riskStats.high} high, {riskStats.medium} medium, {riskStats.low} low), with an average risk score of {riskStats.avg}.
+                {riskStats.total} risks are being tracked ({riskStats.critical} critical, {riskStats.high} high, {riskStats.medium} medium, {riskStats.low} low), with an average risk score of{" "}
+                <button type="button" onClick={() => navigateTo("risk")} className="hover:underline font-bold">{riskStats.avg}</button>.
                 {riskStats.topRiskDocs.length > 0 && (
                   <>
                     {" "}The highest-risk item is "{riskStats.topRiskDocs[0].title}" ({riskStats.topRiskDocs[0].risk.toFixed(1)} pts)

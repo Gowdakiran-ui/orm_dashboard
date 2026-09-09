@@ -15,6 +15,14 @@ import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { useTabNavigation } from "@/hooks/useTabNavigation";
+import {
+  RiskSeverityDefinition,
+  AverageRiskScoreTrackedDefinition,
+  RiskMatrixAxesDefinition,
+  RiskCategoriesDefinition,
+} from "@/lib/metricDefinitions";
 
 export interface RiskTabProps {
   alertsLoading: boolean;
@@ -40,8 +48,31 @@ export function RiskTab({
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const { navigateTo, searchParams } = useTabNavigation();
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  const [selectedCell, setSelectedCell] = useState<{ impact: string; likelihood: string } | null>(null);
+
+  // Matrix-cell drill-down (Part B/C: filter-carrying navigation) --
+  // sourced from the URL (?tab=risk&impact=..&likelihood=..) instead of
+  // local state, so a cell click from this tab's own matrix and from the
+  // SOC Risk Matrix in Executive Analytics land on the exact same,
+  // shareable/back-navigable filtered view. Same shape the old local
+  // useState carried, so the drawer JSX below is unchanged.
+  const impactParam = searchParams.get("impact");
+  const likelihoodParam = searchParams.get("likelihood");
+  const selectedCell = impactParam && likelihoodParam ? { impact: impactParam, likelihood: likelihoodParam } : null;
+  const clearCellFilter = () => navigateTo("risk", { severity: searchParams.get("severity") ?? undefined, date: searchParams.get("date") ?? undefined });
+
+  // Severity/date filters (Part C drill-throughs): narrow only the Risk
+  // Events table below, not the summary charts above it -- those are
+  // meant to show the whole picture, the table is the drill-through
+  // target. Only one of these is normally set at a time (a fresh
+  // navigateTo() call replaces the whole query string), but both are
+  // read independently so either can filter on its own.
+  const severityParam = searchParams.get("severity");
+  const dateParam = searchParams.get("date");
+  const hasListFilter = Boolean(severityParam || dateParam);
+  const clearListFilter = () => navigateTo("risk");
+
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
   // single-document detail endpoint does return it.
@@ -92,6 +123,23 @@ export function RiskTab({
       })
       .sort((a, b) => b.risk - a.risk);
   }, [documents]);
+
+  // Risk Events table filter (severity=.. / date=.. from the URL) -- narrows
+  // only the table, matching exactly how the pie chart's severity bands and
+  // the timeline's date buckets are already computed above, so a filtered
+  // list here is always the same set of items the CEO clicked from.
+  const filteredRiskDocs = useMemo(() => {
+    return riskDocs.filter(d => {
+      if (severityParam && d.severity.toLowerCase() !== severityParam) return false;
+      if (dateParam) {
+        const docDate = d.timestamp
+          ? new Date(d.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+          : null;
+        if (docDate !== dateParam) return false;
+      }
+      return true;
+    });
+  }, [riskDocs, severityParam, dateParam]);
 
   const selectedDoc = useMemo(() => {
     if (!selectedDocId) return null;
@@ -298,7 +346,14 @@ export function RiskTab({
         <Card className={`${glassCard(theme)} md:col-span-4`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Severity Profile</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
+              Severity Profile
+              <InfoTooltip label="About Severity and Avg Rating">
+                <RiskSeverityDefinition />
+                <span className="mt-2 block" />
+                <AverageRiskScoreTrackedDefinition />
+              </InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="h-[220px] flex justify-center items-center relative">
             {severityChartData.length > 0 ? (
@@ -334,7 +389,10 @@ export function RiskTab({
         <Card className={`${glassCard(theme)} md:col-span-8`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Risk Matrix (Likelihood × Impact)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
+              Risk Matrix (Likelihood × Impact)
+              <InfoTooltip label="About Impact and Likelihood"><RiskMatrixAxesDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
             <div className="grid grid-cols-12 gap-2 font-mono text-xs">
@@ -374,7 +432,7 @@ export function RiskTab({
                       return (
                         <div 
                           key={colKey} 
-                          onClick={() => count > 0 && setSelectedCell({ impact: rowKey, likelihood: colKey })}
+                          onClick={() => count > 0 && navigateTo("risk", { impact: rowKey, likelihood: colKey })}
                           className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center ${bgClass}`}
                         >
                           {count > 0 ? (
@@ -442,7 +500,12 @@ export function RiskTab({
           <CardContent className="h-[200px] pl-2">
             {timelineChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={timelineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart
+                  data={timelineChartData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  onClick={(e) => { if (e?.activeLabel) navigateTo("risk", { date: String(e.activeLabel) }); }}
+                  style={{ cursor: "pointer" }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
                   <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} />
                   <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} allowDecimals={false} />
@@ -460,9 +523,10 @@ export function RiskTab({
         <Card className={glassCard(theme)}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center gap-1`}>
               <TrendingUp className="h-4 w-4 mr-2" style={{ color: accent }} />
               Incident Categories
+              <InfoTooltip label="About Incident Categories"><RiskCategoriesDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[200px] pl-2">
@@ -497,10 +561,20 @@ export function RiskTab({
               <ShieldAlert className="h-4 w-4 text-red-500 mr-2" />
               Risk Events
             </span>
-            <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-xs">{riskDocs.length} Incidents</Badge>
+            <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-xs">{filteredRiskDocs.length} Incidents</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {hasListFilter && (
+            <div className={`mb-3 flex items-center justify-between rounded-lg border px-3 py-2 text-xs font-mono ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+              <span className={mutedText(theme)}>
+                Filtered by{severityParam ? ` severity: ${severityParam}` : ""}{dateParam ? ` date: ${dateParam}` : ""}
+              </span>
+              <button type="button" onClick={clearListFilter} className="hover:underline" style={{ color: accent }}>
+                Clear Filter
+              </button>
+            </div>
+          )}
           <Table>
             <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
               <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
@@ -514,7 +588,7 @@ export function RiskTab({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {riskDocs.map((doc, idx) => (
+              {filteredRiskDocs.map((doc, idx) => (
                 <TableRow
                   key={doc.id}
                   className={`transition-colors cursor-pointer ${isDark ? "border-white/[0.08] hover:bg-white/[0.04]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}
@@ -558,10 +632,10 @@ export function RiskTab({
                   </TableCell>
                 </TableRow>
               ))}
-              {riskDocs.length === 0 && (
+              {filteredRiskDocs.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
-                    No risk incidents flagged.
+                    {hasListFilter ? "No risk incidents match this filter." : "No risk incidents flagged."}
                   </TableCell>
                 </TableRow>
               )}
@@ -742,7 +816,7 @@ export function RiskTab({
           drawer above, for the same legibility reason. */}
       {selectedCell && (
         <div className="fixed inset-0 z-50 overflow-hidden font-mono">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedCell(null)} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => clearCellFilter()} />
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
             <div className={`w-[600px] backdrop-blur-2xl border-l flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300 ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]"}`}>
 
@@ -755,7 +829,7 @@ export function RiskTab({
                   </span>
                 </div>
                 <button
-                  onClick={() => setSelectedCell(null)}
+                  onClick={() => clearCellFilter()}
                   className={`flex items-center gap-1.5 text-xs min-h-[44px] transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
                 >
                   <X className="h-5 w-5" />
@@ -791,7 +865,7 @@ export function RiskTab({
                       </div>
                       <div className="flex justify-end pt-1">
                         <button
-                          onClick={() => { setSelectedDocId(doc.id); setSelectedCell(null); }}
+                          onClick={() => { setSelectedDocId(doc.id); clearCellFilter(); }}
                           className="bg-blue-600 hover:bg-blue-700 text-white font-mono text-xs rounded px-3 min-h-[44px] inline-flex items-center justify-center"
                         >
                           View Details &rarr;
@@ -805,7 +879,7 @@ export function RiskTab({
               {/* Footer */}
               <div className={`p-4 border-t flex justify-end ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
                 <button
-                  onClick={() => setSelectedCell(null)}
+                  onClick={() => clearCellFilter()}
                   className={`bg-transparent border text-xs rounded px-4 py-2 transition-colors ${mutedText(theme)} ${isDark ? "border-white/[0.12] hover:border-zinc-500 hover:text-zinc-100" : "border-black/[0.08] hover:border-zinc-400 hover:text-zinc-900"}`}
                 >
                   Close Window

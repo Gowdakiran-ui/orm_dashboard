@@ -447,7 +447,7 @@ export function CompetitorsTab({
                   <div>
                     <span className={`block ${mutedText(theme)}`}>Reputation</span>
                     <span className="font-bold text-sm" style={{ color: accent }}>
-                      {searchResult.competitor.reputation_score !== null ? searchResult.competitor.reputation_score.toFixed(1) : 'N/A'}
+                      {searchResult.competitor.reputation_score !== null ? searchResult.competitor.reputation_score.toFixed(2) : 'N/A'}
                     </span>
                   </div>
                   <div>
