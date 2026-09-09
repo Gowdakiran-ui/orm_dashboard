@@ -262,8 +262,17 @@ class AlertEngine:
                 })
                 existing.lifecycle_history = l_hist
 
-            # Update explainability & human summary
-            existing.explainability = kwargs.get("explainability", existing.explainability)
+            # Update explainability & human summary. Merged, not replaced:
+            # a full replace here silently wiped ai_summary_engine.py's own
+            # ai_summary sub-key (written into this same column by a later
+            # pipeline stage on a previous run) on every single ALERT-stage
+            # re-evaluation, before ai_summary's own cache check ever ran.
+            # This alert engine always rebuilds its own keys (why_it_fired,
+            # contributing_documents, etc.) fresh on every write, so the
+            # merge doesn't leave any of ITS OWN fields stale -- new values
+            # win on every key both sides share; only genuinely foreign
+            # keys like ai_summary, absent from this payload, survive.
+            existing.explainability = {**(existing.explainability or {}), **kwargs.get("explainability", {})}
             existing.human_summary = kwargs.get("human_summary", existing.human_summary)
             existing.description = kwargs.get("description", existing.description)
 

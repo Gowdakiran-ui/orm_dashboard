@@ -175,7 +175,20 @@ class RiskEngine:
                     latency_ms = EXCLUDED.latency_ms,
                     retry_count = EXCLUDED.retry_count,
                     source_reliability = EXCLUDED.source_reliability,
-                    explainability = EXCLUDED.explainability,
+                    -- jsonb merge, not a full replace: preserves any keys
+                    -- the current row's explainability has that this
+                    -- write's payload doesn't (e.g. ai_summary_engine.py's
+                    -- ai_summary sub-key, written by a later pipeline
+                    -- stage on a previous run) -- a full replace here
+                    -- silently wiped that key on every single RISK-stage
+                    -- re-evaluation, defeating ai_summary's own cache
+                    -- before its comparison ever ran. New values still win
+                    -- on any key both sides share (risk_score's own
+                    -- fields, role_classification_source included) --
+                    -- this column is `json`, not `jsonb`, so both sides
+                    -- are cast to jsonb for the merge and the result cast
+                    -- back to match the column's declared type.
+                    explainability = (COALESCE(risk_events.explainability::jsonb, '{}'::jsonb) || EXCLUDED.explainability::jsonb)::json,
                     computed_at = EXCLUDED.computed_at
                 WHERE
                     (COALESCE(EXCLUDED.explainability->>'role_classification_source', '') = 'llm')::int
