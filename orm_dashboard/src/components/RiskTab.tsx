@@ -320,7 +320,14 @@ export function RiskTab({
                 const isExpanded = expandedAlertId === alert.id;
                 const aiSummary = alert.ai_summary;
                 return (
-                  <div key={alert.id} className={`rounded-2xl font-mono text-xs overflow-hidden ${glassPill(theme)}`}>
+                  // A4 fix: glassPill() applies rounded-full, meant for
+                  // short one-line pill badges -- reusing it as the wrapper
+                  // for this whole (multi-line once expanded) card turned
+                  // it into a stadium/oval shape that clipped the AI
+                  // Summary text at the curved sides. Uses the pill's own
+                  // bg/border/shadow token directly instead, with a normal
+                  // rounded-2xl corner radius that works at any height.
+                  <div key={alert.id} className={`rounded-2xl font-mono text-xs overflow-hidden ${glassTokens[theme].pill}`}>
                     <button
                       type="button"
                       onClick={() => setExpandedAlertId(isExpanded ? null : alert.id)}
@@ -350,10 +357,15 @@ export function RiskTab({
                         existing full drill-through drawer, so this expands
                         inline instead of opening a second drawer type. */}
                     {isExpanded && (
-                      <div className={`px-3 pb-3 space-y-2.5 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                      <div className={`px-3 pb-3 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                         {aiSummary ? (
-                          <>
-                            <div className="flex items-center justify-between pt-2.5">
+                          // Solid opaque panel, not the glass/translucent
+                          // convention used elsewhere -- this sits on top
+                          // of the row above it once expanded, and a
+                          // translucent background let that row's text
+                          // bleed through and become unreadable.
+                          <div className={`mt-2.5 space-y-2.5 p-3 rounded-xl border ${isDark ? "bg-zinc-900 border-white/[0.08]" : "bg-white border-black/[0.08]"}`}>
+                            <div className="flex items-center justify-between">
                               <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
                                 <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> AI Summary
                               </span>
@@ -385,14 +397,14 @@ export function RiskTab({
                                 onClick={() => onViewNarrative?.(aiSummary.narrative_name)}
                                 disabled={!onViewNarrative}
                                 className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
-                                  isDark ? "bg-black/30 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
+                                  isDark ? "bg-zinc-800 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-zinc-100 border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
                                 } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
                               >
                                 <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Via linked narrative:</span>{" "}
                                 {aiSummary.narrative_name}
                               </button>
                             )}
-                          </>
+                          </div>
                         ) : (
                           <div className={`pt-2.5 text-xs italic ${mutedText(theme)}`}>
                             AI summary not yet generated for this alert.
@@ -861,7 +873,10 @@ export function RiskTab({
                     LOW-severity items, which never get one, and for any
                     item whose first summary hasn't run yet. */}
                 {selectedDoc.risk_explainability?.ai_summary && (
-                  <div className={`space-y-2.5 p-4 rounded-2xl border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+                  // Solid opaque panel (not the translucent glass
+                  // convention used elsewhere in this drawer) -- reported
+                  // unreadable against the drawer's own background.
+                  <div className={`space-y-2.5 p-4 rounded-2xl border ${isDark ? "bg-zinc-900 border-white/[0.08]" : "bg-white border-black/[0.08]"}`}>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
                         <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> AI Summary
@@ -894,7 +909,7 @@ export function RiskTab({
                         onClick={() => onViewNarrative?.(selectedDoc.risk_explainability.ai_summary.narrative_name)}
                         disabled={!onViewNarrative}
                         className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
-                          isDark ? "bg-black/30 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
+                          isDark ? "bg-zinc-800 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-zinc-100 border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
                         } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
                       >
                         <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Via linked narrative:</span>{" "}
