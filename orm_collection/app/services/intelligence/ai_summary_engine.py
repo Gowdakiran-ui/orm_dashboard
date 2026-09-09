@@ -1,5 +1,6 @@
 import os
 import time
+import hashlib
 import json as _json
 import structlog
 from typing import Optional, Dict, Any, Tuple
@@ -29,6 +30,25 @@ _MEDIUM_PLUS = ("MEDIUM", "HIGH", "CRITICAL")
 # of a client's documents Risk Center can ever have loaded into `documents`
 # to filter into its register.
 _UI_DOCUMENT_WINDOW = 500
+
+
+def _content_signature(*parts) -> str:
+    """
+    Stable hash of the exact values that determine a summary's content --
+    used as the cache key instead of RiskEvent.computed_at/Alert.updated_at.
+
+    Real bug this replaces (forensic audit, confirmed live with two
+    consecutive pipeline runs against unchanged data): both those columns
+    get re-stamped by risk_engine.py/alert_engine.py on every single
+    re-evaluation, regardless of whether the score/content actually
+    changed -- so a timestamp-keyed cache never holds, and every eligible
+    item was being re-billed to the LLM on every pipeline run. Mirrors
+    narrative_engine.py's own convention of keying on a value that only
+    changes when the underlying data actually changes (there,
+    mention_count) rather than a clock.
+    """
+    joined = "\x1f".join("" if p is None else str(p) for p in parts)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 
 class AISummaryEngine:
@@ -217,25 +237,34 @@ class AISummaryEngine:
         client_name: str, client_id: str, run_id: Optional[str],
     ) -> Optional[Dict[str, Any]]:
         existing = (re.explainability or {}).get("ai_summary")
-        # Cache: only regenerate if this row's own computed_at has moved
-        # since the summary was generated (mirrors narrative_engine.py's
-        # mention_count freshness check) -- not on every pipeline run.
-        # None here means "nothing to write", not "no summary exists".
-        cache_key = re.computed_at.isoformat() if re.computed_at else None
-        if existing and existing.get("_cache_key") == cache_key:
-            return None
 
         document = db.query(Document).filter(Document.id == re.document_id).first() if re.document_id else None
         doc_topic = db.query(DocumentTopic).filter(DocumentTopic.document_id == re.document_id).first() if re.document_id else None
         topic_name = getattr(getattr(doc_topic, "topic", None), "name", None) or "General"
         title = (document.title if document and document.title else None) or "an untitled item"
+        # [:1500] matches _generate_how_to_solve's own truncation -- content
+        # past that point never actually reaches the prompt, so it must not
+        # be able to bust the cache either.
+        snippet = (document.normalized_content if document else "") [:1500]
 
         what = f"{re.risk_level} risk flagged on \"{title}\" (category: {topic_name})."
         when = self._format_when(re.computed_at or re.created_at)
 
+        # Cache key: a hash of exactly the fields that feed how_to_solve
+        # (risk_level, topic, title, source excerpt) -- see
+        # _content_signature's docstring for why this replaced
+        # re.computed_at.
+        item_signature = _content_signature(re.risk_level, topic_name, title, snippet)
+
         linked = risk_narrative_map.get(str(re.id))
         if linked:
             narrative, rca = linked
+            # Also folds in the linked narrative's own rca text, so a reused
+            # summary refreshes if that narrative's RCA is later regenerated
+            # -- cheap either way since this branch never calls the LLM.
+            cache_key = _content_signature(item_signature, "narrative", str(narrative.id), rca.get("root_cause"), rca.get("recommended_action"))
+            if existing and existing.get("_cache_key") == cache_key:
+                return None
             return {
                 "what": what,
                 "when": when,
@@ -247,12 +276,16 @@ class AISummaryEngine:
                 "_cache_key": cache_key,
             }
 
+        cache_key = item_signature
+        if existing and existing.get("_cache_key") == cache_key:
+            return None
+
         how_to_solve = self._generate_how_to_solve(
             item_kind="Risk Event",
             what=what,
             topic_name=topic_name,
             document_title=document.title if document else None,
-            document_snippet=document.normalized_content if document else None,
+            document_snippet=snippet,
             client_name=client_name,
             client_id=client_id,
             run_id=run_id,
@@ -275,16 +308,21 @@ class AISummaryEngine:
         client_name: str, client_id: str, run_id: Optional[str],
     ) -> Optional[Dict[str, Any]]:
         existing = (alert.explainability or {}).get("ai_summary")
-        cache_key = alert.updated_at.isoformat() if alert.updated_at else None
-        if existing and existing.get("_cache_key") == cache_key:
-            return None
 
         document = db.query(Document).filter(Document.id == alert.document_id).first() if alert.document_id else None
         doc_topic = db.query(DocumentTopic).filter(DocumentTopic.document_id == alert.document_id).first() if alert.document_id else None
         topic_name = getattr(getattr(doc_topic, "topic", None), "name", None) or alert.alert_type
+        snippet = (document.normalized_content if document else "") [:1500]
 
         what = f"{alert.severity} {alert.alert_type} alert: {alert.title}."
         when = self._format_when(alert.created_at)
+
+        # Cache key: a hash of exactly the fields that feed how_to_solve
+        # (severity, alert_type, title, topic, source excerpt) -- not
+        # alert.updated_at, which alert_engine.py re-stamps on every
+        # pipeline run regardless of whether the alert's content actually
+        # changed (see _content_signature's docstring).
+        item_signature = _content_signature(alert.severity, alert.alert_type, alert.title, topic_name, snippet)
 
         # Direct link first (narrative's own supporting_alerts); if this
         # alert isn't directly in any narrative's cluster, fall through to
@@ -301,6 +339,9 @@ class AISummaryEngine:
 
         if linked:
             narrative, rca = linked
+            cache_key = _content_signature(item_signature, "narrative", str(narrative.id), rca.get("root_cause"), rca.get("recommended_action"))
+            if existing and existing.get("_cache_key") == cache_key:
+                return None
             return {
                 "what": what,
                 "when": when,
@@ -312,12 +353,16 @@ class AISummaryEngine:
                 "_cache_key": cache_key,
             }
 
+        cache_key = item_signature
+        if existing and existing.get("_cache_key") == cache_key:
+            return None
+
         how_to_solve = self._generate_how_to_solve(
             item_kind="Active Alert",
             what=what,
             topic_name=topic_name,
             document_title=document.title if document else None,
-            document_snippet=document.normalized_content if document else None,
+            document_snippet=snippet,
             client_name=client_name,
             client_id=client_id,
             run_id=run_id,
