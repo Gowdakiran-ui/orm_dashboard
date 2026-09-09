@@ -10,6 +10,37 @@ from app.models.document import Document, DocumentMatch
 
 router = APIRouter()
 
+
+def get_client_visible_documents(db: Session, client_id, skip: int = 0, limit: int = 100):
+    """
+    The exact document set Risk Center (and every other page that consumes
+    `documents`) can ever show for a client: matched documents ordered by
+    recency, capped at 500. Single source of truth -- read_client_documents
+    below calls this instead of inlining the query, and
+    ai_summary_engine.py's Risk Event sweep imports and calls this same
+    function (with the same limit=500 the frontend's own fetchDocuments()
+    always requests) rather than a separately-written copy. A change to
+    this cap or ordering is then automatically inherited everywhere instead
+    of requiring a second manual fix later -- this project has already been
+    bitten once by two places computing "the same thing" slightly
+    differently and silently drifting apart (the Risk-Matrix Likelihood
+    formula bug).
+    """
+    from app.models.entity import Entity
+    limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
+    return (
+        db.query(Document)
+        .join(DocumentMatch)
+        .join(Entity)
+        .filter(Entity.client_id == client_id)
+        .distinct()
+        .order_by(Document.published_at.desc(), Document.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
 @router.get("/", response_model=List[DocumentResponse])
 def read_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
@@ -151,11 +182,9 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
     from app.models.topic import DocumentTopic
     from app.models.narrative import Narrative
     from app.models.document import DocumentMatch
-    
-    docs = db.query(Document).join(DocumentMatch).join(Entity).filter(
-        Entity.client_id == client_id
-    ).distinct().order_by(Document.published_at.desc(), Document.id.desc()).offset(skip).limit(limit).all()
-    
+
+    docs = get_client_visible_documents(db, client_id, skip=skip, limit=limit)
+
     if not docs:
         return []
         

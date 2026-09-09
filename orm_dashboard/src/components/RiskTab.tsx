@@ -50,6 +50,7 @@ export function RiskTab({
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const { navigateTo, searchParams } = useTabNavigation();
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
 
   // Matrix-cell drill-down (Part B/C: filter-carrying navigation) --
   // sourced from the URL (?tab=risk&impact=..&likelihood=..) instead of
@@ -314,26 +315,94 @@ export function RiskTab({
           ) : alerts.length === 0 ? (
             <div className={`text-center py-6 ${mutedText(theme)} font-mono text-xs`}>No active alerts.</div>
           ) : (
-            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-              {alerts.map((alert) => (
-                <div key={alert.id} className={`flex items-center justify-between rounded p-3 font-mono text-xs ${glassPill(theme)}`}>
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <Badge className={`font-mono text-xs shrink-0 ${
-                      alert.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
-                      alert.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
-                      alert.severity === "WARNING" ? "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20" :
-                      `${isDark ? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20" : "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20"}`
-                    }`}>
-                      {alert.severity}
-                    </Badge>
-                    <span className={`font-bold truncate ${bodyText(theme)}`}>{alert.title}</span>
-                    <span className={`text-xs shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {alerts.map((alert) => {
+                const isExpanded = expandedAlertId === alert.id;
+                const aiSummary = alert.ai_summary;
+                return (
+                  <div key={alert.id} className={`rounded-2xl font-mono text-xs overflow-hidden ${glassPill(theme)}`}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedAlertId(isExpanded ? null : alert.id)}
+                      className="w-full flex items-center justify-between p-3 min-h-[44px] text-left"
+                    >
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <Badge className={`font-mono text-xs shrink-0 ${
+                          alert.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                          alert.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
+                          alert.severity === "WARNING" ? "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20" :
+                          `${isDark ? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20" : "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20"}`
+                        }`}>
+                          {alert.severity}
+                        </Badge>
+                        <span className={`font-bold truncate ${bodyText(theme)}`}>{alert.title}</span>
+                        <span className={`text-xs shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
+                      </div>
+                      <span className={`text-xs shrink-0 ml-3 ${mutedText(theme)}`}>
+                        {alert.created_at ? new Date(alert.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
+                      </span>
+                    </button>
+
+                    {/* AI Summary -- same What/When/How-to-solve pattern as
+                        the Risk Event drawer above and the narrative
+                        drawer's Root Cause Analysis section, generated
+                        per-alert by ai_summary_engine.py. Alerts have no
+                        existing full drill-through drawer, so this expands
+                        inline instead of opening a second drawer type. */}
+                    {isExpanded && (
+                      <div className={`px-3 pb-3 space-y-2.5 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                        {aiSummary ? (
+                          <>
+                            <div className="flex items-center justify-between pt-2.5">
+                              <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
+                                <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> AI Summary
+                              </span>
+                              {aiSummary.source === "narrative" && (
+                                <InfoTooltip label="About this AI Summary">
+                                  Reused from this alert&apos;s linked narrative&apos;s own
+                                  root-cause analysis, not freshly generated for this
+                                  alert alone.
+                                </InfoTooltip>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <div className="space-y-0.5">
+                                <span className={`block uppercase text-xs ${mutedText(theme)}`}>What</span>
+                                <p className={`leading-relaxed ${bodyText(theme)}`}>{aiSummary.what}</p>
+                              </div>
+                              <div className="space-y-0.5">
+                                <span className={`block uppercase text-xs ${mutedText(theme)}`}>When</span>
+                                <p className={`leading-relaxed ${bodyText(theme)}`}>{aiSummary.when || "Unknown"}</p>
+                              </div>
+                              <div className="space-y-0.5">
+                                <span className={`block uppercase text-xs ${mutedText(theme)}`}>How to solve</span>
+                                <p className={`leading-relaxed ${bodyText(theme)}`}>{aiSummary.how_to_solve}</p>
+                              </div>
+                            </div>
+                            {aiSummary.source === "narrative" && (
+                              <button
+                                type="button"
+                                onClick={() => onViewNarrative?.(aiSummary.narrative_name)}
+                                disabled={!onViewNarrative}
+                                className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
+                                  isDark ? "bg-black/30 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
+                                } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
+                              >
+                                <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Via linked narrative:</span>{" "}
+                                {aiSummary.narrative_name}
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <div className={`pt-2.5 text-xs italic ${mutedText(theme)}`}>
+                            AI summary not yet generated for this alert.
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <span className={`text-xs shrink-0 ml-3 ${mutedText(theme)}`}>
-                    {alert.created_at ? new Date(alert.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -783,6 +852,57 @@ export function RiskTab({
                     </div>
                   )}
                 </div>
+
+                {/* AI Summary -- same What/When/How-to-solve pattern as the
+                    narrative drawer's Root Cause Analysis section
+                    (NarrativesTab.tsx), generated per-item by
+                    ai_summary_engine.py and stored in this item's own
+                    risk_explainability.ai_summary. Absent (not rendered) for
+                    LOW-severity items, which never get one, and for any
+                    item whose first summary hasn't run yet. */}
+                {selectedDoc.risk_explainability?.ai_summary && (
+                  <div className={`space-y-2.5 p-4 rounded-2xl border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
+                        <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> AI Summary
+                      </span>
+                      {selectedDoc.risk_explainability.ai_summary.source === "narrative" && (
+                        <InfoTooltip label="About this AI Summary">
+                          Reused from this item&apos;s linked narrative&apos;s own root-cause
+                          analysis, not freshly generated for this item alone -- avoids a
+                          second, potentially-conflicting explanation of the same story.
+                        </InfoTooltip>
+                      )}
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="space-y-0.5">
+                        <span className={`block uppercase text-xs ${mutedText(theme)}`}>What</span>
+                        <p className={`leading-relaxed ${bodyText(theme)}`}>{selectedDoc.risk_explainability.ai_summary.what}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className={`block uppercase text-xs ${mutedText(theme)}`}>When</span>
+                        <p className={`leading-relaxed ${bodyText(theme)}`}>{selectedDoc.risk_explainability.ai_summary.when || "Unknown"}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className={`block uppercase text-xs ${mutedText(theme)}`}>How to solve</span>
+                        <p className={`leading-relaxed ${bodyText(theme)}`}>{selectedDoc.risk_explainability.ai_summary.how_to_solve}</p>
+                      </div>
+                    </div>
+                    {selectedDoc.risk_explainability.ai_summary.source === "narrative" && (
+                      <button
+                        type="button"
+                        onClick={() => onViewNarrative?.(selectedDoc.risk_explainability.ai_summary.narrative_name)}
+                        disabled={!onViewNarrative}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
+                          isDark ? "bg-black/30 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
+                        } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
+                      >
+                        <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Via linked narrative:</span>{" "}
+                        {selectedDoc.risk_explainability.ai_summary.narrative_name}
+                      </button>
+                    )}
+                  </div>
+                )}
 
               </div>
 

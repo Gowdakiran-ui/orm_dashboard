@@ -7,7 +7,7 @@ No AsyncResult. No Redis parsing.
 
 FSM States (ordered):
     QUEUED → COLLECTING → AWAITING_PROCESSING → PROCESSING → TREND → RISK →
-    ALERT → NARRATIVE → REPUTATION → EXECUTIVE → BENCHMARK →
+    ALERT → NARRATIVE → AI_SUMMARY → REPUTATION → EXECUTIVE → BENCHMARK →
     FINALIZING → SUCCESS
                         ↘ FAILED (from any state)
 
@@ -47,6 +47,7 @@ _STAGE_ORDER = [
     "RISK",
     "ALERT",
     "NARRATIVE",
+    "AI_SUMMARY",
     "REPUTATION",
     "EXECUTIVE",
     "BENCHMARK",
@@ -81,6 +82,7 @@ STAGE_PROGRESS: dict[str, int] = {
     "RISK":        50,
     "ALERT":       60,
     "NARRATIVE":   70,
+    "AI_SUMMARY":  75,
     "REPUTATION":  80,
     "EXECUTIVE":   85,
     "BENCHMARK":   90,

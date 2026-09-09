@@ -87,13 +87,19 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
     ).order_by(Alert.created_at.desc()).all()
     results = []
     for a in alerts:
+        # ai_summary lives inside the alert's own existing `explainability`
+        # JSON column (see ai_summary_engine.py) -- surfaced here as its own
+        # top-level key so the frontend doesn't need to know the storage
+        # detail, same as documents.py already does for risk_explainability.
+        ai_summary = (a.explainability or {}).get("ai_summary")
         results.append({
             "id": str(a.id),
             "alert_type": a.alert_type,
             "severity": a.severity,
             "title": a.title,
             "is_acknowledged": a.is_acknowledged,
-            "created_at": a.created_at.isoformat() if a.created_at else None
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "ai_summary": ai_summary,
         })
     return results
 

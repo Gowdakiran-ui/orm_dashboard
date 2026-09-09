@@ -51,7 +51,7 @@ logger = structlog.get_logger()
 # Active pipeline statuses (non-terminal)
 _ACTIVE_STATUSES = {
     "QUEUED", "COLLECTING", "PROCESSING", "TREND", "RISK",
-    "ALERT", "NARRATIVE", "REPUTATION", "EXECUTIVE", "BENCHMARK", "FINALIZING",
+    "ALERT", "NARRATIVE", "AI_SUMMARY", "REPUTATION", "EXECUTIVE", "BENCHMARK", "FINALIZING",
 }
 
 

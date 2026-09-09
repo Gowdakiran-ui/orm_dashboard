@@ -1382,6 +1382,18 @@ def _stage_narrative(ctx: PipelineContext, db) -> None:
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
 
 
+def _stage_ai_summary(ctx: PipelineContext, db) -> None:
+    # Runs after NARRATIVE so each Risk Event/Alert's AI Summary can reuse
+    # a just-computed narrative RCA (evidence_metadata.rca) instead of
+    # generating a second, potentially-conflicting explanation.
+    from app.services.intelligence.ai_summary_engine import AISummaryEngine
+    log = logger.bind(stage="AI_SUMMARY", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
+    t0 = time.perf_counter()
+    log.info("stage_started")
+    AISummaryEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
+    log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
+
+
 def _stage_is_fresh_enough(db, model, client_id: str, hours: float) -> bool:
     """
     True if this client already has a `model` row newer than `hours` old.
@@ -1651,6 +1663,9 @@ pipeline_stage_alert = _make_aggregation_stage_task(
 pipeline_stage_narrative = _make_aggregation_stage_task(
     "NARRATIVE", _stage_narrative, "Generating narratives",
     "app.workers.aggregation_tasks.pipeline_stage_narrative")
+pipeline_stage_ai_summary = _make_aggregation_stage_task(
+    "AI_SUMMARY", _stage_ai_summary, "Generating AI summaries",
+    "app.workers.aggregation_tasks.pipeline_stage_ai_summary")
 pipeline_stage_reputation = _make_aggregation_stage_task(
     "REPUTATION", _stage_reputation, "Calculating reputation scores",
     "app.workers.aggregation_tasks.pipeline_stage_reputation")
@@ -1831,6 +1846,7 @@ def run_client_pipeline(self, run_id: str, client_id: str):
         pipeline_stage_risk.si(run_id, client_id, owner_id),
         pipeline_stage_alert.si(run_id, client_id, owner_id),
         pipeline_stage_narrative.si(run_id, client_id, owner_id),
+        pipeline_stage_ai_summary.si(run_id, client_id, owner_id),
         pipeline_stage_reputation.si(run_id, client_id, owner_id),
         pipeline_stage_executive.si(run_id, client_id, owner_id),
         pipeline_stage_benchmark.si(run_id, client_id, owner_id),
