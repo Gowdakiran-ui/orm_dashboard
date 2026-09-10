@@ -91,7 +91,19 @@ def get_reach_modifier(view_count, comment_count=None) -> float:
 # an exhaustive or authoritative trust ranking -- a starting point.
 RSS_TRUST_TIERS = {
     "high": 1.15,
-    "medium": 1.00,
+    # 0.95, not 1.00 -- 1.00 is also the neutral default final_score keeps for
+    # document types with no reach/trust signal at all (gdelt, hn_algolia,
+    # YouTube not yet re-collected -- see risk_engine.py's reach_trust_modifier
+    # default). A "medium"-tier value identical to that neutral default made a
+    # real recognized outlet (Hindustan Times, NDTV, Times of India) look
+    # indistinguishable from "no trust data at all" to anyone auditing by
+    # reach_trust_modifier value alone instead of also checking
+    # reach_trust_basis. Investigated live 2026-09-10: confirmed no RSS
+    # document actually falls through to a neutral default (unparseable/
+    # unmatched titles already correctly resolve to "unknown" below) -- this
+    # is purely to keep every RSS trust tier numerically distinct from
+    # out-of-scope "no data".
+    "medium": 0.95,
     "low": 0.85,
     "unknown": 0.65,  # default for anything unrecognized -- NOT a neutral/benefit-of-the-doubt tier
 }
