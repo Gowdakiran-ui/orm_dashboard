@@ -48,6 +48,38 @@ REACH_ANCHORS = [
 
 COMMENT_TO_VIEW_WEIGHT = 10
 
+# ---------------------------------------------------------------------------
+# Hard reach/trust eligibility gate (replaces the soft modifier for this
+# purpose): real verification showed the 0.65-1.15 modifier range can never
+# pull a genuinely risk-relevant document's score below the LOW threshold
+# (23/23 real risk-relevant RSS documents stayed MEDIUM+ even at the lowest
+# 0.65 trust tier), so low reach / low trust must instead exclude a document
+# from risk-relevance entirely via is_risk_relevant in risk_engine.py, not
+# just down-weight it.
+# ---------------------------------------------------------------------------
+YOUTUBE_MIN_VIEW_COUNT = 1000
+YOUTUBE_MIN_COMMENT_COUNT = 50
+RSS_ELIGIBLE_TIERS = {"medium", "high"}
+
+
+def is_youtube_reach_eligible(view_count, comment_count=None) -> bool:
+    """
+    Hard gate for YouTube: eligible only at or above the real "nano-influencer"
+    reach floor (eMarketer 2026) on views or comments. Callers must only
+    invoke this when view_count is not None -- a document with no reach data
+    at all has no reach signal to gate on (see get_reach_modifier).
+    """
+    return (view_count or 0) >= YOUTUBE_MIN_VIEW_COUNT or (comment_count or 0) >= YOUTUBE_MIN_COMMENT_COUNT
+
+
+def is_rss_trust_eligible(title: str) -> bool:
+    """
+    Hard gate for RSS: eligible only if the outlet's existing trust tier
+    classification (get_trust_tier) is medium or high. "low" and "unknown"
+    are both excluded -- not just the unrecognized floor.
+    """
+    return get_trust_tier(title) in RSS_ELIGIBLE_TIERS
+
 
 def get_reach_modifier(view_count, comment_count=None) -> float:
     """
@@ -152,6 +184,21 @@ def _extract_outlet(title: str):
     return outlet or None
 
 
+def get_trust_tier(title: str) -> str:
+    """
+    Returns the trust tier ("high", "medium", "low", or "unknown") for the
+    outlet parsed out of an RSS document's title. Unrecognized/unparseable
+    outlets resolve to "unknown" by design (CEO's ask: unverified sources
+    default to lowest trust, not neutral). Shared by get_trust_modifier and
+    by the risk_engine.py reach/trust eligibility gate so both use the same
+    classification instead of parsing the title twice.
+    """
+    outlet = _extract_outlet(title)
+    if outlet is None:
+        return "unknown"
+    return TRUSTED_OUTLETS.get(outlet.lower(), "unknown")
+
+
 def get_trust_modifier(title: str) -> float:
     """
     Returns a 0.65-1.15 multiplier from the outlet parsed out of an RSS
@@ -159,8 +206,4 @@ def get_trust_modifier(title: str) -> float:
     by design (CEO's ask: unverified sources default to lowest trust, not
     neutral).
     """
-    outlet = _extract_outlet(title)
-    if outlet is None:
-        return RSS_TRUST_TIERS["unknown"]
-    tier = TRUSTED_OUTLETS.get(outlet.lower(), "unknown")
-    return RSS_TRUST_TIERS[tier]
+    return RSS_TRUST_TIERS[get_trust_tier(title)]

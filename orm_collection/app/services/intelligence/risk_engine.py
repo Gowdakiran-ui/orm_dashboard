@@ -22,7 +22,12 @@ from app.core.risk_config import (
     DYNAMIC_SOURCE_RELIABILITY_MAP,
     RISK_THRESHOLDS,
 )
-from app.core.reach_trust_config import get_reach_modifier, get_trust_modifier
+from app.core.reach_trust_config import (
+    get_reach_modifier,
+    get_trust_modifier,
+    is_youtube_reach_eligible,
+    is_rss_trust_eligible,
+)
 
 logger = structlog.get_logger()
 
@@ -636,12 +641,15 @@ class RiskEngine:
         # (1.0) for document types with no reach or trust signal at all.
         reach_trust_modifier = 1.0
         reach_trust_basis = None
+        reach_trust_eligible = True
         if document.document_type == "youtube" and document.view_count is not None:
             reach_trust_modifier = get_reach_modifier(document.view_count, document.comment_count)
             reach_trust_basis = "reach"
+            reach_trust_eligible = is_youtube_reach_eligible(document.view_count, document.comment_count)
         elif document.document_type == "rss":
             reach_trust_modifier = get_trust_modifier(document.title)
             reach_trust_basis = "source_trust"
+            reach_trust_eligible = is_rss_trust_eligible(document.title)
 
         # Optimization: Eager load Topic relation on DocumentTopic
         doc_topics = db.query(DocumentTopic).options(
@@ -785,7 +793,17 @@ class RiskEngine:
                 # legal dispute reported dispassionately. Gating BEFORE the
                 # LLM role classification below also skips that (paid) call
                 # entirely for non-risk-relevant documents.
-                is_risk_relevant = (ent_sent_label == "Negative") or (topic_weight > 0)
+                # Hard reach/trust eligibility gate, folded into the same
+                # is_risk_relevant check rather than a second filtering
+                # mechanism: a soft 0.65-1.15 modifier alone can never pull a
+                # genuinely risk-relevant document's score below the LOW
+                # threshold (verified live: 23/23 real risk-relevant RSS
+                # documents stayed MEDIUM+ even at the lowest trust tier), so
+                # low-reach YouTube documents and low/unrecognized-trust RSS
+                # documents must be excluded outright, not just down-weighted.
+                is_risk_relevant = (
+                    (ent_sent_label == "Negative") or (topic_weight > 0)
+                ) and reach_trust_eligible
                 if not is_risk_relevant:
                     final_score = 0.0
 
