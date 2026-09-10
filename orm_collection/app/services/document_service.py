@@ -46,7 +46,9 @@ def process_and_save_document(db: Session, doc_data: NormalizedDocument) -> Tupl
             author=doc_data.author,
             published_at=doc_data.published_at,
             collected_at=doc_data.collected_at,
-            raw_storage_path=s3_uri
+            raw_storage_path=s3_uri,
+            view_count=doc_data.view_count,
+            comment_count=doc_data.comment_count
         ).on_conflict_do_nothing()
 
         result = db.execute(stmt)

@@ -40,3 +40,5 @@ class NormalizedDocument(BaseModel):
     published_at: Optional[datetime] = None
     collected_at: datetime
     raw_payload: str # JSON encoded string of the raw data
+    view_count: Optional[int] = None
+    comment_count: Optional[int] = None

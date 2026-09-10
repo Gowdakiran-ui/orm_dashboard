@@ -22,6 +22,7 @@ from app.core.risk_config import (
     DYNAMIC_SOURCE_RELIABILITY_MAP,
     RISK_THRESHOLDS,
 )
+from app.core.reach_trust_config import get_reach_modifier, get_trust_modifier
 
 logger = structlog.get_logger()
 
@@ -625,6 +626,23 @@ class RiskEngine:
                 else:
                     source_reliability = DYNAMIC_SOURCE_RELIABILITY_MAP.get("default", 1.0)
 
+        # Reach/credibility-weighted risk scoring (CEO priority): a single
+        # mention from a low-reach post is noise, but the same complaint from
+        # a high-reach account or a reputable outlet is a real signal even
+        # as one mention. Same document-level modifier for every entity/
+        # client on this document (reach/trust don't vary per entity), so
+        # computed once here and folded into final_score alongside
+        # source_reliability below -- not a second, separate filter. Neutral
+        # (1.0) for document types with no reach or trust signal at all.
+        reach_trust_modifier = 1.0
+        reach_trust_basis = None
+        if document.document_type == "youtube" and document.view_count is not None:
+            reach_trust_modifier = get_reach_modifier(document.view_count, document.comment_count)
+            reach_trust_basis = "reach"
+        elif document.document_type == "rss":
+            reach_trust_modifier = get_trust_modifier(document.title)
+            reach_trust_basis = "source_trust"
+
         # Optimization: Eager load Topic relation on DocumentTopic
         doc_topics = db.query(DocumentTopic).options(
             joinedload(DocumentTopic.topic)
@@ -745,7 +763,7 @@ class RiskEngine:
                 normalized_base = (base_sum / 240.0) * 100.0
 
                 # Apply Modifiers (Confidence no longer alters severity score)
-                final_score = normalized_base * source_reliability
+                final_score = normalized_base * source_reliability * reach_trust_modifier
                 final_score = min(100.0, max(0.0, final_score))
 
                 # Risk-relevance gate: trend_weight is pure coverage-volume
@@ -811,7 +829,7 @@ class RiskEngine:
                 explainability_data = {
                     "engine_version": "5.2",
                     "formula_version": "1.0",
-                    "final_equation": "final_score = min(100.0, max(0.0, (topic_weight + sentiment_weight + trend_weight) / 240.0 * 100.0 * source_reliability))",
+                    "final_equation": "final_score = min(100.0, max(0.0, (topic_weight + sentiment_weight + trend_weight) / 240.0 * 100.0 * source_reliability * reach_trust_modifier))",
                     "individual_weights": {
                         "topic_weight": topic_weight,
                         "sentiment_weight": ent_sent_weight,
@@ -821,13 +839,18 @@ class RiskEngine:
                     "sentiment_contribution": ent_sent_weight,
                     "trend_contribution": trend_weight,
                     "source_reliability": source_reliability,
+                    "reach_trust_modifier": reach_trust_modifier,
+                    "reach_trust_basis": reach_trust_basis,
+                    "view_count": document.view_count,
+                    "comment_count": document.comment_count,
                     "confidence": confidence_modifier,
                     "final_score": final_score,
                     "final_severity": self.get_risk_level(final_score),
                     "decision_reason": (
                         f"Risk level set to {self.get_risk_level(final_score)} based on topic '{top_topic}' "
                         f"(weight {topic_weight}), sentiment '{ent_sent_label}' (weight {ent_sent_weight}), "
-                        f"trend '{trend_severity}' (weight {trend_weight}), and source reliability {source_reliability}."
+                        f"trend '{trend_severity}' (weight {trend_weight}), source reliability {source_reliability}, "
+                        f"and reach/trust modifier {reach_trust_modifier} ({reach_trust_basis or 'n/a'})."
                         if role_classification not in ("BYSTANDER", "EXONERATED")
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
                     ),

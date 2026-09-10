@@ -319,6 +319,8 @@ CREATE TABLE public.documents (
     sentiment_batch_id character varying(64),
     sentiment_processing_time_ms double precision,
     processing_started_at timestamp with time zone,
+    view_count integer,
+    comment_count integer,
     CONSTRAINT documents_processing_status_check CHECK (((processing_status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PROCESSING'::character varying)::text, ('MATCHED'::character varying)::text, ('FAILED'::character varying)::text, ('SKIPPED'::character varying)::text, ('RETRYING'::character varying)::text, ('COMPLETED'::character varying)::text])))
 );
 

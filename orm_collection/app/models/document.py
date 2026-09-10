@@ -21,6 +21,14 @@ class Document(Base):
     language = Column(String(10), default="en")
     raw_storage_path = Column(String(1024))
 
+    # Reach signal — Reach/credibility-weighted risk scoring. Populated
+    # going forward by adapters that expose real engagement stats (currently
+    # YouTube via statistics.viewCount/commentCount); NULL for source types
+    # with no such data and for documents collected before this column
+    # existed (no backfill — see migrations/0008).
+    view_count = Column(Integer, nullable=True)
+    comment_count = Column(Integer, nullable=True)
+
     # Processing State Machine — Phase C
     processing_status = Column(String(20), default="PENDING")
     # Valid states: PENDING | PROCESSING | MATCHED | FAILED | SKIPPED | RETRYING

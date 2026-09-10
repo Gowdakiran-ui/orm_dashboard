@@ -216,10 +216,23 @@ class YouTubeAdapter(BaseSearchAdapter):
 
         description = snippet.get("description", "")
         content = description
+        view_count = None
+        comment_count = None
         if statistics:
             view_str = _format_count(statistics.get("viewCount"))
             comment_str = _format_count(statistics.get("commentCount"))
             content = f"{view_str} views, {comment_str} comments\n\n{description}"
+            # Real integers for reach-weighted risk scoring (risk_engine.py) --
+            # the formatted string above is for human-readable content only
+            # and is lossy (K/M-rounded); these are the actual API values.
+            try:
+                view_count = int(statistics["viewCount"])
+            except (KeyError, TypeError, ValueError):
+                pass
+            try:
+                comment_count = int(statistics["commentCount"])
+            except (KeyError, TypeError, ValueError):
+                pass
 
         return {
             "source_id": source_id,
@@ -237,5 +250,7 @@ class YouTubeAdapter(BaseSearchAdapter):
             "author": snippet.get("channelTitle", ""),
             "published_at": published_at,
             "collected_at": datetime.now(timezone.utc),
-            "raw_payload": json.dumps(raw_data)
+            "raw_payload": json.dumps(raw_data),
+            "view_count": view_count,
+            "comment_count": comment_count,
         }
