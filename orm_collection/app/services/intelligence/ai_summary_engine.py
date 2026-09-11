@@ -3,7 +3,7 @@ import time
 import hashlib
 import json as _json
 import structlog
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -232,10 +232,24 @@ class AISummaryEngine:
             _record(success=False)
             return None
 
-    def _build_for_risk_event(
+    def _prepare_risk_event(
         self, db: Session, re: RiskEvent, risk_narrative_map: Dict[str, tuple],
         client_name: str, client_id: str, run_id: Optional[str],
     ) -> Optional[Dict[str, Any]]:
+        """
+        Decide-only half of what used to be _build_for_risk_event: every
+        cache/reuse check and every non-LLM field, but stops short of
+        actually calling _generate_how_to_solve so that call can be fanned
+        out to its own task (see pipeline_stage_ai_summary in
+        aggregation_tasks.py) instead of happening inline in this loop.
+
+        Returns None (nothing to do -- cache unchanged, no write needed),
+        {"action": "ready", "summary": {...}} (narrative-linked reuse or a
+        result computable with no LLM call -- caller writes it immediately),
+        or {"action": "generate", "gen_kwargs": {...}, "partial": {...}}
+        (needs a fresh LLM call; "partial" is every summary field except
+        how_to_solve, merged with the LLM result by the gather step).
+        """
         existing = (re.explainability or {}).get("ai_summary")
 
         document = db.query(Document).filter(Document.id == re.document_id).first() if re.document_id else None
@@ -265,7 +279,7 @@ class AISummaryEngine:
             cache_key = _content_signature(item_signature, "narrative", str(narrative.id), rca.get("root_cause"), rca.get("recommended_action"))
             if existing and existing.get("_cache_key") == cache_key:
                 return None
-            return {
+            return {"action": "ready", "summary": {
                 "what": what,
                 "when": when,
                 "how_to_solve": rca.get("recommended_action"),
@@ -274,39 +288,34 @@ class AISummaryEngine:
                 "narrative_id": str(narrative.id),
                 "narrative_name": narrative.narrative_name,
                 "_cache_key": cache_key,
-            }
+            }}
 
         cache_key = item_signature
         if existing and existing.get("_cache_key") == cache_key:
             return None
 
-        how_to_solve = self._generate_how_to_solve(
-            item_kind="Risk Event",
-            what=what,
-            topic_name=topic_name,
-            document_title=document.title if document else None,
-            document_snippet=snippet,
-            client_name=client_name,
-            client_id=client_id,
-            run_id=run_id,
-        )
-        if how_to_solve is None:
-            # Fail-safe convention (same as _generate_rca): never overwrite
-            # a previously-good summary with a partial one on a failed call.
-            return None
-
-        return {
+        return {"action": "generate", "gen_kwargs": {
+            "item_kind": "Risk Event",
+            "what": what,
+            "topic_name": topic_name,
+            "document_title": document.title if document else None,
+            "document_snippet": snippet,
+            "client_name": client_name,
+            "client_id": client_id,
+            "run_id": run_id,
+        }, "partial": {
             "what": what,
             "when": when,
-            "how_to_solve": how_to_solve,
             "source": "generated",
             "_cache_key": cache_key,
-        }
+        }}
 
-    def _build_for_alert(
+    def _prepare_alert(
         self, db: Session, alert: Alert, alert_narrative_map: Dict[str, tuple], risk_narrative_map: Dict[str, tuple],
         client_name: str, client_id: str, run_id: Optional[str],
     ) -> Optional[Dict[str, Any]]:
+        """Decide-only half of what used to be _build_for_alert -- see
+        _prepare_risk_event's docstring for the return-value contract."""
         existing = (alert.explainability or {}).get("ai_summary")
 
         document = db.query(Document).filter(Document.id == alert.document_id).first() if alert.document_id else None
@@ -342,7 +351,7 @@ class AISummaryEngine:
             cache_key = _content_signature(item_signature, "narrative", str(narrative.id), rca.get("root_cause"), rca.get("recommended_action"))
             if existing and existing.get("_cache_key") == cache_key:
                 return None
-            return {
+            return {"action": "ready", "summary": {
                 "what": what,
                 "when": when,
                 "how_to_solve": rca.get("recommended_action"),
@@ -351,32 +360,27 @@ class AISummaryEngine:
                 "narrative_id": str(narrative.id),
                 "narrative_name": narrative.narrative_name,
                 "_cache_key": cache_key,
-            }
+            }}
 
         cache_key = item_signature
         if existing and existing.get("_cache_key") == cache_key:
             return None
 
-        how_to_solve = self._generate_how_to_solve(
-            item_kind="Active Alert",
-            what=what,
-            topic_name=topic_name,
-            document_title=document.title if document else None,
-            document_snippet=snippet,
-            client_name=client_name,
-            client_id=client_id,
-            run_id=run_id,
-        )
-        if how_to_solve is None:
-            return None
-
-        return {
+        return {"action": "generate", "gen_kwargs": {
+            "item_kind": "Active Alert",
+            "what": what,
+            "topic_name": topic_name,
+            "document_title": document.title if document else None,
+            "document_snippet": snippet,
+            "client_name": client_name,
+            "client_id": client_id,
+            "run_id": run_id,
+        }, "partial": {
             "what": what,
             "when": when,
-            "how_to_solve": how_to_solve,
             "source": "generated",
             "_cache_key": cache_key,
-        }
+        }}
 
     def process_client(
         self,
@@ -385,7 +389,17 @@ class AISummaryEngine:
         run_id: Optional[str] = None,
         batch_id: Optional[str] = None,
         worker_id: Optional[str] = None,
-    ) -> None:
+    ) -> List[Dict[str, Any]]:
+        """
+        Decide-only pass: writes every ready/skip item immediately (no LLM
+        involved) and returns the list of items that still need a fresh
+        _generate_how_to_solve call, instead of generating them itself.
+        pipeline_stage_ai_summary (aggregation_tasks.py) fans those out via
+        chord and writes them back in pipeline_stage_ai_summary_gather --
+        mirroring pipeline_stage_process's PROCESSING-stage fan-out. Only
+        caller is that stage task; nothing else depends on this method
+        completing all generation synchronously.
+        """
         log = logger.bind(run_id=run_id, batch_id=batch_id, worker_id=worker_id, client_id=client_id,
                            processing_stage="AI_SUMMARY")
         log.info("ai_summary_started")
@@ -393,7 +407,7 @@ class AISummaryEngine:
         client = db.query(Client).filter(Client.id == client_id).first()
         if not client:
             log.error("ai_summary_client_not_found")
-            return
+            return []
 
         risk_narrative_map, alert_narrative_map = self._narrative_maps(db, client_id)
 
@@ -427,39 +441,62 @@ class AISummaryEngine:
             or_(Entity.entity_type != "competitor", Alert.entity_id.is_(None)),
         ).all()
 
-        generated = 0
+        pending: List[Dict[str, Any]] = []
         reused = 0
         skipped = 0
 
         for re in risk_events:
-            summary = self._build_for_risk_event(db, re, risk_narrative_map, client.name, client_id, run_id)
-            if summary is None:
+            result = self._prepare_risk_event(db, re, risk_narrative_map, client.name, client_id, run_id)
+            if result is None:
                 skipped += 1
                 continue
-            explainability = dict(re.explainability or {})
-            explainability["ai_summary"] = summary
-            re.explainability = explainability
-            if summary.get("source") == "narrative":
+            if result["action"] == "ready":
+                explainability = dict(re.explainability or {})
+                explainability["ai_summary"] = result["summary"]
+                re.explainability = explainability
                 reused += 1
-            else:
-                generated += 1
+                continue
+            pending.append({"kind": "risk_event", "id": str(re.id), **result})
 
         db.commit()
 
         for alert in alerts:
-            summary = self._build_for_alert(db, alert, alert_narrative_map, risk_narrative_map, client.name, client_id, run_id)
-            if summary is None:
+            result = self._prepare_alert(db, alert, alert_narrative_map, risk_narrative_map, client.name, client_id, run_id)
+            if result is None:
                 skipped += 1
                 continue
-            explainability = dict(alert.explainability or {})
-            explainability["ai_summary"] = summary
-            alert.explainability = explainability
-            if summary.get("source") == "narrative":
+            if result["action"] == "ready":
+                explainability = dict(alert.explainability or {})
+                explainability["ai_summary"] = result["summary"]
+                alert.explainability = explainability
                 reused += 1
-            else:
-                generated += 1
+                continue
+            pending.append({"kind": "alert", "id": str(alert.id), **result})
 
         db.commit()
 
-        log.info("ai_summary_complete", risk_events=len(risk_events), alerts=len(alerts),
-                  generated=generated, reused=reused, skipped=skipped)
+        log.info("ai_summary_decide_complete", risk_events=len(risk_events), alerts=len(alerts),
+                  reused=reused, skipped=skipped, pending_generation=len(pending))
+        return pending
+
+    def finalize_generated(self, db: Session, kind: str, item_id: str, partial: Dict[str, Any], how_to_solve: Optional[str]) -> bool:
+        """
+        Write-back half of the old inline generation path, run from
+        pipeline_stage_ai_summary_gather once a fanned-out
+        _generate_how_to_solve call has returned. how_to_solve is None on
+        any LLM failure (see _generate_how_to_solve's fail-safe convention)
+        -- same as the old code, that means skip: never overwrite a
+        previously-good summary with a partial one. Returns True if a write
+        happened.
+        """
+        if how_to_solve is None:
+            return False
+        model = RiskEvent if kind == "risk_event" else Alert
+        obj = db.query(model).filter(model.id == item_id).first()
+        if not obj:
+            return False
+        summary = {**partial, "how_to_solve": how_to_solve}
+        explainability = dict(obj.explainability or {})
+        explainability["ai_summary"] = summary
+        obj.explainability = explainability
+        return True

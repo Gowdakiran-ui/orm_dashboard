@@ -1382,16 +1382,16 @@ def _stage_narrative(ctx: PipelineContext, db) -> None:
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
 
 
-def _stage_ai_summary(ctx: PipelineContext, db) -> None:
-    # Runs after NARRATIVE so each Risk Event/Alert's AI Summary can reuse
-    # a just-computed narrative RCA (evidence_metadata.rca) instead of
-    # generating a second, potentially-conflicting explanation.
-    from app.services.intelligence.ai_summary_engine import AISummaryEngine
-    log = logger.bind(stage="AI_SUMMARY", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
-    t0 = time.perf_counter()
-    log.info("stage_started")
-    AISummaryEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
-    log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
+# _stage_ai_summary (the old fully-synchronous AI_SUMMARY stage function)
+# was removed here, not left as dead code like _stage_process above --
+# unlike that one, it would no longer behave correctly if called: it relied
+# on AISummaryEngine.process_client() itself calling _generate_how_to_solve
+# and writing every result, but process_client is now a decide-only pass
+# (see its docstring) that returns pending items instead of generating them.
+# Runs after NARRATIVE so each Risk Event/Alert's AI Summary can reuse a
+# just-computed narrative RCA (evidence_metadata.rca) instead of generating
+# a second, potentially-conflicting explanation -- pipeline_stage_ai_summary
+# below preserves that same chain position.
 
 
 def _stage_is_fresh_enough(db, model, client_id: str, hours: float) -> bool:
@@ -1663,9 +1663,10 @@ pipeline_stage_alert = _make_aggregation_stage_task(
 pipeline_stage_narrative = _make_aggregation_stage_task(
     "NARRATIVE", _stage_narrative, "Generating narratives",
     "app.workers.aggregation_tasks.pipeline_stage_narrative")
-pipeline_stage_ai_summary = _make_aggregation_stage_task(
-    "AI_SUMMARY", _stage_ai_summary, "Generating AI summaries",
-    "app.workers.aggregation_tasks.pipeline_stage_ai_summary")
+# pipeline_stage_ai_summary is NOT built from _make_aggregation_stage_task
+# (see its own definition below, next to pipeline_ai_summary_generate_one /
+# pipeline_stage_ai_summary_gather) -- it fans its per-item LLM generation
+# out via chord, the same B1 fix PROCESSING already has (pipeline_stage_process).
 pipeline_stage_reputation = _make_aggregation_stage_task(
     "REPUTATION", _stage_reputation, "Calculating reputation scores",
     "app.workers.aggregation_tasks.pipeline_stage_reputation")
@@ -1675,6 +1676,126 @@ pipeline_stage_executive = _make_aggregation_stage_task(
 pipeline_stage_benchmark = _make_aggregation_stage_task(
     "BENCHMARK", _stage_benchmark, "Running competitor benchmarks",
     "app.workers.aggregation_tasks.pipeline_stage_benchmark")
+
+
+# ---------------------------------------------------------------------------
+# AI_SUMMARY stage -- B1 fix. Same chord fan-out shape as PROCESSING's
+# pipeline_stage_process / pipeline_process_one_document /
+# pipeline_stage_process_gather above: a cheap synchronous decide pass,
+# then one Celery task per item needing a fresh LLM call, then a gather
+# callback that writes the results back. Chain position (after NARRATIVE,
+# before REPUTATION) is unchanged -- this only changes how AI_SUMMARY does
+# its own work, not where it sits in run_client_pipeline's chain.
+# ---------------------------------------------------------------------------
+
+@shared_task(bind=True, queue="pipeline_queue", max_retries=0)
+def pipeline_stage_ai_summary(self, run_id: str, client_id: str, owner_id: str) -> None:
+    """
+    AI_SUMMARY stage entry point. Does the FSM transition (cheap, DB-only),
+    then AISummaryEngine.process_client's decide-only pass -- which writes
+    every item needing no LLM call (narrative-linked reuse, or unchanged
+    cache) immediately, and returns only the items that need a fresh
+    _generate_how_to_solve call. Which items those are is only known after
+    that pass runs, so (like pipeline_stage_process) the chord can't be
+    built up-front in run_client_pipeline's static chain() call; self.replace()
+    splices it in in place of this task. See pipeline_ai_summary_generate_one
+    for the fan-out unit and pipeline_stage_ai_summary_gather for the
+    gather/callback.
+    """
+    worker_id = f"worker-{os.getpid()}"
+    log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task="pipeline_stage_ai_summary")
+    db = SessionLocal()
+    try:
+        if not _update_run(db, run_id, "AI_SUMMARY", "Generating AI summaries"):
+            log.warning("stage_skipped_stale_duplicate", stage="AI_SUMMARY")
+            db.commit()
+            return
+        run = db.query(PipelineRun).filter(PipelineRun.run_id == run_id).with_for_update().first()
+        if run:
+            run.current_worker = worker_id
+        db.commit()
+
+        from app.services.intelligence.ai_summary_engine import AISummaryEngine
+        pending = AISummaryEngine().process_client(
+            db, client_id, run_id=run_id, batch_id=run_id[:12], worker_id=worker_id
+        )
+        db.commit()
+
+        if not pending:
+            log.info("stage_skipped_no_generation_needed")
+            return
+
+        header = group(
+            pipeline_ai_summary_generate_one.s(item) for item in pending
+        )
+        callback = pipeline_stage_ai_summary_gather.s(run_id, client_id, owner_id, len(pending))
+        raise self.replace(chord(header, callback))
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, queue="aggregation_queue", max_retries=0)
+def pipeline_ai_summary_generate_one(self, item: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Fan-out unit for pipeline_stage_ai_summary's per-item LLM generation
+    (see that task's docstring). One Celery task per Risk Event/Alert
+    needing a fresh how_to_solve call, dispatched as a chord so
+    aggregation_queue's concurrency=3 (already sized for this exact
+    I/O-bound LLM work -- see docker-compose.yml) actually parallelizes a
+    stage's items instead of a single task looping over them serially --
+    same reasoning as pipeline_process_one_document for PROCESSING.
+    AISummaryEngine._generate_how_to_solve already catches its own
+    exceptions and returns None on any failure (fail-safe convention shared
+    with narrative_engine.py's _generate_rca), so this task never raises;
+    it just passes that result through to the gather callback.
+    """
+    from app.services.intelligence.ai_summary_engine import AISummaryEngine
+    how_to_solve = AISummaryEngine()._generate_how_to_solve(**item["gen_kwargs"])
+    return {**item, "how_to_solve": how_to_solve}
+
+
+@shared_task(bind=True, queue="pipeline_queue", max_retries=0)
+def pipeline_stage_ai_summary_gather(
+    self, results: List[Dict[str, Any]], run_id: str, client_id: str, owner_id: str, total: int
+) -> None:
+    """
+    Chord callback for the AI_SUMMARY stage fan-out (see
+    pipeline_stage_ai_summary above). Runs once every
+    pipeline_ai_summary_generate_one task in the group has returned.
+
+    Never raises regardless of how many generations failed: matching the
+    old serial loop's semantics exactly, an item's LLM failure was always
+    left un-written (existing explainability untouched, if any), never
+    something that aborted the AI_SUMMARY stage or blocked the chain from
+    continuing to REPUTATION. AISummaryEngine.finalize_generated implements
+    that exact fail-safe write-or-skip decision -- see its own docstring --
+    so this callback is just that loop plus one commit, matching
+    pipeline_stage_process_gather's own shape for PROCESSING.
+    """
+    worker_id = f"worker-{os.getpid()}"
+    log = logger.bind(run_id=run_id, client_id=client_id, worker_id=worker_id, task="pipeline_stage_ai_summary_gather")
+    from app.services.intelligence.ai_summary_engine import AISummaryEngine
+    engine = AISummaryEngine()
+    generated = 0
+    failed_or_skipped = 0
+    db = SessionLocal()
+    try:
+        for r in results:
+            ok = bool(r) and engine.finalize_generated(db, r["kind"], r["id"], r["partial"], r.get("how_to_solve"))
+            if ok:
+                generated += 1
+            else:
+                failed_or_skipped += 1
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+    log.info("stage_complete", generated=generated, failed_or_skipped=failed_or_skipped, total=total)
 
 
 @shared_task(bind=True, queue="pipeline_queue", max_retries=0)
