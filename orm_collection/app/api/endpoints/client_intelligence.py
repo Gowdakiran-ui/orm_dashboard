@@ -1026,6 +1026,13 @@ def search_client_product(
             from app.services.intelligence.benchmark_engine import BenchmarkEngine
             RiskEngine().process_client(db, str(client_id))
             BenchmarkEngine().calculate_product_benchmarks(db, str(client_id))
+            # Neither engine call above commits (they rely on their caller,
+            # same as the Celery pipeline's own db.commit() after
+            # process_client) -- without this, the ProductBenchmark row this
+            # request just computed is rolled back when get_db() closes the
+            # session, and every subsequent search recomputes from scratch
+            # instead of reading a persisted row.
+            db.commit()
             benchmark = db.query(ProductBenchmark).filter(
                 ProductBenchmark.product_entity_id == tracked_entity.id
             ).order_by(ProductBenchmark.created_at.desc()).first()
