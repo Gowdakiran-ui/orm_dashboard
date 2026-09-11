@@ -17,6 +17,7 @@ import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { fetchDocumentDetails, searchCompetitor } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { ProductCompareSection } from "@/components/ProductCompareSection";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -770,6 +771,19 @@ export function CompetitorsTab({
         </CardContent>
       </Card>
       </>
+      )}
+
+      {/* PRODUCT COMPARE -- below the Competitor Compare view (Product
+          Compare task, Part 2). Needs a tracked competitor to know which
+          competitor's product to search under, so it only renders once a
+          search above has resolved to one. */}
+      {selectedCompetitor && (
+        <ProductCompareSection
+          clientId={clientId}
+          activeClientName={activeClientName}
+          competitorEntityId={selectedCompetitor.entity_id}
+          competitorName={selectedCompetitor.name}
+        />
       )}
 
       {/* Details Drawer (Slide-Over Panel) -- kept high-opacity (not the

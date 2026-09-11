@@ -339,7 +339,8 @@ CREATE TABLE public.entities (
     domain character varying(255),
     linkedin_url character varying(1024),
     ticker_symbol character varying(20),
-    industry character varying(100)
+    industry character varying(100),
+    parent_entity_id uuid
 );
 
 
@@ -556,6 +557,37 @@ CREATE TABLE public.pipeline_runs (
     duration_s double precision,
     processing_started_at timestamp with time zone,
     execution_duration_s double precision
+);
+
+
+--
+-- Name: product_benchmarks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.product_benchmarks (
+    id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    product_entity_id uuid NOT NULL,
+    reputation_score double precision NOT NULL,
+    executive_reputation_score double precision NOT NULL,
+    sentiment_score double precision NOT NULL,
+    risk_score double precision NOT NULL,
+    visibility_score double precision NOT NULL,
+    share_of_voice double precision NOT NULL,
+    top_narrative character varying(255),
+    rank integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    run_id character varying(100),
+    batch_id character varying(100),
+    worker_id character varying(100),
+    latency_ms double precision,
+    retry_count integer,
+    calculation_lineage jsonb,
+    evidence_metadata jsonb,
+    health_status character varying(50),
+    confidence_score double precision,
+    data_coverage double precision DEFAULT 0.40,
+    CONSTRAINT ck_product_benchmarks_confidence_score CHECK (((confidence_score IS NULL) OR ((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))))
 );
 
 
@@ -955,6 +987,22 @@ ALTER TABLE ONLY public.documents
 
 ALTER TABLE ONLY public.entities
     ADD CONSTRAINT entities_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: product_benchmarks product_benchmarks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT product_benchmarks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: product_benchmarks uq_product_benchmark_run; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT uq_product_benchmark_run UNIQUE (product_entity_id, run_id);
 
 
 --
@@ -1479,6 +1527,27 @@ CREATE INDEX ix_entities_client_id ON public.entities USING btree (client_id);
 
 
 --
+-- Name: ix_entities_parent_entity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entities_parent_entity_id ON public.entities USING btree (parent_entity_id);
+
+
+--
+-- Name: ix_product_benchmarks_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_product_benchmarks_client_id ON public.product_benchmarks USING btree (client_id);
+
+
+--
+-- Name: ix_product_benchmarks_product_entity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_product_benchmarks_product_entity_id ON public.product_benchmarks USING btree (product_entity_id);
+
+
+--
 -- Name: ix_entity_aliases_alias_text; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1879,6 +1948,30 @@ ALTER TABLE ONLY public.documents
 
 ALTER TABLE ONLY public.entities
     ADD CONSTRAINT entities_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: entities entities_parent_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entities
+    ADD CONSTRAINT entities_parent_entity_id_fkey FOREIGN KEY (parent_entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
+
+
+--
+-- Name: product_benchmarks product_benchmarks_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT product_benchmarks_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: product_benchmarks product_benchmarks_product_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT product_benchmarks_product_entity_id_fkey FOREIGN KEY (product_entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
 
 
 --

@@ -20,6 +20,7 @@ from app.models.narrative import Narrative
 from app.models.reputation import ReputationScore
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.competitor_benchmark import CompetitorBenchmark
+from app.models.product_benchmark import ProductBenchmark
 from app.models.client_processing_summary import ClientProcessingSummary
 from app.models.executive_candidate import ExecutiveCandidate
 from app.models.competitor_candidate import CompetitorCandidate

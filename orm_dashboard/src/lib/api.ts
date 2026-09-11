@@ -523,6 +523,13 @@ export async function searchCompetitor(clientId: string, name: string, signal?: 
   return parseOrThrow(res);
 }
 
+export async function searchProduct(clientId: string, name: string, parentEntityId?: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ name });
+  if (parentEntityId) params.set("parent_entity_id", parentEntityId);
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/product-search?${params.toString()}`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function promoteCompetitorCandidates(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/promote-competitors`, {
     method: "POST",

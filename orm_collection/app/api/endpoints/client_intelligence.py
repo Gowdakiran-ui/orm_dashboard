@@ -911,6 +911,170 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
     return {"status": "searching"}
 
 
+@router.get("/{client_id}/product-search", response_model=Dict[str, Any])
+def search_client_product(
+    client_id: UUID,
+    name: str = Query(..., min_length=1),
+    parent_entity_id: UUID = Query(None, description="Entity id of the owning brand (own product) or tracked competitor (competitor's product). Omit to resolve the client's own brand entity."),
+    db: Session = Depends(get_db)
+):
+    """
+    Product-Level Compare, search-first (same shape as search_client_competitor
+    / search_client_executive above): a client types their own product name
+    (parent_entity_id omitted -> resolves the client's brand entity) or a
+    tracked competitor's product name (parent_entity_id = that competitor's
+    entity id, from an already-tracked CompetitorsTab search) and gets back
+    one of the same four states those two endpoints already use.
+
+    Disambiguation follows the executive-search pattern exactly: the
+    fresh-search collection query is scoped "[product name] AND [parent
+    company name]" (entity_search_feed_urls' co_occur_with) -- a bare
+    product name like "Model 3" is too ambiguous alone.
+
+    Known accepted gap for v1 (M6-F1): product matching inherits the
+    existing hardcoded Tesla/Meta/Tata-only confidence-boost limitation in
+    matching_engine.py -- not addressed here, out of scope for this task.
+    """
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    from app.models.entity import Entity, EntityKeyword
+    from app.models.product_benchmark import ProductBenchmark
+    from app.models.rss_feed import RSSFeed
+    from app.models.collection_job import CollectionJob
+    from app.services.client_service import entity_search_feed_urls, provision_entity_search_feeds
+
+    # Resolve the parent brand/competitor entity this product belongs to.
+    # Tenant isolation: the parent must belong to THIS client -- never trust
+    # a caller-supplied parent_entity_id from another client's entity tree.
+    if parent_entity_id is not None:
+        parent_entity = db.query(Entity).filter(
+            Entity.id == parent_entity_id,
+            Entity.client_id == client_id,
+            Entity.entity_type.in_(("brand", "competitor"))
+        ).first()
+        if not parent_entity:
+            raise HTTPException(status_code=400, detail="parent_entity_id must be a brand or competitor entity belonging to this client")
+    else:
+        parent_entity = db.query(Entity).filter(
+            Entity.client_id == client_id,
+            Entity.entity_type == "brand"
+        ).first()
+        if not parent_entity:
+            raise HTTPException(status_code=400, detail="Client has no brand entity configured -- cannot resolve 'own product' parent")
+
+    def _benchmark_payload(entity: "Entity", benchmark) -> Dict[str, Any]:
+        return {
+            "status": "tracked",
+            "product": {
+                "id": str(benchmark.id) if benchmark else None,
+                "entity_id": str(entity.id),
+                "name": entity.name,
+                "parent_entity_id": str(entity.parent_entity_id) if entity.parent_entity_id else None,
+                "parent_entity_type": parent_entity.entity_type,
+                "reputation_score": benchmark.reputation_score if benchmark else None,
+                "sentiment_score": benchmark.sentiment_score if benchmark else None,
+                "risk_score": benchmark.risk_score if benchmark else None,
+                "share_of_voice": benchmark.share_of_voice if benchmark else None,
+                "rank": benchmark.rank if benchmark else 0,
+                "top_narrative": benchmark.top_narrative if benchmark else None,
+                "confidence_score": benchmark.confidence_score if benchmark else None,
+                "data_coverage": benchmark.data_coverage if benchmark else None,
+                "health_status": benchmark.health_status if benchmark else "INSUFFICIENT_EVIDENCE",
+            }
+        }
+
+    def _latest_jobs_terminal(feeds: list) -> bool:
+        terminal = {"completed", "failed"}
+        for feed in feeds:
+            latest_job = db.query(CollectionJob).filter(
+                CollectionJob.source_id == feed.id
+            ).order_by(CollectionJob.started_at.desc()).first()
+            if not latest_job or latest_job.status not in terminal:
+                return False
+        return True
+
+    tracked_entity = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "product",
+        Entity.parent_entity_id == parent_entity.id,
+        Entity.name.ilike(f"%{name}%")
+    ).first()
+
+    if tracked_entity:
+        benchmark = db.query(ProductBenchmark).filter(
+            ProductBenchmark.product_entity_id == tracked_entity.id
+        ).order_by(ProductBenchmark.created_at.desc()).first()
+        if benchmark:
+            return _benchmark_payload(tracked_entity, benchmark)
+
+        search_urls = list(entity_search_feed_urls(tracked_entity.name, co_occur_with=parent_entity.name).values())
+        search_feeds = db.query(RSSFeed).filter(
+            RSSFeed.client_id == client_id,
+            RSSFeed.feed_url.in_(search_urls),
+        ).all()
+        if search_feeds and not _latest_jobs_terminal(search_feeds):
+            return {"status": "searching"}
+
+        if search_feeds:
+            # Same on-demand scoring as search_client_competitor: collection
+            # just finished and nothing has scored this product yet -- run
+            # both engines directly instead of waiting for the next
+            # scheduled pipeline pass.
+            from app.services.intelligence.risk_engine import RiskEngine
+            from app.services.intelligence.benchmark_engine import BenchmarkEngine
+            RiskEngine().process_client(db, str(client_id))
+            BenchmarkEngine().calculate_product_benchmarks(db, str(client_id))
+            benchmark = db.query(ProductBenchmark).filter(
+                ProductBenchmark.product_entity_id == tracked_entity.id
+            ).order_by(ProductBenchmark.created_at.desc()).first()
+
+        return _benchmark_payload(tracked_entity, benchmark)
+
+    # Race guard: a fresh search for this exact (name, parent) may already be
+    # in flight from a concurrent request.
+    race_urls = list(entity_search_feed_urls(name, co_occur_with=parent_entity.name).values())
+    if db.query(RSSFeed).filter(RSSFeed.client_id == client_id, RSSFeed.feed_url.in_(race_urls)).first():
+        return {"status": "searching"}
+
+    # Genuinely new (name, parent) pair -- provision the tracked product
+    # entity now, same pattern as executive-search's brand-scoped provisioning.
+    new_entity = Entity(client_id=client_id, name=name, entity_type="product", parent_entity_id=parent_entity.id)
+    db.add(new_entity)
+    db.flush()
+    db.add(EntityKeyword(
+        entity_id=new_entity.id,
+        keyword_text=name,
+        match_type="exact",
+        category="PRODUCT",
+        priority=1,
+        is_active=True
+    ))
+    provision_entity_search_feeds(db, client_id, name, co_occur_with=parent_entity.name)
+    db.commit()
+
+    from app.services.matching_engine import engine_instance
+    engine_instance.refresh_processor(db)
+    try:
+        from app.utils.redis_client import redis_client
+        redis_client.publish('keyword_updated', 'refresh')
+    except Exception:
+        pass
+    from app.services.intelligence.entity_discovery import entity_discovery_engine
+    entity_discovery_engine._rematch_recent_documents_for_new_entity(db, str(client_id), new_entity.id, name)
+
+    search_feeds = db.query(RSSFeed).filter(
+        RSSFeed.client_id == client_id,
+        RSSFeed.feed_url.in_(list(entity_search_feed_urls(name, co_occur_with=parent_entity.name).values())),
+    ).all()
+    from app.core.celery_app import celery_app
+    for feed in search_feeds:
+        celery_app.send_task("app.workers.collection_tasks.fetch_feed_task", args=[str(feed.id)])
+
+    return {"status": "searching"}
+
+
 @router.post("/{client_id}/promote-competitors", response_model=Dict[str, Any])
 def promote_competitor_candidates(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()

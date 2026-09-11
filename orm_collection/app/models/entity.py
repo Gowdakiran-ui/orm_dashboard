@@ -12,18 +12,24 @@ class Entity(Base):
     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     entity_type = Column(String(50)) # 'brand', 'person', 'product', 'competitor'
-    
+
+    # Self-referencing FK: for a product entity, the brand/competitor entity
+    # it belongs to. "Own vs. competitor" is derived by joining to
+    # parent_entity_id -> entity_type, never duplicated on this row.
+    parent_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True)
+
     # Verification Fields
     website = Column(String(255))
     domain = Column(String(255))
     linkedin_url = Column(String(1024))
     ticker_symbol = Column(String(20))
     industry = Column(String(100))
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     keywords = relationship("EntityKeyword", back_populates="entity", cascade="all, delete-orphan")
     aliases = relationship("EntityAlias", back_populates="entity", cascade="all, delete-orphan")
+    parent_entity = relationship("Entity", remote_side=[id], foreign_keys=[parent_entity_id])
 
 class EntityAlias(Base):
     __tablename__ = "entity_aliases"
