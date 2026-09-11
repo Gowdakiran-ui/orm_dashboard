@@ -44,18 +44,16 @@ NARRATIVE_LLM_SPLIT_MIN_CLUSTER_SIZE = 8
 # if that document already cleared the same "real signal" bar the risk-event
 # gate applies (YouTube view/comment floor, RSS medium/high trust tier).
 #
-# No single-high-trust-source exception. Investigated live (2026-09-11)
-# against the 85 real currently-tracked single-document narratives sourced
-# from a high-trust RSS outlet (Reuters/Bloomberg/Economic Times/etc.): the
-# large majority were routine, non-negative business items (stock-price
-# ticks, earnings beats -- only 17/85 even carried negative sentiment), and
-# several were the exact same one article fanned out into 3-4 separate
-# "narratives" purely by topic classification (one Reuters "no Tesla recall"
-# article alone seeded Market Position / Regulatory Scrutiny / Full
-# Self-Driving narratives simultaneously). A single-high-trust-source
-# exception would reopen the CEO's single-mention complaint, just gated to
-# high-trust outlets instead of any outlet -- so the bar is a flat >=2
-# distinct eligible sources, no exception.
+# No RSS-trust-tier exception. Verified live (2026-09-11) against real data:
+# only 8 narrative_gated_insufficient_source_diversity log entries exist
+# platform-wide, and of those, only 2 distinct documents had
+# eligible_source_diversity=1 -- both hn_algolia (Hacker News), not RSS.
+# No Tesla-recall example exists in real data. The motivating case (a single
+# very-significant story, "Google $40B", getting gated) is also hn_algolia --
+# a source type with no trust-tier concept at all, so an RSS-specific
+# exception would not have fixed it. Zero real examples were found of an
+# actual high-trust RSS single source ever being gated. The bar stays a flat
+# >=2 distinct eligible sources, no exception, no logic change.
 NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY = 2
 
 # ─────────────────────────────────────────────────────────────
