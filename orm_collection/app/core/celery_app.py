@@ -94,6 +94,16 @@ celery_app.conf.update(
         # Phase 13: Manual pipeline runs on isolated pipeline_queue
         # This keeps scheduler tasks and manual runs from competing for the same workers
         'app.workers.aggregation_tasks.run_client_pipeline': {'queue': 'pipeline_queue'},
+        # B3 fix (2026-09-11): pipeline_stage_process was previously routed to
+        # nlp_queue -- the same queue as the pipeline_process_one_document
+        # children it fans out via chord (see pipeline_stage_process's own
+        # docstring in aggregation_tasks.py). Since it's a cheap, DB-only
+        # chord-dispatch task (no NLP work itself), it belongs on
+        # pipeline_queue alongside run_client_pipeline/pipeline_stage_finalize,
+        # not competing with its own fan-out children's nlp_queue slots -- a
+        # large client's document backlog was blocking a different, smaller
+        # client's pipeline from even starting.
+        'app.workers.aggregation_tasks.pipeline_stage_process': {'queue': 'pipeline_queue'},
     },
     beat_schedule={
         # --- Collection Layer ---

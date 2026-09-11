@@ -1505,8 +1505,8 @@ def pipeline_stage_collect(self, run_id: str, client_id: str, owner_id: str) -> 
         doc_ids = _stage_collect(ctx, db)
 
         # Collection itself is done here, but pipeline_stage_process
-        # (nlp_queue, concurrency=3) may not actually start for a while if
-        # every slot is busy -- transition into AWAITING_PROCESSING rather
+        # (pipeline_queue) may not actually start for a while if every slot
+        # is busy -- transition into AWAITING_PROCESSING rather
         # than leaving the FSM pinned at COLLECTING for however long that
         # wait turns out to be. If this is a stale/duplicate call (fix
         # #1's redelivery guard), the transition itself is a harmless
@@ -1527,7 +1527,7 @@ def pipeline_stage_collect(self, run_id: str, client_id: str, owner_id: str) -> 
         db.close()
 
 
-@shared_task(bind=True, queue="nlp_queue", max_retries=0)
+@shared_task(bind=True, queue="pipeline_queue", max_retries=0)
 def pipeline_stage_process(self, doc_ids: List[str], run_id: str, client_id: str, owner_id: str) -> None:
     """
     PROCESSING stage entry point. Does the FSM transition and the bulk

@@ -11,16 +11,17 @@ FSM States (ordered):
     FINALIZING → SUCCESS
                         ↘ FAILED (from any state)
 
-AWAITING_PROCESSING (2026-09-03): pipeline_stage_process (nlp_queue,
-concurrency=3) doesn't start executing the moment it's dispatched -- it
-queues behind whatever's already using the NLP workers. Before this stage
-existed, the FSM just stayed at COLLECTING the whole time a run sat
-queued (confirmed live: over an hour under 5-way concurrent load),
-which looked stalled/stale rather than honestly "done collecting,
-waiting for capacity." pipeline_stage_collect transitions into this
-stage right before returning; pipeline_stage_process's existing
-transition into PROCESSING (unchanged) naturally closes it out once a
-slot actually frees up.
+AWAITING_PROCESSING (2026-09-03): pipeline_stage_process doesn't start
+executing the moment it's dispatched -- it queues behind whatever's already
+using its worker slots. Before this stage existed, the FSM just stayed at
+COLLECTING the whole time a run sat queued (confirmed live: over an hour
+under 5-way concurrent load), which looked stalled/stale rather than
+honestly "done collecting, waiting for capacity." pipeline_stage_collect
+transitions into this stage right before returning; pipeline_stage_process's
+existing transition into PROCESSING (unchanged) naturally closes it out once
+a slot actually frees up. (2026-09-11, B3 fix: pipeline_stage_process itself
+now runs on pipeline_queue, not nlp_queue -- the per-document NLP work it
+fans out via chord still runs on nlp_queue, concurrency=3.)
 """
 import uuid
 from datetime import datetime, timezone
