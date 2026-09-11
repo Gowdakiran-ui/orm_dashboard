@@ -72,6 +72,24 @@ def is_youtube_reach_eligible(view_count, comment_count=None) -> bool:
     return (view_count or 0) >= YOUTUBE_MIN_VIEW_COUNT or (comment_count or 0) >= YOUTUBE_MIN_COMMENT_COUNT
 
 
+def is_document_reach_trust_eligible(document_type, title, view_count=None, comment_count=None) -> bool:
+    """
+    Document-level reach/trust eligibility, factored out of risk_engine.py's
+    inline dispatch (document_type == "youtube"/"rss" -> is_youtube_reach_eligible
+    / is_rss_trust_eligible, else eligible by default) so other callers --
+    narrative_engine.py's narrative eligibility gate -- can reuse the exact
+    same rule instead of re-deriving it. Behavior is identical to
+    risk_engine.py's own reach_trust_eligible computation for every existing
+    document_type; risk_engine.py is left as-is (not refactored to call this)
+    since this task's scope is the narrative gate, not a risk_engine.py change.
+    """
+    if document_type == "youtube" and view_count is not None:
+        return is_youtube_reach_eligible(view_count, comment_count)
+    elif document_type == "rss":
+        return is_rss_trust_eligible(title)
+    return True
+
+
 def is_rss_trust_eligible(title: str) -> bool:
     """
     Hard gate for RSS: eligible only if the outlet's existing trust tier

@@ -18,6 +18,7 @@ from app.models.narrative import Narrative
 from app.models.entity import EntityMention, Entity
 from app.models.client import Client
 from app.core.risk_config import TOPIC_WEIGHTS, RISK_THRESHOLDS
+from app.core.reach_trust_config import is_document_reach_trust_eligible
 
 logger = structlog.get_logger()
 
@@ -33,6 +34,29 @@ logger = structlog.get_logger()
 # clustering alone already measured ~90%+ coherent in tonight's audit, so
 # it isn't worth the call.
 NARRATIVE_LLM_SPLIT_MIN_CLUSTER_SIZE = 8
+
+# Narrative source-diversity eligibility gate (CEO's ask: a single mention
+# from one source is an individual data point, not a narrative -- real
+# narrative-intelligence systems require independent sources converging on
+# the same story). Reuses the risk-event reach/trust eligibility gate
+# (is_document_reach_trust_eligible, reach_trust_config.py) rather than
+# re-deriving it: a cluster only counts a document's source toward this bar
+# if that document already cleared the same "real signal" bar the risk-event
+# gate applies (YouTube view/comment floor, RSS medium/high trust tier).
+#
+# No single-high-trust-source exception. Investigated live (2026-09-11)
+# against the 85 real currently-tracked single-document narratives sourced
+# from a high-trust RSS outlet (Reuters/Bloomberg/Economic Times/etc.): the
+# large majority were routine, non-negative business items (stock-price
+# ticks, earnings beats -- only 17/85 even carried negative sentiment), and
+# several were the exact same one article fanned out into 3-4 separate
+# "narratives" purely by topic classification (one Reuters "no Tesla recall"
+# article alone seeded Market Position / Regulatory Scrutiny / Full
+# Self-Driving narratives simultaneously). A single-high-trust-source
+# exception would reopen the CEO's single-mention complaint, just gated to
+# high-trust outlets instead of any outlet -- so the bar is a flat >=2
+# distinct eligible sources, no exception.
+NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY = 2
 
 # ─────────────────────────────────────────────────────────────
 # NARRATIVE PROCESSING STATE MACHINE (R2)
@@ -1155,6 +1179,29 @@ class NarrativeEngine:
                     for m in mention_map.get(did, [])
                     if m.entity.entity_type == "person"
                 } - {entity_id for entity_id, _, _, _, _ in prominent_persons}
+
+                # Narrative eligibility gate: a cluster only becomes a
+                # tracked Narrative if at least 2 distinct sources contribute
+                # a reach/trust-eligible document (see
+                # NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY above). Checked
+                # before the evidence-score gate below, as a separate
+                # precondition -- a cluster can have a high evidence_score
+                # from a single ineligible-source document (e.g. one
+                # unrecognized-outlet RSS article with an attached risk
+                # event) and still not be a real, multi-source narrative.
+                eligible_cluster_docs = [
+                    d for d in cluster_docs
+                    if is_document_reach_trust_eligible(d.document_type, d.title, d.view_count, d.comment_count)
+                ]
+                eligible_source_diversity = len(set(d.source_id for d in eligible_cluster_docs if d.source_id))
+                if eligible_source_diversity < NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY:
+                    log.info(
+                        "narrative_gated_insufficient_source_diversity",
+                        narrative_name=narrative_name,
+                        eligible_source_diversity=eligible_source_diversity,
+                        doc_count=len(cluster_docs)
+                    )
+                    continue
 
                 # Calculate Confidence & Gate
                 source_diversity = len(set(d.source_id for d in cluster_docs if d.source_id))
