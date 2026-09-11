@@ -56,6 +56,49 @@ NARRATIVE_LLM_SPLIT_MIN_CLUSTER_SIZE = 8
 # >=2 distinct eligible sources, no exception, no logic change.
 NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY = 2
 
+# Narrative velocity/growth eligibility gate (Part D follow-up: a flat
+# mention_count threshold doesn't work on real data -- even >=10 documents
+# wipes out 99.36% of all 2,948 platform-wide narratives, per
+# PART_D_NARRATIVE_VOLUME_THRESHOLD_2026-09-11.md's live read-only query
+# against xoop-prod. Industry practice (Wizikey, trending-topic research)
+# compares current activity to a topic's own recent baseline instead of a
+# fixed count, which also doesn't need retuning as new source platforms add
+# volume). Reuses the topic-level TrendEvent this pipeline already computes
+# and already reads into `trend_strength` a few lines below -- trend_type
+# "Topic", 24h-vs-7d window, TrendDetector.calculate_severity's own >=50%
+# move bar (trend_detector.py) -- rather than deriving a second, parallel
+# velocity metric. Per-cluster document timelines are too sparse to
+# compute a reliable per-narrative baseline directly (median 1 document per
+# narrative platform-wide, per the same live query); the existing
+# topic-level aggregate sidesteps that sparsity, which is exactly why it's
+# reused as-is instead of rebuilt at narrative granularity.
+#
+# Only DECLINING (a confirmed FALLING topic-level trend) is excluded --
+# EMERGING (no trend_event yet) is deliberately let through. Revised
+# 2026-09-11: the initial version also excluded EMERGING, but that
+# structurally prevents the platform from ever surfacing a brand-new
+# reputational risk before it becomes an established trend, defeating the
+# early-warning purpose of the feature. A fading (FALLING) story is the one
+# case genuinely safe to hold back -- it doesn't need active surfacing the
+# way a new or accelerating one does.
+#
+# Verified live (2026-09-11) against real data: of the 2,948 narratives that
+# exist today (pre-dating this gate), 2,845 (96.5%) already have a RISING
+# topic-level trend, 38 (1.3%) FALLING (excluded), and 65 (2.2%) no trend
+# event at all / EMERGING (now let through). Applying this gate to today's
+# data would remove only the 38 DECLINING narratives (1.3% platform-wide);
+# Anthropic (27) and Google (4) keep every one of their narratives, since
+# none of theirs are FALLING -- their earlier all-zero result under the
+# stricter RISING-only version was an artifact of that stricter condition,
+# not of this one.
+#
+# Checked as its own precondition, alongside (not instead of) the
+# reach/trust + source-diversity gate above: credibility (>=2 corroborating
+# sources) and growth (a confirmed accelerating topic-level trend) are two
+# independent, complementary signals -- a narrative can have plenty of
+# corroborating sources and still be flat/declining, or vice versa.
+NARRATIVE_REQUIRE_RISING_TREND = True
+
 # ─────────────────────────────────────────────────────────────
 # NARRATIVE PROCESSING STATE MACHINE (R2)
 # ─────────────────────────────────────────────────────────────
@@ -1198,6 +1241,30 @@ class NarrativeEngine:
                         narrative_name=narrative_name,
                         eligible_source_diversity=eligible_source_diversity,
                         doc_count=len(cluster_docs)
+                    )
+                    continue
+
+                # Narrative velocity/growth eligibility gate (see
+                # NARRATIVE_REQUIRE_RISING_TREND above): excludes only a
+                # cluster whose topic has a CONFIRMED FALLING trend (the
+                # same trend_event looked up above and reused below as
+                # trend_strength) -- a fading story doesn't need active
+                # surfacing. EMERGING (no trend_event yet) and RISING both
+                # pass: a brand-new topic is the earliest point to catch a
+                # real reputational risk, and gating it out until it becomes
+                # an established trend would defeat the feature's
+                # early-warning purpose. No RCA is generated and no row is
+                # written for a narrative gated here -- ties AI-generation
+                # cost to the same display-eligibility decision, same
+                # principle as Risk Events' AI Summary.
+                if NARRATIVE_REQUIRE_RISING_TREND and (
+                    trend_event is not None and trend_event.trend_direction == "FALLING"
+                ):
+                    log.info(
+                        "narrative_gated_insufficient_velocity",
+                        narrative_name=narrative_name,
+                        trend_strength=trend_strength,
+                        has_trend_event=trend_event is not None
                     )
                     continue
 
