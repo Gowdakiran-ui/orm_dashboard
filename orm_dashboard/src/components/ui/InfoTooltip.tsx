@@ -123,7 +123,7 @@ export function InfoTooltip({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const boxBg = isDark ? "bg-black/30" : "bg-black/[0.03]";
+  const boxBg = isDark ? "bg-zinc-950/95" : "bg-white/95";
   const boxBorder = isDark ? "border-white/[0.12]" : "border-black/[0.06]";
   const strongText = isDark ? "text-zinc-100" : "text-zinc-900";
 
