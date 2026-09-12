@@ -128,7 +128,7 @@ class YouTubeAdapter(BaseSearchAdapter):
             return
         self.youtube = build("youtube", "v3", developerKey=self.api_key)
 
-    def search(self, keyword: str, cursor: Optional[str] = None, limit: int = 25, **kwargs) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    def search(self, keyword: str, cursor: Optional[str] = None, limit: int = 25, order: str = "date", **kwargs) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         if not self.available:
             return [], cursor
 
@@ -142,7 +142,7 @@ class YouTubeAdapter(BaseSearchAdapter):
                 maxResults=limit,
                 pageToken=cursor,
                 type="video",
-                order="date"
+                order=order
             )
             response = request.execute()
         except HttpError as e:
@@ -214,14 +214,33 @@ class YouTubeAdapter(BaseSearchAdapter):
             except ValueError:
                 pass
 
+        title = snippet.get("title", "")
         description = snippet.get("description", "")
-        content = description
+        # Part D fix 1: entity matching (matching_engine.py's find_matches,
+        # both at ingestion via document_service.py and later re-derived from
+        # normalized_content by entity_extractor.py) only ever scans this
+        # `content` field, never the separate `title` field returned below --
+        # confirmed live that real high-view videos were sitting uncollected-
+        # looking (0 entity_mentions) because the brand name was only in the
+        # title, with the description empty or generic/promotional (YouTube
+        # descriptions are far less reliable than RSS article bodies, which
+        # is why this same content-only matching pattern doesn't bite RSS in
+        # practice). Prepending the title here, not just passing it alongside
+        # separately, means the fix lands wherever `content`/normalized_content
+        # is read for matching without changing find_matches'/process_document's
+        # signature. evaluate_match_accuracy's existing confidence threshold
+        # and negative-context checks (Nikola Tesla, meta-analysis, unrelated
+        # Tata companies) apply identically regardless of whether the matched
+        # span falls in the title or the description, so this doesn't bypass
+        # those safeguards.
+        content = f"{title}\n\n{description}" if title else description
         view_count = None
         comment_count = None
         if statistics:
             view_str = _format_count(statistics.get("viewCount"))
             comment_str = _format_count(statistics.get("commentCount"))
-            content = f"{view_str} views, {comment_str} comments\n\n{description}"
+            content = f"{title}\n\n{view_str} views, {comment_str} comments\n\n{description}" if title \
+                else f"{view_str} views, {comment_str} comments\n\n{description}"
             # Real integers for reach-weighted risk scoring (risk_engine.py) --
             # the formatted string above is for human-readable content only
             # and is lossy (K/M-rounded); these are the actual API values.
@@ -237,7 +256,7 @@ class YouTubeAdapter(BaseSearchAdapter):
         return {
             "source_id": source_id,
             "source_type": "youtube",
-            "title": snippet.get("title", ""),
+            "title": title,
             "content": content,
             # youtu.be/{id} keeps the video identifier in the URL PATH, not a
             # query string. canonicalize_url() (text_processing.py) strips

@@ -56,18 +56,40 @@ COMMENT_TO_VIEW_WEIGHT = 10
 # 0.65 trust tier), so low reach / low trust must instead exclude a document
 # from risk-relevance entirely via is_risk_relevant in risk_engine.py, not
 # just down-weight it.
+#
+# YOUTUBE_MIN_VIEW_COUNT was originally 1000, grounded in a generic "any real
+# audience at all" nano-influencer floor. Raised to 10,000 (2026-09-12):
+# published 2026 benchmarks put the floor for "reached a genuinely
+# non-negligible audience" at 10k-100k views even for a smaller channel, and
+# 1,000 was judged too permissive as a real risk-relevance signal. Re-checked
+# against the real current corpus (159 YouTube documents with view_count
+# populated, prod DB, 2026-09-12): raising the view floor alone takes overall
+# eligibility (view OR comment) from 73.0% (116/159) to 27.7% (44/159).
+#
+# YOUTUBE_MIN_COMMENT_COUNT was investigated separately per the same
+# discipline, not scaled up to match the 10x view-count increase: among the
+# 118 documents that now fall under the new 10,000-view floor, real
+# comment_count distribution is p50=1, p75=4, p90=19.2, p95=34.3, p99=55.9,
+# max=92 -- the existing 50 threshold already sits almost exactly at that
+# sub-population's p99, i.e. it already selects only genuinely exceptional
+# comment engagement (only 3 of 159 documents clear it on comments alone:
+# 55, 56, and 92 comments). Scaling it up 10x to 500 would exceed every real
+# comment_count ever observed (max 92) and make the comment clause dead
+# weight; raising it to any value above 92 has the same effect. 50 is left
+# unchanged as already well-calibrated, not left provisional.
 # ---------------------------------------------------------------------------
-YOUTUBE_MIN_VIEW_COUNT = 1000
+YOUTUBE_MIN_VIEW_COUNT = 10000
 YOUTUBE_MIN_COMMENT_COUNT = 50
 RSS_ELIGIBLE_TIERS = {"medium", "high"}
 
 
 def is_youtube_reach_eligible(view_count, comment_count=None) -> bool:
     """
-    Hard gate for YouTube: eligible only at or above the real "nano-influencer"
-    reach floor (eMarketer 2026) on views or comments. Callers must only
-    invoke this when view_count is not None -- a document with no reach data
-    at all has no reach signal to gate on (see get_reach_modifier).
+    Hard gate for YouTube: eligible only at or above the real "genuinely
+    non-negligible audience" reach floor (published 2026 benchmarks) on views
+    or comments. Callers must only invoke this when view_count is not None --
+    a document with no reach data at all has no reach signal to gate on (see
+    get_reach_modifier).
     """
     return (view_count or 0) >= YOUTUBE_MIN_VIEW_COUNT or (comment_count or 0) >= YOUTUBE_MIN_COMMENT_COUNT
 

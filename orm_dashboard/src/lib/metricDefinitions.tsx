@@ -176,6 +176,68 @@ export function SentimentScaleDefinition() {
   );
 }
 
+/**
+ * Competitor Compare radar chart (CompetitorsTab.tsx singleCompetitorRadarData)
+ * and its Reputation Compare / Share of Voice bar charts below it. Each axis
+ * value verified directly against the source that computes it:
+ *   - Reputation Score: same 0-100 blended score as ReputationScoreDefinition
+ *     above (client via ReputationEngine; competitor via BenchmarkEngine's
+ *     reputation_score field).
+ *   - Sentiment Score: the -1..+1 average from sentiment_analyzer.py,
+ *     normalized to 0-100 for this chart -- client already 0-100 via
+ *     ReputationEngine's ((avg+1)/2)*100, competitor via the same (x+1)*50
+ *     mapping applied client-side (CompetitorsTab.tsx singleCompetitorRadarData).
+ *   - Risk Containment: 100 minus the entity's average Risk Score (0-100,
+ *     same risk_engine.py score as Risk Severity above) -- a frontend-only
+ *     inversion so "higher is better" holds for every radar axis; it is not
+ *     a distinct backend metric of its own.
+ *   - Share of Voice: benchmark_engine.py's calculate_competitor_benchmarks --
+ *     a competitor's SOV = its mention count / (client + every tracked
+ *     competitor's mention count) x 100 over the same rolling window the
+ *     rest of the benchmark run uses. The client's own SOV (no benchmark row
+ *     of its own) is 100 minus the sum of every tracked competitor's SOV
+ *     (utils/shareOfVoice.ts calculateClientSOV), floored at 0.
+ */
+export function CompetitorRadarAxesDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Competitor Comparison Metrics</span>
+      <span className="block">
+        <b>Reputation Score</b> (0–100) — the same blended reputation score
+        used everywhere else in this dashboard.
+      </span>
+      <span className="mt-1 block">
+        <b>Sentiment Score</b> — average coverage tone, normalized from the
+        -1.0..+1.0 scale to 0–100 for this chart (50 = neutral).
+      </span>
+      <span className="mt-1 block">
+        <b>Risk Containment</b> — 100 minus the entity&apos;s average Risk
+        Score, so a higher bar always means lower risk exposure.
+      </span>
+      <span className="mt-1 block">
+        <b>Share of Voice</b> — this entity&apos;s share of total tracked
+        mentions (itself vs. client + every tracked competitor), as a
+        percentage.
+      </span>
+    </>
+  );
+}
+
+export function ShareOfVoiceDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Share of Voice (SOV)</span>
+      <span className="block">
+        A competitor&apos;s share of total tracked mentions: its mention
+        count divided by (client + every tracked competitor&apos;s mention
+        count), as a percentage. The client&apos;s own SOV is 100 minus the
+        sum of every tracked competitor&apos;s SOV, floored at 0 — it has no
+        benchmark row of its own to read a mention count from directly.
+      </span>
+    </>
+  );
+}
+
 export function RiskCountSummaryDefinition() {
   return (
     <>

@@ -18,6 +18,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { ReputationScoreDefinition } from "@/lib/metricDefinitions";
+import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
 export interface ExecutivesTabProps {
   execHistoryLoading: boolean;
@@ -477,7 +478,7 @@ export function ExecutivesTab({
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
                       <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
                       <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} />
-                      <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
+                      <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
                       {Object.keys(execHistory).map((name, idx) => {
                         const colors = ["#38BDF8", "#EF4444", "#EAB308", "#10B981"];
                         const col = colors[idx % colors.length];

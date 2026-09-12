@@ -14,10 +14,13 @@ import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
+import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 import { fetchDocumentDetails, searchCompetitor } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { ProductCompareSection } from "@/components/ProductCompareSection";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { CompetitorRadarAxesDefinition, ReputationScoreDefinition, ShareOfVoiceDefinition } from "@/lib/metricDefinitions";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -531,6 +534,7 @@ export function CompetitorsTab({
               <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                 <Compass className="h-4 w-4 text-[#D4AF37] mr-2" />
                 Competitor Comparison
+                <InfoTooltip label="About these metrics"><CompetitorRadarAxesDefinition /></InfoTooltip>
               </CardTitle>
               <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>{activeClientName} vs. {selectedCompetitor?.name || "selected competitor"} — Reputation, Sentiment, Risk Containment, and Share of Voice</CardDescription>
             </CardHeader>
@@ -547,7 +551,7 @@ export function CompetitorsTab({
 
                     {/* THE ONE SELECTED COMPETITOR */}
                     <Radar name={selectedCompetitor.name} dataKey={selectedCompetitor.name} stroke="#38BDF8" fill="#38BDF8" fillOpacity={0.15} strokeWidth={2} />
-                    <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', borderRadius: '6px', fontFamily: 'monospace', fontSize: 12 }} />
+                    <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', borderRadius: '6px', fontFamily: 'monospace', fontSize: 12 }} />
                   </RadarChart>
                 </ResponsiveContainer>
               ) : (
@@ -578,6 +582,7 @@ export function CompetitorsTab({
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                   <BarChart3 className="h-4 w-4 text-[#D4AF37] mr-2" />
                   Reputation Compare
+                  <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pl-2">
@@ -597,7 +602,7 @@ export function CompetitorsTab({
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
                           <XAxis dataKey="name" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
                           <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} />
-                          <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
+                          <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
                           <Bar dataKey="Score" fill="#D4AF37" radius={[3, 3, 0, 0]} />
                       </BarChart>
                       </ResponsiveContainer>
@@ -629,6 +634,7 @@ export function CompetitorsTab({
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                   <Users className="h-4 w-4 text-blue-500 mr-2" />
                   Share of Voice (SOV)
+                  <InfoTooltip label="About Share of Voice"><ShareOfVoiceDefinition /></InfoTooltip>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pl-2">
@@ -651,7 +657,7 @@ export function CompetitorsTab({
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
                           <XAxis dataKey="name" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
                           <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} />
-                          <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
+                          <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
                           <Bar dataKey="Share of Voice" fill="#38BDF8" radius={[3, 3, 0, 0]} />
                       </BarChart>
                       </ResponsiveContainer>

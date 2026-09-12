@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Compass, Users, MessageSquare, AlertOctagon, TrendingUp, Cpu } from "lucide-react";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, LineChart as RechartsLineChart, Line,
@@ -317,11 +318,11 @@ export function NarrativeAnalyticsPanel({
                             </div>
                             <div className="flex justify-between space-x-6">
                               <span className={mutedText(theme)}>Risk Score:</span>
-                              <span className="text-red-500 font-bold">{data.risk}</span>
+                              <span className="text-red-500 font-bold">{formatScore(data.risk, 1)}</span>
                             </div>
                             <div className="flex justify-between space-x-6">
                               <span className={mutedText(theme)}>Velocity:</span>
-                              <span className={`font-bold ${bodyText(theme)}`}>{data.strength?.toFixed(1)}</span>
+                              <span className={`font-bold ${bodyText(theme)}`}>{formatScore(data.strength, 1)}</span>
                             </div>
                             <div className="flex justify-between space-x-6">
                               <span className={mutedText(theme)}>Classification:</span>
@@ -383,6 +384,7 @@ export function NarrativeAnalyticsPanel({
                   <YAxis stroke={axisStroke} fontSize={9} />
                   <Tooltip
                     shared
+                    formatter={tooltipScoreFormatter}
                     contentStyle={tooltipStyle}
                   />
                   {Object.keys(execHistory || {}).map((name, idx) => {

@@ -18,6 +18,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { AverageRiskScoreFeedDefinition } from "@/lib/metricDefinitions";
+import { formatScore } from "@/utils/formatScore";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface NarrativesTabProps {
@@ -258,15 +259,15 @@ export function NarrativesTab({
           </div>
           <div className="flex justify-between space-x-6">
             <span className={mutedText(theme)}>Risk Score:</span>
-            <span className="text-red-500 font-bold">{data.risk} pts</span>
+            <span className="text-red-500 font-bold">{formatScore(data.risk, 1)} pts</span>
           </div>
           <div className="flex justify-between space-x-6">
             <span className={mutedText(theme)}>Velocity:</span>
-            <span className={`font-bold ${bodyText(theme)}`}>{data.trend?.toFixed(1)}%</span>
+            <span className={`font-bold ${bodyText(theme)}`}>{formatScore(data.trend, 1)}%</span>
           </div>
           <div className="flex justify-between space-x-6">
             <span className={mutedText(theme)}>Sentiment:</span>
-            <span className={`font-bold ${sentimentColor}`}>{data.sentiment?.toFixed(2)}</span>
+            <span className={`font-bold ${sentimentColor}`}>{formatScore(data.sentiment, 2)}</span>
           </div>
           <div className="flex justify-between space-x-6">
             <span className={mutedText(theme)}>Volume:</span>

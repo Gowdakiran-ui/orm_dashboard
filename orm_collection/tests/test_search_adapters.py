@@ -44,7 +44,12 @@ def test_youtube_adapter_normalize():
     # or every video collapses onto the same canonical URL and gets
     # silently deduplicated after the first one ever saved.
     assert normalized["url"] == "https://youtu.be/test_vid_123"
-    assert normalized["content"] == "Test youtube content"
+    # Part D fix 1: title is prepended to content so entity matching (which
+    # only ever scans `content`/normalized_content, never the separate
+    # `title` field) can see brand names that appear in the title but not
+    # the description -- confirmed live as the cause of real high-view
+    # videos never getting an entity_mention at all.
+    assert normalized["content"] == "Test YouTube Title\n\nTest youtube content"
     assert normalized["source_id"] == "test_source_id"
     assert normalized["source_type"] == "youtube"
     assert normalized["author"] == "testchannel"
@@ -66,7 +71,7 @@ def test_youtube_adapter_normalize_includes_stats_prefix_when_available():
 
     normalized = adapter.normalize(mock_raw_data, "test_source_id")
 
-    assert normalized["content"] == "1.2M views, 340 comments\n\nSome description"
+    assert normalized["content"] == "Stats Video\n\n1.2M views, 340 comments\n\nSome description"
 
 
 def test_youtube_adapter_unavailable_without_api_key(monkeypatch):

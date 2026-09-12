@@ -11,6 +11,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { ReputationScoreDefinition, SentimentScaleDefinition } from "@/lib/metricDefinitions";
+import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
 export interface OverviewAnalyticsPanelProps {
   sentimentDistData: any[];
@@ -102,7 +103,7 @@ export function OverviewAnalyticsPanel({
     return (
       <div style={tooltipStyle} className="space-y-1 max-w-[260px]">
         <div className="font-bold">{label}</div>
-        <div>Sentiment: {point.Sentiment >= 0 ? "+" : ""}{point.Sentiment.toFixed(2)}</div>
+        <div>Sentiment: {point.Sentiment >= 0 ? "+" : ""}{formatScore(point.Sentiment, 2)}</div>
         {point.meaningful && driver && driver.rootCause ? (
           <div className="pt-1 border-t border-current/10 space-y-0.5">
             <div className="text-[10px] uppercase opacity-70">Driving narrative ({driver.mentions} doc{driver.mentions === 1 ? "" : "s"})</div>
@@ -265,7 +266,7 @@ export function OverviewAnalyticsPanel({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
                   <XAxis dataKey="date" stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} />
                   <YAxis stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: unknown) => (typeof value === "number" ? value.toFixed(2) : (value as React.ReactNode))} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={tooltipScoreFormatter} />
                   <Line
                     type="monotone"
                     dataKey="score"

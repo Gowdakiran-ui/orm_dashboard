@@ -1095,11 +1095,33 @@ def _get_or_create_youtube_source(db):
     return db.query(Source).filter(Source.url == synthetic_url).first()
 
 
+# Part D fix 2: two independent pagination streams per keyword, each with
+# its own SearchCursor row (keyed by this source_type string, not a schema
+# change) and its own 60-minute cooldown/quota reservation:
+#   - "youtube" (order=date, unchanged): fast detection of brand-new content,
+#     which order=relevance alone would risk delaying (a just-published video
+#     with real risk content but not yet any engagement ranks poorly on
+#     relevance).
+#   - "youtube_relevance" (order=relevance, new): reaches high-signal videos
+#     regardless of age. Real cursor state investigated 2026-09-12 showed the
+#     date-only cursor for high-volume keywords ("Anthropic", "Google") had
+#     only ever paged through the single most recent 25 results in this
+#     deployment's entire history -- a genuinely viral older video is
+#     structurally unreachable by date-ordered pagination alone.
+_YOUTUBE_SEARCH_ORDERS = (
+    ("youtube", "date"),
+    ("youtube_relevance", "relevance"),
+)
+
+
 def _stage_collect_youtube(ctx: PipelineContext, db, client, log) -> List[str]:
     """
     Search YouTube for this client's single highest-priority active
-    keyword (2b decision: precision over breadth -- one search.list call,
-    not an OR-joined multi-keyword query) and persist any new videos.
+    keyword (2b decision: precision over breadth -- one search.list call
+    per order, not an OR-joined multi-keyword query) and persist any new
+    videos. Runs one search.list call per entry in _YOUTUBE_SEARCH_ORDERS
+    (currently 2: date + relevance), each independently cooldown-gated and
+    quota-reserved.
 
     Reachability: this function is only ever called from _stage_collect,
     which only ever runs as pipeline_stage_collect inside run_client_pipeline
@@ -1143,67 +1165,72 @@ def _stage_collect_youtube(ctx: PipelineContext, db, client, log) -> List[str]:
     if not keyword_row:
         return new_doc_ids
 
-    cursor = db.query(SearchCursor).filter(
-        SearchCursor.keyword_id == keyword_row.id,
-        SearchCursor.source_type == "youtube",
-    ).first()
+    adapter = YouTubeAdapter()
+    if not adapter.available:
+        # Adapter itself already logged youtube_adapter_unavailable with the
+        # reason. Don't touch either SearchCursor here -- no call was
+        # attempted, so starting the cooldown against a config problem
+        # (missing key) would just delay the first real attempt once it's
+        # fixed, for no quota-protection benefit.
+        return new_doc_ids
 
-    if cursor and cursor.last_searched_at:
-        elapsed_minutes = (datetime.now(timezone.utc) - cursor.last_searched_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
-        if elapsed_minutes < _YOUTUBE_SEARCH_COOLDOWN_MINUTES:
-            log.info(
-                "youtube_search_skipped_cooldown",
-                keyword=keyword_row.keyword_text,
-                minutes_since_last_search=round(elapsed_minutes, 1),
-                cooldown_minutes=_YOUTUBE_SEARCH_COOLDOWN_MINUTES,
+    source = None
+    for cursor_source_type, order in _YOUTUBE_SEARCH_ORDERS:
+        cursor = db.query(SearchCursor).filter(
+            SearchCursor.keyword_id == keyword_row.id,
+            SearchCursor.source_type == cursor_source_type,
+        ).first()
+
+        if cursor and cursor.last_searched_at:
+            elapsed_minutes = (datetime.now(timezone.utc) - cursor.last_searched_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
+            if elapsed_minutes < _YOUTUBE_SEARCH_COOLDOWN_MINUTES:
+                log.info(
+                    "youtube_search_skipped_cooldown",
+                    keyword=keyword_row.keyword_text,
+                    order=order,
+                    minutes_since_last_search=round(elapsed_minutes, 1),
+                    cooldown_minutes=_YOUTUBE_SEARCH_COOLDOWN_MINUTES,
+                )
+                continue
+
+        try:
+            raw_results, new_cursor_val = adapter.search(
+                keyword_row.keyword_text,
+                cursor=cursor.cursor_value if cursor else None,
+                limit=25,
+                order=order,
             )
-            return new_doc_ids
 
-    try:
-        adapter = YouTubeAdapter()
-        if not adapter.available:
-            # Adapter itself already logged youtube_adapter_unavailable with
-            # the reason. Don't touch SearchCursor here -- no call was
-            # attempted, so starting the 60-minute cooldown against a
-            # config problem (missing key) would just delay the first real
-            # attempt once it's fixed, for no quota-protection benefit.
-            return new_doc_ids
+            if raw_results:
+                if source is None:
+                    source = _get_or_create_youtube_source(db)
+                for res in raw_results:
+                    norm = adapter.normalize(res, str(source.id))
+                    norm_doc = NormalizedDocument(**norm)
+                    is_saved, _, _ = process_and_save_document(db, norm_doc)
+                    if is_saved:
+                        db_doc = db.query(Document).filter(Document.url == canonicalize_url(norm["url"])).first()
+                        if db_doc:
+                            new_doc_ids.append(str(db_doc.id))
 
-        raw_results, new_cursor_val = adapter.search(
-            keyword_row.keyword_text,
-            cursor=cursor.cursor_value if cursor else None,
-            limit=25,
-        )
+            if not cursor:
+                cursor = SearchCursor(keyword_id=keyword_row.id, source_type=cursor_source_type)
+                db.add(cursor)
+            cursor.cursor_value = new_cursor_val
+            cursor.last_searched_at = datetime.now(timezone.utc)
+            db.commit()
 
-        if raw_results:
-            source = _get_or_create_youtube_source(db)
-            for res in raw_results:
-                norm = adapter.normalize(res, str(source.id))
-                norm_doc = NormalizedDocument(**norm)
-                is_saved, _, _ = process_and_save_document(db, norm_doc)
-                if is_saved:
-                    db_doc = db.query(Document).filter(Document.url == canonicalize_url(norm["url"])).first()
-                    if db_doc:
-                        new_doc_ids.append(str(db_doc.id))
+            log.info("youtube_search_complete", keyword=keyword_row.keyword_text, order=order, results_found=len(raw_results), new_docs=len(new_doc_ids))
 
-        if not cursor:
-            cursor = SearchCursor(keyword_id=keyword_row.id, source_type="youtube")
-            db.add(cursor)
-        cursor.cursor_value = new_cursor_val
-        cursor.last_searched_at = datetime.now(timezone.utc)
-        db.commit()
-
-        log.info("youtube_search_complete", keyword=keyword_row.keyword_text, results_found=len(raw_results), new_docs=len(new_doc_ids))
-
-    except YouTubeQuotaExhaustedError as e:
-        db.rollback()
-        log.warning("youtube_quota_exhausted", keyword=keyword_row.keyword_text, detail=str(e))
-    except YouTubeCircuitBreakerOpenError as e:
-        db.rollback()
-        log.warning("youtube_circuit_breaker_open", keyword=keyword_row.keyword_text, detail=str(e))
-    except Exception as e:
-        db.rollback()
-        log.warning("youtube_search_failed", keyword=keyword_row.keyword_text, error=str(e))
+        except YouTubeQuotaExhaustedError as e:
+            db.rollback()
+            log.warning("youtube_quota_exhausted", keyword=keyword_row.keyword_text, order=order, detail=str(e))
+        except YouTubeCircuitBreakerOpenError as e:
+            db.rollback()
+            log.warning("youtube_circuit_breaker_open", keyword=keyword_row.keyword_text, order=order, detail=str(e))
+        except Exception as e:
+            db.rollback()
+            log.warning("youtube_search_failed", keyword=keyword_row.keyword_text, order=order, error=str(e))
 
     return new_doc_ids
 
