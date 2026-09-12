@@ -105,9 +105,21 @@ class RedditApifyAdapter(BaseSearchAdapter):
                     "maxPostCount": capped_limit,
                 },
                 # Actor run is synchronous end-to-end (scrape + dataset
-                # write), same shape as instagram.py's call; observed ~60-90s
-                # for a 4-result call during live testing.
-                timeout=170,
+                # write), same shape as instagram.py's call. The original
+                # 170s here was copied from instagram.py's own timeout,
+                # tuned for its 4-result live test -- confirmed live
+                # 2026-09-12 that this actor takes materially longer at a
+                # real 25-result cap (the MAX_RESULTS_PER_CALL default):
+                # a real Godrej Properties pipeline run's Reddit call was
+                # killed client-side by the 170s timeout while the actual
+                # Apify run kept going and succeeded anyway 415s in
+                # (confirmed against the run's own startedAt/finishedAt via
+                # the Apify API) -- meaning the 170s figure was silently
+                # discarding real, already-paid-for, successful runs, not
+                # protecting against a hung one. 600s gives real headroom
+                # above the observed 415s without approaching the actor's
+                # own 3600s run timeout.
+                timeout=600,
             )
         except requests.RequestException as e:
             raise Exception(f"Reddit (Apify) Search Failed: {e}") from e
