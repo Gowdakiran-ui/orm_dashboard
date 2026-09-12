@@ -1235,6 +1235,173 @@ def _stage_collect_youtube(ctx: PipelineContext, db, client, log) -> List[str]:
     return new_doc_ids
 
 
+# Same rationale as _YOUTUBE_SEARCH_COOLDOWN_MINUTES above, but the stakes
+# are higher here: a YouTube search.list call is free against a shared daily
+# quota, while every Instagram/Reddit call has a real per-result dollar cost
+# (see instagram.py/reddit_apify.py module docstrings) with no free quota to
+# fall back on. Reusing the exact same cooldown mechanism (one SearchCursor
+# row per keyword+source_type, gating repeated Run Pipeline clicks) is what
+# keeps Phase 5's per-click cost estimate an upper bound on real spend, not
+# just a per-call number multiplied by however many times someone mashes the
+# button.
+_SOCIAL_SEARCH_COOLDOWN_MINUTES = 60
+
+
+def _get_or_create_social_search_source(db, source_type: str, name: str):
+    """
+    Same shared, platform-wide (not per-client) Source row pattern as
+    _get_or_create_youtube_source -- one row per source_type, not per
+    client/keyword. Instagram and Reddit share a "Social Search"
+    SourceCategory (mirrors "Video Search" being YouTube's own category)
+    rather than each getting a dedicated category, since there are only two
+    of them and neither needs distinct reliability tuning yet.
+    """
+    from sqlalchemy.dialects.postgresql import insert
+    from app.models.source import Source, SourceCategory
+
+    cat = db.query(SourceCategory).filter(SourceCategory.name == "Social Search").first()
+    if not cat:
+        cat = SourceCategory(name="Social Search", base_reliability_score=1.0)
+        db.add(cat)
+        db.commit()
+        db.refresh(cat)
+
+    synthetic_url = f"search://{source_type}"
+    stmt = insert(Source).values(
+        category_id=cat.id,
+        name=name,
+        source_type=source_type,
+        url=synthetic_url,
+        schedule_cron="on-demand",
+        is_active=True,
+    ).on_conflict_do_nothing(index_elements=['url'])
+    db.execute(stmt)
+    db.commit()
+
+    return db.query(Source).filter(Source.url == synthetic_url).first()
+
+
+def _stage_collect_social_search(ctx: PipelineContext, db, log, source_type: str, adapter, result_cap: int) -> List[str]:
+    """
+    Shared per-client, per-keyword search-and-persist dispatch for
+    Instagram/Reddit, factored out instead of duplicating
+    _stage_collect_youtube's body twice -- YouTube keeps its own separate
+    function because it has no direct equivalent here (two cursor-tracked
+    search orders per keyword, quota/circuit-breaker exception handling);
+    Instagram and Reddit have neither, so one shared implementation
+    parameterized by source_type/adapter/result_cap matches actual behavior
+    instead of forking a second near-identical copy.
+
+    Single highest-priority active brand keyword per client, same as
+    _stage_collect_youtube -- an entity-loop version (brand + competitors +
+    executives + products) was built and real-cost-tested 2026-09-12 at
+    $152-$1,554/month across the 4 real clients (73 tracked entities for
+    Godrej alone), an order-of-magnitude+ jump over this single-keyword
+    baseline's verified $2.71-$8.09/month, and was reverted back to this by
+    explicit decision pending a batching fix (Reddit's flat per-run
+    actor-start fee is currently paid once per entity per call, when the
+    actor's `searches` input already accepts an array) -- full tracked-
+    entity coverage is a deferred future task, not attempted here in any
+    reduced form.
+
+    Reachability: only ever called from _stage_collect, same as
+    _stage_collect_youtube -- see that function's docstring for the full
+    grep-confirmed call-chain argument. Neither Instagram nor Reddit is
+    reachable via schedule_searches/execute_search_task (dead code, Phase
+    15) or any other path.
+    """
+    from app.models.entity import Entity, EntityKeyword
+    from app.models.search import SearchCursor
+    from app.models.document import Document
+    from app.services.document_service import process_and_save_document
+    from app.schemas.document import NormalizedDocument
+    from app.utils.text_processing import canonicalize_url
+
+    new_doc_ids: List[str] = []
+
+    if not adapter.available:
+        # Adapter itself already logged its own *_adapter_unavailable with
+        # the reason (missing APIFY_API_TOKEN). Same as YouTube: don't touch
+        # SearchCursor here -- no call was attempted.
+        return new_doc_ids
+
+    brand_entity = db.query(Entity).filter(
+        Entity.client_id == ctx.client_id,
+        Entity.entity_type == "brand",
+    ).first()
+    if not brand_entity:
+        return new_doc_ids
+
+    keyword_row = db.query(EntityKeyword).filter(
+        EntityKeyword.entity_id == brand_entity.id,
+        EntityKeyword.is_active == True,
+    ).order_by(
+        (EntityKeyword.category == "PRIMARY").desc(),
+        EntityKeyword.priority.desc(),
+    ).first()
+    if not keyword_row:
+        return new_doc_ids
+
+    cursor = db.query(SearchCursor).filter(
+        SearchCursor.keyword_id == keyword_row.id,
+        SearchCursor.source_type == source_type,
+    ).first()
+
+    if cursor and cursor.last_searched_at:
+        elapsed_minutes = (datetime.now(timezone.utc) - cursor.last_searched_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
+        if elapsed_minutes < _SOCIAL_SEARCH_COOLDOWN_MINUTES:
+            log.info(
+                f"{source_type}_search_skipped_cooldown",
+                keyword=keyword_row.keyword_text,
+                minutes_since_last_search=round(elapsed_minutes, 1),
+                cooldown_minutes=_SOCIAL_SEARCH_COOLDOWN_MINUTES,
+            )
+            return new_doc_ids
+
+    try:
+        raw_results, new_cursor_val = adapter.search(
+            keyword_row.keyword_text,
+            cursor=cursor.cursor_value if cursor else None,
+            limit=result_cap,
+        )
+
+        if raw_results:
+            source = _get_or_create_social_search_source(db, source_type, f"{source_type.capitalize()} Search")
+            for res in raw_results:
+                norm = adapter.normalize(res, str(source.id))
+                norm_doc = NormalizedDocument(**norm)
+                is_saved, _, _ = process_and_save_document(db, norm_doc)
+                if is_saved:
+                    db_doc = db.query(Document).filter(Document.url == canonicalize_url(norm["url"])).first()
+                    if db_doc:
+                        new_doc_ids.append(str(db_doc.id))
+
+        if not cursor:
+            cursor = SearchCursor(keyword_id=keyword_row.id, source_type=source_type)
+            db.add(cursor)
+        cursor.cursor_value = new_cursor_val
+        cursor.last_searched_at = datetime.now(timezone.utc)
+        db.commit()
+
+        log.info(f"{source_type}_search_complete", keyword=keyword_row.keyword_text, results_found=len(raw_results), new_docs=len(new_doc_ids))
+
+    except Exception as e:
+        db.rollback()
+        log.warning(f"{source_type}_search_failed", keyword=keyword_row.keyword_text, error=str(e))
+
+    return new_doc_ids
+
+
+def _stage_collect_instagram(ctx: PipelineContext, db, log) -> List[str]:
+    from app.adapters.instagram import InstagramAdapter, MAX_RESULTS_PER_CALL
+    return _stage_collect_social_search(ctx, db, log, "instagram", InstagramAdapter(), MAX_RESULTS_PER_CALL)
+
+
+def _stage_collect_reddit(ctx: PipelineContext, db, log) -> List[str]:
+    from app.adapters.reddit_apify import RedditApifyAdapter, MAX_RESULTS_PER_CALL
+    return _stage_collect_social_search(ctx, db, log, "reddit", RedditApifyAdapter(), MAX_RESULTS_PER_CALL)
+
+
 def _stage_collect(ctx: PipelineContext, db) -> List[str]:
     """
     COLLECTING stage: fetch RSS feeds for this client, deduplicate,
@@ -1294,6 +1461,12 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
 
     youtube_doc_ids = _stage_collect_youtube(ctx, db, client, log)
     new_doc_ids.extend(youtube_doc_ids)
+
+    instagram_doc_ids = _stage_collect_instagram(ctx, db, log)
+    new_doc_ids.extend(instagram_doc_ids)
+
+    reddit_doc_ids = _stage_collect_reddit(ctx, db, log)
+    new_doc_ids.extend(reddit_doc_ids)
 
     # Also pick up any PENDING docs from this client's feeds
     feed_urls = [f.feed_url for f in client_feeds]

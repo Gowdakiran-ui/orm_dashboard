@@ -26,6 +26,8 @@ from app.core.reach_trust_config import (
     get_reach_modifier,
     get_trust_modifier,
     is_youtube_reach_eligible,
+    is_instagram_reach_eligible,
+    is_reddit_reach_eligible,
     is_rss_trust_eligible,
 )
 
@@ -646,6 +648,24 @@ class RiskEngine:
             reach_trust_modifier = get_reach_modifier(document.view_count, document.comment_count)
             reach_trust_basis = "reach"
             reach_trust_eligible = is_youtube_reach_eligible(document.view_count, document.comment_count)
+        elif document.document_type == "instagram":
+            # Unlike youtube above, no "and view_count is not None" guard --
+            # view_count is legitimately None for image posts (no play/view
+            # count exists at all), and is_instagram_reach_eligible already
+            # handles that by falling back to comment_count alone. Guarding
+            # it here the same way as youtube would silently give every
+            # image post the neutral 1.0/eligible=True default below instead
+            # of ever applying the comment-count floor.
+            reach_trust_modifier = get_reach_modifier(document.view_count, document.comment_count)
+            reach_trust_basis = "reach"
+            reach_trust_eligible = is_instagram_reach_eligible(document.view_count, document.comment_count)
+        elif document.document_type == "reddit":
+            # reddit.py's normalize() maps `score` (net upvotes) into the
+            # view_count column -- no dedicated upvote column exists, same
+            # reuse-not-add approach as every other source_type here.
+            reach_trust_modifier = get_reach_modifier(document.view_count, document.comment_count)
+            reach_trust_basis = "reach"
+            reach_trust_eligible = is_reddit_reach_eligible(document.view_count, document.comment_count)
         elif document.document_type == "rss":
             reach_trust_modifier = get_trust_modifier(document.title)
             reach_trust_basis = "source_trust"

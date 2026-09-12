@@ -82,6 +82,62 @@ YOUTUBE_MIN_VIEW_COUNT = 10000
 YOUTUBE_MIN_COMMENT_COUNT = 50
 RSS_ELIGIBLE_TIERS = {"medium", "high"}
 
+# *** PROVISIONAL -- NEEDS RECALIBRATION ONCE REAL GODREJ INSTAGRAM DATA EXISTS ***
+# No real Instagram corpus exists yet (unlike YOUTUBE_MIN_VIEW_COUNT/
+# YOUTUBE_MIN_COMMENT_COUNT above, which were checked against 159/225 real
+# collected documents) -- these two floors are grounded only in published
+# external benchmarks, same treatment already given to RSS_TRUST_TIERS
+# ("STARTER LIST -- NEEDS KIRAN/TEAM REVIEW") above.
+#
+# view floor: the real Apify test (instagram.py module docstring) confirmed
+# apify/instagram-scraper's `posts` resultsType returns no view/play count at
+# all for image posts -- only likesCount/commentsCount. Reels are a different
+# post type (productType "clips") and DO carry a real play/view count
+# (`playCount`/`videoViewCount`, confirmed via the same actor's Reel-mode
+# output fields). A widely-cited "average Reels views" figure like ~283K is
+# an all-account-sizes average dominated by large established accounts and
+# is not a usable "reached a real audience" floor for the small/local
+# accounts this platform actually tracks -- same reasoning YOUTUBE_MIN_VIEW_COUNT
+# used to reject a generic floor in favor of a real distribution. The closest
+# available substitute is a small-account-tier average: accounts with
+# 2,001-10,000 followers average ~2,900 Reels views (cited below). Set as the
+# floor itself, not a stricter multiple of it -- unlike YouTube there is no
+# real corpus yet to check what "well above average" excludes, so starting at
+# the small-account average itself (not an arbitrary multiple of it) is the
+# more defensible provisional choice until real Godrej data exists.
+INSTAGRAM_MIN_VIEW_COUNT = 2900  # Reels (playCount) only -- see is_instagram_reach_eligible
+# comment floor: no schema column exists for likesCount (documents.view_count/
+# comment_count are the only two reach columns -- see models/document.py), so
+# image posts (no view/play count at all) are gated on commentsCount alone,
+# the same "OR comment_count" fallback shape YouTube already uses for
+# low-view videos. Published 2026 benchmarks put total engagement (likes +
+# comments + shares + saves) for an ~8K-follower nano account around
+# 400-640 interactions per post, with comments consistently a minority slice
+# of that total (likes dominate) -- 20 is a conservative floor within that
+# range, deliberately not the "200 comments" figure benchmarks call out as
+# exceptional for a nano account, since that would exclude nearly everything.
+INSTAGRAM_MIN_COMMENT_COUNT = 20
+
+# *** PROVISIONAL -- NEEDS RECALIBRATION ONCE REAL GODREJ REDDIT DATA EXISTS ***
+# The live Reddit path is reddit_apify.py (trudax/reddit-scraper-lite),
+# not the dormant PRAW-based reddit.py -- Reddit's own Data API self-service
+# registration is confirmed closed (r/redditdev admin post, 2026-08-05), so
+# reddit.py's credentials can never be obtained and it stays unused. The
+# Apify actor's real confirmed field names are `upVotes`/`numberOfComments`,
+# NOT reddit.py's `score`/`num_comments` -- reddit_apify.py's normalize()
+# maps upVotes into the view_count column (same reuse-not-add pattern as
+# every other source here), which is what the `score` parameter below
+# actually receives at runtime; semantically the same net-upvote count PRAW
+# would have returned, just a different field name from a different source.
+# Threshold values below are unaffected by the field-name change. Grounded
+# in a 2026 Reddit engagement study (cited below): posts need roughly 50-80
+# early upvotes to gain real traction in mid-size (20K-500K member)
+# subreddits, and roughly 8-11 comments to rank in quieter niche
+# subreddits -- the low end of the "real traction" range in each case, same
+# floor-not-ceiling choice as the Instagram view floor above.
+REDDIT_MIN_SCORE = 50
+REDDIT_MIN_COMMENT_COUNT = 10
+
 
 def is_youtube_reach_eligible(view_count, comment_count=None) -> bool:
     """
@@ -94,19 +150,53 @@ def is_youtube_reach_eligible(view_count, comment_count=None) -> bool:
     return (view_count or 0) >= YOUTUBE_MIN_VIEW_COUNT or (comment_count or 0) >= YOUTUBE_MIN_COMMENT_COUNT
 
 
+def is_instagram_reach_eligible(view_count, comment_count=None) -> bool:
+    """
+    Hard gate for Instagram. Unlike YouTube, view_count is legitimately
+    None for an entire post type (images -- no play/view count exists at
+    all, confirmed live), not just for documents with unusually low reach --
+    so, unlike is_youtube_reach_eligible, this must be safe to call with
+    view_count=None and fall back to the comment-count floor alone rather
+    than requiring the caller to special-case that first.
+    """
+    if (comment_count or 0) >= INSTAGRAM_MIN_COMMENT_COUNT:
+        return True
+    return view_count is not None and view_count >= INSTAGRAM_MIN_VIEW_COUNT
+
+
+def is_reddit_reach_eligible(score, comment_count=None) -> bool:
+    """
+    Hard gate for Reddit. `score` (PRAW's net-upvote count) is the Reddit
+    analogue of YouTube's view_count -- always populated for a real
+    submission, so no None-handling special case is needed here the way
+    Instagram's missing-for-images view_count requires above.
+    """
+    return (score or 0) >= REDDIT_MIN_SCORE or (comment_count or 0) >= REDDIT_MIN_COMMENT_COUNT
+
+
 def is_document_reach_trust_eligible(document_type, title, view_count=None, comment_count=None) -> bool:
     """
     Document-level reach/trust eligibility, factored out of risk_engine.py's
     inline dispatch (document_type == "youtube"/"rss" -> is_youtube_reach_eligible
     / is_rss_trust_eligible, else eligible by default) so other callers --
     narrative_engine.py's narrative eligibility gate -- can reuse the exact
-    same rule instead of re-deriving it. Behavior is identical to
-    risk_engine.py's own reach_trust_eligible computation for every existing
-    document_type; risk_engine.py is left as-is (not refactored to call this)
-    since this task's scope is the narrative gate, not a risk_engine.py change.
+    same rule instead of re-deriving it. risk_engine.py's own inline
+    reach_trust_eligible computation mirrors this same dispatch (including
+    the instagram/reddit branches added here) rather than calling this
+    function directly, matching how it already duplicated the youtube/rss
+    branches instead of importing them from here.
+
+    view_count doubles as Reddit's `score` for reddit documents -- reddit.py's
+    normalize() maps `score` into the view_count column (see its own comment)
+    since the schema has no dedicated upvote column, the same reuse-not-add
+    approach view_count/comment_count already take for every other source.
     """
     if document_type == "youtube" and view_count is not None:
         return is_youtube_reach_eligible(view_count, comment_count)
+    elif document_type == "instagram":
+        return is_instagram_reach_eligible(view_count, comment_count)
+    elif document_type == "reddit":
+        return is_reddit_reach_eligible(view_count, comment_count)
     elif document_type == "rss":
         return is_rss_trust_eligible(title)
     return True

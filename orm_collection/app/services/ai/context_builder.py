@@ -86,7 +86,13 @@ class ContextBuilder:
         except Exception:
             source_types = {"rss"}  # Default fallback
 
-        for src in ["rss", "google", "reddit", "youtube"]:
+        # "instagram" added alongside reddit/youtube (Phase 2 pipeline audit
+        # for the Instagram/Reddit adapters, 2026-09-12) -- this hardcoded
+        # list previously excluded it entirely, meaning Instagram would
+        # never count toward (or against) the Data Coverage Score no matter
+        # how many Instagram Source rows existed. Same pattern as every
+        # other entry here, not a new mechanism.
+        for src in ["rss", "google", "reddit", "youtube", "instagram"]:
             if src in source_types:
                 enabled_sources.append(src)
             else:
@@ -94,7 +100,7 @@ class ContextBuilder:
 
         # Calculate coverage score
         # 40% based on enabled sources
-        source_score = (len(enabled_sources) / 4.0) * 40.0
+        source_score = (len(enabled_sources) / 5.0) * 40.0
         
         # 60% based on populated data tables
         data_signals = {
