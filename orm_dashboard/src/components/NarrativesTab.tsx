@@ -124,11 +124,11 @@ export function NarrativesTab({
 
     return [
       { label: "Monitored Narratives", value: totalNarratives, desc: "Active media clusters", color: accentColor, def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
-      { label: "Tracked Leaders", value: totalExecs, desc: "Monitored corporate heads", color: accentColor, def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Notable People Tracked", value: totalExecs, desc: "People mentioned in coverage, not necessarily this client's own staff", color: accentColor, def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
       { label: "Scanned Documents", value: totalDocs, desc: "Pipeline document pool", color: "text-purple-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
       { label: "Highest Risk Narrative", value: highestRiskNarr, desc: "Requires strategic review", color: "text-red-500", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
       { label: "Fastest Growing Narrative", value: fastestGrowingNarr, desc: "High velocity trend", color: "text-orange-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
-      { label: "Most Mentioned Executive", value: mostMentionedExec, desc: "Overall visibility", color: "text-indigo-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
+      { label: "Most Mentioned Person", value: mostMentionedExec, desc: "Overall visibility", color: "text-indigo-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined },
       { label: "Average Risk Level", value: `${avgRiskScore} pts`, desc: "Risk index across feed", color: "text-rose-500", def: <AverageRiskScoreFeedDefinition />, onClick: () => navigateTo("feed") },
       { label: "Average Strength", value: `${avgNarrativeStrength}%`, desc: "Narrative velocity rate", color: "text-emerald-400", def: undefined as React.ReactNode, onClick: undefined as (() => void) | undefined }
     ];
@@ -658,6 +658,32 @@ export function NarrativesTab({
                   </div>
                 </div>
 
+                {/* "When" -- real date range the cluster's documents cover.
+                    Prefers evidence_metadata.date_range (narrative_engine.py,
+                    templated from the cluster's own published_at/collected_at,
+                    no LLM) so it's the actual clustering data, not a re-derived
+                    approximation; falls back to the linked-documents list's own
+                    timestamps for narratives generated before that field
+                    existed. */}
+                {(() => {
+                  const range = drawerData.data.evidence_metadata?.date_range;
+                  const fallbackDates = (drawerData.data.linkedDocuments || [])
+                    .map((d: any) => d.timestamp)
+                    .filter(Boolean)
+                    .sort();
+                  const first = range?.first || fallbackDates[0];
+                  const last = range?.last || fallbackDates[fallbackDates.length - 1];
+                  if (!first && !last) return null;
+                  const fmt = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                  const whenText = (first && last && first !== last) ? `${fmt(first)} – ${fmt(last)}` : fmt(first || last);
+                  return (
+                    <div className="flex justify-between border-b dash-border py-1 text-xs">
+                      <span className="dash-muted">When:</span>
+                      <span className="dash-strong font-bold">{whenText}</span>
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-3 gap-2 dash-box p-2.5 rounded border dash-border text-center">
                   <div>
                     <span className="dash-muted block uppercase text-xs mb-0.5">Risk Score</span>
@@ -754,12 +780,30 @@ export function NarrativesTab({
                           <span className="dash-strong font-bold truncate block">{doc.title}</span>
                           <div className="flex justify-between items-center text-xs dash-muted">
                             <span>Risk: <b className="text-red-400">{Math.round(doc.risk || 0)}</b></span>
-                            <button 
-                              onClick={() => setDrawerData({ type: "document", data: doc })}
-                              className="text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider"
-                            >
-                              View Details
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {/* "Where" surfaced directly on the linked-document
+                                  row instead of only reachable after a second
+                                  click into the document drawer -- doc.url is
+                                  already carried on linkedDocuments (see
+                                  handleTraceClick above). */}
+                              {doc.url && (
+                                <a
+                                  href={doc.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sky-400 hover:text-sky-300 font-bold uppercase tracking-wider flex items-center"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Source <ExternalLink className="h-3 w-3 ml-1" />
+                                </a>
+                              )}
+                              <button
+                                onClick={() => setDrawerData({ type: "document", data: doc })}
+                                className="text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider"
+                              >
+                                View Details
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
