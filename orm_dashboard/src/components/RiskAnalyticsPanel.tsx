@@ -16,6 +16,8 @@ import {
   RiskSeverityDefinition,
   AverageRiskScoreFeedDefinition,
   RiskMatrixAxesDefinition,
+  DailyAlertsTimelineDefinition,
+  ThreatConcentrationHeatmapDefinition,
 } from "@/lib/metricDefinitions";
 
 export interface RiskAnalyticsPanelProps {
@@ -298,7 +300,10 @@ export function RiskAnalyticsPanel({
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-1">
             <div className="flex justify-between items-start">
-              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Daily Alerts Trigger Volume Timeline</CardTitle>
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+                Daily Alerts Trigger Volume Timeline
+                <InfoTooltip label="About Daily Alerts Trigger Volume"><DailyAlertsTimelineDefinition /></InfoTooltip>
+              </CardTitle>
               {alertTimelineData.length === 0 && (
                 <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono text-[9px]">
                   System Stable
@@ -365,7 +370,10 @@ export function RiskAnalyticsPanel({
         <Card className={`${cardStyle} md:col-span-12`}>
           <div className={SPECULAR_LINE} />
           <CardHeader>
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Threat Concentration Heatmap (Severity × Topic)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Threat Concentration Heatmap (Severity × Topic)
+              <InfoTooltip label="About Threat Concentration Heatmap"><ThreatConcentrationHeatmapDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto p-6">
             {riskHeatmapData && riskHeatmapData.categories && riskHeatmapData.categories.length > 0 ? (

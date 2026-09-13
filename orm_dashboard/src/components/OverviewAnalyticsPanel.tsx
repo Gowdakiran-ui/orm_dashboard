@@ -10,7 +10,7 @@ import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition, SentimentScaleDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, SentimentScaleDefinition, CoverageByTopicDefinition, OverviewSentimentBreakdownDefinition, AverageSentimentTrendDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
 export interface OverviewAnalyticsPanelProps {
@@ -195,7 +195,10 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Sentiment Breakdown</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Sentiment Breakdown
+              <InfoTooltip label="About Sentiment Breakdown"><OverviewSentimentBreakdownDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex justify-center items-center h-[260px]">
             {sentimentDistData.length > 0 ? (
@@ -232,7 +235,10 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Coverage by Topic</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Coverage by Topic
+              <InfoTooltip label="About Coverage by Topic"><CoverageByTopicDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pl-2">
             <div className="h-[260px]">
@@ -257,7 +263,10 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Reputation Score Over Time</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Reputation Score Over Time
+              <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[260px]">
             {repHistory.length > 0 ? (
@@ -292,7 +301,10 @@ export function OverviewAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Average Sentiment Over Time</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Average Sentiment Over Time
+              <InfoTooltip label="About Average Sentiment Over Time"><AverageSentimentTrendDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[260px]">
             {sentimentTrendData.length > 0 ? (

@@ -12,6 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import {
+  ReputationScoreDefinition,
+  NarrativeVelocityRiskDefinition,
+  DailyIngestionVolumeDefinition,
+  SourcesDistributionDefinition,
+} from "@/lib/metricDefinitions";
 
 export interface NarrativeAnalyticsPanelProps {
   narrativeBubbleData: any[];
@@ -254,7 +261,10 @@ export function NarrativeAnalyticsPanel({
         <Card className={`${cardStyle} md:col-span-2`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Narrative Landscape Matrix (Velocity × Risk)</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Narrative Landscape Matrix (Velocity × Risk)
+              <InfoTooltip label="About Velocity and Risk"><NarrativeVelocityRiskDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="h-[280px] pl-2">
             {normalizedBubbleData.length > 0 ? (
@@ -373,7 +383,10 @@ export function NarrativeAnalyticsPanel({
         <Card className={`${cardStyle} md:col-span-2`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Executive Figures Historical Trend</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Executive Figures Historical Trend
+              <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[280px]">
             {trendChartDataWithMA.length > 0 ? (
@@ -437,7 +450,10 @@ export function NarrativeAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Daily Ingestion Ingestion Volume</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Daily Ingestion Ingestion Volume
+              <InfoTooltip label="About Daily Ingestion Volume"><DailyIngestionVolumeDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[240px]">
             {stackedTimelineData.length > 0 ? (
@@ -473,7 +489,10 @@ export function NarrativeAnalyticsPanel({
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Sources Distribution Matrix</CardTitle>
+            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
+              Sources Distribution Matrix
+              <InfoTooltip label="About Sources Distribution"><SourcesDistributionDefinition /></InfoTooltip>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[240px]">
             {sortedSourceData.length > 0 ? (

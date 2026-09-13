@@ -17,7 +17,7 @@ import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, ExecutiveSentimentBreakdownDefinition, ExecutiveScorecardMetricsDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
 export interface ExecutivesTabProps {
@@ -467,7 +467,10 @@ export function ExecutivesTab({
         ) : (
           <Card className={glassCard(theme)}>
             <CardHeader>
-              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Reputation Trend</CardTitle>
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+                Reputation Trend
+                <InfoTooltip label="About Reputation Trend"><ReputationScoreDefinition /></InfoTooltip>
+              </CardTitle>
               <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>Reputation score over time for this executive</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
@@ -523,6 +526,7 @@ export function ExecutivesTab({
             <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
               <Activity className="h-4 w-4 text-emerald-500 mr-2" />
               Sentiment Breakdown
+              <InfoTooltip label="About Sentiment Breakdown"><ExecutiveSentimentBreakdownDefinition /></InfoTooltip>
             </CardTitle>
             <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>How coverage of this executive splits by tone</CardDescription>
           </CardHeader>
@@ -583,6 +587,7 @@ export function ExecutivesTab({
               <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                 <Users className="h-4 w-4 text-[#D4AF37] mr-2" />
                 Executive Scorecard
+                <InfoTooltip label="About Confidence, Evidence Coverage and Trend"><ExecutiveScorecardMetricsDefinition /></InfoTooltip>
               </CardTitle>
             </CardHeader>
             <CardContent>

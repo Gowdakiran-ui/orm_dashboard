@@ -238,6 +238,236 @@ export function ShareOfVoiceDefinition() {
   );
 }
 
+/**
+ * ExecutivesTab.tsx's "Sentiment Breakdown" chart -- buckets each piece of
+ * coverage mentioning the selected executive by its per-document sentiment
+ * score (ExecutivesTab.tsx sentimentData: >0.25 positive, <-0.25 negative,
+ * otherwise neutral). These +/-0.25 cut points are this chart's own bucketing
+ * choice, distinct from the underlying -1..+1 sentiment scale itself (see
+ * SentimentScaleDefinition).
+ */
+export function ExecutiveSentimentBreakdownDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Sentiment Breakdown</span>
+      <span className="block">
+        Buckets this executive&apos;s coverage by each document&apos;s
+        sentiment score (-1.0 to +1.0):
+      </span>
+      <span className="mt-1 block"><b>Positive</b> — above +0.25</span>
+      <span className="block"><b>Negative</b> — below -0.25</span>
+      <span className="block"><b>Neutral</b> — everything in between</span>
+    </>
+  );
+}
+
+/**
+ * ExecutivesTab.tsx's Executive Scorecard table -- Confidence, Evidence
+ * Coverage and Trend columns. Traced directly against
+ * executive_reputation_engine.py's calculate_executive_reputation:
+ *   - doc_confidence = min(document_count / 10, 1.0)
+ *   - signal_completeness = 0.5x(1.0 if recent risk data else 0.5) +
+ *       0.5x(1.0 if recent trend data else 0.5)
+ *   - confidence_score = doc_confidence*0.6 + signal_completeness*0.4
+ *     (0.0 whenever there's no qualifying evidence at all)
+ *   - data_coverage is written from that same confidence_score value --
+ *     the engine reuses it rather than computing a second, separate number.
+ *   - Trend compares this run's score to the previous one: +2.0 or more is
+ *     IMPROVING, -2.0 or more is DECLINING, otherwise STABLE (and there's no
+ *     prior score to compare, it reports STABLE).
+ */
+export function ExecutiveScorecardMetricsDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Confidence, Evidence Coverage &amp; Trend</span>
+      <span className="block">
+        <b>Confidence</b> blends how much recent coverage exists (capped once
+        10+ documents are seen in the last 30 days) with whether recent risk
+        and trend signal was available for this executive.
+      </span>
+      <span className="mt-1 block">
+        <b>Evidence Coverage</b> reuses that same Confidence value — it is not
+        a separate calculation.
+      </span>
+      <span className="mt-1 block">
+        <b>Trend</b> compares this run&apos;s Reputation Score to the previous
+        one: IMPROVING (+2.0 or more), DECLINING (-2.0 or more), otherwise
+        STABLE.
+      </span>
+    </>
+  );
+}
+
+/**
+ * OverviewAnalyticsPanel.tsx's "Coverage by Topic" bar chart -- a plain
+ * count of every monitored document grouped by its classified topic
+ * (useAnalytics.ts topicDistData: d.topic, falling back to "General"),
+ * ranked highest to lowest.
+ */
+export function CoverageByTopicDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Coverage by Topic</span>
+      <span className="block">
+        How many monitored documents fall under each classified topic, across
+        this client&apos;s entire feed — ranked from most to least covered.
+      </span>
+    </>
+  );
+}
+
+/**
+ * OverviewAnalyticsPanel.tsx's "Sentiment Breakdown" pie chart -- backed by
+ * utils/calculateSentimentDistribution.ts, which buckets every document with
+ * a sentiment score by a +/-0.3 cut point. This is a different, wider cutoff
+ * than ExecutivesTab.tsx's own +/-0.25 bucketing of a single executive's
+ * coverage (see ExecutiveSentimentBreakdownDefinition) -- each chart uses
+ * its own threshold, so they are named and explained separately rather than
+ * sharing one definition that would misdescribe one of them.
+ */
+export function OverviewSentimentBreakdownDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Sentiment Breakdown</span>
+      <span className="block">
+        Buckets every document in this client&apos;s feed by its sentiment
+        score (-1.0 to +1.0):
+      </span>
+      <span className="mt-1 block"><b>Positive</b> — above +0.3</span>
+      <span className="block"><b>Negative</b> — below -0.3</span>
+      <span className="block"><b>Neutral</b> — everything in between</span>
+    </>
+  );
+}
+
+/**
+ * OverviewAnalyticsPanel.tsx's "Average Sentiment Over Time" line chart --
+ * useAnalytics.ts sentimentTrendData averages each document's sentiment
+ * score (-1.0/0.0/+1.0 per SentimentScaleDefinition) within each calendar
+ * day. Hovering a point that moved by 0.25 or more from the prior day also
+ * surfaces the narrative most likely driving that shift, when one is linked.
+ */
+export function AverageSentimentTrendDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Average Sentiment Over Time</span>
+      <span className="block">
+        Each point is the average sentiment score (-1.0 to +1.0) across every
+        document published that day. A day-over-day move of 0.25 or more is
+        treated as meaningful and, when a narrative is linked to it, shows
+        that narrative&apos;s driving root cause on hover.
+      </span>
+    </>
+  );
+}
+
+/**
+ * RiskAnalyticsPanel.tsx's "Daily Alerts Trigger Volume Timeline" -- a count
+ * of alert records (alert_engine.py's risk/trend/executive alert
+ * evaluators) triggered each day for this client, across every severity.
+ */
+export function DailyAlertsTimelineDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Daily Alerts Trigger Volume</span>
+      <span className="block">
+        How many alerts — risk, trend, or executive-reputation alerts —
+        fired for this client on each day, across every severity level.
+      </span>
+    </>
+  );
+}
+
+/**
+ * RiskAnalyticsPanel.tsx's "Threat Concentration Heatmap (Severity × Topic)"
+ * -- each cell is the document count for one (topic, severity) pair over
+ * the current feed, using the same LOW/MEDIUM/HIGH/CRITICAL bands as Risk
+ * Severity (see RiskSeverityDefinition), plus that cell's average Risk
+ * Score and average sentiment shown on hover.
+ */
+export function ThreatConcentrationHeatmapDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Threat Concentration Heatmap</span>
+      <span className="block">
+        Each cell counts documents that share both a topic and a Risk
+        Severity band (Low/Medium/High/Critical — same cutoffs as Risk
+        Severity). Row and column totals show how concentrated risk is by
+        topic vs. by severity; hovering a cell also shows its average Risk
+        Score and average sentiment.
+      </span>
+    </>
+  );
+}
+
+/**
+ * NarrativeAnalyticsPanel.tsx's "Narrative Landscape Matrix (Velocity ×
+ * Risk)" bubble chart. Traced against narrative_engine.py:
+ *   - Velocity (X axis, "strength" in narrativeBubbleData) is the absolute
+ *     value of the narrative's trend_strength -- a % change in that
+ *     narrative's coverage volume (TrendEvent.percentage_change), not a
+ *     directional value.
+ *   - Risk (Y axis) is the narrative's average Risk Score (0-100), the same
+ *     scale as Risk Severity elsewhere in this dashboard.
+ *   - Bubble size is mention volume (document count in the narrative
+ *     cluster), log-scaled on the frontend only so a handful of very large
+ *     narratives don't dwarf every other bubble.
+ */
+export function NarrativeVelocityRiskDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Narrative Landscape: Velocity × Risk</span>
+      <span className="block">
+        <b>Velocity</b> (x-axis) — the size of the recent % change in that
+        narrative&apos;s coverage volume, regardless of direction.
+      </span>
+      <span className="mt-1 block">
+        <b>Risk</b> (y-axis) — the narrative&apos;s average Risk Score (0–100),
+        the same scale used everywhere else in this dashboard.
+      </span>
+      <span className="mt-1 block">
+        <b>Bubble size</b> — how many documents are in that narrative&apos;s
+        cluster, log-scaled here only so very large narratives don&apos;t
+        dwarf the rest of the chart.
+      </span>
+    </>
+  );
+}
+
+/**
+ * NarrativeAnalyticsPanel.tsx's "Daily Ingestion Ingestion Volume" stacked
+ * area chart -- a per-day count of every monitored document, stacked by
+ * its source.
+ */
+export function DailyIngestionVolumeDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Daily Ingestion Volume</span>
+      <span className="block">
+        How many documents this client&apos;s feed ingested each day, stacked
+        by which source (RSS, Reddit, Instagram, etc.) they came from.
+      </span>
+    </>
+  );
+}
+
+/**
+ * NarrativeAnalyticsPanel.tsx's "Sources Distribution Matrix" ranked bar
+ * chart -- a plain count of every monitored document grouped by source,
+ * across the whole feed (not just one day).
+ */
+export function SourcesDistributionDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Sources Distribution</span>
+      <span className="block">
+        Total document count per source (RSS, Reddit, Instagram, etc.) across
+        this client&apos;s entire feed, ranked highest to lowest.
+      </span>
+    </>
+  );
+}
+
 export function RiskCountSummaryDefinition() {
   return (
     <>
