@@ -741,12 +741,22 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
     # Godrej's "Mohamed Alabbar" -- zero brand-co-occurring documents) was
     # still returned here as "tracked" with a real score, even though he's
     # correctly excluded from the aggregate /executives list. Confirmed live
-    # 2026-09-13. Treat a gated-out match the same as no match at all, so it
-    # falls through to the candidate-discovery/NER-search paths below.
+    # 2026-09-13.
+    #
+    # Return immediately rather than nulling tracked_entity and falling
+    # through: an Entity row with this exact (client_id, name) genuinely
+    # exists (uq_entities_client_name), so falling through into the
+    # candidate/near-dup/validation chain below and eventually the
+    # "genuinely new name" provisioning branch would try to INSERT a second
+    # row with the same (client_id, name) -- confirmed live, this crashed
+    # with psycopg2.errors.UniqueViolation on exactly this Alabbar search
+    # during this fix's own first deploy attempt. "Tracked but excluded" is
+    # a real, distinct outcome the rest of this function has no case for --
+    # do not try to make it fall through as if the name were unseen.
     if tracked_entity:
         gated_ids = _brand_or_product_gated_person_entity_ids(db, client_id)
         if gated_ids is not None and tracked_entity.id not in gated_ids:
-            tracked_entity = None
+            return {"status": "not_found"}
     if tracked_entity:
         score = db.query(ExecutiveReputationScore).filter(
             ExecutiveReputationScore.entity_id == tracked_entity.id
@@ -806,11 +816,13 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
     # Same brand co-occurrence containment as the tracked_entity check above
     # -- an exact-name search for a gated-out person would otherwise still
     # be caught here, since a spelling-identical name is its own "near
-    # duplicate".
+    # duplicate". Return immediately, same reasoning as above: this name
+    # already has a real Entity row, so falling through to provisioning
+    # would hit the same uq_entities_client_name crash.
     if near_dup:
         gated_ids = _brand_or_product_gated_person_entity_ids(db, client_id)
         if gated_ids is not None and near_dup.id not in gated_ids:
-            near_dup = None
+            return {"status": "not_found"}
     if near_dup:
         score = db.query(ExecutiveReputationScore).filter(
             ExecutiveReputationScore.entity_id == near_dup.id
