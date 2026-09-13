@@ -735,6 +735,18 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
         Entity.entity_type == "person",
         Entity.name.ilike(f"%{name}%")
     ).first()
+    # Brand co-occurrence containment (same gate as get_client_executives'
+    # _brand_or_product_gated_person_entity_ids above): a direct name search
+    # bypassed that gate entirely, so a wrongly-tracked person (e.g.
+    # Godrej's "Mohamed Alabbar" -- zero brand-co-occurring documents) was
+    # still returned here as "tracked" with a real score, even though he's
+    # correctly excluded from the aggregate /executives list. Confirmed live
+    # 2026-09-13. Treat a gated-out match the same as no match at all, so it
+    # falls through to the candidate-discovery/NER-search paths below.
+    if tracked_entity:
+        gated_ids = _brand_or_product_gated_person_entity_ids(db, client_id)
+        if gated_ids is not None and tracked_entity.id not in gated_ids:
+            tracked_entity = None
     if tracked_entity:
         score = db.query(ExecutiveReputationScore).filter(
             ExecutiveReputationScore.entity_id == tracked_entity.id
@@ -791,6 +803,14 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
     # existing entity's tracked/searching state instead of provisioning a
     # second, duplicate person entity for the same individual.
     near_dup = entity_discovery_engine._find_near_duplicate_person_entity(db, str(client_id), name)
+    # Same brand co-occurrence containment as the tracked_entity check above
+    # -- an exact-name search for a gated-out person would otherwise still
+    # be caught here, since a spelling-identical name is its own "near
+    # duplicate".
+    if near_dup:
+        gated_ids = _brand_or_product_gated_person_entity_ids(db, client_id)
+        if gated_ids is not None and near_dup.id not in gated_ids:
+            near_dup = None
     if near_dup:
         score = db.query(ExecutiveReputationScore).filter(
             ExecutiveReputationScore.entity_id == near_dup.id
