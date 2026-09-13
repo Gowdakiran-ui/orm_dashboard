@@ -1203,7 +1203,14 @@ class NarrativeEngine:
                 })
                 
                 if len(incident_clusters) > 1:
-                    title_snippet = top_doc_title[:40] + "..." if len(top_doc_title) > 40 else top_doc_title
+                    # xoop_ui_clarity_review.md: 40 chars collapsed distinct
+                    # articles into indistinguishable "...And..." / "...With..."
+                    # fragments in the UI, since the full title was never
+                    # stored. 200 chars keeps well within narrative_name's
+                    # String(255) column (longest mapping['name'] is 39 chars)
+                    # and lets the frontend's existing CSS truncation +
+                    # title= tooltip do the display-layer clipping instead.
+                    title_snippet = top_doc_title[:200] + "..." if len(top_doc_title) > 200 else top_doc_title
                     narrative_name = f"{mapping['name']} - {title_snippet}"
                 else:
                     narrative_name = mapping["name"]
