@@ -350,14 +350,8 @@ def _brand_or_product_gated_person_entity_ids(db: Session, client_id):
         ).all()
     )
 
-    # is_active excludes entities manually confirmed as wrongly-tracked (e.g.
-    # Anthropic's "Michael Jordan" -- co-occurs with the brand by
-    # construction of its own search feed's query, so the brand/product
-    # co-occurrence check above cannot exclude him; this is a read-time
-    # filter applied on top of already-computed scores, so deactivating the
-    # entity takes effect immediately without needing a pipeline re-run).
     person_entities = db.query(Entity.id).filter(
-        Entity.client_id == client_id, Entity.entity_type == "person", Entity.is_active == True
+        Entity.client_id == client_id, Entity.entity_type == "person"
     ).all()
 
     gated_ids = set()
@@ -485,17 +479,13 @@ def get_client_benchmark(
         CompetitorBenchmark.competitor_entity_id
     ).subquery()
 
-    # Entity.is_active excludes competitors manually confirmed as
-    # wrongly-tracked (e.g. Anthropic's "Moonshot AI") -- a read-time filter
-    # on top of already-computed CompetitorBenchmark rows, so deactivating
-    # the entity takes effect immediately without needing a pipeline re-run.
     base_query = db.query(CompetitorBenchmark, Entity).join(
         Entity, Entity.id == CompetitorBenchmark.competitor_entity_id
     ).join(
         latest_sub,
         (CompetitorBenchmark.competitor_entity_id == latest_sub.c.competitor_entity_id) &
         (CompetitorBenchmark.created_at == latest_sub.c.max_created)
-    ).filter(CompetitorBenchmark.client_id == client_id, Entity.is_active == True)
+    ).filter(CompetitorBenchmark.client_id == client_id)
 
     # B1: the old cap of 10 silently dropped Tesla's 11th competitor with no
     # signal to the caller. Total count is now exposed via a response header
@@ -586,17 +576,13 @@ def get_client_competitive_summary(client_id: UUID, db: Session = Depends(get_db
         CompetitorBenchmark.competitor_entity_id
     ).subquery()
 
-    # Entity.is_active excludes competitors manually confirmed as
-    # wrongly-tracked -- same reasoning and pattern as get_client_benchmark
-    # above. Without this, a deactivated entity could still surface here as
-    # "top_competitor" in the dashboard's competitive-standing summary.
     benchmarks = db.query(CompetitorBenchmark, Entity).join(
         Entity, Entity.id == CompetitorBenchmark.competitor_entity_id
     ).join(
         latest_sub,
         (CompetitorBenchmark.competitor_entity_id == latest_sub.c.competitor_entity_id) &
         (CompetitorBenchmark.created_at == latest_sub.c.max_created)
-    ).filter(CompetitorBenchmark.client_id == client_id, Entity.is_active == True).all()
+    ).filter(CompetitorBenchmark.client_id == client_id).all()
 
     if not benchmarks:
         return {

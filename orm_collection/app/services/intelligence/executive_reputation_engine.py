@@ -174,16 +174,9 @@ class ExecutiveReputationEngine:
             raise ValueError(f"Client {client_id} not found")
 
         # R1: Strictly only evaluate entities where entity_type == "person"
-        # is_active excludes entities manually confirmed as wrongly-tracked
-        # (e.g. Anthropic's "Michael Jordan" -- co-occurs with the brand by
-        # construction of its own search feed's query, so the brand-
-        # co-occurrence gate below cannot filter him out; deactivating the
-        # entity is the only way to stop a genuinely-co-occurring but
-        # irrelevant tracked person from scoring).
         executives = db.query(Entity).filter(
             Entity.client_id == client_id,
-            Entity.entity_type == "person",
-            Entity.is_active == True
+            Entity.entity_type == "person"
         ).all()
 
         # Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 0,
