@@ -223,8 +223,14 @@ export function OverviewAnalyticsPanel({
                     outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
-                    isAnimationActive={true}
-                    animationDuration={850}
+                    // Recharts 3.8.1 + React 19: the Pie entrance animation
+                    // reliably left the sector <path> elements empty on
+                    // this stack (confirmed live: sectors present in the
+                    // DOM, laid out, zero pixels painted). Disabling the
+                    // animation is the standard workaround for this pairing
+                    // (xoop_ui_clarity_review.md "Sentiment Breakdown"
+                    // blank-card bug).
+                    isAnimationActive={false}
                   >
                     {sentimentDistData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />

@@ -448,6 +448,12 @@ export function RiskTab({
                     outerRadius={75}
                     paddingAngle={3}
                     dataKey="value"
+                    // Same Recharts 3.8.1 + React 19 blank-Pie bug as
+                    // OverviewAnalyticsPanel's "Sentiment Breakdown" card
+                    // (xoop_ui_clarity_review.md) -- found live here too
+                    // while diagnosing that one. Disabling the entrance
+                    // animation is the workaround.
+                    isAnimationActive={false}
                   >
                     {severityChartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
