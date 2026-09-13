@@ -780,30 +780,12 @@ export function NarrativesTab({
                           <span className="dash-strong font-bold truncate block">{doc.title}</span>
                           <div className="flex justify-between items-center text-xs dash-muted">
                             <span>Risk: <b className="text-red-400">{Math.round(doc.risk || 0)}</b></span>
-                            <div className="flex items-center gap-2">
-                              {/* "Where" surfaced directly on the linked-document
-                                  row instead of only reachable after a second
-                                  click into the document drawer -- doc.url is
-                                  already carried on linkedDocuments (see
-                                  handleTraceClick above). */}
-                              {doc.url && (
-                                <a
-                                  href={doc.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sky-400 hover:text-sky-300 font-bold uppercase tracking-wider flex items-center"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  Source <ExternalLink className="h-3 w-3 ml-1" />
-                                </a>
-                              )}
-                              <button
-                                onClick={() => setDrawerData({ type: "document", data: doc })}
-                                className="text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider"
-                              >
-                                View Details
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => setDrawerData({ type: "document", data: doc })}
+                              className="text-purple-400 hover:text-purple-300 font-bold uppercase tracking-wider"
+                            >
+                              View Details
+                            </button>
                           </div>
                         </div>
                       ))}
