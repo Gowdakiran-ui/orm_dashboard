@@ -41,7 +41,18 @@ export function OverviewAnalyticsPanel({
   const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
   // 1. KPI Summaries based on live prop telemetry
   const kpis = useMemo(() => {
-    const latestRep = repHistory.length > 0 ? repHistory[0].score : 0;
+    // repHistory arrives already reversed into chronological (oldest-first)
+    // order for the trend chart below (see useDashboardData.ts's
+    // fetchReputationHistory handler) -- the latest point is the LAST
+    // entry, not the first. Reading repHistory[0] here was silently
+    // surfacing the oldest score in the last-30-days window as if it were
+    // current (xoop_ui_clarity_review.md Phase 1: this is what produced
+    // "AVG REPUTATION: 76.32" here vs. the dashboard's correct, current
+    // "REPUTATION SCORE: 60.06" for the same client at the same time --
+    // same metric, not two different ones, just the wrong end of a reversed
+    // array). Also relabeled below: this was never an average, it's a
+    // single point-in-time score, same as the dashboard's own tile.
+    const latestRep = repHistory.length > 0 ? repHistory[repHistory.length - 1].score : 0;
     const latestRepScore = latestRep > 0 ? latestRep.toFixed(2) : "0.00";
     
     const latestSent = sentimentTrendData.length > 0 ? sentimentTrendData[0].Sentiment : 0.0;
@@ -54,7 +65,7 @@ export function OverviewAnalyticsPanel({
     const posRatio = totalVal > 0 ? `${((posVal / totalVal) * 100).toFixed(0)}%` : "0%";
 
     return [
-      { label: "Avg Reputation", value: latestRepScore, desc: "Overall reputation score", icon: Activity, color: accentColor, def: <ReputationScoreDefinition /> },
+      { label: "Current Reputation", value: latestRepScore, desc: "Overall reputation score", icon: Activity, color: accentColor, def: <ReputationScoreDefinition /> },
       { label: "Sentiment Score", value: latestSentScore, desc: "How positive coverage is (-1.0 to +1.0)", icon: Smile, color: accentColor, def: <SentimentScaleDefinition /> },
       { label: "Topics Covered", value: dimensionsCount, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400", def: undefined as React.ReactNode },
       { label: "Positive Share", value: posRatio, desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400", def: undefined as React.ReactNode }

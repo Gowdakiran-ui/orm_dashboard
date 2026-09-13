@@ -384,7 +384,7 @@ export function NarrativeAnalyticsPanel({
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
-              Executive Figures Historical Trend
+              Notable People in Coverage — Historical Trend
               <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>

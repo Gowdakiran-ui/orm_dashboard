@@ -472,7 +472,10 @@ export function useAnalytics({
     
     const currentRep = reputation?.score ?? 0;
     const currentGrade = reputation?.grade ?? 'N/A';
-    const repChange = (repHistory || []).length > 1 ? ((repHistory[0]?.score || 0) - (repHistory[repHistory.length - 1]?.score || 0)).toFixed(1) : '0.0';
+    // repHistory is in chronological (oldest-first) order -- see
+    // OverviewAnalyticsPanel.tsx's identical fix -- so "change" is latest
+    // (last entry) minus oldest (first entry), not the reverse.
+    const repChange = (repHistory || []).length > 1 ? ((repHistory[repHistory.length - 1]?.score || 0) - (repHistory[0]?.score || 0)).toFixed(1) : '0.0';
     
     const execCount = (executives || []).length;
     const avgExecScore = execCount > 0 ? ((executives || []).reduce((sum: number, e: any) => sum + (e?.score || 0), 0) / execCount).toFixed(1) : '0.0';

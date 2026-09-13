@@ -18,6 +18,7 @@ import {
   RiskMatrixAxesDefinition,
   DailyAlertsTimelineDefinition,
   ThreatConcentrationHeatmapDefinition,
+  DocumentsAnalyzedDefinition,
 } from "@/lib/metricDefinitions";
 
 export interface RiskAnalyticsPanelProps {
@@ -54,9 +55,9 @@ export function RiskAnalyticsPanel({
     const alertsStatus = alertTimelineData.length === 0 ? "System Stable" : "Active Alerts";
 
     return [
-      { label: "Total Incidents", value: totalIncidents, desc: "Monitored threat vectors", icon: Shield, color: accentColor, def: undefined as React.ReactNode },
-      { label: "Avg Risk Rating", value: avgRiskVal.toFixed(2), desc: "Average severity score", icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
-      { label: "Critical Incidents", value: criticalCount, desc: `Risk score ${RISK_THRESHOLDS.HIGH_TO_CRITICAL + 1}+`, icon: ShieldAlert, color: "text-red-500", def: <RiskSeverityDefinition /> },
+      { label: "Documents Analyzed", value: totalIncidents, desc: "Every document scanned, not just confirmed risk incidents", icon: Shield, color: accentColor, def: <DocumentsAnalyzedDefinition /> },
+      { label: "Avg Risk Score (Full Feed)", value: avgRiskVal.toFixed(2), desc: "Diluted by zero-risk documents — see Risk Center for confirmed-incidents-only average", icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
+      { label: "Critical-Risk Documents", value: criticalCount, desc: `Risk score ${RISK_THRESHOLDS.HIGH_TO_CRITICAL + 1}+`, icon: ShieldAlert, color: "text-red-500", def: <RiskSeverityDefinition /> },
       { label: "Ingestion Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400", def: undefined as React.ReactNode }
     ];
   }, [riskMatrixData, alertTimelineData, accentColor]);

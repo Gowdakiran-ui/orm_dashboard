@@ -243,7 +243,7 @@ export function FeedTab({
               { label: "Scanned Feed", value: metrics.totalDocs, desc: "Total documents", icon: FileText, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
               { label: "Active Channels", value: metrics.uniqueSources, desc: "Monitored RSS Feeds", icon: Globe, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
               { label: "Active Narratives", value: metrics.activeNarrativesCount, desc: "Identified story clusters", icon: Layers, color: "text-purple-400" },
-              { label: "Tracked Leaders", value: metrics.totalExecutivesCount, desc: "Executives mentioned", icon: Users, color: "text-emerald-400" },
+              { label: "Notable People Tracked", value: metrics.totalExecutivesCount, desc: "People mentioned in coverage", icon: Users, color: "text-emerald-400" },
               { label: "Avg Risk Level", value: `${metrics.avgRisk} pts`, desc: "Severity risk rating", icon: ShieldAlert, color: "text-rose-500" },
               { label: "Ingested Today", value: metrics.processedToday, desc: "Last 24h count", icon: Activity, color: "text-amber-400" }
             ].map((kpi, idx) => (

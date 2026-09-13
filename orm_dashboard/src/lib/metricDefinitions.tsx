@@ -120,6 +120,20 @@ export function RiskMatrixAxesDefinition() {
   );
 }
 
+export function DocumentsAnalyzedDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Documents Analyzed</span>
+      <span className="block">
+        Every document collected and processed for this client, whether or
+        not it turned out to carry any risk — this is a coverage-volume
+        count, not a count of confirmed risk incidents. For the count of
+        actual tracked risks, see Risk Center&apos;s &quot;Total Risks&quot;.
+      </span>
+    </>
+  );
+}
+
 export function AverageRiskScoreFeedDefinition() {
   return (
     <>

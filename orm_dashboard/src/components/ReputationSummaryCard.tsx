@@ -268,8 +268,8 @@ export function ReputationSummaryCard({
     { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-sky-500", onClick: () => navigateTo("narratives") },
     { label: "Highest Risk Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.highestRisk, sub: "Requires strategic review", color: "text-red-500" },
     { label: "Fastest Growing Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
-    { label: "Most Mentioned Executive", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
-    { label: "Tracked Executives", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Monitored leaders", color: "text-sky-500" },
+    { label: "Most Mentioned Person", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
+    { label: "Notable People Tracked", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Mentioned in coverage, not necessarily this client's own staff", color: "text-sky-500" },
     { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500" },
     { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: execAlert.open ? (alertNames ?? "Open alert") : "None open", color: execAlert.open ? "text-red-500" : "text-emerald-500" },
   ];
@@ -384,11 +384,11 @@ export function ReputationSummaryCard({
             </div>
 
             <div>
-              <span className={sectionLabelClass(isDark)}>Leadership</span>
+              <span className={sectionLabelClass(isDark)}>Notable People in Coverage</span>
               <p className={sectionTextClass(isDark)}>
-                {execStats.mostMentioned} is the most-mentioned executive, out of {execStats.total} tracked executive{execStats.total === 1 ? "" : "s"}.
+                {execStats.mostMentioned} is the most-mentioned person, out of {execStats.total} notable people tracked in {activeClientName}'s coverage (not necessarily {activeClientName}'s own staff).
                 {execStats.highest && execStats.lowest && execStats.highest !== execStats.lowest && (
-                  <> {execStats.highest.name} leads on reputation ({(execStats.highest.score ?? 0).toFixed(1)}), while {execStats.lowest.name} trails ({(execStats.lowest.score ?? 0).toFixed(1)}).</>
+                  <> {execStats.highest.name} has the highest sentiment score in this coverage ({(execStats.highest.score ?? 0).toFixed(1)}), while {execStats.lowest.name} has the lowest ({(execStats.lowest.score ?? 0).toFixed(1)}).</>
                 )}
               </p>
             </div>
