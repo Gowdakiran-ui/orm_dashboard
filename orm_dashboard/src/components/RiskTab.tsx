@@ -22,6 +22,7 @@ import {
   AverageRiskScoreTrackedDefinition,
   RiskMatrixAxesDefinition,
   RiskCategoriesDefinition,
+  CriticalRisksVsActiveAlertsDefinition,
 } from "@/lib/metricDefinitions";
 
 export interface RiskTabProps {
@@ -273,7 +274,7 @@ export function RiskTab({
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 font-mono">
           {[
             { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true },
-            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true },
+            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
             { label: "High Risks", value: stats.high, color: "text-orange-500" },
             { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
             { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
@@ -282,7 +283,10 @@ export function RiskTab({
           ].map((card, idx) => (
             <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
               <div className={SPECULAR_LINE} />
-              <span className={`text-xs ${mutedText(theme)} uppercase tracking-wider block mb-2`}>{card.label}</span>
+              <span className={`text-xs ${mutedText(theme)} uppercase tracking-wider flex items-center gap-1 mb-2`}>
+                {card.label}
+                {'def' in card && card.def && <InfoTooltip label={`About ${card.label}`}>{card.def}</InfoTooltip>}
+              </span>
               <span className={`${card.highlight ? "text-2xl" : "text-xl"} font-bold ${card.color}`}>{card.value}</span>
             </div>
           ))}
@@ -297,6 +301,7 @@ export function RiskTab({
             <span className="flex items-center">
               <AlertTriangle className="h-4 w-4 text-orange-500 mr-2" />
               ACTIVE ALERTS
+              <InfoTooltip label="About Active Alerts vs. Critical Risks"><CriticalRisksVsActiveAlertsDefinition /></InfoTooltip>
             </span>
             {!alertsLoading && !alertsError && (
               <Badge className={`${glassPill(theme)} text-orange-500 font-mono text-xs`}>{alerts.length} Active</Badge>
@@ -484,9 +489,16 @@ export function RiskTab({
           <CardContent className="p-4">
             <div className="grid grid-cols-12 gap-2 font-mono text-xs">
 
-              {/* Y Axis Label */}
-              <div className="col-span-1 flex items-center justify-center">
-                <span className={`transform -rotate-90 origin-center whitespace-nowrap uppercase tracking-widest font-bold ${mutedText(theme)}`}>IMPACT (RISK)</span>
+              {/* Y Axis Labels -- per-row IMPACT tier, matching the X axis's
+                  per-column LIKELIHOOD tier labels below (xoop_ui_clarity_review.md:
+                  only the X axis was labeled, so a viewer had no way to tell
+                  which row was HIGH/MEDIUM/LOW impact without hovering each cell). */}
+              <div className="col-span-1 grid grid-rows-3 gap-1">
+                {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
+                  <div key={rowKey} className="h-[55px] flex items-center justify-center text-center">
+                    <span className={`uppercase tracking-widest font-bold text-[10px] leading-tight ${mutedText(theme)}`}>{rowKey} IMPACT</span>
+                  </div>
+                ))}
               </div>
 
               {/* 3x3 Matrix Grid */}

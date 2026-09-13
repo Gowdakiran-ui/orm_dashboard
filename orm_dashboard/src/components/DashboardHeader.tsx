@@ -32,7 +32,12 @@ export function DashboardHeader({
         </span>
         <Terminal className="h-5 w-5 ml-2" style={{ color: accent }} />
         <h2 className={`text-xs font-mono font-extrabold tracking-wider uppercase ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
-          {activeClientName} — {activeTab.toUpperCase()}
+          {/* Access Control is a global, cross-client admin panel (see
+              AdminUsersPanel, gated on isSuperAdmin, not on the selected
+              client) -- prefixing it with whichever client happens to be
+              selected in the sidebar falsely implied a per-client setting
+              (xoop_ui_clarity_review.md). */}
+          {activeTab === "admin" ? "XOOP — GLOBAL ACCESS CONTROL" : `${activeClientName} — ${activeTab.toUpperCase()}`}
         </h2>
       </div>
 

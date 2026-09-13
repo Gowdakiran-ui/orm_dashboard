@@ -249,7 +249,15 @@ export function NarrativeIntelligenceWorkbench({
                   </div>
 
                   <p className={`text-[10px] leading-normal line-clamp-2 mb-2 font-mono ${mutedText(theme)}`}>
-                    {n.description || "Synthesizing supporting media vectors. Active narrative matches public profile targets."}
+                    {/* xoop_ui_clarity_review.md: this always showed the same
+                        boilerplate line for every narrative, since `n.description`
+                        is never actually populated by the backend. The real
+                        per-narrative AI summary (same one the drill-through
+                        drawer reads) lives at evidence_metadata.rca.problem_statement,
+                        but narrative_engine.py only generates an RCA for
+                        risk-worthy narratives, so a genuine narrative-specific
+                        fallback is still needed for the rest. */}
+                    {n.evidence_metadata?.rca?.problem_statement || n.description || "No AI-generated summary available for this narrative yet."}
                   </p>
 
                   <div className={`grid grid-cols-4 gap-2 pt-2 border-t text-[9px] font-mono ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
@@ -329,7 +337,7 @@ export function NarrativeIntelligenceWorkbench({
                       This reputation coordinate outlines media anomalies targeting public profiles connected to {clientName}. Public traction focuses on {activeNarrative.name.toLowerCase()} with an index intensity rating of {Math.round(activeNarrative.risk)} pts.
                     </p>
                     <p className={`text-[10px] leading-relaxed font-mono mt-1 border-t border-dashed pt-1.5 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                      {activeNarrative.description || "Initial media collection traces narrative volume across digital profiles, indicating low structural risk but high volatile trend vectors in forum discussion boards."}
+                      {activeNarrative.evidence_metadata?.rca?.problem_statement || activeNarrative.description || "No AI-generated summary available for this narrative yet."}
                     </p>
                   </>
                 )}

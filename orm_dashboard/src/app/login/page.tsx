@@ -69,7 +69,7 @@ function LoginForm() {
       >
         <div className="space-y-1 text-center">
           <h1 className="font-[family-name:var(--font-login-mono)] text-lg font-extrabold uppercase tracking-wider text-[#FF5E00]">
-            ORM Command
+            XOOP
           </h1>
           <p className="text-xs text-zinc-400">Sign in to access the intelligence platform</p>
         </div>

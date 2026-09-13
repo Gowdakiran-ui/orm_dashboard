@@ -32,6 +32,31 @@ const LOW_MAX = RISK_THRESHOLDS.LOW_TO_MEDIUM;
 const MED_MAX = RISK_THRESHOLDS.MEDIUM_TO_HIGH;
 const HIGH_MAX = RISK_THRESHOLDS.HIGH_TO_CRITICAL;
 
+/**
+ * "Critical Risks" (this tile) vs. an Active Alert's own "CRITICAL" badge --
+ * these can legitimately disagree (xoop_ui_clarity_review.md: "0 Critical
+ * Risks" next to "1 Active -- CRITICAL" read as a contradiction). Traced
+ * against alert_engine.py: an alert's severity comes from a separate
+ * evidence_score (risk + trend + document-count + executive-mention
+ * weighting combined, >70 or any executive involvement = CRITICAL), not
+ * from any single document crossing this tile's per-document Risk Score
+ * threshold. Two different signals, same word -- not a bug to reconcile.
+ */
+export function CriticalRisksVsActiveAlertsDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Critical Risks vs. Active Alerts</span>
+      <span className="block">
+        This tile counts documents whose own Risk Score crosses the Critical
+        threshold ({HIGH_MAX}+). An Active Alert&apos;s CRITICAL badge is a
+        separate signal -- it can fire from a combination of risk, trend
+        velocity, document volume, and executive involvement even when no
+        single document is itself Critical-risk.
+      </span>
+    </>
+  );
+}
+
 export function RiskSeverityDefinition() {
   return (
     <>
@@ -409,6 +434,10 @@ export function ThreatConcentrationHeatmapDefinition() {
         Severity). Row and column totals show how concentrated risk is by
         topic vs. by severity; hovering a cell also shows its average Risk
         Score and average sentiment.
+      </span>
+      <span className="block mt-1">
+        <b>R:</b> that cell&apos;s average Risk Score (0–100). <b>S:</b> its
+        average sentiment (-1.0 to +1.0).
       </span>
     </>
   );
