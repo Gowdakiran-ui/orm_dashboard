@@ -5,11 +5,13 @@ import { mutedText } from "@/components/theme/tokens";
 export interface AnalyticsTabHeaderProps {
   analyticsSubTab: string;
   onSelectSubTab: (subTab: string) => void;
+  isSuperAdmin?: boolean;
 }
 
 export function AnalyticsTabHeader({
   analyticsSubTab,
-  onSelectSubTab
+  onSelectSubTab,
+  isSuperAdmin
 }: AnalyticsTabHeaderProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -21,7 +23,9 @@ export function AnalyticsTabHeader({
         { id: "overview", label: "Reputation & Sentiment Trends" },
         { id: "risk", label: "Risk & Alert Profile" },
         { id: "narratives", label: "Narrative & Ingestion Analytics" },
-        { id: "pipeline", label: "AI Platform Diagnostics" }
+        // Internal ops telemetry (latency ms, engine success rates) -- not
+        // for a client exec's nav (xoop_ui_clarity_review.md Phase 4).
+        ...(isSuperAdmin ? [{ id: "pipeline", label: "AI Platform Diagnostics" }] : [])
       ].map(sub => {
         const isActive = analyticsSubTab === sub.id;
         return (

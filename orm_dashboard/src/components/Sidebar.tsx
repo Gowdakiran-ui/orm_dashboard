@@ -212,7 +212,12 @@ export function Sidebar({
             { id: "analytics", label: "Executive Analytics", icon: BarChartIcon },
             { id: "narratives", label: "Narrative Cluster", icon: LineChart },
             { id: "feed", label: "Intelligence Stream", icon: FileText },
-            { id: "pipeline", label: "AI Pipeline Health", icon: Cpu },
+            // Internal ops telemetry (engine success rates, latency,
+            // failure counts) -- not for a client exec's nav, same
+            // isSuperAdmin gate as Access Control (xoop_ui_clarity_review.md
+            // Phase 4: this was undermining trust in every other number
+            // on the site by sitting one click away).
+            ...(isSuperAdmin ? [{ id: "pipeline", label: "AI Pipeline Health", icon: Cpu }] : []),
             ...(isSuperAdmin ? [{ id: "admin", label: "Access Control", icon: ShieldCheck }] : [])
           ].map(tab => {
             const Icon = tab.icon;

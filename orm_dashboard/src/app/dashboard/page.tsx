@@ -279,6 +279,7 @@ function DashboardShell() {
                   <AnalyticsTabHeader
                     analyticsSubTab={analyticsSubTab}
                     onSelectSubTab={setAnalyticsSubTab}
+                    isSuperAdmin={isSuperAdmin}
                   />
 
                   {/* Sub-tab 1: Overview (Reputation & Sentiment) */}
@@ -329,8 +330,8 @@ function DashboardShell() {
                     </ErrorBoundary>
                   )}
 
-                  {/* Sub-tab 4: AI Ingestion Pipeline Diagnostics */}
-                  {analyticsSubTab === "pipeline" && (
+                  {/* Sub-tab 4: AI Ingestion Pipeline Diagnostics (super_admin only, see AnalyticsTabHeader.tsx) */}
+                  {analyticsSubTab === "pipeline" && isSuperAdmin && (
                     <ErrorBoundary fallback={<TelemetryErrorWidget title="Pipeline Diagnostics Error" />}>
                       <PipelineDiagnosticsPanel
                         pipelineDiagnostics={analytics.engineDiagnosticsList}
@@ -436,8 +437,8 @@ function DashboardShell() {
                 </ErrorBoundary>
               )}
 
-              {/* H. AI PIPELINE HEALTH VIEW */}
-              {activeTab === "pipeline" && (
+              {/* H. AI PIPELINE HEALTH VIEW (super_admin only, see Sidebar.tsx) */}
+              {activeTab === "pipeline" && isSuperAdmin && (
                 <ErrorBoundary fallback={<TelemetryErrorWidget title="Pipeline Health Error" />}>
                   <PipelineTab
                     commandStats={data.commandStats}
