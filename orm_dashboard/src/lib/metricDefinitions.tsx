@@ -198,6 +198,15 @@ export function RiskCategoriesDefinition() {
         Complaints and Layoffs are mid-severity; Cybersecurity, Data Breach,
         Legal, Fraud and Regulatory Action score highest.
       </span>
+      <span className="block mt-1">
+        <b>Innovation</b> (product/competitive-positioning coverage, e.g.
+        pricing changes) carries no inherent topic weight of its own
+        (risk_config.py&apos;s TOPIC_WEIGHTS has no entry for it) -- its Risk
+        Score comes entirely from that document&apos;s sentiment, trend, and
+        source-reliability signals. That&apos;s why an Innovation-tagged
+        article can still register a non-trivial risk score even when the
+        underlying news is neutral or positive for the company.
+      </span>
     </>
   );
 }
