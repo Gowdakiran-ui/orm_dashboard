@@ -374,6 +374,41 @@ class BenchmarkEngine:
             Entity.entity_type == "competitor"
         ).all()
 
+        # Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 5,
+        # same root cause and pattern as narrative_engine.py/documents.py/
+        # executive_reputation_engine.py): a client's own competitor roster
+        # can include generic/globally-common names ("Huawei", "White House",
+        # "IPO Filing" -- confirmed live under Anthropic's own benchmarks)
+        # that were never actually mentioned alongside this client's own
+        # brand/product in any document. Without this gate, calculate_client_
+        # rank/SOV get computed from entities that have nothing to do with
+        # this client, producing headline numbers ("#17 rank", "42.3% SOV")
+        # that contradict the honestly-empty Competitor Compare page.
+        brand_or_product_ids = [
+            e.id for e in db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.entity_type.in_(("brand", "product"))
+            ).all()
+        ]
+        if brand_or_product_ids:
+            brand_doc_ids = set(
+                m.document_id for m in db.query(EntityMention).filter(
+                    EntityMention.entity_id.in_(brand_or_product_ids)
+                ).all()
+            )
+            gated_competitors = []
+            for e in competitors:
+                competitor_doc_ids = set(
+                    m.document_id for m in db.query(EntityMention).filter(
+                        EntityMention.entity_id == e.id
+                    ).all()
+                )
+                if competitor_doc_ids & brand_doc_ids:
+                    gated_competitors.append(e)
+            competitors = gated_competitors
+        else:
+            log.warning("benchmark_no_brand_entity_found", action="brand_gate_skipped")
+
         # Benchmark requires Client + 1 or more REAL competitors
         if not competitors or len(competitors) < 1:
             log.info("benchmark_insufficient_competitors_skipped", count=len(competitors) if competitors else 0)
