@@ -534,3 +534,31 @@ export function RiskCountSummaryDefinition() {
     </>
   );
 }
+
+/**
+ * "Competitor Rank / Share of Voice" (dashboard home) vs. Competitor
+ * Compare's "No tracked competitors yet" -- traced against
+ * benchmark_engine.py: this tile is computed automatically from every
+ * entity_type='competitor' entity discovered in this client's own passive
+ * coverage (with real document evidence, i.e. a computed reputation
+ * score), not from Competitor Compare's separate opt-in "search a name to
+ * start tracking" feature. A client can have this tile populated while
+ * genuinely tracking zero competitors on that page -- not a contradiction
+ * once the two are understood as different signals over different data.
+ */
+export function CompetitorRankShareOfVoiceDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Competitor Rank / Share of Voice</span>
+      <span className="block">
+        Computed automatically from every competitor entity found in this
+        client&apos;s own coverage with enough evidence to score -- a
+        passive, always-on signal. This is a different list than Competitor
+        Compare&apos;s page, which only shows competitors you&apos;ve
+        explicitly searched and started tracking there. It&apos;s expected
+        for this tile to show a rank/SOV while that page still reads &quot;No
+        tracked competitors yet.&quot;
+      </span>
+    </>
+  );
+}

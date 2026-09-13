@@ -6,7 +6,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, SPECULAR_LINE } from "@/components/theme/tokens";
 import { HeroGlass } from "@/components/theme/HeroGlass";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition, CompetitorRankShareOfVoiceDefinition } from "@/lib/metricDefinitions";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface ReputationSummaryCardProps {
@@ -270,7 +270,7 @@ export function ReputationSummaryCard({
     { label: "Fastest Growing Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
     { label: "Most Mentioned Person", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
     { label: "Notable People Tracked", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Mentioned in coverage, not necessarily this client's own staff", color: "text-sky-500" },
-    { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500" },
+    { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500", def: <CompetitorRankShareOfVoiceDefinition /> },
     { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: execAlert.open ? (alertNames ?? "Open alert") : "None open", color: execAlert.open ? "text-red-500" : "text-emerald-500" },
   ];
 
@@ -397,7 +397,7 @@ export function ReputationSummaryCard({
             <div>
               <span className={sectionLabelClass(isDark)}>Competitive Standing</span>
               <p className={sectionTextClass(isDark)}>
-                {activeClientName} ranks {clientRank} among tracked competitors with {sovDisplay}% share of voice.
+                {activeClientName} ranks {clientRank} among competitors found in coverage with {sovDisplay}% share of voice (a separate, passive signal from Competitor Compare's opt-in tracking list).
                 {topCompetitor && <> The top-ranked competitor is {topCompetitor.competitor_name}.</>}
               </p>
             </div>
