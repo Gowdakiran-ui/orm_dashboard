@@ -405,9 +405,13 @@ class BenchmarkEngine:
 
         # Only count verified competitors (entity_type == "competitor")
         # Do not use fallback to other entities - only real competitors count
+        # is_active excludes entities manually confirmed as wrongly-tracked
+        # (e.g. Anthropic's "Moonshot AI" -- same reasoning as
+        # executive_reputation_engine.py's identical is_active filter).
         competitors = db.query(Entity).filter(
             Entity.client_id == client_id,
-            Entity.entity_type == "competitor"
+            Entity.entity_type == "competitor",
+            Entity.is_active == True
         ).all()
 
         # Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 5,
