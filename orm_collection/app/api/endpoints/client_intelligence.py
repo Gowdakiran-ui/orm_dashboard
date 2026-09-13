@@ -257,25 +257,87 @@ def get_client_reputation_breakdown(client_id: UUID, db: Session = Depends(get_d
         "visibility": rep.visibility_component
     }
 
+def _brand_or_product_gated_person_entity_ids(db: Session, client_id):
+    """
+    Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 0,
+    2026-09-13) -- third confirmed instance of the same root-cause bug, this
+    time in executive_reputation_engine.py's write path and its own read
+    endpoints here. calculate_executive_reputation pulls EVERY
+    entity_type='person' entity tracked for a client with zero check that
+    the client's own brand/product is ever mentioned alongside them --
+    confirmed live, Anthropic's ExecutiveReputationScore rows include
+    genuine Anthropic executives (Dario Amodei, Jared Kaplan, Tom Brown)
+    mixed with wholly unrelated people (Elon Musk, Sam Altman, Howard
+    Lutnick, Satya Nadella, Liang Wenfeng) and outright NER garbage
+    ("Russian Hackers", "Fortune Tech", "Rules DOD" as a "person"). Same
+    fix pattern as narrative_engine.py/documents.py: only trust a person
+    entity's reputation score if at least one of their mentioned documents
+    also mentions this client's own brand or product entity.
+
+    Returns the set of entity_ids (already restricted to entity_type=
+    'person' for this client) that pass the gate. This is a read-path
+    containment applied on top of already-computed ExecutiveReputationScore
+    rows -- it does not retroactively delete the contaminated rows, and
+    does not yet fix the write path itself (calculate_executive_reputation
+    still computes a score for every person entity on its next scheduled
+    run) -- both are scoped as the same follow-up as the shared
+    matching-engine fix, not attempted today.
+    """
+    from app.models.entity import Entity, EntityMention
+
+    brand_or_product_ids = [
+        r[0] for r in db.query(Entity.id).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+        ).all()
+    ]
+    if not brand_or_product_ids:
+        return None
+
+    brand_doc_ids = set(
+        r[0] for r in db.query(EntityMention.document_id).filter(
+            EntityMention.entity_id.in_(brand_or_product_ids)
+        ).all()
+    )
+
+    person_entities = db.query(Entity.id).filter(
+        Entity.client_id == client_id, Entity.entity_type == "person"
+    ).all()
+
+    gated_ids = set()
+    for (pid,) in person_entities:
+        person_doc_ids = set(
+            r[0] for r in db.query(EntityMention.document_id).filter(
+                EntityMention.entity_id == pid
+            ).all()
+        )
+        if person_doc_ids & brand_doc_ids:
+            gated_ids.add(pid)
+    return gated_ids
+
+
 @router.get("/{client_id}/executives", response_model=List[Dict[str, Any]])
 def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     from app.models.executive_reputation import ExecutiveReputationScore
-    
+
     # Get latest score for each executive entity
     subq = db.query(
         ExecutiveReputationScore.entity_id,
         func.max(ExecutiveReputationScore.created_at).label("max_created")
     ).filter(ExecutiveReputationScore.client_id == client_id).group_by(ExecutiveReputationScore.entity_id).subquery()
-    
+
     scores = db.query(ExecutiveReputationScore).join(
         subq,
         (ExecutiveReputationScore.entity_id == subq.c.entity_id) &
         (ExecutiveReputationScore.created_at == subq.c.max_created)
     ).all()
-    
+
+    gated_ids = _brand_or_product_gated_person_entity_ids(db, client_id)
+    if gated_ids is not None:
+        scores = [s for s in scores if s.entity_id in gated_ids]
+
     return [{
         "id": str(s.id),
         "entity_id": str(s.entity_id),
@@ -312,6 +374,7 @@ def get_client_executive_history(client_id: UUID, db: Session = Depends(get_db))
         order_by=ExecutiveReputationScore.created_at.desc()
     ).label("row_num")
     subq = db.query(
+        ExecutiveReputationScore.entity_id,
         ExecutiveReputationScore.executive_name,
         ExecutiveReputationScore.score,
         ExecutiveReputationScore.created_at,
@@ -319,6 +382,16 @@ def get_client_executive_history(client_id: UUID, db: Session = Depends(get_db))
     ).filter(ExecutiveReputationScore.client_id == client_id).subquery()
 
     rows = db.query(subq).filter(subq.c.row_num <= 30).order_by(subq.c.created_at.asc()).all()
+
+    # Brand co-occurrence containment (see
+    # _brand_or_product_gated_person_entity_ids above) -- without this, the
+    # "Executive Figures Historical Trend" chart plots one line per person
+    # entity regardless of whether they have anything to do with this
+    # client, confirmed live (Howard Lutnick, Huawei Order, Liang Wenfeng,
+    # Matt Clifford all appeared under Anthropic).
+    gated_ids = _brand_or_product_gated_person_entity_ids(db, client_id)
+    if gated_ids is not None:
+        rows = [r for r in rows if r.entity_id in gated_ids]
 
     history: Dict[str, List[Dict[str, Any]]] = {}
     for r in rows:

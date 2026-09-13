@@ -178,7 +178,49 @@ class ExecutiveReputationEngine:
             Entity.client_id == client_id,
             Entity.entity_type == "person"
         ).all()
-        
+
+        # Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 0,
+        # 2026-09-13): the R1 filter above has no check that the client's own
+        # brand/product is ever mentioned alongside a tracked person entity --
+        # matching_engine.py's shared GlobalMatchingEngine has no such check
+        # either, so a person entity like "Elon Musk" or "Howard Lutnick"
+        # (tracked because they DO come up in real client coverage sometimes)
+        # gets an ExecutiveReputationScore computed here even when every one
+        # of their mentions this run is on wholly unrelated documents (e.g. a
+        # 100%-Tesla article). Confirmed live: Anthropic's
+        # ExecutiveReputationScore rows mixed genuine Anthropic executives
+        # with unrelated public figures and outright NER garbage ("Russian
+        # Hackers", "Fortune Tech" as "person" entities). Same fix pattern as
+        # narrative_engine.py/documents.py: only compute a score for a person
+        # entity if at least one of their mentioned documents also mentions
+        # this client's own brand or product entity. No brand/product entity
+        # at all is an existing-data edge case (should not happen for an
+        # onboarded client) -- logged and left ungated rather than silently
+        # zeroing out a client's entire executive roster.
+        brand_or_product_ids = [
+            e.id for e in db.query(Entity).filter(
+                Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+            ).all()
+        ]
+        if brand_or_product_ids:
+            brand_doc_ids = set(
+                m.document_id for m in db.query(EntityMention).filter(
+                    EntityMention.entity_id.in_(brand_or_product_ids)
+                ).all()
+            )
+            gated_executives = []
+            for ex in executives:
+                person_doc_ids = set(
+                    m.document_id for m in db.query(EntityMention).filter(
+                        EntityMention.entity_id == ex.id
+                    ).all()
+                )
+                if person_doc_ids & brand_doc_ids:
+                    gated_executives.append(ex)
+            executives = gated_executives
+        else:
+            log.warning("exec_reputation_no_brand_or_product_entity_found", action="brand_gate_skipped")
+
         if not executives:
             log.info("exec_reputation_no_executives_found_skipping")
             ExecutiveReputationStateMachine.transition(
