@@ -104,6 +104,62 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
     return results
 
 from app.models.narrative import Narrative
+from app.models.document import Document
+
+
+def _filter_stale_narratives(db: Session, narratives: List[Narrative]) -> List[Narrative]:
+    """
+    Stale-evidence containment (xoop_ui_clarity_review.md Phase 0, second
+    confirmed bug, 2026-09-13): narratives are never invalidated or
+    recomputed when their source evidence (documents, risk events) is later
+    deleted or a client's data is reseeded -- calculate_narratives only ever
+    inserts/updates a narrative when its own topic-clustering pass produces
+    one again, it never removes a narrative whose underlying evidence has
+    since evaporated. Confirmed live: a narrative's evidence_metadata claims
+    a cluster of real articles, but 0 of its own supporting_documents ids
+    still exist in `documents` -- the drill-through view then shows "0
+    Sources / No supporting documents found" directly contradicting the AI
+    summary's "based on a cluster of N articles" in the very same drawer.
+    Confirmed via a platform-wide query (2026-09-13) that this is rare (2 of
+    2,957 narratives, both with supporting_documents fully gone, none
+    partially gone) -- a full recompute/invalidation system is the real fix
+    and is scoped as its own follow-up, not attempted here; this filter is a
+    read-path containment that hides a narrative once ALL of its own listed
+    supporting documents have disappeared, rather than showing that
+    contradiction to a user. A narrative with no supporting_documents listed
+    at all (nothing to check) is left untouched -- this only catches
+    evidence that once existed and later vanished, not narratives that never
+    had per-document evidence recorded.
+    """
+    all_doc_ids = set()
+    for n in narratives:
+        all_doc_ids.update((n.evidence_metadata or {}).get("supporting_documents") or [])
+    if not all_doc_ids:
+        return narratives
+
+    existing_doc_ids = set()
+    id_list = list(all_doc_ids)
+    batch_size = 500
+    for i in range(0, len(id_list), batch_size):
+        batch = id_list[i:i + batch_size]
+        rows = db.query(Document.id).filter(Document.id.in_(batch)).all()
+        existing_doc_ids.update(str(r[0]) for r in rows)
+
+    result = []
+    for n in narratives:
+        supporting_docs = (n.evidence_metadata or {}).get("supporting_documents") or []
+        if supporting_docs and not any(did in existing_doc_ids for did in supporting_docs):
+            logger.warning(
+                "narrative_stale_evidence_hidden",
+                narrative_id=str(n.id),
+                client_id=str(n.client_id),
+                narrative_name=n.narrative_name,
+                supporting_document_count=len(supporting_docs),
+            )
+            continue
+        result.append(n)
+    return result
+
 
 @router.get("/{client_id}/narratives", response_model=List[Dict[str, Any]])
 def get_client_narratives(client_id: UUID, db: Session = Depends(get_db)):
@@ -111,6 +167,7 @@ def get_client_narratives(client_id: UUID, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     narratives = db.query(Narrative).filter(Narrative.client_id == client_id).order_by(Narrative.updated_at.desc()).all()
+    narratives = _filter_stale_narratives(db, narratives)
     results = [{
         "id": str(n.id),
         "name": n.narrative_name,
@@ -132,6 +189,7 @@ def get_client_top_narratives(client_id: UUID, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     narratives = db.query(Narrative).filter(Narrative.client_id == client_id).order_by(Narrative.mention_count.desc(), Narrative.id.desc()).limit(5).all()
+    narratives = _filter_stale_narratives(db, narratives)
     results = [{
         "id": str(n.id),
         "name": n.narrative_name,

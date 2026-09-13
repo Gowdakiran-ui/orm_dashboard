@@ -916,7 +916,39 @@ class NarrativeEngine:
         narrative_entity_ids = [e.id for e in client_entities if e.entity_type != "competitor"]
         mentions = db.query(EntityMention).filter(EntityMention.entity_id.in_(narrative_entity_ids)).all()
         doc_ids = list(set(m.document_id for m in mentions))
-        
+
+        # Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 0,
+        # 2026-09-13): the competitor exclusion above doesn't cover
+        # entity_type='person' -- a client's own tracked person entities can
+        # still be generic, globally-common names (e.g. Anthropic tracking
+        # "Elon Musk" as a person entity relevant to real Anthropic coverage).
+        # matching_engine.py's shared GlobalMatchingEngine has no check that
+        # the client's own brand is actually mentioned before accepting a
+        # match, so a document matching ONLY on that generic name -- zero
+        # brand mention anywhere in it -- was still entering this client's
+        # narrative pool. Confirmed live: 100%-Tesla "Full Self-Driving"
+        # documents entered Anthropic's pool this way via its "Elon Musk"
+        # person entity. Requiring the client's own brand entity to also be
+        # mentioned in the document closes this for narrative generation.
+        # This is a targeted containment in this read path, not a fix to
+        # matching_engine.py itself (a platform-wide, shared-scoring change
+        # that needs real regression testing before it can be trusted) -- see
+        # documents.py's get_client_visible_documents for the equivalent
+        # containment on the document-feed read path. No brand entity at all
+        # is an existing-data edge case (should not happen for an onboarded
+        # client) -- logged and left ungated rather than silently zeroing out
+        # a client's entire narrative pool.
+        brand_entity = next((e for e in client_entities if e.entity_type == "brand"), None)
+        if brand_entity:
+            brand_doc_ids = set(
+                m.document_id for m in db.query(EntityMention).filter(
+                    EntityMention.entity_id == brand_entity.id
+                ).all()
+            )
+            doc_ids = [did for did in doc_ids if did in brand_doc_ids]
+        else:
+            log.warning("narrative_no_brand_entity_found", action="brand_gate_skipped")
+
         if not doc_ids:
             log.info("narrative_no_documents_found", action="skipping")
             return
@@ -1369,8 +1401,23 @@ class NarrativeEngine:
                             run_id=rid,
                         )
 
+                # "When" for the narrative drawer (Part B explainability
+                # reconciliation): a plain min/max over the same
+                # published_at-or-collected_at values cluster_docs is already
+                # sorted by (see the docs.sort(...) tiebreak above) -- no LLM,
+                # just the real date range the cluster's own documents cover.
+                _cluster_dates = [
+                    (d.published_at or d.collected_at) for d in cluster_docs
+                    if d.published_at or d.collected_at
+                ]
+                date_range = {
+                    "first": min(_cluster_dates).isoformat() if _cluster_dates else None,
+                    "last": max(_cluster_dates).isoformat() if _cluster_dates else None,
+                }
+
                 evidence_metadata = {
                     "supporting_documents": [str(did) for did in cluster_doc_ids],
+                    "date_range": date_range,
                     "supporting_risks": risk_ids,
                     "supporting_trends": trend_ids,
                     "supporting_alerts": alert_ids,

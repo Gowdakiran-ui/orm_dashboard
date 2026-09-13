@@ -11,6 +11,45 @@ from app.models.document import Document, DocumentMatch
 router = APIRouter()
 
 
+def _brand_gated_document_ids(db: Session, client_id):
+    """
+    Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 0,
+    2026-09-13): a client's own tracked person/competitor entities can be
+    generic, globally-common names (e.g. Anthropic tracking "Trump", "Elon
+    Musk", "Google" as competitor/person entities relevant to real Anthropic
+    coverage) that also appear constantly in totally unrelated clients' own
+    news. matching_engine.py's shared GlobalMatchingEngine has no check that
+    the client's own brand is actually mentioned before accepting a match, so
+    a document matching ONLY on one of those generic names -- zero mention of
+    the client's own brand anywhere in it -- was still treated as this
+    client's own document. Confirmed live: 20 100%-Tesla documents were
+    showing up in Anthropic's document feed this way, matched only via
+    entities like "Trump" and "Elon Musk".
+
+    Returns the set of document ids that have an accepted match to this
+    client's own entity_type='brand' entity, or None if the client has no
+    brand entity at all (an existing-data edge case that should not happen
+    for an onboarded client) -- callers treat None as "don't gate", rather
+    than silently returning zero documents for such a client.
+
+    This is a targeted containment in this read path, not a fix to
+    matching_engine.py itself (a platform-wide, shared-scoring change across
+    every client that needs real regression testing before it can be
+    trusted).
+    """
+    from app.models.entity import Entity
+
+    brand_entity = db.query(Entity).filter(
+        Entity.client_id == client_id, Entity.entity_type == "brand"
+    ).first()
+    if not brand_entity:
+        return None
+    rows = db.query(DocumentMatch.document_id).filter(
+        DocumentMatch.matched_entity_id == brand_entity.id
+    ).all()
+    return {r[0] for r in rows}
+
+
 def get_client_visible_documents(db: Session, client_id, skip: int = 0, limit: int = 100):
     """
     The exact document set Risk Center (and every other page that consumes
@@ -28,11 +67,17 @@ def get_client_visible_documents(db: Session, client_id, skip: int = 0, limit: i
     """
     from app.models.entity import Entity
     limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
-    return (
+    query = (
         db.query(Document)
         .join(DocumentMatch)
         .join(Entity)
         .filter(Entity.client_id == client_id)
+    )
+    brand_doc_ids = _brand_gated_document_ids(db, client_id)
+    if brand_doc_ids is not None:
+        query = query.filter(Document.id.in_(brand_doc_ids))
+    return (
+        query
         .distinct()
         .order_by(Document.published_at.desc(), Document.id.desc())
         .offset(skip)
@@ -49,9 +94,13 @@ def read_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session
     # every sibling endpoint in this file. Matches the join pattern already
     # used correctly in GET /{document_id} and GET /client/{client_id} below.
     from app.models.entity import Entity
-    return db.query(Document).join(DocumentMatch).join(Entity).filter(
+    query = db.query(Document).join(DocumentMatch).join(Entity).filter(
         Entity.client_id == client_id
-    ).distinct().order_by(Document.published_at.desc(), Document.id.desc()).offset(skip).limit(limit).all()
+    )
+    brand_doc_ids = _brand_gated_document_ids(db, client_id)
+    if brand_doc_ids is not None:
+        query = query.filter(Document.id.in_(brand_doc_ids))
+    return query.distinct().order_by(Document.published_at.desc(), Document.id.desc()).offset(skip).limit(limit).all()
 
 @router.get("/{document_id}")
 def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_db)):
@@ -61,10 +110,14 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     # matched to an entity belonging to the requesting client (API_FORENSICS.md
     # Section 2 / TASK.md Phase 2 item 2). Matches the join pattern already
     # used correctly in GET /client/{client_id} below.
-    doc = db.query(Document).join(DocumentMatch).join(Entity).filter(
+    query = db.query(Document).join(DocumentMatch).join(Entity).filter(
         Document.id == document_id,
         Entity.client_id == client_id,
-    ).distinct().first()
+    )
+    brand_doc_ids = _brand_gated_document_ids(db, client_id)
+    if brand_doc_ids is not None:
+        query = query.filter(Document.id.in_(brand_doc_ids))
+    doc = query.distinct().first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
