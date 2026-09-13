@@ -282,6 +282,32 @@ class TrendDetector:
             )
             return
 
+        # Brand co-occurrence containment (contamination_bug_sweep.md,
+        # 2026-09-13): this query has no entity_type filter or brand-
+        # co-occurrence check at all -- a generic person-type entity in this
+        # client's own roster (e.g. a globally-common name) had its mention
+        # volume/topic/sentiment counted toward this client's trends from
+        # ANY document mentioning it, even one with zero co-occurrence of
+        # this client's own brand/product entity. Same fix as
+        # narrative_engine.py/documents.py/executive_reputation_engine.py/
+        # benchmark_engine.py/reputation_engine.py/risk_engine.py: a
+        # document only counts toward this client's trend detection if it
+        # also mentions the client's own brand or product entity. A client
+        # with no brand/product entity configured at all is an existing-
+        # data edge case -- logged and left ungated, same as
+        # narrative_engine.py, rather than silently suppressing every trend
+        # for that client.
+        brand_or_product_ids = [e.id for e in entities if e.entity_type in ("brand", "product")]
+        if brand_or_product_ids:
+            brand_doc_ids = set(
+                m.document_id for m in db.query(EntityMention).filter(
+                    EntityMention.entity_id.in_(brand_or_product_ids)
+                ).all()
+            )
+        else:
+            brand_doc_ids = None
+            log.warning("trend_no_brand_entity_found", action="brand_gate_skipped")
+
         # --- Transition: → TREND_PROCESSING ---
         state = self._get_or_create_state(db, client_id)
         retry_count = state.retry_count or 0
@@ -320,15 +346,18 @@ class TrendDetector:
 
             mention_events = self._detect_mention_trends(
                 db, client_id, entities, now, last_24h, prev_7d_start,
-                run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established
+                run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established,
+                brand_doc_ids
             )
             topic_events = self._detect_topic_trends(
                 db, client_id, now, last_24h, prev_7d_start,
-                run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established
+                run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established,
+                brand_doc_ids
             )
             sentiment_events = self._detect_sentiment_trends(
                 db, client_id, now, last_24h, prev_7d_start,
-                run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established
+                run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established,
+                brand_doc_ids
             )
 
             # --- Single commit for all three detectors ---
@@ -393,7 +422,8 @@ class TrendDetector:
     # ------------------------------------------------------------------
     def _detect_mention_trends(
         self, db, client_id, entities, now, last_24h, prev_7d_start,
-        run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established
+        run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established,
+        brand_doc_ids=None
     ) -> int:
         """
         Detect mention-volume spikes per entity.
@@ -405,7 +435,7 @@ class TrendDetector:
             t0 = time.perf_counter()
 
             # --- Baseline: SUM of mention_count over prior 7 days ---
-            baseline_count = (
+            baseline_query = (
                 db.query(func.sum(EntityMention.mention_count))
                 .join(Document, Document.id == EntityMention.document_id)
                 .filter(EntityMention.entity_id == entity.id)
@@ -413,12 +443,14 @@ class TrendDetector:
                     Document.collected_at >= prev_7d_start,
                     Document.collected_at < last_24h
                 )
-                .scalar() or 0
             )
+            if brand_doc_ids is not None:
+                baseline_query = baseline_query.filter(EntityMention.document_id.in_(brand_doc_ids))
+            baseline_count = baseline_query.scalar() or 0
             baseline_avg = baseline_count / divisor
 
             # --- Current: SUM of mention_count in last 24 hours ---
-            current_count = (
+            current_query = (
                 db.query(func.sum(EntityMention.mention_count))
                 .join(Document, Document.id == EntityMention.document_id)
                 .filter(EntityMention.entity_id == entity.id)
@@ -426,8 +458,10 @@ class TrendDetector:
                     Document.collected_at >= last_24h,
                     Document.collected_at <= now
                 )
-                .scalar() or 0
             )
+            if brand_doc_ids is not None:
+                current_query = current_query.filter(EntityMention.document_id.in_(brand_doc_ids))
+            current_count = current_query.scalar() or 0
 
             # Nothing to compute
             if current_count == 0 and baseline_avg == 0:
@@ -462,14 +496,15 @@ class TrendDetector:
                 severity = self.calculate_severity(percent_change)
 
                 # Fetch triggering documents in last 24h for explainability
-                trigger_docs = (
+                trigger_docs_query = (
                     db.query(Document.id)
                     .join(EntityMention, EntityMention.document_id == Document.id)
                     .filter(EntityMention.entity_id == entity.id)
                     .filter(Document.collected_at >= last_24h, Document.collected_at <= now)
-                    .limit(3)
-                    .all()
                 )
+                if brand_doc_ids is not None:
+                    trigger_docs_query = trigger_docs_query.filter(Document.id.in_(brand_doc_ids))
+                trigger_docs = trigger_docs_query.limit(3).all()
                 triggering_ids = [str(d[0]) for d in trigger_docs]
 
                 direction = "RISING" if percent_change >= 0 else "FALLING"
@@ -510,7 +545,8 @@ class TrendDetector:
     # ------------------------------------------------------------------
     def _detect_topic_trends(
         self, db, client_id, now, last_24h, prev_7d_start,
-        run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established
+        run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established,
+        brand_doc_ids=None
     ) -> int:
         """
         Detect topic-volume spikes per active topic (client-aware topic list).
@@ -526,12 +562,20 @@ class TrendDetector:
         # session that a client-level Sentiment-type trend directly
         # deducts from that client's own reputation score (reputation_
         # engine.py's Trend Component).
-        client_docs_query = (
-            db.query(EntityMention.document_id)
+        client_doc_ids = set(
+            r[0] for r in db.query(EntityMention.document_id)
             .join(Entity, Entity.id == EntityMention.entity_id)
             .filter(Entity.client_id == client_id, Entity.entity_type != "competitor")
-            .scalar_subquery()
+            .all()
         )
+        # Brand co-occurrence containment (contamination_bug_sweep.md,
+        # 2026-09-13): same additive gate as detect_trends' Mention-trend
+        # pool above -- a document only belongs to this client's Topic/
+        # Sentiment trend pool if it also mentions the client's own brand
+        # or product entity.
+        if brand_doc_ids is not None:
+            client_doc_ids = client_doc_ids & brand_doc_ids
+        client_docs_query = client_doc_ids
 
         # A4 Client-Aware Topic Evaluation: only evaluate topics present in the client's documents
         topics = (
@@ -650,7 +694,8 @@ class TrendDetector:
     # ------------------------------------------------------------------
     def _detect_sentiment_trends(
         self, db, client_id, now, last_24h, prev_7d_start,
-        run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established
+        run_id, batch_id, worker_id, trend_date, log, divisor, system_active_days, baseline_established,
+        brand_doc_ids=None
     ) -> int:
         """
         Detect negative and positive sentiment volume spikes at the client level.
@@ -666,12 +711,18 @@ class TrendDetector:
         # session that a client-level Sentiment-type trend directly
         # deducts from that client's own reputation score (reputation_
         # engine.py's Trend Component).
-        client_docs_query = (
-            db.query(EntityMention.document_id)
+        client_doc_ids = set(
+            r[0] for r in db.query(EntityMention.document_id)
             .join(Entity, Entity.id == EntityMention.entity_id)
             .filter(Entity.client_id == client_id, Entity.entity_type != "competitor")
-            .scalar_subquery()
+            .all()
         )
+        # Brand co-occurrence containment (contamination_bug_sweep.md,
+        # 2026-09-13): same additive gate as detect_trends' Mention-trend
+        # pool above.
+        if brand_doc_ids is not None:
+            client_doc_ids = client_doc_ids & brand_doc_ids
+        client_docs_query = client_doc_ids
 
         events_count = 0
 

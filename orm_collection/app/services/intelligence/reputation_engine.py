@@ -7,7 +7,7 @@ import structlog
 from urllib.parse import urlparse
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_
 from sqlalchemy.dialects.postgresql import insert
 
 from app.models.document import Document
@@ -160,16 +160,64 @@ class ReputationEngine:
         ).all()
         entity_ids = [e.id for e in entities]
 
+        # Brand co-occurrence containment (godrej_forensics_review.md /
+        # xoop_ui_clarity_review.md Phase 0 pattern sweep): the
+        # competitor-type exclusion above does not catch a globally-common
+        # PERSON entity in this client's own roster (confirmed live: 16
+        # documents about Elon Musk/Tesla with zero Anthropic co-occurrence
+        # were feeding this client's Sentiment component via "Elon Musk").
+        # Same fix as narrative_engine.py/documents.py/
+        # executive_reputation_engine.py/benchmark_engine.py: require the
+        # client's own brand/product entity to also appear in the same
+        # document before an entity's mentions count toward this client's
+        # reputation.
+        brand_or_product_ids = [
+            e.id for e in db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.entity_type.in_(("brand", "product"))
+            ).all()
+        ]
+        if brand_or_product_ids:
+            brand_doc_ids = set(
+                m.document_id for m in db.query(EntityMention).filter(
+                    EntityMention.entity_id.in_(brand_or_product_ids)
+                ).all()
+            )
+        else:
+            brand_doc_ids = None
+            log.warning("reputation_no_brand_entity_found", action="brand_gate_skipped")
+
+        # Same containment for the Risk/Trend components below: a
+        # person-type entity's RiskEvent/TrendEvent only counts toward this
+        # client's reputation if that person co-occurs with the brand in
+        # some document (brand/product entities are always this client's
+        # own, so they're never excluded here).
+        gated_person_ids = set()
+        if brand_doc_ids is not None:
+            person_entities = [e for e in entities if e.entity_type == "person"]
+            if person_entities:
+                person_mentions = db.query(EntityMention).filter(
+                    EntityMention.entity_id.in_([p.id for p in person_entities])
+                ).all()
+                person_docs: Dict[Any, set] = {}
+                for m in person_mentions:
+                    person_docs.setdefault(m.entity_id, set()).add(m.document_id)
+                gated_person_ids = {
+                    pid for pid, docs in person_docs.items() if docs & brand_doc_ids
+                }
+
         doc_ids = []
         doc_urls = []
         total_mentions = 0
-        
+
         if entity_ids:
             # P3: Batch preloading of all mentions in the 30-day window
             mentions = db.query(EntityMention).filter(
                 EntityMention.entity_id.in_(entity_ids),
                 EntityMention.created_at >= lookback_date
             ).all()
+            if brand_doc_ids is not None:
+                mentions = [m for m in mentions if m.document_id in brand_doc_ids]
             doc_ids = list(set(m.document_id for m in mentions))
             total_mentions = sum(m.mention_count for m in mentions)
             
@@ -207,7 +255,11 @@ class ReputationEngine:
             ).filter(
                 RiskEvent.client_id == client_id,
                 RiskEvent.created_at >= lookback_date,
-                or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+                or_(
+                    RiskEvent.entity_id.is_(None),
+                    Entity.entity_type.in_(("brand", "product")),
+                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                ),
             ).all()
             if supporting_risks:
                 avg_risk = sum(r.risk_score for r in supporting_risks) / len(supporting_risks)
@@ -247,7 +299,11 @@ class ReputationEngine:
             ).filter(
                 TrendEvent.client_id == client_id,
                 TrendEvent.created_at >= lookback_date,
-                or_(Entity.entity_type != "competitor", TrendEvent.entity_id.is_(None)),
+                or_(
+                    TrendEvent.entity_id.is_(None),
+                    Entity.entity_type.in_(("brand", "product")),
+                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                ),
             ).order_by(TrendEvent.created_at.desc()).limit(10).all()
             
             if supporting_trends:

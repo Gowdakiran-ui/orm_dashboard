@@ -59,13 +59,41 @@ def get_status(
 
     from app.models.document import Document, DocumentMatch
     from app.models.entity import Entity
+
+    # Brand co-occurrence containment (contamination_bug_sweep.md,
+    # 2026-09-13): raw DocumentMatch->Entity.client_id count with no
+    # entity_type filter or brand-co-occurrence check at all -- same gap
+    # documents.py's get_client_visible_documents (_brand_gated_document_ids)
+    # already closes on the client-facing document feed. Require the
+    # client's own brand/product entity to also have a match on the same
+    # document before it counts toward this client's raw totals. A client
+    # with no brand/product entity configured at all is an existing-data
+    # edge case -- logged and left ungated, same as documents.py, rather
+    # than silently zeroing out these counts for such a client.
+    brand_or_product_ids = [
+        r[0] for r in db.query(Entity.id).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+        ).all()
+    ]
+    brand_doc_ids = None
+    if brand_or_product_ids:
+        brand_doc_ids = {
+            r[0] for r in db.query(DocumentMatch.document_id).filter(
+                DocumentMatch.matched_entity_id.in_(brand_or_product_ids)
+            ).all()
+        }
+
     client_docs = db.query(Document).join(DocumentMatch).join(Entity).filter(
         Entity.client_id == client_id
     ).distinct()
-    total_docs = client_docs.count()
-    total_matches = db.query(DocumentMatch).join(Entity).filter(
+    total_matches_query = db.query(DocumentMatch).join(Entity).filter(
         Entity.client_id == client_id
-    ).count()
+    )
+    if brand_doc_ids is not None:
+        client_docs = client_docs.filter(Document.id.in_(brand_doc_ids))
+        total_matches_query = total_matches_query.filter(DocumentMatch.document_id.in_(brand_doc_ids))
+    total_docs = client_docs.count()
+    total_matches = total_matches_query.count()
 
     # Calculate docs collected in last 24h
     now = datetime.datetime.now(datetime.timezone.utc)

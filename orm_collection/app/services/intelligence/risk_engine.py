@@ -609,6 +609,43 @@ class RiskEngine:
             bucket[m.entity.id] = m.entity
         client_to_entities = {cid: list(ents.values()) for cid, ents in client_to_entities.items()}
 
+        # Brand co-occurrence containment (contamination_bug_sweep.md,
+        # 2026-09-13): no entity_type filter or brand-co-occurrence check
+        # existed here at all -- any entity mentioned anywhere in a document
+        # generated a RiskEvent under that entity's client_id, even when the
+        # client's own brand/product entity never appears in the same
+        # document (confirmed live: an Amazon/Tesla Cybercab article produced
+        # a RiskEvent under Anthropic's client_id via a generic tracked
+        # entity with zero Anthropic brand mention in that article). Same
+        # fix as narrative_engine.py/documents.py/
+        # executive_reputation_engine.py/benchmark_engine.py/
+        # reputation_engine.py: a client's entities on this document only
+        # count toward that client if this document also mentions that
+        # client's own brand or product entity. A client with no brand/
+        # product entity configured at all is an existing-data edge case --
+        # logged and left ungated, same as narrative_engine.py, rather than
+        # silently suppressing every RiskEvent for that client.
+        if client_to_entities:
+            client_ids_in_doc = list(client_to_entities.keys())
+            client_brand_product_ids = {}
+            for cid, eid in db.query(Entity.client_id, Entity.id).filter(
+                Entity.client_id.in_(client_ids_in_doc),
+                Entity.entity_type.in_(("brand", "product"))
+            ).all():
+                client_brand_product_ids.setdefault(cid, set()).add(eid)
+
+            doc_entity_ids = set(m.entity_id for m in mentions)
+            clients_with_brand_co_occurrence = {
+                cid for cid, bp_ids in client_brand_product_ids.items()
+                if bp_ids & doc_entity_ids
+            }
+
+            for cid in client_ids_in_doc:
+                if cid in client_brand_product_ids and cid not in clients_with_brand_co_occurrence:
+                    del client_to_entities[cid]
+                elif cid not in client_brand_product_ids:
+                    logger.warning("risk_no_brand_entity_found", client_id=str(cid), action="brand_gate_skipped")
+
         # Optimization: Combined query with outerjoin to fetch Source and SourceCategory in 1 step
         source_reliability = 1.0
         if document.source_id:

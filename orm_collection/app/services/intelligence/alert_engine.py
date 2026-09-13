@@ -4,14 +4,14 @@ import os
 import uuid
 import traceback
 import structlog
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.risk import RiskEvent
 from app.models.trends import TrendEvent
 from app.models.alert import Alert
-from app.models.entity import Entity
+from app.models.entity import Entity, EntityMention
 from app.models.client import Client
 from app.models.alert_state import AlertClientState
 
@@ -340,6 +340,51 @@ class AlertEngine:
             client_obj = db.query(Client).filter(Client.id == client_id).first()
             client_name = client_obj.name if client_obj else "Unknown"
 
+            # Brand co-occurrence containment (contamination_bug_sweep.md,
+            # 2026-09-13): the competitor-type exclusion below doesn't catch
+            # a globally-common PERSON entity in this client's own roster
+            # (same gap narrative_engine.py had before Phase 0) -- same fix
+            # as narrative_engine.py/documents.py/
+            # executive_reputation_engine.py/benchmark_engine.py/
+            # reputation_engine.py/risk_engine.py/trend_detector.py: require
+            # the client's own brand/product entity to also appear in the
+            # same document before a person-type entity's RiskEvent/
+            # TrendEvent counts toward this client's alerts. A client with
+            # no brand/product entity configured at all is an existing-data
+            # edge case -- logged and left ungated, same as
+            # narrative_engine.py.
+            brand_or_product_ids = [
+                e.id for e in db.query(Entity).filter(
+                    Entity.client_id == client_id,
+                    Entity.entity_type.in_(("brand", "product"))
+                ).all()
+            ]
+            if brand_or_product_ids:
+                brand_doc_ids = set(
+                    m.document_id for m in db.query(EntityMention).filter(
+                        EntityMention.entity_id.in_(brand_or_product_ids)
+                    ).all()
+                )
+            else:
+                brand_doc_ids = None
+                log.warning("alert_no_brand_entity_found", action="brand_gate_skipped")
+
+            gated_person_ids = set()
+            if brand_doc_ids is not None:
+                person_entities = db.query(Entity).filter(
+                    Entity.client_id == client_id, Entity.entity_type == "person"
+                ).all()
+                if person_entities:
+                    person_mentions = db.query(EntityMention).filter(
+                        EntityMention.entity_id.in_([p.id for p in person_entities])
+                    ).all()
+                    person_docs = {}
+                    for m in person_mentions:
+                        person_docs.setdefault(m.entity_id, set()).add(m.document_id)
+                    gated_person_ids = {
+                        pid for pid, docs in person_docs.items() if docs & brand_doc_ids
+                    }
+
             # 1. Fetch raw signals in bulk
             # Excludes entity_type='competitor': a tracked competitor's own
             # high-risk story (e.g. its own fraud/legal incident) must not
@@ -352,7 +397,11 @@ class AlertEngine:
             ).filter(
                 RiskEvent.client_id == client_id,
                 RiskEvent.risk_score > 50,
-                or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+                or_(
+                    RiskEvent.entity_id.is_(None),
+                    Entity.entity_type.in_(("brand", "product")),
+                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                ),
             ).order_by(RiskEvent.created_at.desc()).limit(15).all()
 
             # Same competitor exclusion as recent_risks above -- entity_id is
@@ -365,7 +414,11 @@ class AlertEngine:
             ).filter(
                 TrendEvent.client_id == client_id,
                 TrendEvent.percentage_change > 30.0,
-                or_(Entity.entity_type != "competitor", TrendEvent.entity_id.is_(None)),
+                or_(
+                    TrendEvent.entity_id.is_(None),
+                    Entity.entity_type.in_(("brand", "product")),
+                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                ),
             ).order_by(TrendEvent.created_at.desc()).limit(15).all()
 
             exec_risks = db.query(RiskEvent, Entity).join(Entity, Entity.id == RiskEvent.entity_id).filter(
@@ -397,6 +450,8 @@ class AlertEngine:
             # Map executive risks
             for r, ent in exec_risks:
                 is_exec = ent.entity_type == "person"
+                if is_exec and brand_doc_ids is not None and ent.id not in gated_person_ids:
+                    is_exec = False
                 if is_exec:
                     eid = r.entity_id
                     if eid not in groups:
