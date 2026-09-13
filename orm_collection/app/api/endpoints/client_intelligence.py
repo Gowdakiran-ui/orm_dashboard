@@ -1426,11 +1426,49 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 
     # 6. Executive Risk alerts -- open (unacknowledged) alerts of type "Executive Risk"
     # (A12-F1: entity_type == "person" gate, commit 1ceca4f).
-    exec_alert_row = db.query(Alert, Entity).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
+    #
+    # Brand co-occurrence containment (contamination_bug_sweep.md follow-up,
+    # 2026-09-13): this query had no brand-co-occurrence check at all --
+    # confirmed live via the dashboard's own "Executive Alerts" tile, which
+    # this endpoint feeds: Godrej's "Mohamed Alabbar" CRITICAL alert (created
+    # before alert_engine.py's own fix existed) was still showing here even
+    # after get_client_active_alerts (this file, above) was fixed -- this is
+    # a separate read path, never touched by that fix. Same read-time
+    # containment: an "Executive Risk" alert only counts here if at least
+    # one of its own recorded contributing_documents (stored in
+    # explainability at generation time) co-occurs with the client's own
+    # brand/product entity. Iterates candidates newest-first and takes the
+    # first one that passes, rather than just the single newest row
+    # unconditionally.
+    from app.models.entity import EntityMention as _EntityMention
+    exec_alert_candidates = db.query(Alert, Entity).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
         Alert.client_id == client_id,
         Alert.alert_type == "Executive Risk",
         Alert.is_acknowledged == False
-    ).order_by(Alert.created_at.desc()).first()
+    ).order_by(Alert.created_at.desc()).all()
+
+    exec_alert_row = None
+    if exec_alert_candidates:
+        brand_or_product_ids = [
+            e.id for e in db.query(Entity).filter(
+                Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+            ).all()
+        ]
+        if brand_or_product_ids:
+            brand_doc_ids_str = {
+                str(m.document_id) for m in db.query(_EntityMention).filter(
+                    _EntityMention.entity_id.in_(brand_or_product_ids)
+                ).all()
+            }
+            for alert, entity in exec_alert_candidates:
+                contributing_docs = (alert.explainability or {}).get("contributing_documents") or []
+                if set(contributing_docs) & brand_doc_ids_str:
+                    exec_alert_row = (alert, entity)
+                    break
+        else:
+            logger.warning("reputation_summary_no_brand_entity_found", client_id=str(client_id), action="brand_gate_skipped")
+            exec_alert_row = exec_alert_candidates[0]
+
     executive_alert = {"open": False, "alert": None}
     if exec_alert_row:
         alert, entity = exec_alert_row
