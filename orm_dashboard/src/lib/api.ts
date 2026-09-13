@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from "./utils";
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 
@@ -456,7 +458,10 @@ export async function fetchDocuments(clientId: string, signal?: AbortSignal) {
   // here, so 500 is the real maximum this call can ever return — not an
   // arbitrary bigger magic number.
   const res = await fetchWithRetry(`${API_BASE}/documents/client/${clientId}?limit=500`, { signal });
-  return parseOrThrow(res);
+  const docs = await parseOrThrow(res);
+  // Decode HTML entities baked into upstream RSS titles (xoop_ui_clarity_review.md
+  // "&amp;" bug) once here, at the single source every tab's `documents` state reads from.
+  return Array.isArray(docs) ? docs.map((d: any) => (d && d.title ? { ...d, title: decodeHtmlEntities(d.title) } : d)) : docs;
 }
 
 export async function fetchDocumentDetails(clientId: string, documentId: string, signal?: AbortSignal) {

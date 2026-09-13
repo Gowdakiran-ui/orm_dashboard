@@ -315,7 +315,11 @@ export function useAnalytics({
     });
     const datesList = Array.from(datesSet);
     return datesList.map(date => {
-      const row: Record<string, any> = { date };
+      // Raw ISO-8601 timestamps (e.g. "2026-09-03T08:20:00.179606+00:00")
+      // must not reach the chart's x-axis/tooltip as-is (xoop_ui_clarity_review.md).
+      // Lookups against execHistory below still use the raw `date` key.
+      const displayDate = new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const row: Record<string, any> = { date: displayDate };
       Object.entries(execHistory || {}).forEach(([name, hist]) => {
         if (Array.isArray(hist)) {
           const match = hist.find(h => h && h.date === date);

@@ -289,12 +289,13 @@ export function ReputationSummaryCard({
           <button
             type="button"
             onClick={card.onClick}
+            title={typeof card.value === "string" ? card.value : undefined}
             className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate text-left hover:underline ${card.color}`}
           >
             {card.value}
           </button>
         ) : (
-          <span className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
+          <span title={typeof card.value === "string" ? card.value : undefined} className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
         )}
         {card.sub && <span className={`text-xs ${mutedText(theme)} block truncate mt-1`}>{card.sub}</span>}
       </div>

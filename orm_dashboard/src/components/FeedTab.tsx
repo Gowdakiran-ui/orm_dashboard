@@ -44,6 +44,14 @@ export function FeedTab({
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedDocDetails, setSelectedDocDetails] = useState<any>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  // xoop_ui_clarity_review.md: mounting all ~500 documents' worth of feed
+  // cards at once (no windowing) caused blank scroll regions and a
+  // screenshot timeout during normal scrolling. Rendering only a bounded
+  // window at a time (already-recency-sorted by the backend, see
+  // documents.py order_by) fixes the DOM-node count without adding a
+  // virtualization dependency.
+  const FEED_PAGE_SIZE = 50;
+  const [feedRenderCount, setFeedRenderCount] = useState(FEED_PAGE_SIZE);
 
   // Automatically select the first document on load
   useEffect(() => {
@@ -403,7 +411,7 @@ export function FeedTab({
                 <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
               </CardHeader>
               <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-                {documents.map((d, i) => {
+                {documents.slice(0, feedRenderCount).map((d, i) => {
                   const isSelected = selectedDocId === d.id;
                   const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
                   
@@ -457,6 +465,15 @@ export function FeedTab({
                     <AlertTriangle className={`h-8 w-8 mb-2 ${mutedText(theme)}`} />
                     No intelligence documents matches in database.
                   </div>
+                )}
+                {documents.length > feedRenderCount && (
+                  <button
+                    type="button"
+                    onClick={() => setFeedRenderCount((c) => c + FEED_PAGE_SIZE)}
+                    className={`w-full text-center text-[10px] font-mono uppercase tracking-wider py-2.5 rounded-lg border ${isDark ? "border-white/[0.08] text-zinc-400 hover:bg-white/[0.03]" : "border-black/[0.06] text-zinc-600 hover:bg-black/[0.02]"}`}
+                  >
+                    Load {Math.min(FEED_PAGE_SIZE, documents.length - feedRenderCount)} more ({feedRenderCount} of {documents.length})
+                  </button>
                 )}
               </CardContent>
             </Card>

@@ -211,7 +211,7 @@ export function OverviewAnalyticsPanel({
               <InfoTooltip label="About Sentiment Breakdown"><OverviewSentimentBreakdownDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex justify-center items-center h-[260px]">
+          <CardContent className="h-[260px]">
             {sentimentDistData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -285,7 +285,7 @@ export function OverviewAnalyticsPanel({
                 <RechartsLineChart data={repHistory} margin={{ top: 15, right: 30, bottom: 10, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
                   <XAxis dataKey="date" stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} />
-                  <YAxis stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} />
+                  <YAxis stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} tickFormatter={(v) => Number(v).toFixed(0)} />
                   <Tooltip contentStyle={tooltipStyle} formatter={tooltipScoreFormatter} />
                   <Line
                     type="monotone"

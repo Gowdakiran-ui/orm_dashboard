@@ -460,7 +460,7 @@ export function NarrativesTab({
 
                 return (
                   <TableRow key={n.id ?? idx} className={`transition-all duration-150 ${isDark ? "border-white/[0.08] hover:bg-white/[0.03]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}>
-                    <TableCell className={`font-bold truncate max-w-[200px] ${bodyText(theme)}`}>{n.name}</TableCell>
+                    <TableCell title={n.name} className={`font-bold truncate max-w-[200px] ${bodyText(theme)}`}>{n.name}</TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className={`text-xs font-normal uppercase tracking-wider ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>{n.type || "General"}</Badge></TableCell>
                     <TableCell className={`text-center font-bold ${bodyText(theme)}`}>{n.mentions || 0}</TableCell>
                     <TableCell className="text-center font-bold text-red-500">{Math.round(n.risk || 0)}</TableCell>
@@ -554,7 +554,7 @@ export function NarrativesTab({
                   <div className="dash-box border dash-border rounded p-2 divide-y divide-[#1F2937]/30 text-xs">
                     {narratives.map((narr, idx) => (
                       <div key={idx} className="flex justify-between py-1.5 first:pt-0 last:pb-0">
-                        <span className="dash-strong truncate max-w-[200px]">{narr.name}</span>
+                        <span title={narr.name} className="dash-strong truncate max-w-[200px]">{narr.name}</span>
                         <span className="text-red-400 font-bold">{Math.round(narr.risk)} pts</span>
                       </div>
                     ))}
@@ -777,7 +777,7 @@ export function NarrativesTab({
                     <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
                       {drawerData.data.linkedDocuments.map((doc: any, idx: number) => (
                         <div key={idx} className="dash-box border dash-border rounded p-2 flex flex-col justify-between space-y-1 text-xs">
-                          <span className="dash-strong font-bold truncate block">{doc.title}</span>
+                          <span title={doc.title} className="dash-strong font-bold truncate block">{doc.title}</span>
                           <div className="flex justify-between items-center text-xs dash-muted">
                             <span>Risk: <b className="text-red-400">{Math.round(doc.risk || 0)}</b></span>
                             <button

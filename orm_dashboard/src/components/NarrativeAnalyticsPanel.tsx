@@ -308,8 +308,8 @@ export function NarrativeAnalyticsPanel({
                     </filter>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} strokeOpacity={0.4} />
-                  <XAxis type="number" dataKey="strength" name="Velocity" stroke={axisStroke} fontSize={9} domain={xAxisDomain} label={{ value: 'Narrative Velocity', position: 'bottom', fill: axisStroke, offset: 0, fontSize: 9 }} />
-                  <YAxis type="number" dataKey="risk" name="Risk Score" stroke={axisStroke} fontSize={9} domain={yAxisDomain} label={{ value: 'Risk Score', angle: -90, position: 'left', fill: axisStroke, fontSize: 9 }} />
+                  <XAxis type="number" dataKey="strength" name="Velocity" stroke={axisStroke} fontSize={9} domain={xAxisDomain} tickFormatter={(v) => Number(v).toFixed(0)} label={{ value: 'Narrative Velocity', position: 'bottom', fill: axisStroke, offset: 0, fontSize: 9 }} />
+                  <YAxis type="number" dataKey="risk" name="Risk Score" stroke={axisStroke} fontSize={9} domain={yAxisDomain} tickFormatter={(v) => Number(v).toFixed(0)} label={{ value: 'Risk Score', angle: -90, position: 'left', fill: axisStroke, fontSize: 9 }} />
                   <ZAxis type="number" dataKey="logVolume" range={[80, 500]} name="Volume" />
                   <Tooltip
                     cursor={{ strokeDasharray: '3 3' }}
@@ -446,12 +446,12 @@ export function NarrativeAnalyticsPanel({
           </CardContent>
         </Card>
 
-        {/* Daily Ingestion Ingestion Volume (Stacked Area Chart) */}
+        {/* Daily Ingestion Volume (Stacked Area Chart) */}
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
-              Daily Ingestion Ingestion Volume
+              Daily Ingestion Volume
               <InfoTooltip label="About Daily Ingestion Volume"><DailyIngestionVolumeDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>
