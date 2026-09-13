@@ -180,35 +180,47 @@ class ExecutiveReputationEngine:
         ).all()
 
         # Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 0,
-        # 2026-09-13): the R1 filter above has no check that the client's own
-        # brand/product is ever mentioned alongside a tracked person entity --
-        # matching_engine.py's shared GlobalMatchingEngine has no such check
-        # either, so a person entity like "Elon Musk" or "Howard Lutnick"
-        # (tracked because they DO come up in real client coverage sometimes)
-        # gets an ExecutiveReputationScore computed here even when every one
-        # of their mentions this run is on wholly unrelated documents (e.g. a
+        # 2026-09-13; granularity fix 2026-09-13): the R1 filter above has no
+        # check that the client's own brand/product is ever mentioned
+        # alongside a tracked person entity -- matching_engine.py's shared
+        # GlobalMatchingEngine has no such check either, so a person entity
+        # like "Elon Musk" or "Howard Lutnick" (tracked because they DO come
+        # up in real client coverage sometimes) gets an
+        # ExecutiveReputationScore computed here even when every one of
+        # their mentions this run is on wholly unrelated documents (e.g. a
         # 100%-Tesla article). Confirmed live: Anthropic's
         # ExecutiveReputationScore rows mixed genuine Anthropic executives
         # with unrelated public figures and outright NER garbage ("Russian
-        # Hackers", "Fortune Tech" as "person" entities). Same fix pattern as
-        # narrative_engine.py/documents.py: only compute a score for a person
-        # entity if at least one of their mentioned documents also mentions
-        # this client's own brand or product entity. No brand/product entity
-        # at all is an existing-data edge case (should not happen for an
-        # onboarded client) -- logged and left ungated rather than silently
-        # zeroing out a client's entire executive roster.
+        # Hackers", "Fortune Tech" as "person" entities).
+        #
+        # The original fix here gated per-ENTITY ("has this executive EVER
+        # co-occurred with the brand in ANY document") -- confirmed live as
+        # a granularity bug (same class as reputation_engine.py's Risk/Trend
+        # components): an executive who legitimately co-occurs with the
+        # brand even once got their ENTIRE mention/risk/trend history
+        # included unfiltered. Confirmed live: Anthropic's "Elon Musk" had 19
+        # total mentions, only 11 brand-co-occurring (42% contaminated
+        # feeding his score). `gated_executive_ids` below is kept ONLY as a
+        # cheap roster pre-filter (a necessary, not sufficient, condition --
+        # an executive with zero co-occurring documents anywhere obviously
+        # has zero qualifying mentions either way, so pruning them here
+        # avoids computing and writing a no-evidence row for pure NER
+        # garbage that never once co-occurred). The actual mentions/risks/
+        # trends fed into the score below are filtered per-event against
+        # brand_doc_ids, not by this roster membership.
         brand_or_product_ids = [
             e.id for e in db.query(Entity).filter(
                 Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
             ).all()
         ]
+        brand_doc_ids = None
         if brand_or_product_ids:
             brand_doc_ids = set(
                 m.document_id for m in db.query(EntityMention).filter(
                     EntityMention.entity_id.in_(brand_or_product_ids)
                 ).all()
             )
-            gated_executives = []
+            gated_executive_ids = set()
             for ex in executives:
                 person_doc_ids = set(
                     m.document_id for m in db.query(EntityMention).filter(
@@ -216,8 +228,8 @@ class ExecutiveReputationEngine:
                     ).all()
                 )
                 if person_doc_ids & brand_doc_ids:
-                    gated_executives.append(ex)
-            executives = gated_executives
+                    gated_executive_ids.add(ex.id)
+            executives = [ex for ex in executives if ex.id in gated_executive_ids]
         else:
             log.warning("exec_reputation_no_brand_or_product_entity_found", action="brand_gate_skipped")
 
@@ -235,10 +247,17 @@ class ExecutiveReputationEngine:
         lookback_date = now_utc - datetime.timedelta(days=30)
 
         # P3: Batch preloading of all executive mentions, risks, trends, alerts, and narratives
+        #
+        # Brand co-occurrence containment, per-mention not per-entity
+        # (2026-09-13 granularity fix): only a mention whose OWN document
+        # co-occurs with the brand counts toward this executive's sentiment/
+        # visibility/source-reliability components below.
         mentions = db.query(EntityMention).filter(
             EntityMention.entity_id.in_(exec_ids),
             EntityMention.created_at >= lookback_date
         ).all()
+        if brand_doc_ids is not None:
+            mentions = [m for m in mentions if m.document_id in brand_doc_ids]
 
         # Group mentions by executive entity_id
         mention_map = {eid: [] for eid in exec_ids}
@@ -259,22 +278,36 @@ class ExecutiveReputationEngine:
             ).all()
             sentiment_map = {s[0]: s[1] for s in sents}
 
-        # Batch preload risks
+        # Batch preload risks. RiskEvent carries its own document_id, so the
+        # brand-co-occurrence check is a direct per-event filter (same
+        # granularity fix as reputation_engine.py's Risk Component).
         risks = db.query(RiskEvent).filter(
             RiskEvent.client_id == client_id,
             RiskEvent.entity_id.in_(exec_ids),
             RiskEvent.created_at >= lookback_date
         ).all()
+        if brand_doc_ids is not None:
+            risks = [r for r in risks if r.document_id in brand_doc_ids]
         risk_map = {eid: [] for eid in exec_ids}
         for r in risks:
             risk_map[r.entity_id].append(r)
 
-        # Batch preload trends
+        # Batch preload trends. TrendEvent has no single document_id column
+        # (it carries a `triggering_documents` JSON array instead), so this
+        # is checked in Python against each event's own triggering_documents
+        # -- same per-event granularity fix as reputation_engine.py's Trend
+        # Component.
         trends = db.query(TrendEvent).filter(
             TrendEvent.client_id == client_id,
             TrendEvent.entity_id.in_(exec_ids),
             TrendEvent.created_at >= lookback_date
         ).all()
+        if brand_doc_ids is not None:
+            brand_doc_ids_str = {str(d) for d in brand_doc_ids}
+            trends = [
+                t for t in trends
+                if {str(d) for d in (t.triggering_documents or [])} & brand_doc_ids_str
+            ]
         trend_map = {eid: [] for eid in exec_ids}
         for t in trends:
             trend_map[t.entity_id].append(t)

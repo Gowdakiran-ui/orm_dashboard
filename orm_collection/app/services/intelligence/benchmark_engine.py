@@ -153,7 +153,7 @@ class BenchmarkEngine:
         score = max(0.0, min(100.0, weighted_sum / total_weight))
         return score, total_weight
 
-    def _preload_score_inputs(self, db: Session, client_id: str, entity_ids: List[Any], lookback_date, log):
+    def _preload_score_inputs(self, db: Session, client_id: str, entity_ids: List[Any], lookback_date, log, brand_doc_ids=None):
         """
         P3 batch preloading + the per-entity component-scoring closure,
         extracted verbatim (same queries, same formulas) from the original
@@ -164,6 +164,21 @@ class BenchmarkEngine:
         Behavior for the competitor path is unchanged: entity_ids is still
         [client_entity] + competitors there, same queries, same output.
 
+        `brand_doc_ids`, when given (2026-09-13 granularity fix), restricts
+        every mention/sentiment/risk/trend/source-reliability input below to
+        only the documents that also co-occur with the client's own brand/
+        product entity -- per event, not per entity. The prior version of
+        this gate at the calculate_competitor_benchmarks call site checked
+        "has this competitor EVER co-occurred with the brand in ANY
+        document" and then, once true, pulled the competitor's ENTIRE
+        mention/sentiment/risk/trend history unfiltered into this function.
+        Confirmed live: Anthropic's "Google" competitor entity had 385 total
+        mentions, only 10 (3%) actually co-occurring with Anthropic's brand
+        -- the other 375 were still inflating its Share-of-Voice/rank score.
+        Callers that don't pass brand_doc_ids (calculate_product_benchmarks)
+        keep the prior, unfiltered behavior -- not verified as contaminated,
+        so left untouched rather than changed without live confirmation.
+
         Returns a dict: mentions_map, sentiment_map, risk_map, exec_rep_map,
         top_narrative_text, total_mentions (sum of mentions_map across
         entity_ids, the SOV denominator), weights, and components_for(entity_id).
@@ -172,8 +187,10 @@ class BenchmarkEngine:
         mentions_query = db.query(EntityMention.entity_id, func.sum(EntityMention.mention_count)).filter(
             EntityMention.entity_id.in_(entity_ids),
             EntityMention.created_at >= lookback_date
-        ).group_by(EntityMention.entity_id).all()
-        mentions_map = {eid: val for eid, val in mentions_query}
+        )
+        if brand_doc_ids is not None:
+            mentions_query = mentions_query.filter(EntityMention.document_id.in_(brand_doc_ids))
+        mentions_map = {eid: val for eid, val in mentions_query.group_by(EntityMention.entity_id).all()}
 
         # 30-day sentiment in bulk
         sentiment_query = db.query(EntityMention.entity_id, func.avg(DocumentSentiment.sentiment_score)).join(
@@ -181,16 +198,22 @@ class BenchmarkEngine:
         ).filter(
             EntityMention.entity_id.in_(entity_ids),
             EntityMention.created_at >= lookback_date
-        ).group_by(EntityMention.entity_id).all()
-        sentiment_map = {eid: val for eid, val in sentiment_query}
+        )
+        if brand_doc_ids is not None:
+            sentiment_query = sentiment_query.filter(EntityMention.document_id.in_(brand_doc_ids))
+        sentiment_map = {eid: val for eid, val in sentiment_query.group_by(EntityMention.entity_id).all()}
 
-        # 30-day risk in bulk
+        # 30-day risk in bulk. RiskEvent carries its own document_id, so this
+        # is a direct per-event filter (same as reputation_engine.py's Risk
+        # Component).
         risk_query = db.query(RiskEvent.entity_id, func.avg(RiskEvent.risk_score)).filter(
             RiskEvent.client_id == client_id,
             RiskEvent.entity_id.in_(entity_ids),
             RiskEvent.created_at >= lookback_date
-        ).group_by(RiskEvent.entity_id).all()
-        risk_map = {eid: val for eid, val in risk_query}
+        )
+        if brand_doc_ids is not None:
+            risk_query = risk_query.filter(RiskEvent.document_id.in_(brand_doc_ids))
+        risk_map = {eid: val for eid, val in risk_query.group_by(RiskEvent.entity_id).all()}
 
         # 30-day executive reputation in bulk
         exec_reps = db.query(ExecutiveReputationScore).filter(
@@ -207,12 +230,22 @@ class BenchmarkEngine:
 
         # 30-day trend events per entity (A2.9 — trend component).
         # Same shape as ReputationEngine's trend rule, but scoped by entity_id
-        # instead of client-wide, which trend_events supports.
+        # instead of client-wide, which trend_events supports. TrendEvent has
+        # no single document_id column (it carries a `triggering_documents`
+        # JSON array instead), so this is checked in Python against each
+        # event's own triggering_documents -- same per-event fix as
+        # reputation_engine.py's Trend Component.
         trend_rows = db.query(TrendEvent).filter(
             TrendEvent.client_id == client_id,
             TrendEvent.entity_id.in_(entity_ids),
             TrendEvent.created_at >= lookback_date
         ).order_by(TrendEvent.created_at.desc()).all()
+        if brand_doc_ids is not None:
+            brand_doc_ids_str = {str(d) for d in brand_doc_ids}
+            trend_rows = [
+                tev for tev in trend_rows
+                if {str(d) for d in (tev.triggering_documents or [])} & brand_doc_ids_str
+            ]
         trends_by_entity: Dict[Any, List[Any]] = {}
         for tev in trend_rows:
             bucket = trends_by_entity.setdefault(tev.entity_id, [])
@@ -228,7 +261,7 @@ class BenchmarkEngine:
 
         reliability_by_entity: Dict[Any, List[float]] = {}
         try:
-            source_rows = db.query(
+            source_rows_query = db.query(
                 EntityMention.entity_id,
                 SourceCategory.base_reliability_score,
                 SourceHealth.reliability_penalty
@@ -243,7 +276,10 @@ class BenchmarkEngine:
             ).filter(
                 EntityMention.entity_id.in_(entity_ids),
                 EntityMention.created_at >= lookback_date
-            ).all()
+            )
+            if brand_doc_ids is not None:
+                source_rows_query = source_rows_query.filter(EntityMention.document_id.in_(brand_doc_ids))
+            source_rows = source_rows_query.all()
             for eid, base_score, penalty in source_rows:
                 score = float(base_score or 1.00)
                 pen = float(penalty or 0.0)
@@ -384,19 +420,34 @@ class BenchmarkEngine:
         # rank/SOV get computed from entities that have nothing to do with
         # this client, producing headline numbers ("#17 rank", "42.3% SOV")
         # that contradict the honestly-empty Competitor Compare page.
+        #
+        # Granularity fix (2026-09-13): the roster filter below ("has this
+        # competitor EVER co-occurred with the brand in ANY document") is
+        # kept only as a cheap pre-filter -- a necessary, not sufficient,
+        # condition; an entity with zero co-occurring documents anywhere
+        # obviously has zero qualifying mentions either way, so pruning it
+        # here just avoids scoring pure noise. The actual score inputs
+        # (mentions/sentiment/risk/trend/source-reliability) are filtered
+        # per-event inside _preload_score_inputs via brand_doc_ids below,
+        # not by roster membership. Confirmed live this was previously a
+        # granularity bug: Anthropic's "Google" competitor entity had 385
+        # total mentions, only 10 (3%) actually co-occurring, with the other
+        # 375 still inflating its Share-of-Voice/rank once it passed this
+        # roster check.
         brand_or_product_ids = [
             e.id for e in db.query(Entity).filter(
                 Entity.client_id == client_id,
                 Entity.entity_type.in_(("brand", "product"))
             ).all()
         ]
+        brand_doc_ids = None
         if brand_or_product_ids:
             brand_doc_ids = set(
                 m.document_id for m in db.query(EntityMention).filter(
                     EntityMention.entity_id.in_(brand_or_product_ids)
                 ).all()
             )
-            gated_competitors = []
+            gated_competitor_ids = set()
             for e in competitors:
                 competitor_doc_ids = set(
                     m.document_id for m in db.query(EntityMention).filter(
@@ -404,8 +455,8 @@ class BenchmarkEngine:
                     ).all()
                 )
                 if competitor_doc_ids & brand_doc_ids:
-                    gated_competitors.append(e)
-            competitors = gated_competitors
+                    gated_competitor_ids.add(e.id)
+            competitors = [e for e in competitors if e.id in gated_competitor_ids]
         else:
             log.warning("benchmark_no_brand_entity_found", action="brand_gate_skipped")
 
@@ -426,7 +477,7 @@ class BenchmarkEngine:
         all_entities = [client_entity] + competitors
         all_entity_ids = [e.id for e in all_entities]
 
-        inputs = self._preload_score_inputs(db, client_id, all_entity_ids, lookback_date, log)
+        inputs = self._preload_score_inputs(db, client_id, all_entity_ids, lookback_date, log, brand_doc_ids=brand_doc_ids)
         mentions_map = inputs["mentions_map"]
         sentiment_map = inputs["sentiment_map"]
         risk_map = inputs["risk_map"]
