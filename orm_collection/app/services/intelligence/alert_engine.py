@@ -369,21 +369,13 @@ class AlertEngine:
                 brand_doc_ids = None
                 log.warning("alert_no_brand_entity_found", action="brand_gate_skipped")
 
-            gated_person_ids = set()
-            if brand_doc_ids is not None:
-                person_entities = db.query(Entity).filter(
-                    Entity.client_id == client_id, Entity.entity_type == "person"
-                ).all()
-                if person_entities:
-                    person_mentions = db.query(EntityMention).filter(
-                        EntityMention.entity_id.in_([p.id for p in person_entities])
-                    ).all()
-                    person_docs = {}
-                    for m in person_mentions:
-                        person_docs.setdefault(m.entity_id, set()).add(m.document_id)
-                    gated_person_ids = {
-                        pid for pid, docs in person_docs.items() if docs & brand_doc_ids
-                    }
+            # Entity type lookup for the per-event filtering below (2026-09-13
+            # follow-up fix -- see the RiskEvent/TrendEvent filters just
+            # below for why this replaced an entity-level gated_person_ids
+            # set).
+            entity_type_by_id = {
+                e.id: e.entity_type for e in db.query(Entity).filter(Entity.client_id == client_id).all()
+            }
 
             # 1. Fetch raw signals in bulk
             # Excludes entity_type='competitor': a tracked competitor's own
@@ -392,6 +384,18 @@ class AlertEngine:
             # for competitors still exist for benchmark_engine.py's separate
             # competitive-comparison use -- only excluded here, at the point
             # alerts get raised for this client.
+            #
+            # Brand co-occurrence containment, per-event not per-entity
+            # (2026-09-13 follow-up): the original gate here ("has this
+            # person entity EVER co-occurred with the brand in ANY
+            # document") was copied from reputation_engine.py's pre-existing
+            # gate and inherited the same granularity bug -- confirmed live
+            # there, a person entity that legitimately co-occurs with the
+            # brand in even one document lets ALL of that person's
+            # RiskEvents/TrendEvents through, including ones from totally
+            # unrelated documents. RiskEvent carries its own document_id, so
+            # the correct check is simply whether THIS event's own source
+            # document co-occurs with the brand.
             recent_risks = db.query(RiskEvent).outerjoin(
                 Entity, Entity.id == RiskEvent.entity_id
             ).filter(
@@ -400,7 +404,7 @@ class AlertEngine:
                 or_(
                     RiskEvent.entity_id.is_(None),
                     Entity.entity_type.in_(("brand", "product")),
-                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                    and_(Entity.entity_type == "person", RiskEvent.document_id.in_(brand_doc_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
             ).order_by(RiskEvent.created_at.desc()).limit(15).all()
 
@@ -409,17 +413,38 @@ class AlertEngine:
             # type trends carry the entity being tracked, which can be a
             # competitor's). A competitor's own trend spike must not feed
             # an alert's evidence score for this client.
-            recent_trends = db.query(TrendEvent).outerjoin(
+            #
+            # TrendEvent has no single document_id column (it carries a
+            # `triggering_documents` JSON array instead), so unlike
+            # RiskEvent this can't be pushed into the SQL filter directly --
+            # person-type rows are fetched broadly here and checked in
+            # Python against this specific event's own triggering_documents
+            # below, same per-event fix as reputation_engine.py's Trend
+            # Component.
+            candidate_trends = db.query(TrendEvent).outerjoin(
                 Entity, Entity.id == TrendEvent.entity_id
             ).filter(
                 TrendEvent.client_id == client_id,
                 TrendEvent.percentage_change > 30.0,
                 or_(
                     TrendEvent.entity_id.is_(None),
-                    Entity.entity_type.in_(("brand", "product")),
-                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                    Entity.entity_type.in_(("brand", "product", "person")) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
             ).order_by(TrendEvent.created_at.desc()).limit(15).all()
+
+            if brand_doc_ids is not None:
+                brand_doc_ids_str = {str(d) for d in brand_doc_ids}
+                recent_trends = []
+                for t in candidate_trends:
+                    etype = entity_type_by_id.get(t.entity_id) if t.entity_id else None
+                    if t.entity_id is None or etype in ("brand", "product"):
+                        recent_trends.append(t)
+                    elif etype == "person":
+                        trigger_docs = {str(d) for d in (t.triggering_documents or [])}
+                        if trigger_docs & brand_doc_ids_str:
+                            recent_trends.append(t)
+            else:
+                recent_trends = candidate_trends
 
             exec_risks = db.query(RiskEvent, Entity).join(Entity, Entity.id == RiskEvent.entity_id).filter(
                 RiskEvent.client_id == client_id,
@@ -447,10 +472,13 @@ class AlertEngine:
                     groups[eid] = {"risks": [], "trends": [], "executives": []}
                 groups[eid]["trends"].append(trend)
 
-            # Map executive risks
+            # Map executive risks. Same per-event (not per-entity-ever-
+            # co-occurred) brand gate as recent_risks above: this specific
+            # RiskEvent's own document_id must co-occur with the brand, not
+            # merely some other document this person was ever mentioned in.
             for r, ent in exec_risks:
                 is_exec = ent.entity_type == "person"
-                if is_exec and brand_doc_ids is not None and ent.id not in gated_person_ids:
+                if is_exec and brand_doc_ids is not None and r.document_id not in brand_doc_ids:
                     is_exec = False
                 if is_exec:
                     eid = r.entity_id

@@ -85,6 +85,57 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
         Alert.is_acknowledged == False,
         or_(Entity.entity_type != "competitor", Alert.entity_id.is_(None)),
     ).order_by(Alert.created_at.desc()).all()
+
+    # Brand co-occurrence containment (contamination_bug_sweep.md follow-up,
+    # 2026-09-13): the competitor-type exclusion above doesn't catch a
+    # globally-common PERSON entity in this client's own roster -- confirmed
+    # live, Godrej's "Mohamed Alabbar" CRITICAL alert (created before
+    # alert_engine.py's own brand-co-occurrence fix existed) still renders
+    # here since this endpoint never had that check at all. Read-path fix:
+    # a person-type alert's own recorded contributing_documents (stored in
+    # explainability at generation time, see alert_engine.py's
+    # explainability["contributing_documents"]) must include at least one
+    # document that also co-occurs with the client's own brand/product
+    # entity. This checks THIS alert's own evidence, not whether the person
+    # has ever co-occurred with the brand anywhere (the granularity mistake
+    # found and fixed in reputation_engine.py/alert_engine.py's own
+    # generation logic today) -- and unlike those write-path fixes, this is
+    # a read-time filter, so it works retroactively on alerts generated
+    # before any of today's fixes existed without needing to touch the
+    # underlying row.
+    from app.models.entity import EntityMention
+    brand_or_product_ids = [
+        e.id for e in db.query(Entity).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+        ).all()
+    ]
+    if brand_or_product_ids:
+        brand_doc_ids_str = {
+            str(m.document_id) for m in db.query(EntityMention).filter(
+                EntityMention.entity_id.in_(brand_or_product_ids)
+            ).all()
+        }
+        entity_type_by_id = {
+            e.id: e.entity_type for e in db.query(Entity).filter(Entity.client_id == client_id).all()
+        }
+        filtered_alerts = []
+        for a in alerts:
+            etype = entity_type_by_id.get(a.entity_id) if a.entity_id else None
+            if a.entity_id is None or etype in ("brand", "product"):
+                filtered_alerts.append(a)
+                continue
+            if etype == "person":
+                contributing_docs = (a.explainability or {}).get("contributing_documents") or []
+                if set(contributing_docs) & brand_doc_ids_str:
+                    filtered_alerts.append(a)
+                # No recorded evidence documents to verify against -- leave
+                # excluded rather than showing an unverifiable person-type
+                # alert, consistent with this endpoint's goal of only
+                # surfacing alerts about this client's own brand.
+        alerts = filtered_alerts
+    else:
+        logger.warning("active_alerts_no_brand_entity_found", client_id=str(client_id), action="brand_gate_skipped")
+
     results = []
     for a in alerts:
         # ai_summary lives inside the alert's own existing `explainability`

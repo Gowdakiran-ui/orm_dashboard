@@ -5,7 +5,7 @@ import uuid
 import math
 import structlog
 from urllib.parse import urlparse
-from typing import Optional, Dict, Any, List
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 from sqlalchemy.dialects.postgresql import insert
@@ -187,24 +187,8 @@ class ReputationEngine:
             brand_doc_ids = None
             log.warning("reputation_no_brand_entity_found", action="brand_gate_skipped")
 
-        # Same containment for the Risk/Trend components below: a
-        # person-type entity's RiskEvent/TrendEvent only counts toward this
-        # client's reputation if that person co-occurs with the brand in
-        # some document (brand/product entities are always this client's
-        # own, so they're never excluded here).
-        gated_person_ids = set()
-        if brand_doc_ids is not None:
-            person_entities = [e for e in entities if e.entity_type == "person"]
-            if person_entities:
-                person_mentions = db.query(EntityMention).filter(
-                    EntityMention.entity_id.in_([p.id for p in person_entities])
-                ).all()
-                person_docs: Dict[Any, set] = {}
-                for m in person_mentions:
-                    person_docs.setdefault(m.entity_id, set()).add(m.document_id)
-                gated_person_ids = {
-                    pid for pid, docs in person_docs.items() if docs & brand_doc_ids
-                }
+        # Entity type lookup for the Risk/Trend per-event filtering below.
+        entity_type_by_id = {e.id: e.entity_type for e in entities}
 
         doc_ids = []
         doc_urls = []
@@ -247,6 +231,18 @@ class ReputationEngine:
         # endpoints (documents.py/alert_engine.py/get_client_risks) fixed
         # earlier this session, this one feeds the actual stored
         # ReputationScore, not just a display.
+        #
+        # Brand co-occurrence containment, per-event not per-entity
+        # (contamination_bug_sweep.md follow-up, 2026-09-13): the prior
+        # version of this gate ("has this person entity EVER co-occurred
+        # with the brand in ANY document") let a person entity through
+        # wholesale once a single legitimate co-occurring document existed
+        # anywhere in its history -- confirmed live, all 16 of Anthropic's
+        # "Elon Musk" RiskEvents passed this way, including 7 confirmed
+        # 100%-Tesla-only articles with zero Anthropic mention. RiskEvent
+        # carries its own document_id, so the correct granularity is simply
+        # whether THIS event's own source document co-occurs with the
+        # brand.
         risk_component = None
         supporting_risks = []
         try:
@@ -258,7 +254,7 @@ class ReputationEngine:
                 or_(
                     RiskEvent.entity_id.is_(None),
                     Entity.entity_type.in_(("brand", "product")),
-                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                    and_(Entity.entity_type == "person", RiskEvent.document_id.in_(brand_doc_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
             ).all()
             if supporting_risks:
@@ -291,21 +287,43 @@ class ReputationEngine:
         # none; Mention-type trends carry the entity they're tracking
         # volume for, which can be a competitor's) -- same reasoning as
         # the Risk Component above.
+        #
+        # Brand co-occurrence containment, per-event not per-entity (same
+        # 2026-09-13 follow-up as the Risk Component above): TrendEvent has
+        # no single document_id column (it carries a `triggering_documents`
+        # JSON array instead), so unlike RiskEvent this can't be pushed into
+        # the SQL filter directly. Person-type rows are fetched broadly here
+        # and then checked in Python against this specific event's own
+        # triggering_documents, not against whether the entity has EVER
+        # co-occurred with the brand anywhere in its history.
         trend_component = None
         supporting_trends = []
         try:
-            supporting_trends = db.query(TrendEvent).outerjoin(
+            candidate_trends = db.query(TrendEvent).outerjoin(
                 Entity, Entity.id == TrendEvent.entity_id
             ).filter(
                 TrendEvent.client_id == client_id,
                 TrendEvent.created_at >= lookback_date,
                 or_(
                     TrendEvent.entity_id.is_(None),
-                    Entity.entity_type.in_(("brand", "product")),
-                    and_(Entity.entity_type == "person", Entity.id.in_(gated_person_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
+                    Entity.entity_type.in_(("brand", "product", "person")) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
             ).order_by(TrendEvent.created_at.desc()).limit(10).all()
-            
+
+            if brand_doc_ids is not None:
+                brand_doc_ids_str = {str(d) for d in brand_doc_ids}
+                supporting_trends = []
+                for t in candidate_trends:
+                    etype = entity_type_by_id.get(t.entity_id) if t.entity_id else None
+                    if t.entity_id is None or etype in ("brand", "product"):
+                        supporting_trends.append(t)
+                    elif etype == "person":
+                        trigger_docs = {str(d) for d in (t.triggering_documents or [])}
+                        if trigger_docs & brand_doc_ids_str:
+                            supporting_trends.append(t)
+            else:
+                supporting_trends = candidate_trends
+
             if supporting_trends:
                 trend_val = 50.0
                 for t in supporting_trends:
