@@ -27,10 +27,16 @@ def _brand_gated_document_ids(db: Session, client_id):
     entities like "Trump" and "Elon Musk".
 
     Returns the set of document ids that have an accepted match to this
-    client's own entity_type='brand' entity, or None if the client has no
-    brand entity at all (an existing-data edge case that should not happen
+    client's own entity_type='brand' OR 'product' entity, or None if the
+    client has neither (an existing-data edge case that should not happen
     for an onboarded client) -- callers treat None as "don't gate", rather
-    than silently returning zero documents for such a client.
+    than silently returning zero documents for such a client. 'product' is
+    included alongside 'brand' (not just 'brand' alone) because a client's
+    own flagship product is routinely covered by name without the parent
+    brand name ever appearing in the same text -- confirmed live, 24 genuine
+    Anthropic articles (including two from anthropic.com itself) mention
+    "Claude" but never "Anthropic", and would otherwise be false-negatived
+    out of Anthropic's own document feed by a brand-only gate.
 
     This is a targeted containment in this read path, not a fix to
     matching_engine.py itself (a platform-wide, shared-scoring change across
@@ -39,13 +45,15 @@ def _brand_gated_document_ids(db: Session, client_id):
     """
     from app.models.entity import Entity
 
-    brand_entity = db.query(Entity).filter(
-        Entity.client_id == client_id, Entity.entity_type == "brand"
-    ).first()
-    if not brand_entity:
+    brand_or_product_ids = [
+        r[0] for r in db.query(Entity.id).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+        ).all()
+    ]
+    if not brand_or_product_ids:
         return None
     rows = db.query(DocumentMatch.document_id).filter(
-        DocumentMatch.matched_entity_id == brand_entity.id
+        DocumentMatch.matched_entity_id.in_(brand_or_product_ids)
     ).all()
     return {r[0] for r in rows}
 

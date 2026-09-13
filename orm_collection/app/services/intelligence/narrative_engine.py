@@ -928,21 +928,30 @@ class NarrativeEngine:
         # brand mention anywhere in it -- was still entering this client's
         # narrative pool. Confirmed live: 100%-Tesla "Full Self-Driving"
         # documents entered Anthropic's pool this way via its "Elon Musk"
-        # person entity. Requiring the client's own brand entity to also be
-        # mentioned in the document closes this for narrative generation.
-        # This is a targeted containment in this read path, not a fix to
+        # person entity. Requiring the client's own brand OR product entity
+        # to also be mentioned in the document closes this for narrative
+        # generation. entity_type='product' is included alongside 'brand'
+        # (not just 'brand' alone) because a client's own flagship product is
+        # routinely covered by name without the parent brand name ever
+        # appearing in the same text -- confirmed live, 24 genuine Anthropic
+        # articles (including two from anthropic.com itself) mention "Claude"
+        # but never "Anthropic", and would otherwise be false-negatived out of
+        # Anthropic's own narrative pool by a brand-only gate. This is a
+        # targeted containment in this read path, not a fix to
         # matching_engine.py itself (a platform-wide, shared-scoring change
         # that needs real regression testing before it can be trusted) -- see
         # documents.py's get_client_visible_documents for the equivalent
-        # containment on the document-feed read path. No brand entity at all
-        # is an existing-data edge case (should not happen for an onboarded
-        # client) -- logged and left ungated rather than silently zeroing out
-        # a client's entire narrative pool.
-        brand_entity = next((e for e in client_entities if e.entity_type == "brand"), None)
-        if brand_entity:
+        # containment on the document-feed read path. No brand/product entity
+        # at all is an existing-data edge case (should not happen for an
+        # onboarded client) -- logged and left ungated rather than silently
+        # zeroing out a client's entire narrative pool.
+        brand_or_product_entity_ids = [
+            e.id for e in client_entities if e.entity_type in ("brand", "product")
+        ]
+        if brand_or_product_entity_ids:
             brand_doc_ids = set(
                 m.document_id for m in db.query(EntityMention).filter(
-                    EntityMention.entity_id == brand_entity.id
+                    EntityMention.entity_id.in_(brand_or_product_entity_ids)
                 ).all()
             )
             doc_ids = [did for did in doc_ids if did in brand_doc_ids]
