@@ -67,6 +67,16 @@ export function InfoTooltip({
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  // Tracks whether the pointer is currently over the trigger. Needed because
+  // onClick fires *after* onMouseEnter on any real mouse interaction -- a
+  // plain `setOpen(o => !o)` in onClick would immediately re-close a panel
+  // that hover had just opened, making every tooltip look broken to anyone
+  // who clicks what they're already hovering (confirmed live: a real click
+  // on a hovered trigger left `aria-expanded` back at "false"). Touch
+  // devices never fire onMouseEnter, so this stays false there and click
+  // keeps working as the sole open/close toggle, per this component's
+  // original design.
+  const hoveringRef = useRef(false);
 
   const updatePosition = () => {
     const btn = btnRef.current;
@@ -137,10 +147,25 @@ export function InfoTooltip({
         aria-describedby={panelId}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((o) => !o);
+          if (hoveringRef.current) {
+            // Hover already opened this; a following click shouldn't fight
+            // it closed. Just keep it open (mouse users close it by moving
+            // away or clicking outside, same as before).
+            setOpen(true);
+          } else {
+            // No hover event preceded this (touch device, or keyboard
+            // activation) -- click is the sole open/close control.
+            setOpen((o) => !o);
+          }
         }}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        onMouseEnter={() => {
+          hoveringRef.current = true;
+          setOpen(true);
+        }}
+        onMouseLeave={() => {
+          hoveringRef.current = false;
+          setOpen(false);
+        }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         className={`relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full hover:opacity-75 focus:opacity-75 focus:outline-none ${
