@@ -4,11 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertTriangle, Shield, ShieldAlert, X, ExternalLink,
-  TrendingUp, Calendar, AlertOctagon, Info
+  TrendingUp, AlertOctagon, Info
 } from "lucide-react";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
+  BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
@@ -127,9 +127,9 @@ export function RiskTab({
   }, [documents]);
 
   // Risk Events table filter (severity=.. / date=.. from the URL) -- narrows
-  // only the table, matching exactly how the pie chart's severity bands and
-  // the timeline's date buckets are already computed above, so a filtered
-  // list here is always the same set of items the CEO clicked from.
+  // only the table, matching exactly how the pie chart's severity bands are
+  // already computed above, so a filtered list here is always the same set
+  // of items the CEO clicked from.
   const filteredRiskDocs = useMemo(() => {
     return riskDocs.filter(d => {
       if (severityParam && d.severity.toLowerCase() !== severityParam) return false;
@@ -212,20 +212,6 @@ export function RiskTab({
     });
 
     return grid;
-  }, [riskDocs]);
-
-  // 4. Timeline Data
-  const timelineChartData = useMemo(() => {
-    const buckets: Record<string, number> = {};
-    riskDocs.forEach(d => {
-      if (d.timestamp) {
-        const dateStr = new Date(d.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        buckets[dateStr] = (buckets[dateStr] || 0) + 1;
-      }
-    });
-    return Object.entries(buckets)
-      .map(([date, count]) => ({ date, count }))
-      .reverse();
   }, [riskDocs]);
 
   // 5. Category Distribution
@@ -584,67 +570,32 @@ export function RiskTab({
         </Card>
       </div>
 
-      {/* Grid containing timeline & categories */}
-      <div className="grid gap-6 md:grid-cols-2">
-        
-        {/* 4. Risk Timeline */}
-        <Card className={glassCard(theme)}>
-          <div className={SPECULAR_LINE} />
-          <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-              <Calendar className="h-4 w-4 mr-2" style={{ color: accent }} />
-              Risk Ingestion Timeline
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-[200px] pl-2">
-            {timelineChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={timelineChartData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  onClick={(e) => { if (e?.activeLabel) navigateTo("risk", { date: String(e.activeLabel) }); }}
-                  style={{ cursor: "pointer" }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                  <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} />
-                  <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
-                  <Line type="monotone" dataKey="count" name="Risks Detected" stroke="#EF4444" strokeWidth={2} dot={{ r: 3, fill: '#EF4444' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No historical risks tracked.</div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 5. Risk Categories */}
-        <Card className={glassCard(theme)}>
-          <div className={SPECULAR_LINE} />
-          <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center gap-1`}>
-              <TrendingUp className="h-4 w-4 mr-2" style={{ color: accent }} />
-              Incident Categories
-              <InfoTooltip label="About Incident Categories"><RiskCategoriesDefinition /></InfoTooltip>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-[200px] pl-2">
-            {categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                  <XAxis type="number" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} />
-                  <YAxis dataKey="name" type="category" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} width={80} />
-                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
-                  <Bar dataKey="count" name="Incidents" fill={accent} radius={[0, 4, 4, 0]} barSize={12} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No category metrics loaded.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* 5. Risk Categories */}
+      <Card className={glassCard(theme)}>
+        <div className={SPECULAR_LINE} />
+        <CardHeader className="pb-2">
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center gap-1`}>
+            <TrendingUp className="h-4 w-4 mr-2" style={{ color: accent }} />
+            Incident Categories
+            <InfoTooltip label="About Incident Categories"><RiskCategoriesDefinition /></InfoTooltip>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="h-[200px] pl-2">
+          {categoryData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={categoryData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
+                <XAxis type="number" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} />
+                <YAxis dataKey="name" type="category" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} width={80} />
+                <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
+                <Bar dataKey="count" name="Incidents" fill={accent} radius={[0, 4, 4, 0]} barSize={12} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No category metrics loaded.</div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 6. High Risk Incidents Table -- the dense data view: risk score,
           severity, and topic badges below intentionally use full-strength
