@@ -506,6 +506,24 @@ class HardenedTopicClassifier:
                 else:
                     topics_rejected += 1
 
+            # Sanity guard: a document where literally every candidate topic
+            # passed its threshold is a degenerate/uncalibrated classification
+            # run, not a genuinely topic-diverse document. Confirmed live
+            # (contamination_bug_sweep follow-up, 2026-09-14): real multi-topic
+            # documents form a smooth decay from 1 topic up through the high
+            # teens across every client (Tesla's most complex real stories top
+            # out at 15/17) -- documents where the model fires on 100% of the
+            # active taxonomy are a distinct outlier spike, not the tail of
+            # that same distribution (e.g. 24 of Anthropic's 500 gated docs
+            # sat at exactly 17/17, vs. 1-2 docs at 15 or 16). When this
+            # fires, the whole result is unreliable -- write nothing rather
+            # than guess which of the topics are the "real" ones.
+            if topic_names and len(passed_threshold_topics) >= len(topic_names):
+                doc_logger.warning("topic_classification_degenerate_all_topics_fired",
+                                    topics_fired=len(passed_threshold_topics),
+                                    taxonomy_size=len(topic_names))
+                passed_threshold_topics = []
+
             # Apply negative suppression (Phase A4)
             final_topics = apply_negative_suppression(preprocessed_text, passed_threshold_topics)
 
@@ -891,6 +909,17 @@ class HardenedTopicClassifier:
                         passed_threshold_topics.append(label)
                     else:
                         topics_rejected += 1
+
+                # Sanity guard -- see identical comment in
+                # _process_single_document_in_transaction above. Mirrored here
+                # so the batch write path (used by backfill/reprocessing) can't
+                # drift from the per-document path actually running in
+                # production (HardenedTopicClassifier._process_with_retry).
+                if topic_names and len(passed_threshold_topics) >= len(topic_names):
+                    doc_logger.warning("topic_classification_degenerate_all_topics_fired",
+                                        topics_fired=len(passed_threshold_topics),
+                                        taxonomy_size=len(topic_names))
+                    passed_threshold_topics = []
 
                 # Apply negative suppression
                 final_topics = apply_negative_suppression(preprocessed_text, passed_threshold_topics)
