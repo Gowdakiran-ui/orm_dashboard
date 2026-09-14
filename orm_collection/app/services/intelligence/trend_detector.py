@@ -19,7 +19,7 @@ import time
 import uuid
 import os
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 import structlog
 
 from app.models.trends import TrendEvent
@@ -562,10 +562,22 @@ class TrendDetector:
         # session that a client-level Sentiment-type trend directly
         # deducts from that client's own reputation score (reputation_
         # engine.py's Trend Component).
+        #
+        # `!= "competitor"` alone is NULL-unsafe: SQL's three-valued logic
+        # makes `NULL != 'competitor'` evaluate to NULL, not TRUE, so an
+        # entity with no entity_type set is silently excluded by the WHERE
+        # clause instead of included (confirmed live: this was collapsing
+        # client_doc_ids to empty -- and Topic/Sentiment trend detection
+        # with it -- for any client with such an entity, e.g. test fixtures
+        # that never set entity_type). The explicit `is_(None)` branch
+        # restores "not a competitor" to mean what it says.
         client_doc_ids = set(
             r[0] for r in db.query(EntityMention.document_id)
             .join(Entity, Entity.id == EntityMention.entity_id)
-            .filter(Entity.client_id == client_id, Entity.entity_type != "competitor")
+            .filter(
+                Entity.client_id == client_id,
+                or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None)),
+            )
             .all()
         )
         # Brand co-occurrence containment (contamination_bug_sweep.md,
@@ -714,7 +726,10 @@ class TrendDetector:
         client_doc_ids = set(
             r[0] for r in db.query(EntityMention.document_id)
             .join(Entity, Entity.id == EntityMention.entity_id)
-            .filter(Entity.client_id == client_id, Entity.entity_type != "competitor")
+            .filter(
+                Entity.client_id == client_id,
+                or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None)),
+            )
             .all()
         )
         # Brand co-occurrence containment (contamination_bug_sweep.md,

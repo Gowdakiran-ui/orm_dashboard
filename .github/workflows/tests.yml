@@ -39,7 +39,16 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Node 20 is EOL and GitHub-hosted runners now silently execute
+          # setup-node@v4's Node-20 actions on a Node 24 shim regardless of
+          # what this pins (see the runner's own deprecation warning in the
+          # job log). jsdom@30's vendored undici breaks under that Node 24
+          # shim (`webidl.util.markAsUncloneable is not a function`) --
+          # jsdom is already at its latest release, so there is no newer
+          # version to bump to. Pinning an actively-supported LTS instead
+          # of the deprecated one avoids the silent runner override and its
+          # incompatibility; verified locally on Node 22.
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: orm_dashboard/package-lock.json
 
