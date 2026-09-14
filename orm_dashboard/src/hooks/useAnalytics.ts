@@ -625,7 +625,12 @@ export function useAnalytics({
         success: "Not Available",
         failed: null,
         metrics: [
-          { label: "Risks Detected", value: r_t.produced !== undefined ? r_t.produced : crit + high + med + low },
+          // Raw RiskEvent rows written for this client_id, before the
+          // competitor-entity exclusion and confirmed-incident thresholding
+          // that Risk Center's own "Total Risks Tracked" applies on read --
+          // same reconciliation pattern as Risk & Alert Profile's "Documents
+          // Analyzed" vs. Risk Center's incident count.
+          { label: "Risks Detected", value: r_t.produced !== undefined ? r_t.produced : crit + high + med + low, desc: "Raw pipeline output, not the client-facing count -- see Risk Center for confirmed risks" },
           { label: "Critical", value: crit },
           { label: "Medium", value: med },
           { label: "Low", value: low }

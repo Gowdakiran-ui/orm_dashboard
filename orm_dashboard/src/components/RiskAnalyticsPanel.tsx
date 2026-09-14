@@ -256,7 +256,7 @@ export function RiskAnalyticsPanel({
                           className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center border ${bgClass}`}
                         >
                           {count > 0 ? (
-                            <span className="text-[10px] font-bold block">🔴 {count} {count === 1 ? "Incident" : "Incidents"}</span>
+                            <span className="text-[10px] font-bold block">🔴 {count} {count === 1 ? "Document" : "Documents"}</span>
                           ) : (
                             <span className={`text-[9px] block ${mutedText(theme)}`}>0</span>
                           )}
@@ -274,7 +274,7 @@ export function RiskAnalyticsPanel({
                               <span className={bodyText(theme)}>{colKey}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Incidents:</span>
+                              <span className={mutedText(theme)}>Documents:</span>
                               <span className={`font-bold ${bodyText(theme)}`}>{count}</span>
                             </div>
                             <div className="flex justify-between">

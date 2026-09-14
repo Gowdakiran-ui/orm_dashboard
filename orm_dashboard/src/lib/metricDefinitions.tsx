@@ -287,6 +287,38 @@ export function ShareOfVoiceDefinition() {
 }
 
 /**
+ * ExecutivesTab.tsx's tracked-executive search result card -- the Grade
+ * shown there comes from ExecutiveReputationEngine, a SEPARATE engine from
+ * the client-level ReputationEngine (see ReputationGradeDefinition/
+ * ReputationScoreDefinition above): same letter-grade cutoffs, but its own
+ * weights (executive_reputation_engine.py __init__: sentiment 35%, risk 30%,
+ * narrative 15%, trend 10%, visibility 10%, each dropped and the rest
+ * re-normalized if that signal has no data for this person). A low grade
+ * with very little tracked coverage most often means too few mentions to
+ * carry much weight, not necessarily sustained negative coverage.
+ */
+export function ExecutiveReputationGradeDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Executive Reputation Grade</span>
+      <span className="block">
+        This person&apos;s Score (0–100) blends sentiment (35%), risk (30%),
+        narrative exposure (15%), coverage trend (10%) and mention visibility
+        (10%) from their own tracked coverage, then maps to a letter grade:
+      </span>
+      <span className="mt-1 block"><b>A+</b> 90–100 &nbsp; <b>A</b> 80–89.9</span>
+      <span className="block"><b>B</b> 70–79.9 &nbsp; <b>C</b> 60–69.9</span>
+      <span className="block"><b>D</b> 40–59.9 &nbsp; <b>F</b> below 40</span>
+      <span className="mt-1 block">
+        Grades are per-person, not per-client — a low grade with only a
+        handful of tracked mentions reflects thin coverage as much as
+        negative sentiment.
+      </span>
+    </>
+  );
+}
+
+/**
  * ExecutivesTab.tsx's "Sentiment Breakdown" chart -- buckets each piece of
  * coverage mentioning the selected executive by its per-document sentiment
  * score (ExecutivesTab.tsx sentimentData: >0.25 positive, <-0.25 negative,
@@ -384,6 +416,39 @@ export function OverviewSentimentBreakdownDefinition() {
       <span className="mt-1 block"><b>Positive</b> — above +0.3</span>
       <span className="block"><b>Negative</b> — below -0.3</span>
       <span className="block"><b>Neutral</b> — everything in between</span>
+    </>
+  );
+}
+
+/**
+ * ReputationSummaryCard.tsx's "Positive Signals" / "Dominant Sentiment"
+ * tiles and Overview paragraph (Dashboard + Narrative Cluster pages, shared
+ * component) -- a THIRD, differently-scoped sentiment split from the two
+ * document-threshold-based ones above. This one comes straight from the
+ * backend (client_intelligence.py get_reputation_summary): a count of
+ * EntitySentiment rows (one per entity mention, not one per document) whose
+ * categorical sentiment_label was set by sentiment_analyzer.py, scoped to
+ * this client's own brand/product/person entities only (competitor entities
+ * excluded). Because it counts entity mentions with a pre-assigned label,
+ * not documents bucketed by a numeric cutoff, its totals will not match
+ * either Sentiment Breakdown chart's positive/neutral/negative counts.
+ */
+export function EntitySentimentSplitDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Positive Signals &amp; Dominant Sentiment</span>
+      <span className="block">
+        Counts this client&apos;s own entity mentions (brand, product, and
+        person entities only — tracked competitors excluded) by the
+        sentiment label already assigned to each mention, not by a numeric
+        cutoff on document scores.
+      </span>
+      <span className="mt-1 block">
+        This counts entity mentions, not documents, so it will not match the
+        Sentiment Breakdown charts on Executive Analytics — those bucket
+        whole documents by a +/-0.25 or +/-0.3 sentiment-score cutoff (see
+        their own tooltips).
+      </span>
     </>
   );
 }

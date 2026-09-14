@@ -169,6 +169,9 @@ export function PipelineDiagnosticsPanel({
                       <div key={mIdx} className="space-y-0.5">
                         <span className={`block uppercase text-[8px] ${mutedText(theme)}`}>{m.label}</span>
                         <span className={`font-bold block ${bodyText(theme)}`}>{m.value}</span>
+                        {m.desc && (
+                          <span className={`block text-[7.5px] font-normal ${mutedText(theme)}`}>{m.desc}</span>
+                        )}
                       </div>
                     ))}
                   </div>

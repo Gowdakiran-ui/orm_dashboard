@@ -212,7 +212,7 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     
     return {
         "id": str(doc.id),
-        "title": doc.title or "Untitled Document",
+        "title": doc.title or source_name,
         "source_id": source_name,
         "url": doc.url,
         "normalized_content": doc.normalized_content,
@@ -335,7 +335,7 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
 
         results.append({
             "id": str(doc.id),
-            "title": doc.title or "Untitled Document",
+            "title": doc.title or source_name,
             "source": source_name,
             "timestamp": (doc.published_at or doc.collected_at).isoformat() if (doc.published_at or doc.collected_at) else None,
             "status": doc.processing_status or "COMPLETED",

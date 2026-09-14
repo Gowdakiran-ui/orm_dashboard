@@ -6,7 +6,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, SPECULAR_LINE } from "@/components/theme/tokens";
 import { HeroGlass } from "@/components/theme/HeroGlass";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition, CompetitorRankShareOfVoiceDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition, CompetitorRankShareOfVoiceDefinition, EntitySentimentSplitDefinition } from "@/lib/metricDefinitions";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface ReputationSummaryCardProps {
@@ -263,8 +263,8 @@ export function ReputationSummaryCard({
     { label: "Risk Signals", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.dangerCount, sub: "Critical + High", color: riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
     { label: "Trend Direction", value: trendDisplay, sub: "Reputation momentum", color: "text-sky-500", highlight: true, compactValue: true },
     { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: severityBreakdownSub, color: RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
-    { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment docs", color: "text-emerald-400" },
-    { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative}`, color: "text-emerald-400" },
+    { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment entity mentions", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
+    { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative} mentions`, color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
     { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-sky-500", onClick: () => navigateTo("narratives") },
     { label: "Highest Risk Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.highestRisk, sub: "Requires strategic review", color: "text-red-500" },
     { label: "Fastest Growing Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
@@ -370,9 +370,12 @@ export function ReputationSummaryCard({
             </div>
 
             <div>
-              <span className={sectionLabelClass(isDark)}>Sentiment</span>
+              <span className={sectionLabelClass(isDark, true)}>
+                Sentiment
+                <InfoTooltip label="About Positive Signals & Dominant Sentiment"><EntitySentimentSplitDefinition /></InfoTooltip>
+              </span>
               <p className={sectionTextClass(isDark)}>
-                Sentiment is running {sentiment.dominant ?? "unknown"} ({sentiment.positive} positive / {sentiment.neutral} neutral / {sentiment.negative} negative).
+                Sentiment is running {sentiment.dominant ?? "unknown"} across this client's own entity mentions ({sentiment.positive} positive / {sentiment.neutral} neutral / {sentiment.negative} negative mentions — see Executive Analytics for the document-level Sentiment Breakdown).
                 {drivingTheme && <> The leading driver is the "{drivingTheme.name}" narrative ({drivingTheme.sentiment.toFixed(2)} sentiment).</>}
               </p>
             </div>

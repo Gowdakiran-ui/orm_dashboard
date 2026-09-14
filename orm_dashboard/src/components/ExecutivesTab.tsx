@@ -17,7 +17,7 @@ import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition, ExecutiveSentimentBreakdownDefinition, ExecutiveScorecardMetricsDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, ExecutiveSentimentBreakdownDefinition, ExecutiveScorecardMetricsDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
 export interface ExecutivesTabProps {
@@ -362,7 +362,10 @@ export function ExecutivesTab({
                     <span className={bodyText(theme)}>{searchResult.executive.trend ?? 'STABLE'}</span>
                   </div>
                   <div>
-                    <span className={`block ${mutedText(theme)}`}>Grade</span>
+                    <span className={`flex items-center gap-1 ${mutedText(theme)}`}>
+                      Grade
+                      <InfoTooltip label="About Executive Reputation Grade"><ExecutiveReputationGradeDefinition /></InfoTooltip>
+                    </span>
                     <span className={bodyText(theme)}>{searchResult.executive.grade ?? 'N/A'}</span>
                   </div>
                 </div>
