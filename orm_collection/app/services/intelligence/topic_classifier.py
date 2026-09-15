@@ -1,6 +1,7 @@
 import os
 import structlog
-from typing import List, Dict, Any
+import numpy as np
+from typing import List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from app.core import nlp_cache
 from app.models.document import Document
@@ -9,6 +10,31 @@ from app.models.system import ModelRun
 from transformers import pipeline
 
 logger = structlog.get_logger()
+
+# BART-MNLI 17/17 calibration fix, 2026-09-15.
+#
+# "This document discusses {}." was tried here as a replacement for the
+# pipeline's bare default ("This example is {}."), on the theory that framing
+# the label as a topic being discussed (vs. a category match) would reduce
+# over-firing. REVERTED after testing against two real production documents
+# pulled read-only from the live DB:
+#   - The actual reported 17/17 document (id f8f4fd56-..., a Reddit billing
+#     complaint) fires 17/17 under BOTH templates (~0.96-0.98 either way) --
+#     the new template did not help the failure it was meant to fix.
+#   - A real, already-correctly-classified multi-topic document (id
+#     514ec084-..., an OpenAI/Anthropic academic credit dispute) went from
+#     7/17 firing under the old template (closely matching what's actually
+#     written to document_topics: Innovation, Competition, Executive
+#     Leadership, Legal Risk, Product Launch) to 15/17 under the new one --
+#     a regression that breaks a document that was working.
+# Kept the pipeline's own default rather than reintroducing a template this
+# environment couldn't validate as an improvement.
+HYPOTHESIS_TEMPLATE = "This example is {}."
+
+# Bump this whenever HYPOTHESIS_TEMPLATE or the postprocessing logic below
+# changes, so nlp_cache (keyed by text+labels+model, TTL 30 days) never
+# serves scores computed under a stale template/logic under the old key.
+TOPIC_SCORING_SCHEMA_VERSION = "dual-score-v1"
 
 class TopicClassifier:
     def __init__(self, use_mock=False):
@@ -47,54 +73,115 @@ class TopicClassifier:
                     logger.critical("topic_classifier_model_load_failed_falling_back_to_mock", error=str(e))
                     self.use_mock = True
 
+    def _run_dual_pass(self, text: str, candidate_labels: List[str]) -> Tuple[List[float], List[float]]:
+        """
+        Run ONE forward pass through the zero-shot pipeline and derive BOTH
+        postprocessing variants from the same entailment/contradiction logits
+        (transformers==5.12.1, ZeroShotClassificationPipeline.postprocess):
+
+          - independent scores (multi_label=True's postprocessing): each
+            label's own softmax vs. its own contradiction score, with zero
+            competition between labels -- this is why a document can hit
+            0.97+ on every one of 17 topics at once.
+          - competing scores (multi_label=False's postprocessing): the
+            entailment logits softmaxed across the WHOLE candidate label set,
+            forcing labels to compete for probability mass.
+
+        This mirrors ChunkPipeline.run_single up to (not including) its final
+        postprocess() call, reusing the pipeline's own preprocess()/forward()
+        so tokenization, truncation, device placement and no_grad handling
+        are untouched -- only the last softmax step is duplicated (once each
+        way) instead of a second full model forward pass.
+        """
+        model_outputs = [
+            self.classifier.forward(model_inputs)
+            for model_inputs in self.classifier.preprocess(
+                text, candidate_labels=candidate_labels, hypothesis_template=HYPOTHESIS_TEMPLATE
+            )
+        ]
+
+        logits = np.concatenate([o["logits"].float().numpy() for o in model_outputs])
+        n = len(candidate_labels)
+        reshaped = logits.reshape((1, n, -1))[0]  # (n_labels, n_nli_classes)
+
+        entailment_id = self.classifier.entailment_id
+        contradiction_id = -1 if entailment_id == 0 else 0
+
+        entail_contr = reshaped[:, [contradiction_id, entailment_id]]
+        independent = np.exp(entail_contr) / np.exp(entail_contr).sum(-1, keepdims=True)
+        independent_scores = independent[:, 1].tolist()
+
+        entail_logits = reshaped[:, entailment_id]
+        competing = np.exp(entail_logits) / np.exp(entail_logits).sum(-1, keepdims=True)
+        competing_scores = competing.tolist()
+
+        return independent_scores, competing_scores
+
     def classify_text(self, text: str, candidate_labels: List[str]) -> Dict[str, Any]:
         if self.use_mock:
             # Mock behavior for fast testing
             import random
+            independent = [random.uniform(0.1, 0.9) for _ in candidate_labels]
+            total = sum(independent) or 1.0
             return {
                 "sequence": text,
                 "labels": candidate_labels,
-                "scores": [random.uniform(0.1, 0.9) for _ in candidate_labels]
+                "scores": independent,
+                "competing_scores": [s / total for s in independent]
             }
 
         if not text or not candidate_labels:
-            return {"sequence": text, "labels": [], "scores": []}
+            return {"sequence": text, "labels": [], "scores": [], "competing_scores": []}
 
-        # Section 6: result depends on both text and the candidate label set
-        # (a taxonomy change must miss, not serve a stale label set), so both
-        # go into the key -- sorted so label order doesn't affect the hash.
+        # Section 6: result depends on the text, the candidate label set (a
+        # taxonomy change must miss, not serve a stale label set), the
+        # hypothesis template and the postprocessing logic -- all go into the
+        # key (labels sorted so their order doesn't affect the hash).
         cache_key = nlp_cache.make_key(
-            "topic", self.model_name, text, "|".join(sorted(candidate_labels))
+            "topic", self.model_name, text, "|".join(sorted(candidate_labels)),
+            HYPOTHESIS_TEMPLATE, TOPIC_SCORING_SCHEMA_VERSION
         )
         cached = nlp_cache.get_cached(cache_key)
         if cached is not None:
             return cached
 
-        # The pipeline supports multi_label=True so a document can have multiple independent topics
-        result = self.classifier(text, candidate_labels, multi_label=True)
+        independent_scores, competing_scores = self._run_dual_pass(text, candidate_labels)
+        result = {
+            "sequence": text,
+            "labels": candidate_labels,
+            "scores": independent_scores,
+            "competing_scores": competing_scores
+        }
         nlp_cache.set_cached(cache_key, result)
         return result
 
     def classify_batch(self, texts: List[str], candidate_labels: List[str], batch_size: int = 16) -> List[Dict[str, Any]]:
         if self.use_mock:
             import random
-            return [
-                {
+            results = []
+            for text in texts:
+                independent = [random.uniform(0.1, 0.9) for _ in candidate_labels]
+                total = sum(independent) or 1.0
+                results.append({
                     "sequence": text,
                     "labels": candidate_labels,
-                    "scores": [random.uniform(0.1, 0.9) for _ in candidate_labels]
-                }
-                for text in texts
-            ]
+                    "scores": independent,
+                    "competing_scores": [s / total for s in independent]
+                })
+            return results
 
         if not texts or not candidate_labels:
-            return [{"sequence": text, "labels": [], "scores": []} for text in texts]
+            return [{"sequence": text, "labels": [], "scores": [], "competing_scores": []} for text in texts]
 
-        # Use native HuggingFace pipeline batching
-        results = self.classifier(texts, candidate_labels, multi_label=True, batch_size=batch_size)
-        if isinstance(results, dict):
-            return [results]
-        return results
+        # NOTE: this no longer uses the pipeline's native multi-text batched
+        # call. Getting both the independent AND competing score requires the
+        # raw per-label logits (see _run_dual_pass/classify_text above), and
+        # this method has no production caller today -- HardenedTopicClassifier
+        # .process_batch (topic_classification_batch_processor.py) that calls
+        # it is unreferenced by any Celery task -- so replicating
+        # ChunkPipeline's native batched collation here wasn't justified.
+        # batch_size is accepted for interface compatibility but unused.
+        return [self.classify_text(text, candidate_labels) for text in texts]
 
     def process_document(self, db: Session, document_id: str, threshold: float = 0.5):
         document = db.query(Document).filter(Document.id == document_id).first()

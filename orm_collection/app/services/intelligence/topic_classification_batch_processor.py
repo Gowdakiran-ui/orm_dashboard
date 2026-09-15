@@ -22,6 +22,34 @@ import re
 # EXPLAINABILITY HELPERS & TAXONOMY KEYWORDS — Phase A5
 # ─────────────────────────────────────────────────────────────
 
+# BART-MNLI 17/17 calibration fix, Step 3 (2026-09-15). multi_label=True
+# scores each topic independently against only its own contradiction score,
+# so a document can score >0.97 on every one of 17 topics at once with zero
+# competition between labels (see the "topic_classification_degenerate_all_
+# topics_fired" guard below, which is the ACTIVE defense against this).
+#
+# NOT ENFORCED -- audit-metadata only. Tested against two real production
+# documents pulled read-only from the live DB: the actual reported 17/17
+# document (a Reddit billing complaint) and a real, already-correctly-
+# classified multi-topic document (an OpenAI/Anthropic academic credit
+# dispute, previously 5/17 topics written). In both cases every label's
+# competing/renormalized score (topic_classifier.py's _run_dual_pass --
+# entailment logits softmaxed across the whole taxonomy) landed within
+# ~0.7x-1.2x of the "equal share" baseline (1 / active topic count) -- i.e.
+# once independent scores are already compressed into a narrow high band
+# (true for both the degenerate doc AND, it turns out, for genuine
+# multi-topic docs), the renormalized distribution ALSO collapses toward
+# equal share for every label. No multiplier separated the two real
+# documents: values large enough to reject the degenerate doc's topics also
+# rejected every one of the genuine document's real topics (Innovation,
+# Competition, Executive Leadership, Legal Risk, Product Launch, Market
+# Share). This is a real negative result, not unpicked tuning -- the
+# competing score is still computed and written to explainability_metadata
+# below (useful for whoever solves this with a supervised classifier, per
+# TASK.md's out-of-scope note), but it does not gate anything. The 100%-fired
+# guard remains the sole active defense.
+COMPETING_SCORE_MULTIPLIER = 2.0
+
 TOPIC_KEYWORDS = {
     "Financial Results": ["earnings", "financials", "target of rs", "stock to buy"],
     "Executive Leadership": ["entrepreneur", "lead whatsapp", "tapped by meta"],
@@ -42,7 +70,8 @@ TOPIC_KEYWORDS = {
     "Energy Storage": ["megapack", "powerwall"]
 }
 
-def generate_explainability_data(text: str, topic_name: str, score: float, threshold: float, rank: int, all_labels: List[str], all_scores: List[str]) -> dict:
+def generate_explainability_data(text: str, topic_name: str, score: float, threshold: float, rank: int, all_labels: List[str], all_scores: List[str],
+                                  competing_score: Optional[float] = None, competing_threshold: Optional[float] = None, equal_share_baseline: Optional[float] = None) -> dict:
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
     keywords = TOPIC_KEYWORDS.get(topic_name, [])
     
@@ -79,7 +108,7 @@ def generate_explainability_data(text: str, topic_name: str, score: float, thres
     if supporting_keywords:
         reason += f" Supporting keywords found: {', '.join(supporting_keywords[:3])}."
         
-    return {
+    data = {
         "topic": topic_name,
         "confidence": round(float(score), 4),
         "threshold": threshold,
@@ -89,6 +118,11 @@ def generate_explainability_data(text: str, topic_name: str, score: float, thres
         "rejected_competing_topics": rejected_competing[:3],
         "decision_reason": reason
     }
+    if competing_score is not None:
+        data["competing_share_score"] = round(float(competing_score), 4)
+        data["competing_share_threshold"] = round(float(competing_threshold), 4) if competing_threshold is not None else None
+        data["equal_share_baseline"] = round(float(equal_share_baseline), 4) if equal_share_baseline is not None else None
+    return data
 
 # ─────────────────────────────────────────────────────────────
 # CORRELATED LOGGING UTILITY — Matches Entity Matching Logger
@@ -486,6 +520,12 @@ class HardenedTopicClassifier:
             sorted_labels = [x[0] for x in labels_scores]
             sorted_scores = [x[1] for x in labels_scores]
 
+            # Competing (renormalized) score per label -- audit-metadata only,
+            # not enforced. See COMPETING_SCORE_MULTIPLIER above for why.
+            competing_score_map = dict(zip(results.get("labels", []), results.get("competing_scores", [])))
+            equal_share_baseline = (1.0 / len(topic_names)) if topic_names else 0.0
+            competing_threshold = equal_share_baseline * COMPETING_SCORE_MULTIPLIER
+
             # Identify which topics pass their per-topic confidence threshold.
             # NOTE: this used to additionally require a literal TOPIC_KEYWORDS phrase
             # match ("high precision keyword gating"). Verified live against real
@@ -497,7 +537,10 @@ class HardenedTopicClassifier:
             # verbatim — the AND-gate was rejecting ~99% of correctly-classified
             # documents. Confidence threshold + apply_negative_suppression() below
             # (real disambiguation rules, e.g. Nikola Tesla vs. Tesla Inc.) remain as
-            # the actual precision guards.
+            # the actual precision guards. The competing/renormalized score
+            # (COMPETING_SCORE_MULTIPLIER above) does NOT gate here -- tested
+            # against real data and found not to discriminate the degenerate case
+            # from genuine multi-topic documents.
             passed_threshold_topics = []
             for label, score in labels_scores:
                 thresh = topic_thresholds.get(label, 0.5)
@@ -538,7 +581,10 @@ class HardenedTopicClassifier:
                         topic_thresholds[label],
                         rank_idx + 1,
                         sorted_labels,
-                        sorted_scores
+                        sorted_scores,
+                        competing_score=competing_score_map.get(label, 0.0),
+                        competing_threshold=competing_threshold,
+                        equal_share_baseline=equal_share_baseline
                     )
 
                     stmt = insert(DocumentTopic).values(
@@ -894,13 +940,21 @@ class HardenedTopicClassifier:
                 sorted_labels = [x[0] for x in labels_scores]
                 sorted_scores = [x[1] for x in labels_scores]
 
+                # Competing (renormalized) score per label -- audit-metadata
+                # only, mirrors _process_single_document_in_transaction above;
+                # see COMPETING_SCORE_MULTIPLIER for the full explanation.
+                competing_score_map = dict(zip(res.get("labels", []), res.get("competing_scores", [])))
+                equal_share_baseline = (1.0 / len(topic_names)) if topic_names else 0.0
+                competing_threshold = equal_share_baseline * COMPETING_SCORE_MULTIPLIER
+
                 # Apply per-topic confidence thresholds. See FINDINGS.md P1-C: the
                 # literal TOPIC_KEYWORDS "high precision keyword gating" AND-gate
                 # previously here rejected ~99% of correctly, confidently classified
                 # documents (verified against real model output) because its phrases
                 # were reverse-engineered from a narrow sample and essentially never
                 # recur verbatim. apply_negative_suppression() below remains as the
-                # real precision guard.
+                # real precision guard. The competing/renormalized score does NOT
+                # gate here, see _process_single_document_in_transaction above.
                 passed_threshold_topics = []
                 topics_rejected = 0
                 for label, score in labels_scores:
@@ -935,7 +989,10 @@ class HardenedTopicClassifier:
                             topic_thresholds[label],
                             rank_idx + 1,
                             sorted_labels,
-                            sorted_scores
+                            sorted_scores,
+                            competing_score=competing_score_map.get(label, 0.0),
+                            competing_threshold=competing_threshold,
+                            equal_share_baseline=equal_share_baseline
                         )
 
                         stmt = insert(DocumentTopic).values(
