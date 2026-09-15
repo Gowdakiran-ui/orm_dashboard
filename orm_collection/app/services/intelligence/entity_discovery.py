@@ -16,7 +16,7 @@ from app.models.executive_candidate import ExecutiveCandidate
 from app.models.competitor_candidate import CompetitorCandidate
 from app.models.document import Document, DocumentMatch
 from app.models.client import Client
-from app.services.matching_engine import engine_instance
+from app.services.matching_engine import engine_instance, should_write_document_match
 
 logger = structlog.get_logger()
 
@@ -1765,6 +1765,17 @@ class EntityDiscoveryEngine:
         anything. Explicitly checks for an existing match first since
         DocumentMatch has no unique constraint on
         (document_id, matched_entity_id) to rely on.
+
+        Brand co-occurrence gate: this method is the second of two live
+        writers of DocumentMatch (the other is
+        matching_engine.py::process_document()) -- confirmed live
+        contamination leak here during the first rollout attempt (3 rows for
+        Godrej, entity auto-promoted mid-run then rematched against a
+        Tesla-only-equivalent article with zero Godrej co-occurrence) because
+        this method called engine_instance.find_matches() directly instead
+        of going through process_document()'s gate. Now routes through the
+        same should_write_document_match() gate as process_document() --
+        see that function's docstring.
         """
         cutoff = datetime.now(timezone.utc) - timedelta(hours=6)
 
@@ -1786,6 +1797,7 @@ class EntityDiscoveryEngine:
             ).all()
         }
 
+        boost_terms_cache: Dict[str, Dict[str, Set[str]]] = {}
         rematched = 0
         for doc_id, content in candidate_docs:
             if doc_id in already_matched or not content:
@@ -1793,6 +1805,8 @@ class EntityDiscoveryEngine:
             matches = engine_instance.find_matches(content)
             hit = next((m for m in matches if m["entity_id"] == str(entity_id)), None)
             if hit:
+                if not should_write_document_match(db, client_id, content.lower(), boost_terms_cache):
+                    continue
                 db.add(DocumentMatch(
                     document_id=doc_id,
                     matched_entity_id=entity_id,

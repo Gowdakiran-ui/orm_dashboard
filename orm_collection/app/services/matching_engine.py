@@ -63,7 +63,92 @@ def get_client_boost_terms(db: Session, client_id) -> Dict[str, Set[str]]:
         if kw.keyword_text:
             product_terms.add(kw.keyword_text.lower())
 
-    return {"executive_terms": executive_terms, "product_terms": product_terms}
+    # Brand co-occurrence gate (see should_write_document_match below): the
+    # client's own Entity(entity_type="brand") name/aliases, same
+    # entity_type this week's downstream reputation/risk/narrative/trend
+    # gates already query (reputation_engine.py's "brand_or_product_ids",
+    # entity_type IN ("brand", "product")) -- product_terms above already
+    # covers the "product" half of that pair, this adds the "brand" half.
+    brand_terms: Set[str] = set()
+    brand_entities = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "brand"
+    ).all()
+    for b in brand_entities:
+        if b.name:
+            brand_terms.add(b.name.lower())
+        for alias in b.aliases:
+            if alias.alias_text:
+                brand_terms.add(alias.alias_text.lower())
+
+    return {"executive_terms": executive_terms, "product_terms": product_terms, "brand_terms": brand_terms}
+
+# Staged rollout for should_write_document_match's brand co-occurrence gate.
+# Deliberately client_id-scoped rather than global: enabled first for
+# Anthropic and Godrej -- the two accounts under the most active scrutiny
+# this week -- so contamination reduction and false-negative risk can be
+# watched on real live-processed documents before other clients are
+# affected. Expand this set (or remove the check entirely once every
+# client is enabled) after that watch period; do not add new clients here
+# without the same live-verification this initial set got.
+BRAND_GATE_ROLLOUT_CLIENT_IDS = {
+    "4abba1b2-80af-4032-b734-6690d00e64ed",  # Anthropic
+    "af7e3278-1032-43b6-aa4e-217bcf9eab27",  # Godrej Properties
+}
+
+def should_write_document_match(
+    db: Session,
+    client_id,
+    doc_text_lower: str,
+    boost_terms_cache: Dict[str, Dict[str, Set[str]]],
+) -> bool:
+    """
+    Single brand/product co-occurrence gate for whether a DocumentMatch
+    should be written for this client, for THIS document's text.
+
+    Every writer of document_matches must call this before adding a
+    DocumentMatch row. It exists because the first rollout attempt patched
+    matching_engine.py::process_document() alone and missed a second live
+    writer -- entity_discovery.py's _rematch_recent_documents_for_new_entity()
+    (fires when a competitor/executive is auto-promoted mid-pipeline-run,
+    re-matching that client's recent documents directly via
+    engine_instance.find_matches(), bypassing process_document() entirely).
+    That gap leaked 3 confirmed-contaminated rows for Godrej during live
+    verification before the whole change was reverted. Centralizing the
+    gate here means there is exactly one place this logic can drift out of
+    sync, and any future writer of document_matches has one obvious
+    function to call instead of reimplementing the check.
+
+    (EntityMatchingBatchProcessor also constructs DocumentMatch rows, but
+    has zero callers anywhere in the app -- confirmed dead code, not wired
+    to this gate.)
+
+    Requires the client to have a brand/product entity whose name/alias
+    text appears somewhere in the document before a match for that client
+    is written. Skipped (returns True) for a client with no brand/product
+    entities configured at all -- same honest limitation as
+    get_client_boost_terms's existing executive/product boosts -- and for
+    any client outside BRAND_GATE_ROLLOUT_CLIENT_IDS.
+
+    boost_terms_cache is owned by the caller and shared across a single
+    document/batch scope, so repeated calls for the same client_id (e.g.
+    once per matched entity in a document with several matches for the
+    same client) don't re-query the DB -- same batching pattern already
+    used for executive_terms/product_terms elsewhere in this file.
+    """
+    client_id = str(client_id)
+    if client_id not in BRAND_GATE_ROLLOUT_CLIENT_IDS:
+        return True
+
+    if client_id not in boost_terms_cache:
+        boost_terms_cache[client_id] = get_client_boost_terms(db, client_id)
+    boost_terms = boost_terms_cache[client_id]
+
+    brand_or_product_terms = boost_terms["brand_terms"] | boost_terms["product_terms"]
+    if not brand_or_product_terms:
+        return True
+
+    return any(t in doc_text_lower for t in brand_or_product_terms)
 
 class MatchingEngineConfig:
     """
@@ -381,14 +466,26 @@ class GlobalMatchingEngine:
         """
         Process a document, save matches, and record metrics.
         Legacy method kept for compatibility.
+
+        This is the actual live write path for DocumentMatch (wired via
+        document_service.py at collection time). See
+        should_write_document_match's docstring for the brand co-occurrence
+        gate applied here and why it's centralized rather than reimplemented
+        inline.
         """
         start_time = time.time()
         matches = self.find_matches(text)
-        
+
+        doc_text_lower = text.lower()
+        boost_terms_cache: Dict[str, Dict[str, Set[str]]] = {}
+
         unique_entities = set()
         db_matches = []
         for m in matches:
             if m["entity_id"] not in unique_entities:
+                if not should_write_document_match(db, m["client_id"], doc_text_lower, boost_terms_cache):
+                    continue
+
                 unique_entities.add(m["entity_id"])
                 db_matches.append(DocumentMatch(
                     document_id=document_id,
@@ -397,7 +494,7 @@ class GlobalMatchingEngine:
                     match_confidence=m["confidence"],
                     matched_text=m.get("matched_keyword", "[Hidden/Aggregated]")
                 ))
-                
+
         if db_matches:
             db.add_all(db_matches)
             
