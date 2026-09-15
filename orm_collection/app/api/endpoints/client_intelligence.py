@@ -53,7 +53,7 @@ def get_client_risks(client_id: UUID, db: Session = Depends(get_db)):
         Entity, Entity.id == RiskEvent.entity_id
     ).filter(
         RiskEvent.client_id == client_id,
-        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).order_by(RiskEvent.created_at.desc(), RiskEvent.id.desc()).limit(50).all()
     avg_score = sum(e.risk_score for e in recent_events) / len(recent_events) if recent_events else 0.0
     
@@ -83,7 +83,7 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
     alerts = db.query(Alert).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
         Alert.client_id == client_id,
         Alert.is_acknowledged == False,
-        or_(Entity.entity_type != "competitor", Alert.entity_id.is_(None)),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), Alert.entity_id.is_(None)),
     ).order_by(Alert.created_at.desc()).all()
 
     # Brand co-occurrence containment (contamination_bug_sweep.md follow-up,
@@ -1380,7 +1380,7 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         Entity, Entity.id == RiskEvent.entity_id
     ).filter(
         RiskEvent.client_id == client_id,
-        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).group_by(RiskEvent.risk_level).all()
     risk_counts = {level: count for level, count in risk_counts_raw}
     risk_total = sum(risk_counts.values())
@@ -1389,7 +1389,7 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
     top_risk = db.query(RiskEvent, Entity).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
         RiskEvent.client_id == client_id,
         RiskEvent.risk_level.in_(["CRITICAL", "HIGH"]),
-        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).order_by(RiskEvent.risk_score.desc(), RiskEvent.created_at.desc()).first()
     if top_risk:
         event, entity = top_risk
@@ -1422,7 +1422,10 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
     # blended into "this client's" dominant sentiment and Overview text.
     sentiment_counts_raw = db.query(EntitySentiment.sentiment_label, func.count(EntitySentiment.id)).join(
         Entity, Entity.id == EntitySentiment.entity_id
-    ).filter(Entity.client_id == client_id, Entity.entity_type != "competitor").group_by(EntitySentiment.sentiment_label).all()
+    ).filter(
+        Entity.client_id == client_id,
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None)),
+    ).group_by(EntitySentiment.sentiment_label).all()
     sentiment_counts = {label: count for label, count in sentiment_counts_raw}
     positive = sentiment_counts.get("Positive", 0)
     neutral = sentiment_counts.get("Neutral", 0)
@@ -1765,7 +1768,7 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
         Entity, Entity.id == RiskEvent.entity_id
     ).filter(
         RiskEvent.client_id == client_id,
-        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).group_by(RiskEvent.risk_level).all()
     risk_counts_map = {level: count for level, count in risk_counts_raw}
     risk_counts = {
@@ -1781,7 +1784,7 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
         a.title for a in db.query(Alert).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
             Alert.client_id == client_id,
             Alert.is_acknowledged == False,
-            or_(Entity.entity_type != "competitor", Alert.entity_id.is_(None)),
+            or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), Alert.entity_id.is_(None)),
         ).all()
     ]
 

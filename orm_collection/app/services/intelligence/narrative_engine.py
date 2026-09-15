@@ -413,6 +413,7 @@ class NarrativeEngine:
         avg_sentiment: float,
         trend_event: Optional[TrendEvent],
         risk_event: Optional[RiskEvent],
+        avg_risk: float,
         alerts: List[Alert],
         narrative_type: str,
         status: str,
@@ -438,7 +439,13 @@ class NarrativeEngine:
             p2_segments.append("Recent media coverage indicates an emerging pattern, though no formal trend event has been established in the database.")
 
         if risk_event:
-            p2_segments.append(f"This activity is associated with a risk score of {risk_event.risk_score:.1f}/100 (level: {risk_event.risk_level}).")
+            # Uses the same cluster-average risk source as
+            # _build_problem_statement_and_impact's `impact` line (not
+            # risk_event.risk_score, which is just cluster_risks[0] --
+            # whichever document happens to be first in cluster_doc_ids,
+            # not the highest or most representative) so the summary and
+            # RCA never show two different risk scores for one narrative.
+            p2_segments.append(f"This activity is associated with a risk score of {avg_risk:.1f}/100 (level: {self._severity_label(avg_risk)}).")
         else:
             p2_segments.append("Multiple negative articles were detected, but no formal risk event has been registered.")
 
@@ -996,7 +1003,7 @@ class NarrativeEngine:
         ).filter(
             RiskEvent.client_id == client_id,
             RiskEvent.document_id.in_(doc_ids),
-            or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+            or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
         ).all()
         risk_map = {}
         for r in risks:
@@ -1396,6 +1403,7 @@ class NarrativeEngine:
                 avg_sentiment=float(avg_sentiment),
                 trend_event=trend_event,
                 risk_event=risk_event,
+                avg_risk=float(avg_risk),
                 alerts=cluster_alerts,
                 narrative_type=narrative_type,
                 status=status,

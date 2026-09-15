@@ -163,7 +163,7 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     risk_rec = db.query(RiskEvent).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
         RiskEvent.document_id == doc.id,
         RiskEvent.client_id == client_id,
-        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).order_by(RiskEvent.risk_score.desc()).first()
     risk_val = getattr(risk_rec, "risk_score", 0.0) if risk_rec else 0.0
     risk_explainability = getattr(risk_rec, "explainability", None) if risk_rec else None
@@ -271,7 +271,7 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
     risks = db.query(RiskEvent).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
         RiskEvent.document_id.in_(doc_ids),
         RiskEvent.client_id == client_id,
-        or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).all()
     risk_map = {}
     risk_explain_map = {}

@@ -403,6 +403,7 @@ class AlertEngine:
                 RiskEvent.risk_score > 50,
                 or_(
                     RiskEvent.entity_id.is_(None),
+                    Entity.entity_type.is_(None),
                     Entity.entity_type.in_(("brand", "product")),
                     and_(Entity.entity_type == "person", RiskEvent.document_id.in_(brand_doc_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
@@ -428,6 +429,7 @@ class AlertEngine:
                 TrendEvent.percentage_change > 30.0,
                 or_(
                     TrendEvent.entity_id.is_(None),
+                    Entity.entity_type.is_(None),
                     Entity.entity_type.in_(("brand", "product", "person")) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
             ).order_by(TrendEvent.created_at.desc()).limit(15).all()

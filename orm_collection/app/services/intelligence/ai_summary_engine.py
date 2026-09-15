@@ -429,7 +429,7 @@ class AISummaryEngine:
             RiskEvent.client_id == client_id,
             RiskEvent.risk_level.in_(_MEDIUM_PLUS),
             RiskEvent.document_id.in_(visible_doc_ids) if visible_doc_ids else False,
-            or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+            or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
         ).all()
 
         # No visibility cap needed: Active Alerts has no pagination, it
@@ -438,7 +438,7 @@ class AISummaryEngine:
         alerts = db.query(Alert).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
             Alert.client_id == client_id,
             Alert.is_acknowledged == False,
-            or_(Entity.entity_type != "competitor", Alert.entity_id.is_(None)),
+            or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), Alert.entity_id.is_(None)),
         ).all()
 
         pending: List[Dict[str, Any]] = []

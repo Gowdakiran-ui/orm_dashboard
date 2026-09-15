@@ -156,7 +156,8 @@ class ReputationEngine:
         # aggregate fixed this session (Risk Center, Narrative Cluster,
         # Active Alerts, Brand Equity sentiment).
         entities = db.query(Entity).filter(
-            Entity.client_id == client_id, Entity.entity_type != "competitor"
+            Entity.client_id == client_id,
+            or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None)),
         ).all()
         entity_ids = [e.id for e in entities]
 
@@ -253,6 +254,7 @@ class ReputationEngine:
                 RiskEvent.created_at >= lookback_date,
                 or_(
                     RiskEvent.entity_id.is_(None),
+                    Entity.entity_type.is_(None),
                     Entity.entity_type.in_(("brand", "product")),
                     and_(Entity.entity_type == "person", RiskEvent.document_id.in_(brand_doc_ids)) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
@@ -306,6 +308,7 @@ class ReputationEngine:
                 TrendEvent.created_at >= lookback_date,
                 or_(
                     TrendEvent.entity_id.is_(None),
+                    Entity.entity_type.is_(None),
                     Entity.entity_type.in_(("brand", "product", "person")) if brand_doc_ids is not None else Entity.entity_type != "competitor",
                 ),
             ).order_by(TrendEvent.created_at.desc()).limit(10).all()
