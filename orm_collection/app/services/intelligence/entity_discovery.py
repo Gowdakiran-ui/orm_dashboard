@@ -234,6 +234,14 @@ class EntityDiscoveryConfig:
         "Q192350",   # government ministry/department
         "Q7278",     # political party
         "Q41176",    # building
+        # Confirmed live (Pentagon-style check): "The Pentagon" resolves to
+        # several distinct exact Wikidata matches, none tagged plain
+        # "building" (Q41176) -- these four cover the actual P31 values
+        # found on that lookup.
+        "Q1021645",  # office building
+        "Q16831714", # government building
+        "Q47272186", # headquarters (military)
+        "Q5611017",  # groundscraper
         "Q570116",   # tourist attraction / landmark
         "Q515",      # city
         "Q6256",     # country
@@ -310,24 +318,17 @@ class EntityDiscoveryEngine:
             self._doc_parse_cache.popitem(last=False)
         return doc
 
-    def _wikidata_search(self, name: str) -> List[Dict[str, Any]]:
-        """
-        Raw wbsearchentities call. Returns only results whose label is an
-        exact case-insensitive match to `name` -- a fuzzy/partial match here
-        would be guessing which real-world entity the candidate refers to,
-        which this check must never do. Fail-open (empty list) on ANY
-        error/timeout/malformed response: this check must never block or
-        meaningfully slow promotion, and an empty list is treated by the
-        caller as "unresolved", which falls through to the existing
-        heuristic-only result unchanged.
-        """
+    def _wikidata_search_raw(self, query: str) -> List[Dict[str, Any]]:
+        """One wbsearchentities call, no filtering. Fail-open (empty list) on
+        ANY error/timeout/malformed response -- this check must never block
+        or meaningfully slow promotion."""
         import requests
         try:
             resp = requests.get(
                 "https://www.wikidata.org/w/api.php",
                 params={
                     "action": "wbsearchentities",
-                    "search": name,
+                    "search": query,
                     "language": "en",
                     "format": "json",
                     "type": "item",
@@ -338,12 +339,42 @@ class EntityDiscoveryEngine:
             )
             if resp.status_code != 200:
                 return []
-            results = (resp.json() or {}).get("search") or []
-            name_lower = name.strip().lower()
-            return [r for r in results if (r.get("label") or "").strip().lower() == name_lower]
+            return (resp.json() or {}).get("search") or []
         except Exception as exc:
-            logger.warning("wikidata_search_failed", candidate=name, error=str(exc))
+            logger.warning("wikidata_search_failed", candidate=query, error=str(exc))
             return []
+
+    def _wikidata_search(self, name: str) -> List[Dict[str, Any]]:
+        """
+        Returns only results that exactly match `name` (case-insensitive) --
+        either as the entity's primary label, or as a registered Wikidata
+        alias the search API itself flagged as the actual match. A
+        fuzzy/partial match here would be guessing which real-world entity
+        the candidate refers to, which this check must never do.
+
+        The alias check matters: confirmed live, searching "Pentagon" alone
+        returns the real "The Pentagon" entity (Q11208) and the "United
+        States Department of Defense" entity (Q11209) with `match.type ==
+        "alias", match.text == "Pentagon"` -- their own *label* is "The
+        Pentagon"/"United States Department of Defense", not "Pentagon", so
+        a label-only exact-match check discards both and is left with only
+        an unrelated Brussels neighborhood that happens to share the bare
+        label "Pentagon". Wikidata's own alias data is what actually answers
+        "is this really the thing the candidate is naming" here -- there's
+        no need to guess at title-casing/article variants ourselves.
+        """
+        name_lower = name.strip().lower()
+        results = self._wikidata_search_raw(name)
+        exact = []
+        for r in results:
+            label = (r.get("label") or "").strip().lower()
+            if label == name_lower:
+                exact.append(r)
+                continue
+            match = r.get("match") or {}
+            if match.get("type") == "alias" and (match.get("text") or "").strip().lower() == name_lower:
+                exact.append(r)
+        return exact
 
     def _wikidata_get_p31(self, qid: str) -> set:
         """Fetches the P31 ("instance of") claim values for one Wikidata QID.
@@ -1340,6 +1371,27 @@ class EntityDiscoveryEngine:
         for kw in brand.keywords:
             if (kw.category or "").upper() in ("PRIMARY", "ALIAS"):
                 _add(kw.keyword_text)
+
+        # Also register the brand name's leading significant word on its
+        # own -- mirrors _registered_source_terms()'s "The Guardian World"
+        # -> also registers "guardian" pattern, applied here to the client's
+        # OWN name instead of a publisher's. Without this, a multi-word
+        # brand like "Godrej Properties" only ever registers the full
+        # "godrej properties" string, so Layer 8 / Layer O2's prefix checks
+        # never match "Godrej <ProjectName>" or "Godrej <SubBrand>" -- only
+        # "Godrej Properties <X>". Confirmed live: this is why "Godrej
+        # Meridien"/"Godrej Evora Estate" passed Layer 8 untouched even
+        # after the brand's full name was already a registered term.
+        # Guarded to >=4 chars, same minimum Layer O2's own prefix checks
+        # already use (see "Tata"/"Tata Motors" above) -- a short leading
+        # word carries too little discriminating power to safely treat as
+        # this client's identity on its own. A generic-but-long leading
+        # word (e.g. a hypothetical "American Express" -> "american") is an
+        # accepted tradeoff already implicit in Layer O2's existing
+        # prefix-matching design, not a new risk introduced here.
+        brand_words = [w for w in self._normalize_name(brand.name or "").split() if w]
+        if len(brand_words) > 1 and len(brand_words[0]) >= 4:
+            terms.add(brand_words[0])
 
         # The client's own products, from the entity_type the Entity model
         # already documents ('brand', 'person', 'product', 'competitor') and
