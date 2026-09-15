@@ -203,6 +203,54 @@ class EntityDiscoveryConfig:
     # conservative (favors missing a near-dupe over blocking a real promotion).
     EXECUTIVE_NAME_SIMILARITY_THRESHOLD = 0.93
 
+    # Wikidata knowledge-base check at promotion time (Day 3-5 item): a
+    # last-gate sanity check that a candidate about to be promoted to
+    # entity_type='person' or 'competitor' is actually that kind of thing.
+    # Confirmed live need: Godrej's own housing projects ("Godrej Plots",
+    # "Godrej Samaris", etc.) pass every existing shape/heuristic layer
+    # above (2 Title-Case tokens, no verb, no denylist hit) and get promoted
+    # as entity_type='person'; Pentagon/Warner-Music-style ORG mentions pass
+    # the equivalent competitor layers despite not being a viable business
+    # competitor for the client in question. None of the layers above check
+    # *what the candidate actually is* against any external source of truth.
+    #
+    # Q5 is Wikidata's canonical "human" type -- the ONLY way to be a person
+    # there, so "resolved to a real Wikidata item, P31 does not include Q5"
+    # is solid positive evidence of "not a person", not a guess.
+    WIKIDATA_HUMAN_QID = "Q5"
+
+    # For the competitor side, the reverse enumeration (every legitimate
+    # business P31 value) is far less tractable -- companies carry dozens of
+    # legitimate instance-of values (bank, automaker, conglomerate, retail
+    # chain, ...). Instead this is a curated DISALLOW-list of common
+    # "NER-tags-as-ORG but is not a viable competitor" types (government
+    # agencies, buildings/landmarks, places, institutions), so a candidate
+    # only gets rejected on positive disconfirming evidence, never merely for
+    # lacking a business type we happened to enumerate. Extend this set the
+    # same way MEDIA_AND_GENERIC_TERMS/EXCHANGES_AND_REGULATORS above were
+    # extended -- add a confirmed-live false positive's QID, don't restructure.
+    WIKIDATA_NON_COMPETITOR_QIDS = {
+        "Q327333",   # government agency
+        "Q192350",   # government ministry/department
+        "Q7278",     # political party
+        "Q41176",    # building
+        "Q570116",   # tourist attraction / landmark
+        "Q515",      # city
+        "Q6256",     # country
+        "Q3624078",  # sovereign state
+        "Q56061",    # administrative territorial entity
+        "Q486972",   # human settlement
+        "Q163740",   # nonprofit organization
+        "Q2385804",  # educational institution
+        "Q3918",     # university
+        "Q16917",    # hospital
+        "Q1248784",  # airport
+        "Q1497364",  # housing estate
+        "Q11315",    # apartment building
+        "Q33506",    # museum
+        "Q7075",     # library
+    }
+
 
 class EntityDiscoveryEngine:
     # Round-3 regression fix: promote_executive_candidates() /
@@ -225,6 +273,15 @@ class EntityDiscoveryEngine:
     # runs --pool=solo (one long-lived process) -- see docker-compose.yml.
     _DOC_PARSE_CACHE_MAXSIZE = 256
 
+    # Same reasoning as _DOC_PARSE_CACHE_MAXSIZE above, applied to the
+    # Wikidata knowledge-base check: promote_*_candidates() re-validates
+    # every not-yet-promoted candidate on every document processed, so an
+    # uncached candidate stuck in "ambiguous"/"rejected" state would hit the
+    # live Wikidata API again on every subsequent document indefinitely.
+    # Bounded LRU keyed on the normalized candidate name, same shape as
+    # _doc_parse_cache, for the same long-lived --pool=solo worker reason.
+    _WIKIDATA_CACHE_MAXSIZE = 512
+
     def __init__(self):
         try:
             self.nlp = spacy.load("en_core_web_sm")
@@ -237,6 +294,7 @@ class EntityDiscoveryEngine:
                 effect="Executive/competitor discovery will return empty candidates silently."
             )
         self._doc_parse_cache: "OrderedDict[str, Any]" = OrderedDict()
+        self._wikidata_cache: "OrderedDict[str, Any]" = OrderedDict()
 
     def _get_parsed_doc(self, source_text: str):
         """Bounded LRU cache around self.nlp(source_text) -- see the cache
@@ -251,6 +309,160 @@ class EntityDiscoveryEngine:
         if len(self._doc_parse_cache) > self._DOC_PARSE_CACHE_MAXSIZE:
             self._doc_parse_cache.popitem(last=False)
         return doc
+
+    def _wikidata_search(self, name: str) -> List[Dict[str, Any]]:
+        """
+        Raw wbsearchentities call. Returns only results whose label is an
+        exact case-insensitive match to `name` -- a fuzzy/partial match here
+        would be guessing which real-world entity the candidate refers to,
+        which this check must never do. Fail-open (empty list) on ANY
+        error/timeout/malformed response: this check must never block or
+        meaningfully slow promotion, and an empty list is treated by the
+        caller as "unresolved", which falls through to the existing
+        heuristic-only result unchanged.
+        """
+        import requests
+        try:
+            resp = requests.get(
+                "https://www.wikidata.org/w/api.php",
+                params={
+                    "action": "wbsearchentities",
+                    "search": name,
+                    "language": "en",
+                    "format": "json",
+                    "type": "item",
+                    "limit": 5,
+                },
+                headers={"User-Agent": "ORM-Intelligence-Platform/1.0 (entity-discovery candidate check)"},
+                timeout=5,
+            )
+            if resp.status_code != 200:
+                return []
+            results = (resp.json() or {}).get("search") or []
+            name_lower = name.strip().lower()
+            return [r for r in results if (r.get("label") or "").strip().lower() == name_lower]
+        except Exception as exc:
+            logger.warning("wikidata_search_failed", candidate=name, error=str(exc))
+            return []
+
+    def _wikidata_get_p31(self, qid: str) -> set:
+        """Fetches the P31 ("instance of") claim values for one Wikidata QID.
+        Fail-open (empty set) on any error -- an empty set is indistinguishable
+        from "no claims data" to the caller, which treats it as unresolved."""
+        import requests
+        try:
+            resp = requests.get(
+                "https://www.wikidata.org/w/api.php",
+                params={"action": "wbgetentities", "ids": qid, "props": "claims", "format": "json"},
+                headers={"User-Agent": "ORM-Intelligence-Platform/1.0 (entity-discovery candidate check)"},
+                timeout=5,
+            )
+            if resp.status_code != 200:
+                return set()
+            data = resp.json() or {}
+            claims = ((data.get("entities") or {}).get(qid) or {}).get("claims") or {}
+            ids = set()
+            for c in claims.get("P31") or []:
+                val = (((c.get("mainsnak") or {}).get("datavalue") or {}).get("value") or {})
+                if isinstance(val, dict) and val.get("id"):
+                    ids.add(val["id"])
+            return ids
+        except Exception as exc:
+            logger.warning("wikidata_get_claims_failed", qid=qid, error=str(exc))
+            return set()
+
+    def _wikidata_resolve(self, name: str) -> tuple:
+        """
+        Resolves a candidate name against Wikidata. Cached (see
+        _WIKIDATA_CACHE_MAXSIZE) since promotion re-validates every
+        not-yet-promoted candidate on every document processed.
+
+        Returns (status, p31_ids, detail):
+          "resolved"   -- exactly one real-world type agreed on by every
+                          exact-label match found; p31_ids is that match's
+                          (or those matches' combined) instance-of QID set.
+          "ambiguous"  -- 2+ exact-label matches exist and disagree on
+                          human-vs-not (e.g. the name is both a real person
+                          and a real company on Wikidata) -- flagged for
+                          review, never auto-decided.
+          "unresolved" -- no confident exact-label match, or a match was
+                          found but its claims couldn't be fetched. Callers
+                          treat this as "no evidence either way" and fall
+                          through to the existing heuristic-only result.
+        """
+        cache_key = name.strip().lower()
+        cached = self._wikidata_cache.get(cache_key)
+        if cached is not None:
+            self._wikidata_cache.move_to_end(cache_key)
+            return cached
+
+        matches = self._wikidata_search(name)
+        if not matches:
+            result = ("unresolved", set(), "no exact Wikidata label match")
+        else:
+            per_match = []
+            for m in matches:
+                p31 = self._wikidata_get_p31(m["id"])
+                if not p31:
+                    continue
+                is_human = EntityDiscoveryConfig.WIKIDATA_HUMAN_QID in p31
+                per_match.append((is_human, p31, f"{m['id']} ({m.get('description') or 'no description'})"))
+
+            if not per_match:
+                result = ("unresolved", set(), "matched but no claims data available")
+            elif len({is_human for is_human, _, _ in per_match}) > 1:
+                detail = "; ".join(d for _, _, d in per_match)
+                result = ("ambiguous", set(), detail)
+            else:
+                combined_p31 = set().union(*[p31 for _, p31, _ in per_match])
+                detail = "; ".join(d for _, _, d in per_match)
+                result = ("resolved", combined_p31, detail)
+
+        self._wikidata_cache[cache_key] = result
+        self._wikidata_cache.move_to_end(cache_key)
+        if len(self._wikidata_cache) > self._WIKIDATA_CACHE_MAXSIZE:
+            self._wikidata_cache.popitem(last=False)
+        return result
+
+    def _check_person_via_kb(self, name: str) -> tuple:
+        """Returns (allow, outcome, reason) for a candidate about to be
+        promoted to entity_type='person'. outcome is one of "confirmed",
+        "ambiguous", "rejected", "unresolved" -- kept distinct from `allow`
+        so callers can log an ambiguous (needs manual review) case under a
+        different, greppable event name than a confident rejection, per the
+        "flag ambiguous/unresolved for review rather than silently
+        auto-deciding" requirement. allow=True on "unresolved" (no evidence
+        either way -- never blocks a real but obscure person for lacking a
+        Wikidata page) and on a confirmed human. allow=False on a confident
+        non-human resolution or a genuine ambiguous split."""
+        status, p31, detail = self._wikidata_resolve(name)
+        if status == "unresolved":
+            return True, "unresolved", f"no confident Wikidata match ({detail}) -- proceeding on existing heuristic result"
+        if status == "ambiguous":
+            return False, "ambiguous", f"ambiguous Wikidata matches, needs manual review: {detail}"
+        if EntityDiscoveryConfig.WIKIDATA_HUMAN_QID in p31:
+            return True, "confirmed", f"Wikidata confirms human: {detail}"
+        return False, "rejected", f"Wikidata confirms this is NOT a person: {detail}"
+
+    def _check_competitor_via_kb(self, name: str) -> tuple:
+        """Returns (allow, outcome, reason) for a candidate about to be
+        promoted to entity_type='competitor'. See _check_person_via_kb's
+        docstring for the outcome/allow distinction. allow=True on
+        "unresolved" (never blocks a real but obscure business for lacking a
+        Wikidata page, or for having a legitimate business P31 value not in
+        the curated disallow-list). allow=False only on positive
+        disconfirming evidence: a confirmed human, a confirmed member of
+        WIKIDATA_NON_COMPETITOR_QIDS, or a genuine ambiguous split."""
+        status, p31, detail = self._wikidata_resolve(name)
+        if status == "unresolved":
+            return True, "unresolved", f"no confident Wikidata match ({detail}) -- proceeding on existing heuristic result"
+        if status == "ambiguous":
+            return False, "ambiguous", f"ambiguous Wikidata matches, needs manual review: {detail}"
+        if EntityDiscoveryConfig.WIKIDATA_HUMAN_QID in p31:
+            return False, "rejected", f"Wikidata confirms this is a person, not a business: {detail}"
+        if p31 & EntityDiscoveryConfig.WIKIDATA_NON_COMPETITOR_QIDS:
+            return False, "rejected", f"Wikidata confirms this is not a viable competitor entity: {detail}"
+        return True, "confirmed", f"Wikidata does not disconfirm a business entity: {detail}"
 
     def extract_ner_entities(self, text: str) -> List[Dict[str, Any]]:
         """Extract PERSON and ORG entities using spaCy NER"""
@@ -326,6 +538,7 @@ class EntityDiscoveryEngine:
                 result = self._process_person_entity(
                     db, client_id, entity_name, document_id,
                     source_text=document.normalized_content,
+                    self_reference_terms=org_self_reference_terms,
                 )
                 if result == "candidate_created":
                     results["executive_candidates_created"] += 1
@@ -358,6 +571,7 @@ class EntityDiscoveryEngine:
         person_name: str,
         document_id: str,
         source_text: Optional[str] = None,
+        self_reference_terms: Optional[set] = None,
     ) -> str:
         """
         Process a PERSON entity:
@@ -467,7 +681,7 @@ class EntityDiscoveryEngine:
             return "candidate_updated"
         
         # Layered validation of the candidate
-        is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(person_name, db, client_id, source_text=source_text)
+        is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(person_name, db, client_id, source_text=source_text, self_reference_terms=self_reference_terms)
         if not is_valid:
             logger.info(
                 "executive_candidate_rejected",
@@ -756,7 +970,7 @@ class EntityDiscoveryEngine:
                 return tok.text
         return None
 
-    def _is_valid_person_name_layered(self, name: str, db: Session, client_id: str, source_text: Optional[str] = None) -> tuple[bool, str, str]:
+    def _is_valid_person_name_layered(self, name: str, db: Session, client_id: str, source_text: Optional[str] = None, self_reference_terms: Optional[set] = None) -> tuple[bool, str, str]:
         """
         Validate candidate name across 5 layers.
         Returns: (is_valid, validation_layer, reason)
@@ -868,6 +1082,29 @@ class EntityDiscoveryEngine:
             p_lower = part.lower().rstrip(".,")
             if p_lower in self._LEGAL_SUFFIXES or p_lower in EntityDiscoveryConfig.CORPORATE_ENTITY_NOUNS:
                 return False, "Layer 7 — Corporate Entity Noun Filter", f"Matches corporate-entity noun: '{p_lower}'"
+
+        # Layer 8 — Client Self-Reference Filter. The ORG path
+        # (_is_valid_org_name_layered's Layer O2) has always checked this;
+        # the person path never did, which is the actual reason "Godrej
+        # Plots"/"Godrej Samaris" (the client's own housing projects, not
+        # people) reached entity_type='person' -- they clear every layer
+        # above on shape alone, and a downstream Wikidata check can't help
+        # here either (confirmed live: neither name has any Wikidata entry
+        # to check against). Reuses _client_self_reference_terms() -- the
+        # exact same brand/alias/product term set the ORG path already
+        # builds -- rather than inventing a second definition of "the
+        # client's own identity" that could drift from it. Word-boundary
+        # aligned (startswith term + " "), same as Layer O2's sub-brand
+        # check, so this only catches "Godrej <something>", not an
+        # unrelated person who happens to share the brand's name.
+        terms = {t.lower() for t in (self_reference_terms or set()) if t}
+        if terms:
+            name_lower = name_clean.lower()
+            for term in terms:
+                if not term:
+                    continue
+                if name_lower == term or name_lower.startswith(term + " "):
+                    return False, "Layer 8 — Client Self-Reference Filter", f"Matches the client's own identity term '{term}' -- not a person"
 
         return True, "", ""
 
@@ -1612,6 +1849,33 @@ class EntityDiscoveryEngine:
                         )
                         continue
 
+                    # Wikidata knowledge-base check (Day 3-5 item): last-gate
+                    # sanity check that this candidate is a real, viable
+                    # business, not e.g. a government agency/building/place
+                    # (the Pentagon-style false positive) that happens to
+                    # pass every shape/heuristic layer above. Runs only here
+                    # -- once a candidate has already cleared shape
+                    # validation, thresholds, and the near-dup guard, i.e.
+                    # only for candidates genuinely about to be promoted, not
+                    # on every candidate on every document (see
+                    # _WIKIDATA_CACHE_MAXSIZE's comment for why that distinction
+                    # matters). No promotion/schema state changes on the
+                    # ambiguous/rejected outcome -- the candidate simply stays
+                    # unpromoted, same as any other rejection layer in this
+                    # file, distinguishable in logs by event name for review.
+                    kb_allow, kb_outcome, kb_reason = self._check_competitor_via_kb(candidate.organization_name)
+                    if not kb_allow:
+                        logger.info(
+                            "competitor_candidate_kb_check_ambiguous" if kb_outcome == "ambiguous"
+                            else "competitor_candidate_kb_check_rejected",
+                            client_id=client_id,
+                            candidate_name=candidate.organization_name,
+                            reason=kb_reason,
+                            confidence=candidate.confidence,
+                            mention_count=candidate.mention_count,
+                        )
+                        continue
+
                     # Advisory locks above cover candidate creation/update, not this
                     # promotion path — two concurrent promotion calls could both reach
                     # here for the same candidate. SAVEPOINT-isolate the insert (same
@@ -1713,16 +1977,21 @@ class EntityDiscoveryEngine:
             ExecutiveCandidate.client_id == client_id,
             ExecutiveCandidate.promoted_to_executive_id.is_(None)
         ).all()
-        
+
         promoted_count = 0
         promoted_executives = []
-        
+
+        # Built once per batch, not per candidate -- same reuse discipline
+        # promote_competitor_candidates() already applies for its own
+        # self-reference/source term sets below.
+        self_reference_terms = self._client_self_reference_terms(db, client_id)
+
         for candidate in candidates:
             # 1. Validation Layers check. Fix 1 (round 3): same full-sentence
             # context creation-time validation now has, from this candidate's
             # first source document.
             source_text = self._first_source_document_text(db, candidate.source_documents)
-            is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(candidate.name, db, client_id, source_text=source_text)
+            is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(candidate.name, db, client_id, source_text=source_text, self_reference_terms=self_reference_terms)
             if not is_valid:
                 logger.info(
                     "executive_candidate_rejected",
@@ -1788,6 +2057,28 @@ class EntityDiscoveryEngine:
                         reason="Name is a near-duplicate spelling variant of an existing promoted "
                                "executive for this client — needs manual review before promoting "
                                "or merging, not auto-promoted."
+                    )
+                    continue
+
+                # Wikidata knowledge-base check (Day 3-5 item): last-gate
+                # sanity check that this candidate is a real human, not e.g.
+                # one of the client's own product/project names (Godrej's
+                # own housing projects -- "Godrej Plots", "Godrej Samaris" --
+                # were confirmed live promoted this way) that happens to
+                # pass every shape/heuristic layer above. See
+                # promote_competitor_candidates()'s identical check for why
+                # this only runs here, once a candidate has already cleared
+                # shape validation, thresholds, and the near-dup guard.
+                kb_allow, kb_outcome, kb_reason = self._check_person_via_kb(promoted_name)
+                if not kb_allow:
+                    logger.info(
+                        "executive_candidate_kb_check_ambiguous" if kb_outcome == "ambiguous"
+                        else "executive_candidate_kb_check_rejected",
+                        candidate=candidate.name,
+                        normalized_candidate=promoted_name,
+                        reason=kb_reason,
+                        confidence=candidate.confidence,
+                        mention_count=candidate.mention_count,
                     )
                     continue
 

@@ -836,7 +836,8 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
     # render "this doesn't look like a valid person name" instead of
     # silently collapsing both into one message.
     is_valid, reject_layer, reject_reason = entity_discovery_engine._is_valid_person_name_layered(
-        name, db, str(client_id), source_text=None
+        name, db, str(client_id), source_text=None,
+        self_reference_terms=entity_discovery_engine._client_self_reference_terms(db, str(client_id)),
     )
     if not is_valid:
         return {"status": "invalid_name", "reason": reject_reason, "layer": reject_layer}
