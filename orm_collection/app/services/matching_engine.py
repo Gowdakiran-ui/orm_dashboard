@@ -63,7 +63,39 @@ def get_client_boost_terms(db: Session, client_id) -> Dict[str, Set[str]]:
         if kw.keyword_text:
             product_terms.add(kw.keyword_text.lower())
 
-    return {"executive_terms": executive_terms, "product_terms": product_terms}
+    # Brand co-occurrence gate (see process_document below): the client's
+    # own Entity(entity_type="brand") name/aliases, same entity_type this
+    # week's downstream reputation/risk/narrative/trend gates already query
+    # (reputation_engine.py's "brand_or_product_ids", entity_type IN
+    # ("brand", "product")) -- product_terms above already covers the
+    # "product" half of that pair, this adds the "brand" half.
+    brand_terms: Set[str] = set()
+    brand_entities = db.query(Entity).filter(
+        Entity.client_id == client_id,
+        Entity.entity_type == "brand"
+    ).all()
+    for b in brand_entities:
+        if b.name:
+            brand_terms.add(b.name.lower())
+        for alias in b.aliases:
+            if alias.alias_text:
+                brand_terms.add(alias.alias_text.lower())
+
+    return {"executive_terms": executive_terms, "product_terms": product_terms, "brand_terms": brand_terms}
+
+# Staged rollout for the brand co-occurrence gate in
+# GlobalMatchingEngine.process_document() (see that method's docstring).
+# Deliberately client_id-scoped rather than global: enabled first for
+# Anthropic and Godrej -- the two accounts under the most active scrutiny
+# this week -- so contamination reduction and false-negative risk can be
+# watched on real live-processed documents before other clients are
+# affected. Expand this set (or remove the check entirely once every
+# client is enabled) after that watch period; do not add new clients here
+# without the same live-verification this initial set got.
+BRAND_GATE_ROLLOUT_CLIENT_IDS = {
+    "4abba1b2-80af-4032-b734-6690d00e64ed",  # Anthropic
+    "af7e3278-1032-43b6-aa4e-217bcf9eab27",  # Godrej Properties
+}
 
 class MatchingEngineConfig:
     """
@@ -381,14 +413,44 @@ class GlobalMatchingEngine:
         """
         Process a document, save matches, and record metrics.
         Legacy method kept for compatibility.
+
+        Brand co-occurrence gate: this is the actual live write path for
+        DocumentMatch (wired via document_service.py at collection time) --
+        unlike evaluate_match_accuracy()/EntityMatchingBatchProcessor, which
+        never runs against this table in production (confirmed live: every
+        document_matches row has match_confidence=1.0, match_metadata=NULL,
+        the signature of this method, not the scored path). Confirmed live
+        via Anthropic's "Trump" entity (entity_type=competitor): 18 of its
+        28 document_matches rows are Tesla/Nvidia/Google articles with zero
+        Anthropic brand/product co-occurrence -- same contamination pattern
+        already gated downstream (on entity_mentions, a different table)
+        this week in reputation_engine.py et al. Requires the matched
+        entity's own client to have a brand/product entity whose name/alias
+        text appears somewhere in this document before writing a match for
+        that client. Skipped (not rejected) for a client with no brand/
+        product entities configured at all -- same honest limitation as
+        get_client_boost_terms's existing executive/product boosts.
         """
         start_time = time.time()
         matches = self.find_matches(text)
-        
+
+        doc_text_lower = text.lower()
+        boost_terms_by_client: Dict[str, Dict[str, Set[str]]] = {}
+
         unique_entities = set()
         db_matches = []
         for m in matches:
             if m["entity_id"] not in unique_entities:
+                client_id = m["client_id"]
+                if client_id in BRAND_GATE_ROLLOUT_CLIENT_IDS:
+                    if client_id not in boost_terms_by_client:
+                        boost_terms_by_client[client_id] = get_client_boost_terms(db, client_id)
+                    boost_terms = boost_terms_by_client[client_id]
+
+                    brand_or_product_terms = boost_terms["brand_terms"] | boost_terms["product_terms"]
+                    if brand_or_product_terms and not any(t in doc_text_lower for t in brand_or_product_terms):
+                        continue
+
                 unique_entities.add(m["entity_id"])
                 db_matches.append(DocumentMatch(
                     document_id=document_id,
@@ -397,7 +459,7 @@ class GlobalMatchingEngine:
                     match_confidence=m["confidence"],
                     matched_text=m.get("matched_keyword", "[Hidden/Aggregated]")
                 ))
-                
+
         if db_matches:
             db.add_all(db_matches)
             
