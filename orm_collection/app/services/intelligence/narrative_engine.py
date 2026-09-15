@@ -982,6 +982,77 @@ class NarrativeEngine:
         topics = db.query(Topic).filter(Topic.id.in_(topic_ids)).all()
         topic_map = {t.id: t for t in topics}
 
+        # P3 — Batch Database Access: Preload all sentiments
+        sentiments = db.query(DocumentSentiment).filter(DocumentSentiment.document_id.in_(doc_ids)).all()
+        sentiment_map = {s.document_id: s.sentiment_score for s in sentiments}
+
+        # P3 — Batch Database Access: Preload all RiskEvents. Same
+        # competitor exclusion as the document pool above -- a document that
+        # mentions both this client's brand AND a tracked competitor (e.g.
+        # a settled dispute story) must not let the competitor's own
+        # RiskEvent row inflate this client's narrative risk_score.
+        risks = db.query(RiskEvent).outerjoin(
+            Entity, Entity.id == RiskEvent.entity_id
+        ).filter(
+            RiskEvent.client_id == client_id,
+            RiskEvent.document_id.in_(doc_ids),
+            or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
+        ).all()
+        risk_map = {}
+        for r in risks:
+            risk_map.setdefault(r.document_id, []).append(r)
+
+        # P3 — Batch Database Access: Preload all TrendEvents
+        trends = db.query(TrendEvent).filter(
+            TrendEvent.client_id == client_id,
+            TrendEvent.trend_type == "Topic",
+            TrendEvent.topic_id.in_(topic_ids)
+        ).all()
+        trend_map = {}
+        for tr in trends:
+            trend_map.setdefault(tr.topic_id, []).append(tr)
+
+        # P3 — Batch Database Access: Preload all Alerts
+        alerts = db.query(Alert).filter(
+            Alert.client_id == client_id,
+            Alert.document_id.in_(doc_ids)
+        ).all()
+        alert_map = {}
+        for a in alerts:
+            alert_map.setdefault(a.document_id, []).append(a)
+
+        # P3 — Batch Database Access: Preload all EntityMentions (including Entity details) for these documents
+        all_mentions = db.query(EntityMention).join(Entity).filter(
+            EntityMention.document_id.in_(doc_ids)
+        ).all()
+        mention_map = {}
+        for m in all_mentions:
+            mention_map.setdefault(m.document_id, []).append(m)
+
+        # P4 — Incident Cluster Optimization: Precompute and cache document title tokens
+        token_cache = {}
+        for d in documents:
+            token_cache[d.id] = set(w.lower() for w in (d.title or "").split() if len(w) > 3)
+
+        # Entity-overlap clustering signal, supplementing the title-Jaccard
+        # check below. Two real news articles about the same event rarely
+        # share 25% of their title words verbatim (confirmed live — with
+        # only the title check, 108 real Tesla documents produced almost
+        # entirely singleton clusters and zero narratives ever cleared the
+        # evidence gate; see NLP_AUDIT_REPORT.md Part 4), but they do tend to
+        # mention the same specific people/companies. The client's own brand
+        # entity is excluded from this signal: since every document here was
+        # matched to this client via that exact entity, it is present on
+        # ~100% of documents and would collapse an entire topic into one
+        # mega-cluster rather than distinguishing real events.
+        brand_entity_id = next((e.id for e in client_entities if e.entity_type == "brand"), None)
+        entity_cache = {}
+        for d in documents:
+            entity_cache[d.id] = {
+                m.entity_id for m in mention_map.get(d.id, [])
+                if m.entity_id != brand_entity_id
+            }
+
         # Inverse index: document_id -> its DocumentTopic rows. Used both to
         # restrict the narrative pool to documents that have >=1 topic
         # assignment (same eligibility topic_docs_map enforced before) and,
