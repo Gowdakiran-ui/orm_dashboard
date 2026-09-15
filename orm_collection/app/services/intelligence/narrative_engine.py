@@ -970,10 +970,11 @@ class NarrativeEngine:
         # Explicit ORDER BY (document_id as a stable tiebreak) -- an
         # unordered IN(...) query has no guaranteed row order across runs
         # with identical data (plan change, autovacuum, etc.), and this
-        # list seeds topic_docs_map below, which the per-topic cluster-build
-        # loop further sorts by published_at with its own tiebreak (see
-        # docs.sort() below) -- ordering it here too keeps every stage of
-        # this pipeline deterministic, not just the final sort.
+        # list seeds doc_topic_entries below, which the cluster-build loop
+        # further sorts by published_at with its own tiebreak (see
+        # narrative_pool_docs.sort() below) -- ordering it here too keeps
+        # every stage of this pipeline deterministic, not just the final
+        # sort.
         doc_topics = db.query(DocumentTopic).filter(
             DocumentTopic.document_id.in_(doc_ids)
         ).order_by(DocumentTopic.document_id, DocumentTopic.topic_id).all()
@@ -981,128 +982,77 @@ class NarrativeEngine:
         topics = db.query(Topic).filter(Topic.id.in_(topic_ids)).all()
         topic_map = {t.id: t for t in topics}
 
-        # Map topic_id -> list of Document objects
-        topic_docs_map = {}
+        # Inverse index: document_id -> its DocumentTopic rows. Used both to
+        # restrict the narrative pool to documents that have >=1 topic
+        # assignment (same eligibility topic_docs_map enforced before) and,
+        # per resulting cluster below, to compute every topic that cluster's
+        # documents carry.
+        doc_topic_entries = {}
         for dt in doc_topics:
-            d = doc_map.get(dt.document_id)
-            if d:
-                topic_docs_map.setdefault(dt.topic_id, []).append(d)
+            doc_topic_entries.setdefault(dt.document_id, []).append(dt)
 
-        # P3 — Batch Database Access: Preload all sentiments
-        sentiments = db.query(DocumentSentiment).filter(DocumentSentiment.document_id.in_(doc_ids)).all()
-        sentiment_map = {s.document_id: s.sentiment_score for s in sentiments}
+        # Narrative-splitting fix (one article -> multiple narratives):
+        # incident clustering used to run once per topic_id (iterating
+        # topic_docs_map), so a single multi-topic document was independently
+        # re-clustered under each of its topics and produced one narrative
+        # row per topic -- confirmed live on Godrej, one Q4-results article
+        # produced separate "Financial Performance", "Market Position", and
+        # "Executive Leadership" narrative rows for the same document set.
+        # Clustering now runs once across the client's whole narrative-
+        # eligible document pool; topics are attached to the resulting
+        # cluster as metadata afterward (see cluster_topic_ids below),
+        # instead of being a second axis clustering happens along. The
+        # clustering signals themselves (3-day window, 0.25 title-Jaccard,
+        # entity-overlap, 40% dominant-entity exclusion, full-membership
+        # matching) are unchanged -- confirmed against real production
+        # cluster spans before this change, all well inside the 3-day
+        # window -- only their scope moved from per-topic to per-client.
+        narrative_pool_docs = [d for d in documents if d.id in doc_topic_entries]
 
-        # P3 — Batch Database Access: Preload all RiskEvents. Same
-        # competitor exclusion as the document pool above -- a document that
-        # mentions both this client's brand AND a tracked competitor (e.g.
-        # a settled dispute story) must not let the competitor's own
-        # RiskEvent row inflate this client's narrative risk_score.
-        risks = db.query(RiskEvent).outerjoin(
-            Entity, Entity.id == RiskEvent.entity_id
-        ).filter(
-            RiskEvent.client_id == client_id,
-            RiskEvent.document_id.in_(doc_ids),
-            or_(Entity.entity_type != "competitor", RiskEvent.entity_id.is_(None)),
-        ).all()
-        risk_map = {}
-        for r in risks:
-            risk_map.setdefault(r.document_id, []).append(r)
+        # Sort documents by publication date to ensure identical incident
+        # grouping order. `str(d.id)` tiebreak: two documents can share
+        # the exact same published_at/collected_at timestamp, and a bare
+        # date-only sort key leaves ties in whatever order they arrived
+        # in (itself not guaranteed stable across runs -- see the
+        # doc_topics query above). Without a total order here, which
+        # document lands first in a cluster -- and therefore which one
+        # becomes `ref_doc`/seeds `narrative_name` below -- could change
+        # between two runs over identical data, breaking both the RCA
+        # cache-reuse lookup (keyed on narrative_name) and the
+        # uq_client_narrative upsert target.
+        narrative_pool_docs.sort(key=lambda d: (d.published_at or d.collected_at, str(d.id)))
 
-        # P3 — Batch Database Access: Preload all TrendEvents
-        trends = db.query(TrendEvent).filter(
-            TrendEvent.client_id == client_id,
-            TrendEvent.trend_type == "Topic",
-            TrendEvent.topic_id.in_(topic_ids)
-        ).all()
-        trend_map = {}
-        for tr in trends:
-            trend_map.setdefault(tr.topic_id, []).append(tr)
-
-        # P3 — Batch Database Access: Preload all Alerts
-        alerts = db.query(Alert).filter(
-            Alert.client_id == client_id,
-            Alert.document_id.in_(doc_ids)
-        ).all()
-        alert_map = {}
-        for a in alerts:
-            alert_map.setdefault(a.document_id, []).append(a)
-
-        # P3 — Batch Database Access: Preload all EntityMentions (including Entity details) for these documents
-        all_mentions = db.query(EntityMention).join(Entity).filter(
-            EntityMention.document_id.in_(doc_ids)
-        ).all()
-        mention_map = {}
-        for m in all_mentions:
-            mention_map.setdefault(m.document_id, []).append(m)
-
-        # P4 — Incident Cluster Optimization: Precompute and cache document title tokens
-        token_cache = {}
-        for d in documents:
-            token_cache[d.id] = set(w.lower() for w in (d.title or "").split() if len(w) > 3)
-
-        # Entity-overlap clustering signal, supplementing the title-Jaccard
-        # check below. Two real news articles about the same event rarely
-        # share 25% of their title words verbatim (confirmed live — with
-        # only the title check, 108 real Tesla documents produced almost
-        # entirely singleton clusters and zero narratives ever cleared the
-        # evidence gate; see NLP_AUDIT_REPORT.md Part 4), but they do tend to
-        # mention the same specific people/companies. The client's own brand
-        # entity is excluded from this signal: since every document here was
-        # matched to this client via that exact entity, it is present on
-        # ~100% of documents and would collapse an entire topic into one
-        # mega-cluster rather than distinguishing real events.
-        brand_entity_id = next((e.id for e in client_entities if e.entity_type == "brand"), None)
-        entity_cache = {}
-        for d in documents:
-            entity_cache[d.id] = {
-                m.entity_id for m in mention_map.get(d.id, [])
-                if m.entity_id != brand_entity_id
-            }
-
-        for topic_id, docs in topic_docs_map.items():
-            topic = topic_map.get(topic_id)
-            if not topic or not docs:
-                continue
-
-            # Sort documents by publication date to ensure identical incident
-            # grouping order. `str(d.id)` tiebreak: two documents can share
-            # the exact same published_at/collected_at timestamp, and a bare
-            # date-only sort key leaves ties in whatever order they arrived
-            # in (itself not guaranteed stable across runs -- see the
-            # doc_topics query above). Without a total order here, which
-            # document lands first in a cluster -- and therefore which one
-            # becomes `ref_doc`/seeds `narrative_name` below -- could change
-            # between two runs over identical data, breaking both the RCA
-            # cache-reuse lookup (keyed on narrative_name) and the
-            # uq_client_narrative upsert target.
-            docs.sort(key=lambda d: (d.published_at or d.collected_at, str(d.id)))
-
+        incident_clusters = []
+        if narrative_pool_docs:
             # Dominant-entity exclusion (generalizes the brand-entity
             # exclusion above to any entity, not just the client's own
             # brand). Confirmed live: a heavily-tracked competitor or person
             # entity (e.g. "Google" as a competitor entity, or a frequently
-            # quoted executive) can appear on most of a topic's documents in
-            # a run, which makes shares_entity below true for nearly any
-            # pair of that topic's articles regardless of whether they're
-            # about the same real event -- the same mega-cluster collapse
-            # the brand exclusion was designed to prevent, just triggered by
-            # a different entity. Any non-brand entity present on more than
-            # 40% of this topic's documents this run is excluded from the
-            # overlap signal the same way brand_entity_id already is. 40% is
-            # deliberately high enough that a real 2-3 document breaking-news
-            # cluster sharing one specific person/company isn't penalized.
-            topic_doc_count = len(docs)
+            # quoted executive) can appear on most of this pool's documents
+            # in a run, which makes shares_entity below true for nearly any
+            # pair of articles regardless of whether they're about the same
+            # real event -- the same mega-cluster collapse the brand
+            # exclusion was designed to prevent, just triggered by a
+            # different entity. Any non-brand entity present on more than
+            # 40% of this run's narrative-eligible documents is excluded
+            # from the overlap signal the same way brand_entity_id already
+            # is. 40% is deliberately high enough that a real 2-3 document
+            # breaking-news cluster sharing one specific person/company
+            # isn't penalized. Threshold denominator is now the whole
+            # client pool (was: the single topic's doc count) since
+            # clustering itself moved to that same scope.
+            pool_doc_count = len(narrative_pool_docs)
             entity_doc_counts = {}
-            for d in docs:
+            for d in narrative_pool_docs:
                 for eid in entity_cache.get(d.id, set()):
                     entity_doc_counts[eid] = entity_doc_counts.get(eid, 0) + 1
             dominant_entities = {
                 eid for eid, count in entity_doc_counts.items()
-                if topic_doc_count > 0 and (count / topic_doc_count) > 0.4
+                if pool_doc_count > 0 and (count / pool_doc_count) > 0.4
             }
-            topic_entity_cache = {
+            pool_entity_cache = {
                 d.id: (entity_cache.get(d.id, set()) - dominant_entities)
-                for d in docs
+                for d in narrative_pool_docs
             }
 
             # P4 — Incident Cluster Optimization: Time-window clustering using
@@ -1135,11 +1085,10 @@ class NarrativeEngine:
             # as it satisfied seed-only agreement -- there's no drift to
             # catch. That's a limitation of the entity-frequency threshold
             # (dominant_entities above), not of this matching change.
-            incident_clusters = []
-            for doc in docs:
+            for doc in narrative_pool_docs:
                 matched_cluster = None
                 doc_tokens = token_cache.get(doc.id, set())
-                doc_entities = topic_entity_cache.get(doc.id, set())
+                doc_entities = pool_entity_cache.get(doc.id, set())
 
                 for cluster in incident_clusters:
                     all_members_match = True
@@ -1154,7 +1103,7 @@ class NarrativeEngine:
                         union = doc_tokens.union(member_tokens)
                         similarity = len(intersection) / len(union) if union else 0.0
 
-                        member_entities = topic_entity_cache.get(member.id, set())
+                        member_entities = pool_entity_cache.get(member.id, set())
                         shares_entity = bool(doc_entities and member_entities and (doc_entities & member_entities))
 
                         if not (similarity >= 0.25 or shares_entity or (not doc_tokens and not member_tokens)):
@@ -1175,7 +1124,7 @@ class NarrativeEngine:
 
             # LLM-assisted split for oversized clusters. Pure post-pass over
             # the already-computed mechanical result, before any DB writes
-            # for this topic -- a failure here (see
+            # for this client -- a failure here (see
             # _llm_verify_and_split_cluster's own contract) just means the
             # mechanical cluster is kept exactly as-is, so this can never
             # block or corrupt narrative calculation.
@@ -1190,318 +1139,357 @@ class NarrativeEngine:
                 refined_clusters.append(cluster)
             incident_clusters = refined_clusters
 
-            for idx, cluster in enumerate(incident_clusters):
-                t_narrative_start = time.perf_counter()
-                cluster_docs = cluster["documents"]
-                cluster_doc_ids = [d.id for d in cluster_docs]
-                top_doc_title = cluster["ref_doc"].title or "No Title Available"
+        for idx, cluster in enumerate(incident_clusters):
+            # Attach topics as metadata on the single resulting cluster,
+            # instead of clustering along a second (topic) axis: gather
+            # every topic any of this cluster's documents carry, and pick a
+            # deterministic "primary" topic (most cluster documents tagged
+            # with it; ties broken by summed DocumentTopic.confidence_score,
+            # then topic_id) to drive the narrative's name/type/status and
+            # the existing topic-level TrendEvent/TOPIC_WEIGHTS lookups --
+            # same semantics those already had per-topic, just resolved once
+            # per cluster now instead of once per topic.
+            cluster_doc_ids = [d.id for d in cluster["documents"]]
+            topic_doc_counts = {}
+            topic_confidence_sums = {}
+            cluster_topic_ids = set()
+            for did in cluster_doc_ids:
+                for dt in doc_topic_entries.get(did, []):
+                    cluster_topic_ids.add(dt.topic_id)
+                    topic_doc_counts[dt.topic_id] = topic_doc_counts.get(dt.topic_id, 0) + 1
+                    topic_confidence_sums[dt.topic_id] = topic_confidence_sums.get(dt.topic_id, 0.0) + (dt.confidence_score or 0.0)
 
-                # Map topic to narrative name
-                mapping = self.narrative_mapping.get(topic.name, {
-                    "name": f"{topic.name} Narrative",
-                    "type": "General"
-                })
+            if not cluster_topic_ids:
+                continue
+
+            primary_topic_id = max(
+                cluster_topic_ids,
+                key=lambda tid: (topic_doc_counts[tid], topic_confidence_sums[tid], str(tid))
+            )
+            topic = topic_map.get(primary_topic_id)
+            if not topic:
+                continue
+            topic_id = primary_topic_id
+
+            t_narrative_start = time.perf_counter()
+            cluster_docs = cluster["documents"]
+            top_doc_title = cluster["ref_doc"].title or "No Title Available"
+
+            # Map topic to narrative name
+            mapping = self.narrative_mapping.get(topic.name, {
+                "name": f"{topic.name} Narrative",
+                "type": "General"
+            })
                 
-                if len(incident_clusters) > 1:
-                    # xoop_ui_clarity_review.md: 40 chars collapsed distinct
-                    # articles into indistinguishable "...And..." / "...With..."
-                    # fragments in the UI, since the full title was never
-                    # stored. 200 chars keeps well within narrative_name's
-                    # String(255) column (longest mapping['name'] is 39 chars)
-                    # and lets the frontend's existing CSS truncation +
-                    # title= tooltip do the display-layer clipping instead.
-                    title_snippet = top_doc_title[:200] + "..." if len(top_doc_title) > 200 else top_doc_title
-                    narrative_name = f"{mapping['name']} - {title_snippet}"
-                else:
-                    narrative_name = mapping["name"]
+            if len(incident_clusters) > 1:
+                # xoop_ui_clarity_review.md: 40 chars collapsed distinct
+                # articles into indistinguishable "...And..." / "...With..."
+                # fragments in the UI, since the full title was never
+                # stored. 200 chars keeps well within narrative_name's
+                # String(255) column (longest mapping['name'] is 39 chars)
+                # and lets the frontend's existing CSS truncation +
+                # title= tooltip do the display-layer clipping instead.
+                title_snippet = top_doc_title[:200] + "..." if len(top_doc_title) > 200 else top_doc_title
+                narrative_name = f"{mapping['name']} - {title_snippet}"
+            else:
+                narrative_name = mapping["name"]
                     
-                narrative_type = mapping["type"]
+            narrative_type = mapping["type"]
 
-                # Calculate average sentiment from preloaded sentiment map
-                s_scores = [sentiment_map[did] for did in cluster_doc_ids if did in sentiment_map]
-                avg_sentiment = sum(s_scores) / len(s_scores) if s_scores else 0.0
+            # Calculate average sentiment from preloaded sentiment map
+            s_scores = [sentiment_map[did] for did in cluster_doc_ids if did in sentiment_map]
+            avg_sentiment = sum(s_scores) / len(s_scores) if s_scores else 0.0
                 
-                # Calculate Risk Score from preloaded risk map
-                cluster_risks = []
-                for did in cluster_doc_ids:
-                    if did in risk_map:
-                        cluster_risks.extend(risk_map[did])
-                risk_ids = [str(r.id) for r in cluster_risks]
-                risk_event = cluster_risks[0] if cluster_risks else None
-                avg_risk = sum(r.risk_score for r in cluster_risks) / len(cluster_risks) if cluster_risks else 0.0
+            # Calculate Risk Score from preloaded risk map
+            cluster_risks = []
+            for did in cluster_doc_ids:
+                if did in risk_map:
+                    cluster_risks.extend(risk_map[did])
+            risk_ids = [str(r.id) for r in cluster_risks]
+            risk_event = cluster_risks[0] if cluster_risks else None
+            avg_risk = sum(r.risk_score for r in cluster_risks) / len(cluster_risks) if cluster_risks else 0.0
                 
-                # Retrieve Trend Event from preloaded trend map
-                topic_trends = trend_map.get(topic_id, [])
-                trend_event = None
-                if topic_trends:
-                    # Find latest trend event by created_at
-                    trend_event = max(topic_trends, key=lambda tr: tr.created_at)
-                trend_ids = [str(tr.id) for tr in topic_trends]
-                trend_strength = trend_event.percentage_change if trend_event else 0.0
+            # Retrieve Trend Event from preloaded trend map
+            topic_trends = trend_map.get(topic_id, [])
+            trend_event = None
+            if topic_trends:
+                # Find latest trend event by created_at
+                trend_event = max(topic_trends, key=lambda tr: tr.created_at)
+            trend_ids = [str(tr.id) for tr in topic_trends]
+            trend_strength = trend_event.percentage_change if trend_event else 0.0
 
-                # Retrieve Alerts from preloaded alert map
-                cluster_alerts = []
-                for did in cluster_doc_ids:
-                    if did in alert_map:
-                        cluster_alerts.extend(alert_map[did])
-                alert_ids = [str(a.id) for a in cluster_alerts]
+            # Retrieve Alerts from preloaded alert map
+            cluster_alerts = []
+            for did in cluster_doc_ids:
+                if did in alert_map:
+                    cluster_alerts.extend(alert_map[did])
+            alert_ids = [str(a.id) for a in cluster_alerts]
 
-                # Extract Executive & Competitor Mentions from preloaded mention map.
-                # Executives are role-classification-aware and ordered by
-                # prominence (see _rank_prominent_persons) -- competitors are
-                # left as a plain per-cluster mention set, unrelated to this
-                # fix's scope (role classification targets people, not orgs).
-                competitors = set()
-                cluster_entity_ids = set()
-                for did in cluster_doc_ids:
-                    for m in mention_map.get(did, []):
-                        cluster_entity_ids.add(m.entity_id)
-                        if m.entity.entity_type == "competitor":
-                            competitors.add(m.entity.name)
+            # Extract Executive & Competitor Mentions from preloaded mention map.
+            # Executives are role-classification-aware and ordered by
+            # prominence (see _rank_prominent_persons) -- competitors are
+            # left as a plain per-cluster mention set, unrelated to this
+            # fix's scope (role classification targets people, not orgs).
+            competitors = set()
+            cluster_entity_ids = set()
+            for did in cluster_doc_ids:
+                for m in mention_map.get(did, []):
+                    cluster_entity_ids.add(m.entity_id)
+                    if m.entity.entity_type == "competitor":
+                        competitors.add(m.entity.name)
 
-                prominent_persons = self._rank_prominent_persons(cluster_doc_ids, mention_map, risk_map)
-                executors = [name for _, name, _, _, _ in prominent_persons]
-                exec_ids = [str(entity_id) for entity_id, _, _, _, _ in prominent_persons]
-                bystander_only_person_ids = {
-                    m.entity_id
-                    for did in cluster_doc_ids
-                    for m in mention_map.get(did, [])
-                    if m.entity.entity_type == "person"
-                } - {entity_id for entity_id, _, _, _, _ in prominent_persons}
+            prominent_persons = self._rank_prominent_persons(cluster_doc_ids, mention_map, risk_map)
+            executors = [name for _, name, _, _, _ in prominent_persons]
+            exec_ids = [str(entity_id) for entity_id, _, _, _, _ in prominent_persons]
+            bystander_only_person_ids = {
+                m.entity_id
+                for did in cluster_doc_ids
+                for m in mention_map.get(did, [])
+                if m.entity.entity_type == "person"
+            } - {entity_id for entity_id, _, _, _, _ in prominent_persons}
 
-                # Narrative eligibility gate: a cluster only becomes a
-                # tracked Narrative if at least 2 distinct sources contribute
-                # a reach/trust-eligible document (see
-                # NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY above). Checked
-                # before the evidence-score gate below, as a separate
-                # precondition -- a cluster can have a high evidence_score
-                # from a single ineligible-source document (e.g. one
-                # unrecognized-outlet RSS article with an attached risk
-                # event) and still not be a real, multi-source narrative.
-                eligible_cluster_docs = [
-                    d for d in cluster_docs
-                    if is_document_reach_trust_eligible(d.document_type, d.title, d.view_count, d.comment_count)
-                ]
-                eligible_source_diversity = len(set(d.source_id for d in eligible_cluster_docs if d.source_id))
-                if eligible_source_diversity < NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY:
-                    log.info(
-                        "narrative_gated_insufficient_source_diversity",
-                        narrative_name=narrative_name,
-                        eligible_source_diversity=eligible_source_diversity,
-                        doc_count=len(cluster_docs)
-                    )
-                    continue
-
-                # Narrative velocity/growth eligibility gate (see
-                # NARRATIVE_REQUIRE_RISING_TREND above): excludes only a
-                # cluster whose topic has a CONFIRMED FALLING trend (the
-                # same trend_event looked up above and reused below as
-                # trend_strength) -- a fading story doesn't need active
-                # surfacing. EMERGING (no trend_event yet) and RISING both
-                # pass: a brand-new topic is the earliest point to catch a
-                # real reputational risk, and gating it out until it becomes
-                # an established trend would defeat the feature's
-                # early-warning purpose. No RCA is generated and no row is
-                # written for a narrative gated here -- ties AI-generation
-                # cost to the same display-eligibility decision, same
-                # principle as Risk Events' AI Summary.
-                if NARRATIVE_REQUIRE_RISING_TREND and (
-                    trend_event is not None and trend_event.trend_direction == "FALLING"
-                ):
-                    log.info(
-                        "narrative_gated_insufficient_velocity",
-                        narrative_name=narrative_name,
-                        trend_strength=trend_strength,
-                        has_trend_event=trend_event is not None
-                    )
-                    continue
-
-                # Calculate Confidence & Gate
-                source_diversity = len(set(d.source_id for d in cluster_docs if d.source_id))
-                confidence_data = self._calculate_confidence_and_gate(
-                    doc_count=len(cluster_docs),
-                    source_diversity=source_diversity,
-                    has_trend=trend_event is not None,
-                    has_risk=risk_event is not None,
-                    has_alert=len(cluster_alerts) > 0
+            # Narrative eligibility gate: a cluster only becomes a
+            # tracked Narrative if at least 2 distinct sources contribute
+            # a reach/trust-eligible document (see
+            # NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY above). Checked
+            # before the evidence-score gate below, as a separate
+            # precondition -- a cluster can have a high evidence_score
+            # from a single ineligible-source document (e.g. one
+            # unrecognized-outlet RSS article with an attached risk
+            # event) and still not be a real, multi-source narrative.
+            eligible_cluster_docs = [
+                d for d in cluster_docs
+                if is_document_reach_trust_eligible(d.document_type, d.title, d.view_count, d.comment_count)
+            ]
+            eligible_source_diversity = len(set(d.source_id for d in eligible_cluster_docs if d.source_id))
+            if eligible_source_diversity < NARRATIVE_MIN_ELIGIBLE_SOURCE_DIVERSITY:
+                log.info(
+                    "narrative_gated_insufficient_source_diversity",
+                    narrative_name=narrative_name,
+                    eligible_source_diversity=eligible_source_diversity,
+                    doc_count=len(cluster_docs)
                 )
-                
-                confidence_score = confidence_data["final_score"]
-                evidence_score = confidence_data["evidence_score"]
-                is_emerging = confidence_data["is_emerging"]
+                continue
 
-                # Gating threshold check
-                if evidence_score < 1.0:
-                    log.info("narrative_gated_insufficient_evidence", narrative_name=narrative_name, score=evidence_score)
-                    continue
-
-                status = self._determine_status(len(cluster_docs), trend_strength, is_emerging)
-
-                # Generate summary text
-                summary_text = self._generate_executive_summary(
-                    client_name=client.name,
-                    topic_name=topic.name,
-                    doc_count=len(cluster_docs),
-                    top_doc_title=top_doc_title,
-                    avg_sentiment=float(avg_sentiment),
-                    trend_event=trend_event,
-                    risk_event=risk_event,
-                    alerts=cluster_alerts,
-                    narrative_type=narrative_type,
-                    status=status,
-                    confidence_score=confidence_score,
-                    entity_names=entity_names,
-                    executives=list(executors),
-                    competitors=list(competitors),
-                    is_emerging=is_emerging
+            # Narrative velocity/growth eligibility gate (see
+            # NARRATIVE_REQUIRE_RISING_TREND above): excludes only a
+            # cluster whose topic has a CONFIRMED FALLING trend (the
+            # same trend_event looked up above and reused below as
+            # trend_strength) -- a fading story doesn't need active
+            # surfacing. EMERGING (no trend_event yet) and RISING both
+            # pass: a brand-new topic is the earliest point to catch a
+            # real reputational risk, and gating it out until it becomes
+            # an established trend would defeat the feature's
+            # early-warning purpose. No RCA is generated and no row is
+            # written for a narrative gated here -- ties AI-generation
+            # cost to the same display-eligibility decision, same
+            # principle as Risk Events' AI Summary.
+            if NARRATIVE_REQUIRE_RISING_TREND and (
+                trend_event is not None and trend_event.trend_direction == "FALLING"
+            ):
+                log.info(
+                    "narrative_gated_insufficient_velocity",
+                    narrative_name=narrative_name,
+                    trend_strength=trend_strength,
+                    has_trend_event=trend_event is not None
                 )
+                continue
 
-                # Lineage Metadata.
-                # supporting_entities used to be the client's ENTIRE tracked
-                # entity roster (entity_ids, defined once at the top of
-                # calculate_narratives for the whole client), identically on
-                # every single narrative regardless of that narrative's own
-                # documents -- confirmed live, every narrative for a 21-entity
-                # client carried exactly 21 (now 23, stale) ids. Since
-                # executive_reputation_engine.py's Executive Narratives
-                # section attributes a narrative to an executive by checking
-                # `exec_entity.id in supporting_entities`, that check was
-                # trivially true for every executive on every narrative --
-                # the actual mechanism behind FINDINGS.md's Thomas Edison
-                # case (an exec attached to a narrative he was never
-                # mentioned in at all, not merely a bystander in it). Fixed
-                # to the entities genuinely mentioned in THIS cluster's own
-                # documents, with person-type entities further restricted to
-                # non-bystander ones via _rank_prominent_persons.
+            # Calculate Confidence & Gate
+            source_diversity = len(set(d.source_id for d in cluster_docs if d.source_id))
+            confidence_data = self._calculate_confidence_and_gate(
+                doc_count=len(cluster_docs),
+                source_diversity=source_diversity,
+                has_trend=trend_event is not None,
+                has_risk=risk_event is not None,
+                has_alert=len(cluster_alerts) > 0
+            )
+                
+            confidence_score = confidence_data["final_score"]
+            evidence_score = confidence_data["evidence_score"]
+            is_emerging = confidence_data["is_emerging"]
 
-                # RCA (problem_statement/impact/root_cause/recommended_action),
-                # consumed by the AI Advisor card. Only generated for
-                # risk-worthy narratives -- genuinely negative sentiment, OR a
-                # named risk-category topic even if worded neutrally -- the
-                # same "is this actually a risk" definition already used to
-                # stop routine positive/neutral coverage from being treated
-                # as risk elsewhere (risk_engine.py's is_risk_relevant gate).
-                # A positive/neutral, non-risk-topic narrative gets no RCA at
-                # all: there is nothing to root-cause, and the Advisor must
-                # never be able to manufacture a problem out of good news.
-                is_risk_worthy = avg_sentiment < 0 or TOPIC_WEIGHTS.get(topic.name, 0) > 0
-                rca = None
-                if is_risk_worthy:
-                    # Cache: reuse the existing row's RCA when this exact
-                    # narrative (same conflict key) already has one and its
-                    # mention_count hasn't changed -- regenerate only when
-                    # the underlying narrative set changes materially, not
-                    # on every pipeline run.
-                    existing = db.query(Narrative).filter(
-                        Narrative.client_id == client_id,
-                        Narrative.narrative_name == narrative_name,
-                    ).first()
-                    existing_rca = (existing.evidence_metadata or {}).get("rca") if existing else None
-                    if existing and existing.mention_count == len(cluster_docs) and existing_rca:
-                        rca = existing_rca
-                    else:
-                        rca = self._generate_rca(
-                            narrative_name=narrative_name,
-                            topic_name=topic.name,
-                            narrative_type=narrative_type,
-                            avg_sentiment=avg_sentiment,
-                            avg_risk=avg_risk,
-                            mention_count=len(cluster_docs),
-                            source_diversity=source_diversity,
-                            trend_strength=trend_strength,
-                            status=status,
-                            summary_text=summary_text,
-                            sample_titles=[d.title for d in cluster_docs if d.title],
-                            client_name=client.name,
-                            client_id=client_id,
-                            run_id=rid,
-                        )
+            # Gating threshold check
+            if evidence_score < 1.0:
+                log.info("narrative_gated_insufficient_evidence", narrative_name=narrative_name, score=evidence_score)
+                continue
 
-                # "When" for the narrative drawer (Part B explainability
-                # reconciliation): a plain min/max over the same
-                # published_at-or-collected_at values cluster_docs is already
-                # sorted by (see the docs.sort(...) tiebreak above) -- no LLM,
-                # just the real date range the cluster's own documents cover.
-                _cluster_dates = [
-                    (d.published_at or d.collected_at) for d in cluster_docs
-                    if d.published_at or d.collected_at
-                ]
-                date_range = {
-                    "first": min(_cluster_dates).isoformat() if _cluster_dates else None,
-                    "last": max(_cluster_dates).isoformat() if _cluster_dates else None,
-                }
+            status = self._determine_status(len(cluster_docs), trend_strength, is_emerging)
 
-                evidence_metadata = {
-                    "supporting_documents": [str(did) for did in cluster_doc_ids],
-                    "date_range": date_range,
-                    "supporting_risks": risk_ids,
-                    "supporting_trends": trend_ids,
-                    "supporting_alerts": alert_ids,
-                    "supporting_entities": [
-                        str(eid) for eid in cluster_entity_ids
-                        if eid not in bystander_only_person_ids
-                    ],
-                    "supporting_topics": [str(topic_id)],
-                    "supporting_executives": exec_ids,
-                    "confidence_calculation": confidence_data,
-                    "decision_reason": f"Narrative generated with evidence score {evidence_score}.",
-                    "rca": rca,
-                    "evidence_counts": {
-                        "documents": len(cluster_doc_ids),
-                        "risks": len(risk_ids),
-                        "trends": len(trend_ids),
-                        "alerts": len(alert_ids),
-                        "entities": len(cluster_entity_ids) - len(bystander_only_person_ids),
-                        "executives": len(exec_ids)
-                    }
-                }
+            # Generate summary text
+            summary_text = self._generate_executive_summary(
+                client_name=client.name,
+                topic_name=topic.name,
+                doc_count=len(cluster_docs),
+                top_doc_title=top_doc_title,
+                avg_sentiment=float(avg_sentiment),
+                trend_event=trend_event,
+                risk_event=risk_event,
+                alerts=cluster_alerts,
+                narrative_type=narrative_type,
+                status=status,
+                confidence_score=confidence_score,
+                entity_names=entity_names,
+                executives=list(executors),
+                competitors=list(competitors),
+                is_emerging=is_emerging
+            )
 
-                elapsed_narrative_ms = (time.perf_counter() - t_narrative_start) * 1000
+            # Lineage Metadata.
+            # supporting_entities used to be the client's ENTIRE tracked
+            # entity roster (entity_ids, defined once at the top of
+            # calculate_narratives for the whole client), identically on
+            # every single narrative regardless of that narrative's own
+            # documents -- confirmed live, every narrative for a 21-entity
+            # client carried exactly 21 (now 23, stale) ids. Since
+            # executive_reputation_engine.py's Executive Narratives
+            # section attributes a narrative to an executive by checking
+            # `exec_entity.id in supporting_entities`, that check was
+            # trivially true for every executive on every narrative --
+            # the actual mechanism behind FINDINGS.md's Thomas Edison
+            # case (an exec attached to a narrative he was never
+            # mentioned in at all, not merely a bystander in it). Fixed
+            # to the entities genuinely mentioned in THIS cluster's own
+            # documents, with person-type entities further restricted to
+            # non-bystander ones via _rank_prominent_persons.
 
-                # Save point nested transaction commit
-                savepoint = db.begin_nested()
-                try:
-                    stmt = insert(Narrative).values(
-                        id=uuid.uuid4(),
-                        client_id=client_id,
+            # RCA (problem_statement/impact/root_cause/recommended_action),
+            # consumed by the AI Advisor card. Only generated for
+            # risk-worthy narratives -- genuinely negative sentiment, OR a
+            # named risk-category topic even if worded neutrally -- the
+            # same "is this actually a risk" definition already used to
+            # stop routine positive/neutral coverage from being treated
+            # as risk elsewhere (risk_engine.py's is_risk_relevant gate).
+            # A positive/neutral, non-risk-topic narrative gets no RCA at
+            # all: there is nothing to root-cause, and the Advisor must
+            # never be able to manufacture a problem out of good news.
+            is_risk_worthy = avg_sentiment < 0 or TOPIC_WEIGHTS.get(topic.name, 0) > 0
+            rca = None
+            if is_risk_worthy:
+                # Cache: reuse the existing row's RCA when this exact
+                # narrative (same conflict key) already has one and its
+                # mention_count hasn't changed -- regenerate only when
+                # the underlying narrative set changes materially, not
+                # on every pipeline run.
+                existing = db.query(Narrative).filter(
+                    Narrative.client_id == client_id,
+                    Narrative.narrative_name == narrative_name,
+                ).first()
+                existing_rca = (existing.evidence_metadata or {}).get("rca") if existing else None
+                if existing and existing.mention_count == len(cluster_docs) and existing_rca:
+                    rca = existing_rca
+                else:
+                    rca = self._generate_rca(
                         narrative_name=narrative_name,
+                        topic_name=topic.name,
                         narrative_type=narrative_type,
+                        avg_sentiment=avg_sentiment,
+                        avg_risk=avg_risk,
                         mention_count=len(cluster_docs),
-                        sentiment_score=float(avg_sentiment),
-                        risk_score=float(avg_risk),
+                        source_diversity=source_diversity,
                         trend_strength=trend_strength,
                         status=status,
                         summary_text=summary_text,
-                        confidence_score=confidence_score,
-                        evidence_metadata=evidence_metadata,
+                        sample_titles=[d.title for d in cluster_docs if d.title],
+                        client_name=client.name,
+                        client_id=client_id,
                         run_id=rid,
-                        batch_id=bid,
-                        worker_id=wid,
-                        latency_ms=elapsed_narrative_ms,
-                        retry_count=attempt
-                    ).on_conflict_do_update(
-                        constraint="uq_client_narrative",
-                        set_={
-                            "mention_count": len(cluster_docs),
-                            "sentiment_score": float(avg_sentiment),
-                            "risk_score": float(avg_risk),
-                            "trend_strength": trend_strength,
-                            "status": status,
-                            "summary_text": summary_text,
-                            "confidence_score": confidence_score,
-                            "evidence_metadata": evidence_metadata,
-                            "run_id": rid,
-                            "batch_id": bid,
-                            "worker_id": wid,
-                            "latency_ms": elapsed_narrative_ms,
-                            "retry_count": attempt
-                        }
                     )
-                    db.execute(stmt)
-                    savepoint.commit()
-                except Exception as e:
-                    savepoint.rollback()
-                    log.error("narrative_savepoint_failed", error=str(e))
+
+            # "When" for the narrative drawer (Part B explainability
+            # reconciliation): a plain min/max over the same
+            # published_at-or-collected_at values cluster_docs is already
+            # sorted by (see the docs.sort(...) tiebreak above) -- no LLM,
+            # just the real date range the cluster's own documents cover.
+            _cluster_dates = [
+                (d.published_at or d.collected_at) for d in cluster_docs
+                if d.published_at or d.collected_at
+            ]
+            date_range = {
+                "first": min(_cluster_dates).isoformat() if _cluster_dates else None,
+                "last": max(_cluster_dates).isoformat() if _cluster_dates else None,
+            }
+
+            evidence_metadata = {
+                "supporting_documents": [str(did) for did in cluster_doc_ids],
+                "date_range": date_range,
+                "supporting_risks": risk_ids,
+                "supporting_trends": trend_ids,
+                "supporting_alerts": alert_ids,
+                "supporting_entities": [
+                    str(eid) for eid in cluster_entity_ids
+                    if eid not in bystander_only_person_ids
+                ],
+                "supporting_topics": [str(tid) for tid in sorted(cluster_topic_ids, key=str)],
+                "topics": [
+                    {
+                        "id": str(tid),
+                        "name": topic_map[tid].name,
+                        "type": self.narrative_mapping.get(topic_map[tid].name, {"type": "General"})["type"],
+                    }
+                    for tid in sorted(cluster_topic_ids, key=str)
+                    if tid in topic_map
+                ],
+                "supporting_executives": exec_ids,
+                "confidence_calculation": confidence_data,
+                "decision_reason": f"Narrative generated with evidence score {evidence_score}.",
+                "rca": rca,
+                "evidence_counts": {
+                    "documents": len(cluster_doc_ids),
+                    "risks": len(risk_ids),
+                    "trends": len(trend_ids),
+                    "alerts": len(alert_ids),
+                    "entities": len(cluster_entity_ids) - len(bystander_only_person_ids),
+                    "executives": len(exec_ids)
+                }
+            }
+
+            elapsed_narrative_ms = (time.perf_counter() - t_narrative_start) * 1000
+
+            # Save point nested transaction commit
+            savepoint = db.begin_nested()
+            try:
+                stmt = insert(Narrative).values(
+                    id=uuid.uuid4(),
+                    client_id=client_id,
+                    narrative_name=narrative_name,
+                    narrative_type=narrative_type,
+                    mention_count=len(cluster_docs),
+                    sentiment_score=float(avg_sentiment),
+                    risk_score=float(avg_risk),
+                    trend_strength=trend_strength,
+                    status=status,
+                    summary_text=summary_text,
+                    confidence_score=confidence_score,
+                    evidence_metadata=evidence_metadata,
+                    run_id=rid,
+                    batch_id=bid,
+                    worker_id=wid,
+                    latency_ms=elapsed_narrative_ms,
+                    retry_count=attempt
+                ).on_conflict_do_update(
+                    constraint="uq_client_narrative",
+                    set_={
+                        "mention_count": len(cluster_docs),
+                        "sentiment_score": float(avg_sentiment),
+                        "risk_score": float(avg_risk),
+                        "trend_strength": trend_strength,
+                        "status": status,
+                        "summary_text": summary_text,
+                        "confidence_score": confidence_score,
+                        "evidence_metadata": evidence_metadata,
+                        "run_id": rid,
+                        "batch_id": bid,
+                        "worker_id": wid,
+                        "latency_ms": elapsed_narrative_ms,
+                        "retry_count": attempt
+                    }
+                )
+                db.execute(stmt)
+                savepoint.commit()
+            except Exception as e:
+                savepoint.rollback()
+                log.error("narrative_savepoint_failed", error=str(e))
 
         elapsed_client_ms = (time.perf_counter() - t0) * 1000
         log.info("narrative_calculation_complete", total_latency_ms=round(elapsed_client_ms, 2))
