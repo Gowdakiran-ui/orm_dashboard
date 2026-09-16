@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
@@ -77,6 +77,12 @@ export function ReputationSummaryCard({
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const { navigateTo } = useTabNavigation();
+  // Anchor for the top-of-page verdict line's "See what it's about" link,
+  // when there's nothing more specific (an alert, a risk-worthy narrative)
+  // to jump straight to -- scrolls down to the "What to do about it" card
+  // instead of duplicating its content a second time near the top.
+  const whatToDoRef = useRef<HTMLDivElement>(null);
+  const scrollToWhatToDo = () => whatToDoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   // Total risks + severity breakdown + avg risk score. Requires MEDIUM+
   // (RiskTab.tsx's Incident Command Register applies the same floor) --
   // a matched document with no RiskEvent row defaults to risk=0, and a
@@ -204,9 +210,55 @@ export function ReputationSummaryCard({
   const sovDisplay = clientSOV.toFixed(1);
 
   const alertNames = execAlert.open && execAlert.alert?.entity_name ? execAlert.alert.entity_name : null;
+  const alertSeverity = execAlert.open ? execAlert.alert?.severity ?? null : null;
   const alertLine = execAlert.open
     ? `1 open executive-risk alert: ${alertNames ?? "unknown"}.`
     : "No open executive-risk alerts.";
+  // Severity preview so the tile itself signals how serious the alert is,
+  // not just who it's about -- reuses the `severity` field already returned
+  // by reputation-summary's `executive_alert.alert`, no new computation.
+  const alertTileSub = execAlert.open
+    ? `${alertNames ?? "Open alert"}${alertSeverity ? ` (${alertSeverity} — needs review)` : ""}`
+    : "None open";
+
+  // One-line top-of-page verdict + action, promoted from content that
+  // already exists further down this same page (the alert line, the risk
+  // danger count, and the AI Advisory / "What to do about it" paragraph) --
+  // no new computation, just surfaced earlier so a 2-3 minute skim sees the
+  // plain-language answer before the stat tiles. Priority matches the order
+  // a reader should care about: an open executive alert first, then a
+  // Critical/High risk count, then the AI Advisory's own lead sentence,
+  // then an honest steady-state default naming what's being watched.
+  const verdict: { emoji: string; text: string; actionLabel: string | null; onAction: (() => void) | null } =
+    documentsLoading || narrativesLoading
+      ? { emoji: "⏳", text: "Checking current risk and narrative activity…", actionLabel: null, onAction: null }
+      : execAlert.open
+      ? {
+          emoji: alertSeverity === "CRITICAL" ? "🔴" : "🟡",
+          text: `One alert needs your attention this week — ${alertNames ?? "an executive"}${alertSeverity ? ` (${alertSeverity})` : ""}. Coverage is otherwise ${trendDisplay === "DECLINING" ? "trending down" : "steady"}.`,
+          actionLabel: "See what it's about →",
+          onAction: () => navigateTo("risk"),
+        }
+      : riskStats.dangerCount > 0
+      ? {
+          emoji: "🟡",
+          text: `${riskStats.dangerCount} risk${riskStats.dangerCount === 1 ? "" : "s"} flagged as Critical or High this week.`,
+          actionLabel: "See what it's about →",
+          onAction: () => navigateTo("risk"),
+        }
+      : planAdvisory?.lead
+      ? {
+          emoji: "🟡",
+          text: planAdvisory.lead,
+          actionLabel: "See what to do about it →",
+          onAction: scrollToWhatToDo,
+        }
+      : {
+          emoji: "🟢",
+          text: `Your reputation is stable this week. Watching ${narrativeStats.total} active narrative${narrativeStats.total === 1 ? "" : "s"} and ${riskStats.total} tracked risk${riskStats.total === 1 ? "" : "s"}.`,
+          actionLabel: null,
+          onAction: null,
+        };
 
   // documents/narratives/executives each load independently and can settle
   // at noticeably different times after a client switch (confirmed live:
@@ -229,23 +281,23 @@ export function ReputationSummaryCard({
   // navigates to Risk Center pre-filtered to that severity band. Same
   // `navigateTo` helper every other drill-through in this task uses --
   // no one-off click handler.
-  const severityCountLink = (count: number, letter: string, severity: string, colorClass: string) => (
+  const severityCountLink = (count: number, word: string, severity: string, colorClass: string) => (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); navigateTo("risk", { severity }); }}
       className={`hover:underline ${colorClass}`}
     >
-      {count}{letter}
+      {count} {word}
     </button>
   );
   const severityBreakdownSub = documentsLoading ? (
     "Loading..."
   ) : (
-    <span className="inline-flex items-center gap-0.5">
-      {severityCountLink(riskStats.critical, "C", "critical", "text-red-500")}/
-      {severityCountLink(riskStats.high, "H", "high", "text-orange-500")}/
-      {severityCountLink(riskStats.medium, "M", "medium", "text-yellow-600")}/
-      {severityCountLink(riskStats.low, "L", "low", "text-emerald-500")}
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+      {severityCountLink(riskStats.critical, "Critical", "critical", "text-red-500")}
+      {severityCountLink(riskStats.high, "High", "high", "text-orange-500")}
+      {severityCountLink(riskStats.medium, "Medium", "medium", "text-yellow-600")}
+      {severityCountLink(riskStats.low, "Low", "low", "text-emerald-500")}
     </span>
   );
 
@@ -271,7 +323,7 @@ export function ReputationSummaryCard({
     { label: "Most Mentioned Person", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
     { label: "Notable People Tracked", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Mentioned in coverage, not necessarily this client's own staff", color: "text-sky-500" },
     { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500", def: <CompetitorRankShareOfVoiceDefinition /> },
-    { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: execAlert.open ? (alertNames ?? "Open alert") : "None open", color: execAlert.open ? "text-red-500" : "text-emerald-500" },
+    { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: alertTileSub, color: execAlert.open ? "text-red-500" : "text-emerald-500" },
   ];
 
   // Only the Reputation Score tile (index 0 -- the single number this whole
@@ -312,16 +364,33 @@ export function ReputationSummaryCard({
 
   return (
     <div className="space-y-6">
+      <div className={`${glassCard(theme)} p-4 flex flex-wrap items-center justify-between gap-3`}>
+        <span className={`text-sm font-mono ${isDark ? "text-zinc-100" : "text-zinc-800"}`}>
+          <span className="mr-2" aria-hidden="true">{verdict.emoji}</span>
+          {verdict.text}
+        </span>
+        {verdict.actionLabel && verdict.onAction && (
+          <button
+            type="button"
+            onClick={verdict.onAction}
+            className="text-sm font-mono font-semibold whitespace-nowrap hover:underline shrink-0"
+            style={{ color: accent }}
+          >
+            {verdict.actionLabel}
+          </button>
+        )}
+      </div>
+
       <div className="space-y-3">
         <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>At a Glance</span>
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 font-mono">
           {heroCards.map(({ card, idx }) =>
             idx === 0 ? (
-              <HeroGlass key={idx} theme={theme} className="p-4 flex flex-col justify-between">
+              <HeroGlass key={idx} theme={theme} className="p-4 flex flex-col justify-between min-w-0">
                 {statCardBody(card)}
               </HeroGlass>
             ) : (
-              <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
+              <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between min-w-0`}>
                 <div className={SPECULAR_LINE} />
                 {statCardBody(card)}
               </div>
@@ -334,7 +403,7 @@ export function ReputationSummaryCard({
         <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>More Detail</span>
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 font-mono">
           {detailCards.map(({ card, idx }) => (
-            <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
+            <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between min-w-0`}>
               <div className={SPECULAR_LINE} />
               {statCardBody(card)}
             </div>
@@ -412,10 +481,10 @@ export function ReputationSummaryCard({
         </CardContent>
       </Card>
 
-      <Card className={glassCard(theme)}>
+      <Card className={glassCard(theme)} ref={whatToDoRef}>
         <div className={SPECULAR_LINE} />
         <CardContent className="p-4 space-y-2">
-          <span className={sectionLabelClass(isDark)}>AI Advisory</span>
+          <span className={sectionLabelClass(isDark)}>What to do about it</span>
           {planAdvisoryLoading ? (
             <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Analyzing current risk posture...</p>
           ) : planAdvisoryError ? (
@@ -445,7 +514,9 @@ export function ReputationSummaryCard({
               )}
             </>
           ) : (
-            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Nothing significant to flag right now.</p>
+            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
+              Nothing significant to flag right now — actively watching {narrativeStats.total} tracked narrative{narrativeStats.total === 1 ? "" : "s"} and {riskStats.total} tracked risk{riskStats.total === 1 ? "" : "s"} for {activeClientName}. You'll see a recommendation here the moment something needs attention.
+            </p>
           )}
         </CardContent>
       </Card>

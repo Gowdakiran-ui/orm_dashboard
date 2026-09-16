@@ -136,6 +136,17 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
     else:
         logger.warning("active_alerts_no_brand_entity_found", client_id=str(client_id), action="brand_gate_skipped")
 
+    # Target-entity type, so the frontend can prefix "Multi-Signal Incident:
+    # X" titles by what X actually is (Executive/Product/Company) instead of
+    # showing a person, a product, and the client's own brand at the same
+    # visual tier with no distinguishing marker (ui_redesign_plan.md #5).
+    # Reuses the same Entity lookup already queried above for the
+    # brand-co-occurrence gate -- no new query, just serializing a value
+    # this endpoint already had in memory but previously discarded.
+    entity_type_lookup = {
+        e.id: e.entity_type for e in db.query(Entity).filter(Entity.client_id == client_id).all()
+    }
+
     results = []
     for a in alerts:
         # ai_summary lives inside the alert's own existing `explainability`
@@ -151,6 +162,7 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
             "is_acknowledged": a.is_acknowledged,
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "ai_summary": ai_summary,
+            "entity_type": entity_type_lookup.get(a.entity_id) if a.entity_id else None,
         })
     return results
 

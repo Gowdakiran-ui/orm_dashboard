@@ -422,6 +422,14 @@ export function CompetitorsTab({
               {searchLoading ? "Searching..." : "Search"}
             </button>
           </form>
+          {/* Same disambiguation already on the Dashboard's Overview
+              paragraph for the #17/share-of-voice figure -- surfaced here
+              too so a viewer who lands on this page first (before ever
+              seeing the Dashboard) isn't left wondering why that ranking
+              doesn't show up on this page (ui_redesign_plan.md #8). */}
+          <p className={`text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
+            Your passive market ranking (shown on your Dashboard) comes from general coverage. This page shows head-to-head comparisons only for competitors you add here.
+          </p>
 
           {searchErrorMsg && (
             <p className="text-red-500 font-mono text-xs">{searchErrorMsg}</p>

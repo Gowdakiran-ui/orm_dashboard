@@ -17,6 +17,7 @@ import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 import { ReputationScoreDefinition, ExecutiveSentimentBreakdownDefinition, ExecutiveScorecardMetricsDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
@@ -646,8 +647,13 @@ export function ExecutivesTab({
                             {e.trend ?? 'STABLE'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-emerald-500 font-mono text-xs truncate max-w-[120px]">{e.top_positive ?? 'None'}</TableCell>
-                        <TableCell className="text-red-500 font-mono text-xs truncate max-w-[120px]">{e.top_negative ?? 'None'}</TableCell>
+                        {/* An unpopulated theme showing "None" next to a
+                            real, serious grade reads as a data gap, not a
+                            genuine absence (ui_redesign_plan.md #9) -- a
+                            muted dash instead of colored "None" text, no
+                            invented fallback value. */}
+                        <TableCell className={`font-mono text-xs truncate max-w-[120px] ${e.top_positive ? "text-emerald-500" : mutedText(theme)}`}>{e.top_positive || "—"}</TableCell>
+                        <TableCell className={`font-mono text-xs truncate max-w-[120px] ${e.top_negative ? "text-red-500" : mutedText(theme)}`}>{e.top_negative || "—"}</TableCell>
                       </TableRow>
                     )
                   ))}
@@ -687,10 +693,14 @@ export function ExecutivesTab({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {execEvents.map((doc, idx) => (
-                <TableRow key={doc.id} className={`${rowBorder} ${rowHoverBg} transition-colors cursor-pointer`} onClick={() => setSelectedDocId(doc.id)}>
+              {execEvents.map((doc, idx) => {
+                const isPlaceholder = isPlaceholderTitle(doc.title, doc.source);
+                return (
+                <TableRow key={doc.id} className={`${rowBorder} ${rowHoverBg} transition-colors cursor-pointer ${isPlaceholder ? PLACEHOLDER_ROW_CLASS : ""}`} onClick={() => setSelectedDocId(doc.id)}>
                   <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{doc.matchedExecutive}</TableCell>
-                  <TableCell className={`font-mono text-xs max-w-[240px] truncate ${bodyText(theme)}`}>{doc.title}</TableCell>
+                  <TableCell className={`font-mono text-xs max-w-[240px] truncate ${bodyText(theme)}`}>
+                    {isPlaceholder ? <PreviewUnavailableLabel /> : doc.title}
+                  </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-xs bg-[#D4AF37]/5">
                       {doc.topic}
@@ -722,7 +732,8 @@ export function ExecutivesTab({
                     </button>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
               {execEvents.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={9} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>

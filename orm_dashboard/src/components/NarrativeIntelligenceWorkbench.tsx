@@ -11,6 +11,7 @@ import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 
 interface NarrativeIntelligenceWorkbenchProps {
   documents: any[];
@@ -226,7 +227,6 @@ export function NarrativeIntelligenceWorkbench({
             processedNarratives.map((n) => {
               const isSelected = selectedNarrativeId === n.id;
               const riskTextColor = n.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : n.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-500" : "";
-              const trendSign = n.trend >= 0 ? "+" : "";
               const statusBadgeColor = n.status === "Critical" ? "bg-red-500/10 text-red-500 border border-red-500/20" : n.status === "Active" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : n.status === "Mitigated" ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border border-white/[0.12]" : "bg-black/[0.03] border border-black/[0.08]"}`;
 
               return (
@@ -262,22 +262,34 @@ export function NarrativeIntelligenceWorkbench({
 
                   <div className={`grid grid-cols-4 gap-2 pt-2 border-t text-[9px] font-mono ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                     <div>
-                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>RISK INDEX</span>
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>Reputation Impact</span>
                       <span className={`font-bold ${riskTextColor}`} style={riskTextColor ? undefined : { color: accent }}>{Math.round(n.risk)} pts</span>
                     </div>
                     <div>
-                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>VELOCITY</span>
-                      <span className={`font-bold ${n.trend >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                        {trendSign}{n.trend?.toFixed(1)}%
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>How Fast It&apos;s Spreading</span>
+                      {/* Plain-language pace instead of a bare velocity % --
+                          same 50%-move bar the platform already uses
+                          elsewhere as its "genuinely significant swing"
+                          threshold (narrative_engine.py's
+                          NARRATIVE_REQUIRE_RISING_TREND / TrendDetector's
+                          24h-vs-7d gate), not an invented cutoff. */}
+                      <span className={`font-bold ${n.trend >= 50 ? "text-red-500" : n.trend <= -50 ? "text-emerald-500" : bodyText(theme)}`}>
+                        {n.trend >= 50 ? "Accelerating" : n.trend <= -50 ? "Slowing" : "Steady"}
                       </span>
                     </div>
                     <div>
-                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>VOLUME</span>
-                      <span className={`font-bold ${bodyText(theme)}`}>{n.mentions} mentions</span>
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>Coverage So Far</span>
+                      <span className={`font-bold ${bodyText(theme)}`}>{n.mentions} article{n.mentions === 1 ? "" : "s"}</span>
                     </div>
                     <div className="text-right">
-                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>CONFIDENCE</span>
-                      <span className="font-bold" style={{ color: accent }}>{n.confidence !== null ? `${n.confidence}%` : "Not Available"}</span>
+                      <span className={`block text-[8px] uppercase ${mutedText(theme)}`}>How Sure We Are This Is Real</span>
+                      {/* Qualitative instead of a raw "31%" next to a
+                          serious-sounding narrative title -- same
+                          confidence value, just not shown as a bare number
+                          (ui_redesign_plan.md #7). */}
+                      <span className="font-bold" style={{ color: accent }}>
+                        {n.confidence === null ? "Not enough data yet" : n.confidence >= 60 ? "High" : n.confidence >= 35 ? "Moderate" : "Low"}
+                      </span>
                     </div>
                   </div>
 
@@ -430,6 +442,7 @@ export function NarrativeIntelligenceWorkbench({
                 const formattedDate = doc.timestamp
                   ? new Date(doc.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
                   : "Unknown";
+                const isPlaceholder = isPlaceholderTitle(doc.title, doc.source);
 
                 // Infer Source Type from the source name
                 let typeLabel = "news";
@@ -445,11 +458,11 @@ export function NarrativeIntelligenceWorkbench({
                   <div
                     key={doc.id}
                     onClick={() => onSelectDocument(doc)}
-                    className={`rounded-lg p-2.5 transition-all duration-150 cursor-pointer space-y-2 group relative border ${isDark ? "bg-black/20 border-white/[0.08] hover:border-emerald-500/40 hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-emerald-500/40 hover:bg-black/[0.04]"}`}
+                    className={`rounded-lg p-2.5 transition-all duration-150 cursor-pointer space-y-2 group relative border ${isDark ? "bg-black/20 border-white/[0.08] hover:border-emerald-500/40 hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-emerald-500/40 hover:bg-black/[0.04]"} ${isPlaceholder ? PLACEHOLDER_ROW_CLASS : ""}`}
                   >
                     <div className="flex justify-between items-start gap-2">
                       <span className={`font-bold text-[10px] transition-colors duration-150 line-clamp-2 leading-tight ${bodyText(theme)}`}>
-                        {doc.title}
+                        {isPlaceholder ? <PreviewUnavailableLabel /> : doc.title}
                       </span>
                     </div>
 

@@ -16,6 +16,7 @@ import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 
 
 export interface FeedTabProps {
@@ -416,10 +417,11 @@ export function FeedTab({
                   const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
                   
                   // Timestamp formatter
-                  const formattedTime = d.timestamp 
+                  const formattedTime = d.timestamp
                     ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     : "Recent";
-                  
+                  const isPlaceholder = isPlaceholderTitle(d.title, d.source);
+
                   return (
                     <div
                       key={d.id ?? i}
@@ -428,11 +430,11 @@ export function FeedTab({
                         isSelected
                           ? isDark ? "bg-white/[0.06] border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/60"
                           : isDark ? "bg-black/20 border-white/[0.08] hover:border-white/[0.2] hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-black/[0.15] hover:bg-black/[0.04]"
-                      }`}
+                      } ${isPlaceholder ? PLACEHOLDER_ROW_CLASS : ""}`}
                     >
                       <div className="flex justify-between items-start gap-2">
                         <span className={`font-bold text-xs line-clamp-2 leading-tight transition-colors duration-150 ${bodyText(theme)}`}>
-                          {d.title}
+                          {isPlaceholder ? <PreviewUnavailableLabel /> : d.title}
                         </span>
                         <span className={`text-[9px] shrink-0 flex items-center gap-1 font-bold ${mutedText(theme)}`}>
                           <Clock className="h-3 w-3" /> {formattedTime}

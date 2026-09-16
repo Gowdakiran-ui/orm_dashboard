@@ -25,6 +25,18 @@ import {
   CriticalRisksVsActiveAlertsDefinition,
 } from "@/lib/metricDefinitions";
 
+// Entity-type prefix for an alert's "Multi-Signal Incident: X" title, so a
+// person, a product, and the client's own brand don't all read as
+// equivalent "incidents" at the same visual tier (ui_redesign_plan.md #5).
+// Reuses the `entity_type` field client_intelligence.py's active-alerts
+// endpoint now serializes -- no guessing from the title text.
+const ALERT_ENTITY_TYPE_LABEL: Record<string, string> = {
+  person: "Executive",
+  product: "Product",
+  brand: "Company",
+  competitor: "Competitor",
+};
+
 export interface RiskTabProps {
   alertsLoading: boolean;
   alertsError: string | null;
@@ -260,7 +272,7 @@ export function RiskTab({
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 font-mono">
           {[
             { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true },
-            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
+            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition />, captionNode: <CriticalRisksVsActiveAlertsDefinition /> },
             { label: "High Risks", value: stats.high, color: "text-orange-500" },
             { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
             { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
@@ -274,6 +286,15 @@ export function RiskTab({
                 {'def' in card && card.def && <InfoTooltip label={`About ${card.label}`}>{card.def}</InfoTooltip>}
               </span>
               <span className={`${card.highlight ? "text-2xl" : "text-xl"} font-bold ${card.color}`}>{card.value}</span>
+              {'captionNode' in card && card.captionNode && (
+                // Promoted from the (i) tooltip above -- same wording,
+                // permanently visible instead of hover-only, since this
+                // tile's number (0) can otherwise look like it contradicts
+                // Active Alerts' own CRITICAL badge below.
+                <span className={`text-[10px] leading-snug mt-1.5 normal-case tracking-normal ${mutedText(theme)}`}>
+                  {card.captionNode}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -293,6 +314,13 @@ export function RiskTab({
               <Badge className={`${glassPill(theme)} text-orange-500 font-mono text-xs`}>{alerts.length} Active</Badge>
             )}
           </CardTitle>
+          {/* Same permanent caption as the Critical Risks tile above, for
+              the same reason -- promoted from the (i) tooltip so the two
+              tiles don't read as contradicting each other without
+              requiring the reader to hover either one. */}
+          <p className={`text-[10px] leading-snug normal-case tracking-normal ${mutedText(theme)}`}>
+            <CriticalRisksVsActiveAlertsDefinition />
+          </p>
         </CardHeader>
         <CardContent>
           {alertsLoading ? (
@@ -333,7 +361,12 @@ export function RiskTab({
                         }`}>
                           {alert.severity}
                         </Badge>
-                        <span className={`font-bold truncate ${bodyText(theme)}`}>{alert.title}</span>
+                        <span className={`font-bold truncate ${bodyText(theme)}`}>
+                          {ALERT_ENTITY_TYPE_LABEL[alert.entity_type] && (
+                            <span className={mutedText(theme)}>{ALERT_ENTITY_TYPE_LABEL[alert.entity_type]}: </span>
+                          )}
+                          {alert.title}
+                        </span>
                         <span className={`text-xs shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
                       </div>
                       <span className={`text-xs shrink-0 ml-3 ${mutedText(theme)}`}>
@@ -579,6 +612,16 @@ export function RiskTab({
             Incident Categories
             <InfoTooltip label="About Incident Categories"><RiskCategoriesDefinition /></InfoTooltip>
           </CardTitle>
+          {categoryData.some(c => c.name === "Innovation") && (
+            // Promoted from the hover-only tooltip above (same wording,
+            // condensed to one line) -- an Innovation-tagged bar showing a
+            // non-trivial count next to Cybersecurity/Legal Risk otherwise
+            // reads as "positive news counts as risk" with no explanation
+            // unless the reader thinks to hover the (i) icon.
+            <p className={`text-xs font-mono mt-1 ${mutedText(theme)}`}>
+              Innovation coverage is tracked here because major announcements can carry reputational risk even when the news itself is positive (e.g. execution risk, investor reaction) — its score comes from sentiment/trend/source signals, not the topic itself.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="h-[200px] pl-2">
           {categoryData.length > 0 ? (

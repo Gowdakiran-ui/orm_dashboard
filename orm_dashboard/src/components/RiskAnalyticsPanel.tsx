@@ -211,7 +211,7 @@ export function RiskAnalyticsPanel({
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
-              SOC Risk Matrix (Impact × Likelihood)
+              Risk by Impact & Likelihood
               <InfoTooltip label="About Impact and Likelihood"><RiskMatrixAxesDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>
@@ -291,6 +291,16 @@ export function RiskAnalyticsPanel({
                     })}
                   </div>
                 ))}
+              </div>
+
+              {/* X Axis Labels -- same LOW/MED/HIGH LIKELIHOOD row already
+                  present on Risk Center's matrix (RiskTab.tsx); this matrix
+                  had no Likelihood axis label at all before, only IMPACT. */}
+              <div className="col-span-1" />
+              <div className={`col-span-11 grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-[9px] ${mutedText(theme)}`}>
+                <span>LOW LIKELIHOOD</span>
+                <span>MED LIKELIHOOD</span>
+                <span>HIGH LIKELIHOOD</span>
               </div>
             </div>
           </CardContent>
@@ -413,15 +423,21 @@ export function RiskAnalyticsPanel({
                           <div
                             key={sIdx}
                             style={bgStyle}
-                            className={`text-center py-3 rounded font-bold hover:opacity-85 transition-all relative group h-12 flex flex-col justify-center mx-1 shadow-sm border ${bodyText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"} ${!bgStyle ? (isDark ? "bg-black/20" : "bg-black/[0.02]") : ""}`}
+                            className={`text-center py-3 rounded font-bold hover:opacity-85 transition-all relative group min-h-12 flex flex-col justify-center mx-1 shadow-sm border ${bodyText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"} ${!bgStyle ? (isDark ? "bg-black/20" : "bg-black/[0.02]") : ""}`}
                             title={`Topic: ${cat}\nSeverity: ${sev}\nDocument Count: ${cellData.count}\nAvg Risk Score: ${cellData.avgRisk.toFixed(1)}\nAvg Sentiment: ${cellData.avgSentiment.toFixed(2)}`}
                           >
                             <span className="text-[10px] font-bold">
                               {cellData.count > 0 ? `${cellData.count} (${cellPercent}%)` : "0"}
                             </span>
                             {cellData.count > 0 && (
-                              <span className={`text-[7.5px] mt-0.5 font-normal font-mono ${mutedText(theme)}`}>
-                                R:{cellData.avgRisk.toFixed(0)} S:{cellData.avgSentiment.toFixed(1)}
+                              // Spelled out instead of packed "R:34 S:-0.3"
+                              // shorthand codes (ui_redesign_plan.md #6) --
+                              // two separate labeled lines, still small
+                              // enough to fit the cell, but no longer an
+                              // abbreviation a reader has to decode.
+                              <span className={`text-[7px] mt-0.5 leading-tight font-normal font-mono ${mutedText(theme)}`}>
+                                <span className="block">Risk Score: {cellData.avgRisk.toFixed(0)}</span>
+                                <span className="block">Sentiment: {cellData.avgSentiment.toFixed(1)}</span>
                               </span>
                             )}
                           </div>
