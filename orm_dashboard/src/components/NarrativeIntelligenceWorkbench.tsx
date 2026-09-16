@@ -3,11 +3,13 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
-  Search, ShieldAlert, Sparkles, TrendingUp, Calendar, 
-  Users, Layers, ExternalLink, RefreshCw, BarChart2, CheckCircle2, AlertTriangle
+  Search, ShieldAlert, Sparkles, TrendingUp, Calendar,
+  Users, Layers, ExternalLink, RefreshCw, BarChart2, CheckCircle2, AlertTriangle, Link2
 } from "lucide-react";
 import { fetchDocumentDetails } from "@/lib/api";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { getNarrativeDocuments } from "@/utils/narrativeEvidence";
+import { findRelatedNarratives } from "@/utils/narrativeSimilarity";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
@@ -46,12 +48,13 @@ export function NarrativeIntelligenceWorkbench({
 
   // Derived narrative stats & list mapping
   const narrativeList = useMemo(() => {
-    return narratives.map(n => {
-      // Find matching documents
-      const docs = documents.filter(d => 
-        (d.narrative && d.narrative.toLowerCase() === n.name.toLowerCase()) ||
-        (d.topic && n.name.toLowerCase().includes(d.topic.toLowerCase()))
-      );
+    const items = narratives.map(n => {
+      // Real cluster membership: evidence_metadata.supporting_documents is
+      // the exact document ID list narrative_engine.py's clustering (3-day
+      // window, title-Jaccard, entity overlap, source-diversity gate)
+      // produced for this narrative -- not a name/topic-substring re-scan
+      // over the whole per-client feed.
+      const docs = getNarrativeDocuments(n, documents);
 
       // Find affected executives
       const meta = n.evidence_metadata || {};
@@ -82,8 +85,9 @@ export function NarrativeIntelligenceWorkbench({
       const timestamps = docs
         .map(d => d.timestamp ? new Date(d.timestamp).getTime() : 0)
         .filter(t => t > 0);
-      const lastDetected = timestamps.length > 0 
-        ? new Date(Math.max(...timestamps)).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      const lastDetectedTs = timestamps.length > 0 ? Math.max(...timestamps) : null;
+      const lastDetected = lastDetectedTs !== null
+        ? new Date(lastDetectedTs).toLocaleDateString("en-US", { month: "short", day: "numeric" })
         : "Recent";
 
       return {
@@ -93,10 +97,20 @@ export function NarrativeIntelligenceWorkbench({
         confidence,
         status,
         lastDetected,
+        lastDetectedTs,
         rawDocs: docs
       };
     });
-  }, [narratives, documents, executives]);
+
+    // Near-duplicate-story hint: same title-Jaccard + day-window recipe
+    // narrative_engine.py's own document clustering uses, applied one level
+    // up across narrative names instead of document titles. Display-only --
+    // it never merges narratives or changes clustering.
+    return items.map(item => ({
+      ...item,
+      relatedNarratives: findRelatedNarratives(item, items, clientName).map(r => r.name)
+    }));
+  }, [narratives, documents, executives, clientName]);
 
   const activeNarrative = useMemo(() => {
     if (!selectedNarrativeId) return null;
@@ -298,6 +312,16 @@ export function NarrativeIntelligenceWorkbench({
                       <Users className="h-3 w-3" style={{ color: accent }} />
                       <span className={`font-bold uppercase ${mutedText(theme)}`}>TARGETS:</span>
                       <span className="truncate max-w-[220px]">{n.affectedExecs.join(", ")}</span>
+                    </div>
+                  )}
+
+                  {n.relatedNarratives.length > 0 && (
+                    <div className={`mt-2 pt-1.5 border-t border-dashed flex items-start gap-1.5 text-[8.5px] font-mono ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                      <Link2 className="h-3 w-3 mt-0.5 shrink-0" style={{ color: accent2 }} />
+                      <span>
+                        <span className={`font-bold uppercase ${mutedText(theme)}`}>Related to:</span>{" "}
+                        <span className="italic">{n.relatedNarratives.join(", ")}</span> — may be the same underlying story.
+                      </span>
                     </div>
                   )}
                 </div>

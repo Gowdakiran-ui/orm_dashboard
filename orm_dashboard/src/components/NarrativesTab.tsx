@@ -19,6 +19,7 @@ import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyT
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { AverageRiskScoreFeedDefinition } from "@/lib/metricDefinitions";
 import { formatScore } from "@/utils/formatScore";
+import { getNarrativeDocuments } from "@/utils/narrativeEvidence";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface NarrativesTabProps {
@@ -197,11 +198,8 @@ export function NarrativesTab({
     setSelectedNarrative(narrativeName);
     const foundNarr = narratives.find(n => n.name.toLowerCase() === narrativeName.toLowerCase());
     if (foundNarr) {
-      const associatedDocs = documents.filter(d => 
-        (d.narrative && d.narrative.toLowerCase() === foundNarr.name.toLowerCase()) ||
-        (d.topic && foundNarr.name.toLowerCase().includes(d.topic.toLowerCase()))
-      );
-      
+      const associatedDocs = getNarrativeDocuments(foundNarr, documents);
+
       const meta = foundNarr.evidence_metadata || {};
       const ents = meta.supporting_entities || [];
       const primaryExec = executives.find(e => ents.includes(e.entity_id))?.name || "Corporate Voice";
@@ -615,10 +613,7 @@ export function NarrativesTab({
                           onClick={() => {
                             const found = narratives.find(n => n.name.toLowerCase() === narrName.toLowerCase());
                             if (found) {
-                              const associatedDocs = documents.filter(d => 
-                                (d.narrative && d.narrative.toLowerCase() === found.name.toLowerCase()) ||
-                                (d.topic && found.name.toLowerCase().includes(d.topic.toLowerCase()))
-                              );
+                              const associatedDocs = getNarrativeDocuments(found, documents);
                               setDrawerData({
                                 type: "narrative",
                                 data: {
