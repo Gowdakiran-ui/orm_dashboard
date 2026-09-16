@@ -310,6 +310,71 @@ class AISummaryEngine:
             "_cache_key": cache_key,
         }}
 
+    def _build_alert_what(self, db: Session, alert: Alert, linked: Optional[tuple]) -> str:
+        """
+        Real description of what specifically triggered this alert -- not
+        the old severity/alert_type/title restatement, which told the
+        reader nothing beyond what the Badge/title already show on the same
+        card. Reuse-first, same as how_to_solve: when this alert is
+        narrative-linked, that narrative's
+        RCA already has a real, evidence-grounded problem_statement
+        (narrative_engine.py's _build_problem_statement_and_impact -- a
+        deterministic template off real document/outlet/sentiment counts,
+        not an LLM call) describing the actual cluster this alert belongs
+        to, so it's reused verbatim rather than re-deriving a second
+        description from scratch.
+
+        Falls back to the alert's own real trigger signals -- already
+        computed and stored on it by alert_engine.py's
+        _upsert_hardened_alert (explainability.supporting_evidence,
+        supporting_signals, evidence_score, confidence_score), not a new
+        data path -- only when there's no linked RCA to reuse. Still real
+        numbers even in the fallback, never a fabricated-sounding sentence.
+        """
+        if linked:
+            _, rca = linked
+            problem_statement = rca.get("problem_statement")
+            if problem_statement:
+                return problem_statement
+
+        explainability = alert.explainability or {}
+        supporting_evidence = explainability.get("supporting_evidence") or {}
+        supporting_signals = alert.supporting_signals or {}
+
+        entity_name = None
+        if alert.entity_id:
+            entity = db.query(Entity).filter(Entity.id == alert.entity_id).first()
+            entity_name = entity.name if entity else None
+        entity_name = entity_name or "this entity"
+
+        risks_count = supporting_signals.get("risks_count")
+        trends_count = supporting_signals.get("trends_count")
+        doc_count = supporting_evidence.get("document_count")
+        exec_involved = supporting_evidence.get("executive_involved")
+
+        signal_parts = []
+        if risks_count:
+            signal_parts.append(f"{risks_count} risk signal{'s' if risks_count != 1 else ''}")
+        if trends_count:
+            signal_parts.append(f"{trends_count} trend signal{'s' if trends_count != 1 else ''}")
+        signals_desc = " and ".join(signal_parts) if signal_parts else "multiple intelligence signals"
+
+        detail_parts = []
+        if doc_count:
+            detail_parts.append(f"backed by {doc_count} document{'s' if doc_count != 1 else ''}")
+        if alert.evidence_score is not None:
+            detail_parts.append(f"evidence score {alert.evidence_score:.1f}")
+        if alert.confidence_score is not None:
+            detail_parts.append(f"confidence {alert.confidence_score:.1f}%")
+        if exec_involved:
+            detail_parts.append("with executive involvement")
+
+        sentence = f"{signals_desc} for {entity_name}"
+        if detail_parts:
+            sentence += f", {', '.join(detail_parts)}"
+        sentence += "."
+        return sentence
+
     def _prepare_alert(
         self, db: Session, alert: Alert, alert_narrative_map: Dict[str, tuple], risk_narrative_map: Dict[str, tuple],
         client_name: str, client_id: str, run_id: Optional[str],
@@ -323,15 +388,7 @@ class AISummaryEngine:
         topic_name = getattr(getattr(doc_topic, "topic", None), "name", None) or alert.alert_type
         snippet = (document.normalized_content if document else "") [:1500]
 
-        what = f"{alert.severity} {alert.alert_type} alert: {alert.title}."
         when = self._format_when(alert.created_at)
-
-        # Cache key: a hash of exactly the fields that feed how_to_solve
-        # (severity, alert_type, title, topic, source excerpt) -- not
-        # alert.updated_at, which alert_engine.py re-stamps on every
-        # pipeline run regardless of whether the alert's content actually
-        # changed (see _content_signature's docstring).
-        item_signature = _content_signature(alert.severity, alert.alert_type, alert.title, topic_name, snippet)
 
         # Direct link first (narrative's own supporting_alerts); if this
         # alert isn't directly in any narrative's cluster, fall through to
@@ -345,6 +402,17 @@ class AISummaryEngine:
                 if rid in risk_narrative_map:
                     linked = risk_narrative_map[rid]
                     break
+
+        what = self._build_alert_what(db, alert, linked)
+
+        # Cache key: a hash of exactly the fields that feed how_to_solve
+        # (severity, alert_type, title, topic, source excerpt) plus `what`
+        # itself, so a cache hit can't leave a stale `what` behind after
+        # alert_engine.py updates the trigger signals it's built from on a
+        # later pipeline run -- not alert.updated_at, which gets re-stamped
+        # on every re-evaluation regardless of whether content actually
+        # changed (see _content_signature's docstring).
+        item_signature = _content_signature(alert.severity, alert.alert_type, alert.title, topic_name, snippet, what)
 
         if linked:
             narrative, rca = linked
