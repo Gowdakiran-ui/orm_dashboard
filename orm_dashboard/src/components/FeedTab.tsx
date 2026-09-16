@@ -1,12 +1,12 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
 import { 
   FileText, Globe, Layers, Users, ShieldAlert, Activity, 
-  ExternalLink, ArrowRight, Cpu, Calendar, TrendingUp, CheckCircle2,
-  AlertTriangle, Info, Sparkles, Server, Clock, BarChart2, Database
+  ExternalLink, Cpu, Calendar, TrendingUp, CheckCircle2,
+  AlertTriangle, Info, Sparkles, Clock, BarChart2
 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
@@ -359,45 +359,6 @@ export function FeedTab({
             </Card>
 
           </div>
-
-          {/* SECTION 7 — Pipeline Flow Visualization (Informational & Non-interactive) */}
-          <Card className={`${glassCard(theme)} overflow-hidden`}>
-            <div className={SPECULAR_LINE} />
-            <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-              <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                <Server className="h-3.5 w-3.5 text-emerald-400" /> Live Brand Intelligence Pipeline Ingestion flow
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 overflow-x-auto">
-              <div className={`flex items-center justify-between min-w-[700px] text-[10px] font-mono py-2 ${mutedText(theme)}`}>
-                {[
-                  { label: "RSS Sources", desc: "Digital collection pool", icon: Globe, status: "Active Ingest" },
-                  { label: "Pipeline Collection", desc: "Fetch & Hash matching", icon: Database, status: "Listening" },
-                  { label: "Entity Extraction", desc: "Spacy NLP parsing", icon: Users, status: "Matched" },
-                  { label: "Topic Classification", desc: "Categorization models", icon: Layers, status: "Confidence Mapped" },
-                  { label: "Risk Analysis", desc: "Critical anomaly filter", icon: ShieldAlert, status: "Indexed" },
-                  { label: "Narrative Engine", desc: "Graph clusters linking", icon: Sparkles, status: "Clustered" },
-                  { label: "SOC Dashboard", desc: "Executive presentation", icon: FileText, status: "Rendered" }
-                ].map((step, idx) => (
-                  <React.Fragment key={idx}>
-                    <div className="flex flex-col items-center text-center space-y-1.5 w-24">
-                      <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                        <step.icon className="h-4 w-4" />
-                      </div>
-                      <span className={`font-bold block leading-tight ${bodyText(theme)}`}>{step.label}</span>
-                      <span className={`text-[8px] block leading-none ${mutedText(theme)}`}>{step.desc}</span>
-                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[7.5px] py-0 px-1 rounded-sm">
-                        {step.status}
-                      </Badge>
-                    </div>
-                    {idx < 6 && (
-                      <ArrowRight className={`h-3.5 w-3.5 animate-pulse shrink-0 ${mutedText(theme)}`} />
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
 
           {/* LOWER SPLIT LAYOUT: Ingested Feed List (Left), Document Details Panel (Middle-Right), Telemetry (Right) */}
           <div className="grid gap-6 lg:grid-cols-12 items-start">
