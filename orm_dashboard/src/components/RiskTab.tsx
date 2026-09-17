@@ -279,7 +279,12 @@ export function RiskTab({
             { label: "Avg Risk Score", value: stats.avg, color: bodyText(theme) },
             { label: "Highest Risk", value: stats.highest, color: "text-red-500 font-black" }
           ].map((card, idx) => (
-            <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between`}>
+            <div
+              key={idx}
+              className={`${glassCard(theme)} p-4 flex flex-col justify-between ${
+                'captionNode' in card && card.captionNode ? "sm:col-span-2 lg:col-span-2" : ""
+              }`}
+            >
               <div className={SPECULAR_LINE} />
               <span className={`text-xs ${mutedText(theme)} uppercase tracking-wider flex items-center gap-1 mb-2`}>
                 {card.label}
@@ -290,7 +295,10 @@ export function RiskTab({
                 // Promoted from the (i) tooltip above -- same wording,
                 // permanently visible instead of hover-only, since this
                 // tile's number (0) can otherwise look like it contradicts
-                // Active Alerts' own CRITICAL badge below.
+                // Active Alerts' own CRITICAL badge below. Spans 2 grid
+                // columns (above) so this full explanation has room to wrap
+                // at the larger 14px caption size instead of stretching the
+                // tile's height across the whole row.
                 <span className={`text-sm leading-snug mt-1.5 normal-case tracking-normal ${mutedText(theme)}`}>
                   {card.captionNode}
                 </span>
