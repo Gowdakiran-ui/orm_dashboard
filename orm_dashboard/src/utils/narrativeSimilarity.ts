@@ -123,3 +123,49 @@ export function findRelatedNarratives<T extends RelatableNarrative>(
     return true;
   });
 }
+
+// Batch form of findRelatedNarratives, for callers that need every item's
+// related list at once (e.g. rendering a full registry). Same matching
+// rules and same output per item as calling findRelatedNarratives(item,
+// items, clientName) in a loop -- but that loop re-tokenizes every
+// candidate's name on every single comparison (O(n^2) tokenize() calls,
+// each allocating a fresh Set), which is what made this the dominant cost
+// in the live browser freeze on Tesla's 2,416-narrative registry. Here each
+// item's content tokens are computed exactly once (O(n)) and reused across
+// all O(n^2) pairwise comparisons, which are themselves cheap Set lookups.
+export function findRelatedNarrativesForAll<T extends RelatableNarrative>(
+  items: T[],
+  clientName: string
+): Map<string, T[]> {
+  const clientNameTokens = tokenize(clientName);
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  const tokensById = new Map<string, Set<string>>();
+  for (const item of items) {
+    tokensById.set(item.id, contentTokens(item.name, clientNameTokens));
+  }
+
+  const result = new Map<string, T[]>();
+  for (const target of items) {
+    const targetTokens = tokensById.get(target.id)!;
+    if (targetTokens.size === 0) {
+      result.set(target.id, []);
+      continue;
+    }
+    const related = items.filter((other) => {
+      if (other.id === target.id) return false;
+      const otherTokens = tokensById.get(other.id)!;
+      const sim = jaccardSimilarity(targetTokens, otherTokens);
+      if (sim < RELATED_NARRATIVE_JACCARD_THRESHOLD) return false;
+      if (sharedTokenCount(targetTokens, otherTokens) < minSharedTokensRequired(targetTokens, otherTokens)) return false;
+      if (target.lastDetectedTs && other.lastDetectedTs) {
+        if (Math.abs(target.lastDetectedTs - other.lastDetectedTs) > RELATED_NARRATIVE_DAY_WINDOW * dayMs) {
+          return false;
+        }
+      }
+      return true;
+    });
+    result.set(target.id, related);
+  }
+  return result;
+}

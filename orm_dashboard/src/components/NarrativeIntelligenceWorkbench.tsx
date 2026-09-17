@@ -9,7 +9,7 @@ import {
 import { fetchDocumentDetails } from "@/lib/api";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { getNarrativeDocuments, getMissingSupportingDocumentIds, fetchMissingNarrativeDocuments } from "@/utils/narrativeEvidence";
-import { findRelatedNarratives } from "@/utils/narrativeSimilarity";
+import { findRelatedNarrativesForAll } from "@/utils/narrativeSimilarity";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
@@ -45,6 +45,24 @@ export function NarrativeIntelligenceWorkbench({
   const [sortBy, setSortBy] = useState<"risk" | "mentions" | "trend" | "recent">("risk");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [docUrls, setDocUrls] = useState<Record<string, string | null>>({});
+
+  // Bounded render window for the Narrative Registry list, same fix
+  // pattern already used for the Intelligence Stream feed (FeedTab.tsx's
+  // feedRenderCount): a large client (e.g. Tesla's 2,416 narratives) was
+  // mounting a fully-expanded detail block for every single narrative at
+  // once (~97,000 DOM nodes measured live), which froze the browser tab on
+  // scroll. The full narrative list is still fetched and searched/sorted
+  // exactly as before -- only how many of the matching results get mounted
+  // to the DOM at once is bounded here.
+  const NARRATIVE_PAGE_SIZE = 25;
+  const [narrativeRenderCount, setNarrativeRenderCount] = useState(NARRATIVE_PAGE_SIZE);
+
+  // Reset back to the first page whenever the result set a viewer is
+  // looking at changes underneath them -- a new search/sort/status filter,
+  // or switching to a different client's narratives entirely.
+  useEffect(() => {
+    setNarrativeRenderCount(NARRATIVE_PAGE_SIZE);
+  }, [searchTerm, sortBy, statusFilter, clientId]);
 
   // Fallback for narrative evidence documents that have aged out of the
   // main 500-most-recent-document window (see the lazy fetch effect below,
@@ -124,10 +142,13 @@ export function NarrativeIntelligenceWorkbench({
     // Near-duplicate-story hint: same title-Jaccard + day-window recipe
     // narrative_engine.py's own document clustering uses, applied one level
     // up across narrative names instead of document titles. Display-only --
-    // it never merges narratives or changes clustering.
+    // it never merges narratives or changes clustering. Computed once for
+    // every item via the batch helper (each name tokenized once, not once
+    // per pairwise comparison) rather than in a per-item loop.
+    const relatedById = findRelatedNarrativesForAll(items, clientName);
     return items.map(item => ({
       ...item,
-      relatedNarratives: findRelatedNarratives(item, items, clientName).map(r => r.name)
+      relatedNarratives: (relatedById.get(item.id) || []).map(r => r.name)
     }));
   }, [narratives, documentsWithFallback, executives, clientName]);
 
@@ -287,7 +308,8 @@ export function NarrativeIntelligenceWorkbench({
 
         <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
           {processedNarratives.length > 0 ? (
-            processedNarratives.map((n) => {
+            <>
+            {processedNarratives.slice(0, narrativeRenderCount).map((n) => {
               const isSelected = selectedNarrativeId === n.id;
               const riskTextColor = n.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : n.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-500" : "";
               const statusBadgeColor = n.status === "Critical" ? "bg-red-500/10 text-red-500 border border-red-500/20" : n.status === "Active" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : n.status === "Mitigated" ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border border-white/[0.12]" : "bg-black/[0.03] border border-black/[0.08]"}`;
@@ -375,7 +397,17 @@ export function NarrativeIntelligenceWorkbench({
                   )}
                 </div>
               );
-            })
+            })}
+            {processedNarratives.length > narrativeRenderCount && (
+              <button
+                type="button"
+                onClick={() => setNarrativeRenderCount((c) => c + NARRATIVE_PAGE_SIZE)}
+                className={`w-full text-center text-[10px] font-mono uppercase tracking-wider py-2.5 rounded-lg border ${isDark ? "border-white/[0.08] text-zinc-400 hover:bg-white/[0.03]" : "border-black/[0.06] text-zinc-600 hover:bg-black/[0.02]"}`}
+              >
+                Load {Math.min(NARRATIVE_PAGE_SIZE, processedNarratives.length - narrativeRenderCount)} more ({narrativeRenderCount} of {processedNarratives.length})
+              </button>
+            )}
+            </>
           ) : (
             <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-10 ${mutedText(theme)}`}>
               No matching narrative vectors found.
