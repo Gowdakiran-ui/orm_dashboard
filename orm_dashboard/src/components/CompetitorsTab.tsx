@@ -412,12 +412,12 @@ export function CompetitorsTab({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search competitor name..."
-              className={`flex-1 rounded px-3 py-2 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[#3B82F6]/50"}`}
+              className={`flex-1 rounded px-3 py-2 min-h-11 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[#3B82F6]/50"}`}
             />
             <button
               type="submit"
               disabled={searchLoading || !searchQuery.trim()}
-              className={`disabled:opacity-50 disabled:cursor-not-allowed font-mono text-xs px-4 py-2 whitespace-nowrap ${glassPrimaryButton(theme)}`}
+              className={`disabled:opacity-50 disabled:cursor-not-allowed font-mono text-xs px-4 py-2 min-h-11 whitespace-nowrap ${glassPrimaryButton(theme)}`}
             >
               {searchLoading ? "Searching..." : "Search"}
             </button>

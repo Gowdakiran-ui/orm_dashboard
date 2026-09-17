@@ -291,7 +291,7 @@ export function RiskTab({
                 // permanently visible instead of hover-only, since this
                 // tile's number (0) can otherwise look like it contradicts
                 // Active Alerts' own CRITICAL badge below.
-                <span className={`text-[10px] leading-snug mt-1.5 normal-case tracking-normal ${mutedText(theme)}`}>
+                <span className={`text-sm leading-snug mt-1.5 normal-case tracking-normal ${mutedText(theme)}`}>
                   {card.captionNode}
                 </span>
               )}
@@ -318,7 +318,7 @@ export function RiskTab({
               the same reason -- promoted from the (i) tooltip so the two
               tiles don't read as contradicting each other without
               requiring the reader to hover either one. */}
-          <p className={`text-[10px] leading-snug normal-case tracking-normal ${mutedText(theme)}`}>
+          <p className={`text-sm leading-snug normal-case tracking-normal ${mutedText(theme)}`}>
             <CriticalRisksVsActiveAlertsDefinition />
           </p>
         </CardHeader>
@@ -628,8 +628,8 @@ export function RiskTab({
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categoryData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                <XAxis type="number" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} />
-                <YAxis dataKey="name" type="category" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={8} tickLine={false} width={80} />
+                <XAxis type="number" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={12} tickLine={false} />
+                <YAxis dataKey="name" type="category" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={12} tickLine={false} width={80} />
                 <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
                 <Bar dataKey="count" name="Incidents" fill={accent} radius={[0, 4, 4, 0]} barSize={12} />
               </BarChart>

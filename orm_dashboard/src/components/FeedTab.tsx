@@ -186,7 +186,7 @@ export function FeedTab({
         ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : `14:0${7 - index}`;
       
-      let eventText = `RSS Article collected: "${d.title}"`;
+      let eventText = `New article added: "${d.title}"`;
       let type: "info" | "success" | "warn" | "error" = "info";
 
       if (d.risk >= 60) {

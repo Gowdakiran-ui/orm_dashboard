@@ -4,6 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Senior-friendly base text size: raises Tailwind's default text-xs
+   (0.75rem/12px, 1.33 line-height) to a real-world accessibility floor
+   (16px/1.5+ line-height, WCAG 1.4.12) as a single shared token, since
+   text-xs is the dominant size across nearly every label/caption/body
+   string in the product (428 usages across 28 components, confirmed via
+   grep) -- this cascades everywhere instead of needing per-component
+   overrides. Headline/stat numbers use larger tokens (text-xl/2xl) and
+   are unaffected. */
+@theme {
+  --text-xs: 1rem;
+  --text-xs--line-height: 1.5rem;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

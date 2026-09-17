@@ -157,14 +157,14 @@ export function Sidebar({
           <div className={`flex justify-between items-center pt-1 border-t ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
             <button
               onClick={onAddCompanyClick}
-              className={`flex items-center text-xs font-mono transition-colors ${isDark ? "text-[#00F5D4] hover:text-[#00F5D4]/80" : "text-[#3B82F6] hover:text-[#3B82F6]/80"}`}
+              className={`flex items-center min-h-11 px-2 text-xs font-mono transition-colors ${isDark ? "text-[#00F5D4] hover:text-[#00F5D4]/80" : "text-[#3B82F6] hover:text-[#3B82F6]/80"}`}
               title="Add Company"
             >
               <Plus className="h-3 w-3 mr-1" /> Add
             </button>
             <button
               onClick={() => onDeleteCompanyClick(clients.find((c: any) => c.id === clientId))}
-              className="flex items-center text-xs font-mono text-red-400 hover:text-red-300 transition-colors"
+              className="flex items-center min-h-11 px-2 text-xs font-mono text-red-400 hover:text-red-300 transition-colors"
               title="Delete Company"
             >
               <Trash2 className="h-3 w-3 mr-1" /> Delete
@@ -172,7 +172,7 @@ export function Sidebar({
             <button
               onClick={onRunPipeline}
               disabled={pipelineRunning}
-              className={`flex items-center text-xs font-mono disabled:opacity-50 transition-colors ${isDark ? "text-[#7B2CBF] hover:text-[#7B2CBF]/80" : "text-[#8B5CF6] hover:text-[#8B5CF6]/80"}`}
+              className={`flex items-center min-h-11 px-2 text-xs font-mono disabled:opacity-50 transition-colors ${isDark ? "text-[#7B2CBF] hover:text-[#7B2CBF]/80" : "text-[#8B5CF6] hover:text-[#8B5CF6]/80"}`}
               title="Run Pipeline"
             >
               {pipelineRunning ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Play className="h-3 w-3 mr-1" />}

@@ -21,6 +21,17 @@ import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } fr
 import { ReputationScoreDefinition, ExecutiveSentimentBreakdownDefinition, ExecutiveScorecardMetricsDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
+// Reinforces the letter grade with the same red/amber/green severity palette
+// already used for Risk severity elsewhere (e.g. RiskTab.tsx's CRITICAL/HIGH
+// badges) -- color is a secondary cue here, the letter stays primary.
+function gradeBandClass(grade: string | null | undefined): string {
+  const letter = grade ? String(grade).trim().charAt(0).toUpperCase() : "";
+  if (letter === "D" || letter === "F") return "border-red-500/40 bg-red-500/10";
+  if (letter === "C") return "border-amber-500/40 bg-amber-500/10";
+  if (letter === "A" || letter === "B") return "border-emerald-500/40 bg-emerald-500/10";
+  return "border-transparent";
+}
+
 export interface ExecutivesTabProps {
   execHistoryLoading: boolean;
   execHistory: Record<string, any[]>;
@@ -362,12 +373,12 @@ export function ExecutivesTab({
                     <span className={`block ${mutedText(theme)}`}>Trend</span>
                     <span className={bodyText(theme)}>{searchResult.executive.trend ?? 'STABLE'}</span>
                   </div>
-                  <div>
+                  <div className={`rounded border px-2 py-1 ${gradeBandClass(searchResult.executive.grade)}`}>
                     <span className={`flex items-center gap-1 ${mutedText(theme)}`}>
                       Grade
                       <InfoTooltip label="About Executive Reputation Grade"><ExecutiveReputationGradeDefinition /></InfoTooltip>
                     </span>
-                    <span className={bodyText(theme)}>{searchResult.executive.grade ?? 'N/A'}</span>
+                    <span className={`font-bold ${bodyText(theme)}`}>{searchResult.executive.grade ?? 'N/A'}</span>
                   </div>
                 </div>
               )}

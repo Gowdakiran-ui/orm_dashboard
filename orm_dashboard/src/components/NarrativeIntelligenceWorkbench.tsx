@@ -57,6 +57,11 @@ export function NarrativeIntelligenceWorkbench({
   const NARRATIVE_PAGE_SIZE = 25;
   const [narrativeRenderCount, setNarrativeRenderCount] = useState(NARRATIVE_PAGE_SIZE);
 
+  // Which cards' "Related to" list has been expanded past the capped
+  // preview (3 items) -- keyed by narrative id so expansion is per-card.
+  const RELATED_PREVIEW_COUNT = 3;
+  const [expandedRelated, setExpandedRelated] = useState<Set<string>>(new Set());
+
   // Reset back to the first page whenever the result set a viewer is
   // looking at changes underneath them -- a new search/sort/status filter,
   // or switching to a different client's narratives entirely.
@@ -387,12 +392,35 @@ export function NarrativeIntelligenceWorkbench({
                   )}
 
                   {n.relatedNarratives.length > 0 && (
-                    <div className={`mt-2 pt-1.5 border-t border-dashed flex items-start gap-1.5 text-[8.5px] font-mono ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                    <div className={`mt-2 pt-1.5 border-t border-dashed flex items-start gap-1.5 text-xs font-mono ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                       <Link2 className="h-3 w-3 mt-0.5 shrink-0" style={{ color: accent2 }} />
-                      <span>
-                        <span className={`font-bold uppercase ${mutedText(theme)}`}>Related to:</span>{" "}
-                        <span className="italic">{n.relatedNarratives.join(", ")}</span> — may be the same underlying story.
-                      </span>
+                      <div className="min-w-0">
+                        <span className={`font-bold uppercase ${mutedText(theme)}`}>Related to:</span>
+                        <ul className="list-disc list-inside mt-0.5 space-y-0.5">
+                          {(expandedRelated.has(n.id) ? n.relatedNarratives : n.relatedNarratives.slice(0, RELATED_PREVIEW_COUNT)).map((title: string, idx: number) => (
+                            <li key={idx} className="italic truncate">{title}</li>
+                          ))}
+                        </ul>
+                        {n.relatedNarratives.length > RELATED_PREVIEW_COUNT && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedRelated((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(n.id)) next.delete(n.id); else next.add(n.id);
+                                return next;
+                              })
+                            }
+                            className="not-italic font-bold mt-0.5 hover:underline"
+                            style={{ color: accent2 }}
+                          >
+                            {expandedRelated.has(n.id)
+                              ? "Show fewer"
+                              : `+${n.relatedNarratives.length - RELATED_PREVIEW_COUNT} more`}
+                          </button>
+                        )}
+                        <span className="block mt-0.5">— may be the same underlying story.</span>
+                      </div>
                     </div>
                   )}
                 </div>
