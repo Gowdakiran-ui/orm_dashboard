@@ -135,13 +135,26 @@ class InstagramAdapter(BaseSearchAdapter):
             except (TypeError, ValueError):
                 continue
 
+        # Instagram posts have no distinct title field (unlike RSS/YouTube),
+        # but leaving title="" left every Instagram document with an empty
+        # title-token set in narrative_engine.py's title-Jaccard clustering
+        # (set(w.lower() for w in (d.title or "").split() if len(w) > 3)),
+        # so these documents could only ever cluster via entity-overlap or
+        # the explicit both-empty escape -- title-similarity could never
+        # fire for them. Synthesized from `content` (not the raw caption)
+        # so it inherits clean_document_content's existing "too short/
+        # placeholder/HTML-only -> ''" filtering (text_processing.py's
+        # remove_placeholder_text, <20 chars after stripping) instead of a
+        # new threshold -- a caption that filters down to nothing keeps the
+        # prior empty-title behavior rather than fabricating a title.
+        # 200 chars + "..." matches narrative_engine.py's own title_snippet
+        # truncation convention (line ~1270).
+        synthesized_title = (content[:200] + "...") if len(content) > 200 else content
+
         return {
             "source_id": str(source_id),
             "source_type": "instagram",
-            # No distinct title field for Instagram posts (unlike RSS/YouTube) --
-            # same "empty title, full text lives in content" pattern rss.py's
-            # normalize() already uses for feed items without one.
-            "title": "",
+            "title": synthesized_title,
             "content": content,
             "url": raw_data.get("url", ""),
             "author": raw_data.get("ownerUsername") or raw_data.get("ownerFullName") or "",
