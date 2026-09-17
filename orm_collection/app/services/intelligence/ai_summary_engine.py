@@ -232,6 +232,42 @@ class AISummaryEngine:
             _record(success=False)
             return None
 
+    def _build_risk_event_what(self, re: RiskEvent, linked: Optional[tuple]) -> str:
+        """
+        Real description of what specifically triggered this risk event --
+        not the old risk_level/title/category restatement, which told the
+        reader nothing beyond what the Badge/title already show on the same
+        card. Reuse-first, same as _build_alert_what: when this risk event
+        is narrative-linked, that narrative's RCA already has a real,
+        evidence-grounded problem_statement describing the actual cluster
+        this event belongs to, so it's reused verbatim.
+
+        Falls back to the event's own real trigger signals -- already
+        computed and stored on it by risk_engine.py (explainability.
+        decision_reason, a deterministic sentence built from real topic/
+        sentiment/trend/source values, and risk_factors), not a new data
+        path -- only when there's no linked RCA to reuse.
+        """
+        if linked:
+            _, rca = linked
+            problem_statement = rca.get("problem_statement")
+            if problem_statement:
+                return problem_statement
+
+        explainability = re.explainability or {}
+        decision_reason = explainability.get("decision_reason")
+        if decision_reason:
+            return decision_reason
+
+        risk_factors = re.risk_factors or []
+        factor_parts = [
+            f"{f.get('type')} '{f.get('factor')}'" for f in risk_factors if f.get("factor")
+        ]
+        if factor_parts:
+            return f"{re.risk_level} risk driven by {', '.join(factor_parts)}."
+
+        return f"{re.risk_level} risk flagged with no further trigger detail available."
+
     def _prepare_risk_event(
         self, db: Session, re: RiskEvent, risk_narrative_map: Dict[str, tuple],
         client_name: str, client_id: str, run_id: Optional[str],
@@ -261,16 +297,17 @@ class AISummaryEngine:
         # be able to bust the cache either.
         snippet = (document.normalized_content if document else "") [:1500]
 
-        what = f"{re.risk_level} risk flagged on \"{title}\" (category: {topic_name})."
+        linked = risk_narrative_map.get(str(re.id))
+        what = self._build_risk_event_what(re, linked)
         when = self._format_when(re.computed_at or re.created_at)
 
         # Cache key: a hash of exactly the fields that feed how_to_solve
-        # (risk_level, topic, title, source excerpt) -- see
-        # _content_signature's docstring for why this replaced
-        # re.computed_at.
-        item_signature = _content_signature(re.risk_level, topic_name, title, snippet)
+        # (risk_level, topic, title, source excerpt) plus `what` itself, so
+        # a cache hit can't leave a stale `what` behind after risk_engine.py
+        # updates the trigger signals it's built from on a later pipeline
+        # run -- same fix as _prepare_alert's item_signature.
+        item_signature = _content_signature(re.risk_level, topic_name, title, snippet, what)
 
-        linked = risk_narrative_map.get(str(re.id))
         if linked:
             narrative, rca = linked
             # Also folds in the linked narrative's own rca text, so a reused
