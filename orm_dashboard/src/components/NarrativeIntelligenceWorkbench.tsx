@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { fetchDocumentDetails } from "@/lib/api";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
-import { getNarrativeDocuments } from "@/utils/narrativeEvidence";
+import { getNarrativeDocuments, getMissingSupportingDocumentIds, fetchMissingNarrativeDocuments } from "@/utils/narrativeEvidence";
 import { findRelatedNarratives } from "@/utils/narrativeSimilarity";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -46,6 +46,20 @@ export function NarrativeIntelligenceWorkbench({
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [docUrls, setDocUrls] = useState<Record<string, string | null>>({});
 
+  // Fallback for narrative evidence documents that have aged out of the
+  // main 500-most-recent-document window (see the lazy fetch effect below,
+  // keyed off activeNarrative) -- keyed by doc id so results accumulate
+  // across every narrative visited this session instead of being
+  // overwritten. Since these ids are, by construction, only ever ones
+  // missing from `documents`, concatenating the two below can't double-count.
+  const [extraDocs, setExtraDocs] = useState<Record<string, any>>({});
+  const [fetchingMissingDocs, setFetchingMissingDocs] = useState(false);
+
+  const documentsWithFallback = useMemo(() => {
+    const extra = Object.values(extraDocs);
+    return extra.length > 0 ? [...documents, ...extra] : documents;
+  }, [documents, extraDocs]);
+
   // Derived narrative stats & list mapping
   const narrativeList = useMemo(() => {
     const items = narratives.map(n => {
@@ -53,8 +67,13 @@ export function NarrativeIntelligenceWorkbench({
       // the exact document ID list narrative_engine.py's clustering (3-day
       // window, title-Jaccard, entity overlap, source-diversity gate)
       // produced for this narrative -- not a name/topic-substring re-scan
-      // over the whole per-client feed.
-      const docs = getNarrativeDocuments(n, documents);
+      // over the whole per-client feed. documentsWithFallback folds in any
+      // evidence documents fetched on-demand because they'd aged out of
+      // the main window (see the effect below) -- this recomputes for
+      // every narrative each time that fallback set grows, which is cheap
+      // (a handful of ids at most) and keeps this the single place
+      // rawDocs/docsCount are derived from.
+      const docs = getNarrativeDocuments(n, documentsWithFallback);
 
       // Find affected executives
       const meta = n.evidence_metadata || {};
@@ -110,7 +129,7 @@ export function NarrativeIntelligenceWorkbench({
       ...item,
       relatedNarratives: findRelatedNarratives(item, items, clientName).map(r => r.name)
     }));
-  }, [narratives, documents, executives, clientName]);
+  }, [narratives, documentsWithFallback, executives, clientName]);
 
   const activeNarrative = useMemo(() => {
     if (!selectedNarrativeId) return null;
@@ -126,6 +145,36 @@ export function NarrativeIntelligenceWorkbench({
       setSelectedNarrativeId(narrativeList[0].id);
     }
   }, [activeNarrative, narrativeList]);
+
+  // Lazy, targeted fallback: only runs for the narrative actually being
+  // viewed (not eagerly for all of them), and only fetches the specific
+  // supporting_documents ids this narrative is missing from `documents` --
+  // e.g. because they've aged out of the 500-most-recent-document window.
+  // Skips entirely (no request at all) when nothing is missing, which is
+  // the common case for a narrative whose evidence is still recent.
+  useEffect(() => {
+    if (!activeNarrative || !clientId) return;
+    const missingIds = getMissingSupportingDocumentIds(activeNarrative, documents);
+    const stillMissing = missingIds.filter(id => !(id in extraDocs));
+    if (stillMissing.length === 0) return;
+
+    let cancelled = false;
+    setFetchingMissingDocs(true);
+    fetchMissingNarrativeDocuments(clientId, activeNarrative, documents)
+      .then(fetched => {
+        if (cancelled || fetched.length === 0) return;
+        setExtraDocs(prev => {
+          const next = { ...prev };
+          for (const doc of fetched) next[String(doc.id)] = doc;
+          return next;
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setFetchingMissingDocs(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeNarrative, clientId]);
 
   useEffect(() => {
     if (!activeNarrative || !activeNarrative.rawDocs || !clientId) return;
@@ -541,6 +590,11 @@ export function NarrativeIntelligenceWorkbench({
                   </div>
                 );
               })
+            ) : fetchingMissingDocs ? (
+              <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
+                <RefreshCw className={`h-5 w-5 mb-1 animate-spin ${mutedText(theme)}`} />
+                Loading additional sources...
+              </div>
             ) : (
               <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
                 <AlertTriangle className={`h-5 w-5 mb-1 ${mutedText(theme)}`} />

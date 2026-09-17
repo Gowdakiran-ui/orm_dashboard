@@ -19,7 +19,7 @@ import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyT
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { AverageRiskScoreFeedDefinition } from "@/lib/metricDefinitions";
 import { formatScore } from "@/utils/formatScore";
-import { getNarrativeDocuments } from "@/utils/narrativeEvidence";
+import { getNarrativeDocuments, fetchMissingNarrativeDocuments } from "@/utils/narrativeEvidence";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface NarrativesTabProps {
@@ -194,11 +194,40 @@ export function NarrativesTab({
 
   const cardStyle = glassCard(theme);
 
-  const handleTraceClick = (narrativeName: string) => {
+  const buildLinkedDocuments = (docs: any[]) => docs.map(d => ({
+    id: d.id,
+    title: d.title,
+    risk: d.risk,
+    sentiment: d.sentiment,
+    source: d.source,
+    timestamp: d.timestamp,
+    content: d.content,
+    extracted_entities: d.extracted_entities,
+    processing_status: d.processing_status,
+    entity_processing_status: d.entity_processing_status,
+    topic_processing_status: d.topic_processing_status,
+    sentiment_processing_status: d.sentiment_processing_status,
+    url: d.url
+  }));
+
+  // A narrative's real evidence documents can include ids that have aged
+  // out of the already-loaded `documents` set (the client's 500-most-
+  // recent-document window) by the time its drawer is opened. Resolves the
+  // locally-available set first, and only reaches for the network when
+  // something's actually missing -- lazy, and scoped to exactly this one
+  // narrative's gap, not a broader reload.
+  const resolveNarrativeDocuments = async (narrative: any): Promise<any[]> => {
+    const localDocs = getNarrativeDocuments(narrative, documents);
+    const fetched = await fetchMissingNarrativeDocuments(clientId ?? undefined, narrative, documents);
+    if (fetched.length === 0) return localDocs;
+    return getNarrativeDocuments(narrative, [...documents, ...fetched]);
+  };
+
+  const handleTraceClick = async (narrativeName: string) => {
     setSelectedNarrative(narrativeName);
     const foundNarr = narratives.find(n => n.name.toLowerCase() === narrativeName.toLowerCase());
     if (foundNarr) {
-      const associatedDocs = getNarrativeDocuments(foundNarr, documents);
+      const associatedDocs = await resolveNarrativeDocuments(foundNarr);
 
       const meta = foundNarr.evidence_metadata || {};
       const ents = meta.supporting_entities || [];
@@ -209,21 +238,7 @@ export function NarrativesTab({
         data: {
           ...foundNarr,
           linkedExecutives: [primaryExec],
-          linkedDocuments: associatedDocs.map(d => ({
-            id: d.id,
-            title: d.title,
-            risk: d.risk,
-            sentiment: d.sentiment,
-            source: d.source,
-            timestamp: d.timestamp,
-            content: d.content,
-            extracted_entities: d.extracted_entities,
-            processing_status: d.processing_status,
-            entity_processing_status: d.entity_processing_status,
-            topic_processing_status: d.topic_processing_status,
-            sentiment_processing_status: d.sentiment_processing_status,
-            url: d.url
-          }))
+          linkedDocuments: buildLinkedDocuments(associatedDocs)
         }
       });
     }
@@ -610,18 +625,16 @@ export function NarrativesTab({
                           key={idx} 
                           variant="outline" 
                           className="text-xs font-normal uppercase bg-[#A855F7]/10 border-[#A855F7]/30 text-purple-300 py-1 px-2 cursor-pointer hover:bg-[#A855F7]/25"
-                          onClick={() => {
+                          onClick={async () => {
                             const found = narratives.find(n => n.name.toLowerCase() === narrName.toLowerCase());
                             if (found) {
-                              const associatedDocs = getNarrativeDocuments(found, documents);
+                              const associatedDocs = await resolveNarrativeDocuments(found);
                               setDrawerData({
                                 type: "narrative",
                                 data: {
                                   ...found,
                                   linkedExecutives: [drawerData.data.name],
-                                  linkedDocuments: associatedDocs.map(d => ({
-                                    id: d.id, title: d.title, risk: d.risk, sentiment: d.sentiment, source: d.source, timestamp: d.timestamp, content: d.content, extracted_entities: d.extracted_entities, processing_status: d.processing_status, entity_processing_status: d.entity_processing_status, topic_processing_status: d.topic_processing_status, sentiment_processing_status: d.sentiment_processing_status, url: d.url
-                                  }))
+                                  linkedDocuments: buildLinkedDocuments(associatedDocs)
                                 }
                               });
                             }

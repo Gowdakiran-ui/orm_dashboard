@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
@@ -228,14 +228,21 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
         "reputation_impact": rep_impact
     }
 
-@router.get("/client/{client_id}")
-def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
-    from app.models.client import Client
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+def _build_document_responses(db: Session, client_id, docs: List[Document]) -> list:
+    """
+    Shared enrichment: turns a list of already-fetched Document rows into
+    the exact response shape the frontend's `documents` array expects
+    (id/title/source/timestamp/sentiment/risk/narrative/topic/...). Used by
+    both read_client_documents (the main 500-most-recent window) and
+    read_client_documents_by_ids (the targeted evidence-id fallback) so the
+    two paths can never silently drift into different shapes for the same
+    fields -- this project has already been bitten once by that exact
+    failure mode (see get_client_visible_documents's docstring).
+    """
+    if not docs:
+        return []
 
+    from sqlalchemy.orm import joinedload
     from app.models.entity import Entity, EntityMention
     from app.models.source import Source
     from app.models.sentiment import DocumentSentiment
@@ -243,13 +250,6 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
     from app.models.topic import DocumentTopic
     from app.models.narrative import Narrative
     from app.models.document import DocumentMatch
-
-    docs = get_client_visible_documents(db, client_id, skip=skip, limit=limit)
-
-    if not docs:
-        return []
-        
-    from sqlalchemy.orm import joinedload
     doc_ids = [doc.id for doc in docs]
     
     source_ids = list({doc.source_id for doc in docs if doc.source_id})
@@ -349,5 +349,63 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
             "topic": topic_name,
             "reputation_impact": rep_impact
         })
-        
+
     return results
+
+
+@router.get("/client/{client_id}")
+def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
+    from app.models.client import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    docs = get_client_visible_documents(db, client_id, skip=skip, limit=limit)
+    return _build_document_responses(db, client_id, docs)
+
+
+@router.get("/client/{client_id}/by-ids")
+def read_client_documents_by_ids(client_id: UUID, ids: List[UUID] = Query(...), db: Session = Depends(get_db)):
+    """
+    Targeted fallback for a narrative's Source Evidence panel: a
+    narrative's real evidence_metadata.supporting_documents can reference
+    ids that have aged out of this client's main 500-most-recent-document
+    window (get_client_visible_documents) by the time the panel is opened
+    -- confirmed live, a narrative's document from ~21 hours before the
+    window's current cutoff was already excluded. This fetches exactly the
+    requested ids back, scoped to this client via the same
+    DocumentMatch/Entity join and brand-gating every other read here uses,
+    so the panel can render the narrative's real, complete evidence
+    regardless of whether each document is still in the main window.
+
+    Deliberately NOT a general search/filter endpoint: no ordering, no
+    paging, no free-form query -- just "give me these specific ids back."
+    An id that doesn't come back (deleted, or never belonged to this
+    client) is simply absent from the response; the caller shows whatever
+    is actually retrievable rather than the count being silently padded.
+    """
+    from app.models.client import Client
+    from app.models.entity import Entity
+
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    if not ids:
+        return []
+    # A narrative's own evidence set is realistically tens of documents at
+    # most; this caps the id list the same way limit=500 caps the main
+    # window, so this can't become an unbounded bulk-fetch path dressed up
+    # as a "by ids" lookup.
+    ids = ids[:200]
+
+    query = db.query(Document).join(DocumentMatch).join(Entity).filter(
+        Document.id.in_(ids),
+        Entity.client_id == client_id,
+    )
+    brand_doc_ids = _brand_gated_document_ids(db, client_id)
+    if brand_doc_ids is not None:
+        query = query.filter(Document.id.in_(brand_doc_ids))
+    docs = query.distinct().all()
+    return _build_document_responses(db, client_id, docs)
