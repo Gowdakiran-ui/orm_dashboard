@@ -388,12 +388,22 @@ services:
     healthcheck:
       # celery-beat has no worker to `inspect ping` -- it schedules, it
       # doesn't consume. Its beat_schedule (app/core/celery_app.py) has
-      # multiple per-minute crontabs, and beat rewrites its persistent
-      # schedule file (celerybeat-schedule, default location, in WORKDIR
-      # /app per the Dockerfile) on every wakeup, so a live process
-      # touches this file at least once a minute. A stale mtime means the
-      # scheduler loop has stopped ticking.
-      test: ["CMD-SHELL", "find /app/celerybeat-schedule* -mmin -2 | grep -q ."]
+      # crontabs down to every 5 minutes (the tightest, flush-metrics-
+      # every-5-minutes) and beat's own reported maxinterval is 5.00
+      # minutes (300s), so the persistent schedule file (celerybeat-
+      # schedule, default location, in WORKDIR /app per the Dockerfile)
+      # is only rewritten roughly every 5-6 minutes in practice, not every
+      # minute -- empirically confirmed 2026-09-17 (consecutive touches
+      # ~5m55s apart). A 2-minute mtime window was tighter than that real
+      # cadence and flapped unhealthy between touches every cycle even
+      # though beat was ticking fine. Widened to 10 minutes (2x margin
+      # over the observed cadence) and paired with a process-liveness
+      # check as the primary signal, since mtime alone can't distinguish
+      # "about to tick" from "actually stuck". Uses /proc directly rather
+      # than pgrep/ps -- this image has neither installed (confirmed by
+      # the first deploy of this fix immediately going unhealthy on every
+      # check: pgrep: not found), while grep and /proc are always present.
+      test: ["CMD-SHELL", "grep -q beat /proc/[1-9]*/cmdline 2>/dev/null && find /app/celerybeat-schedule* -mmin -10 | grep -q ."]
       interval: 30s
       timeout: 10s
       retries: 5
