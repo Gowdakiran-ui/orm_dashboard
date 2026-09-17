@@ -19,9 +19,8 @@
 -- own schema, and the public schema always exists already on any fresh
 -- Postgres instance.
 --
-
--- Dumped from database version 18.4 (Debian 18.4-1.pgdg12+1)
--- Dumped by pg_dump version 18.6 (Debian 18.6-1.pgdg13+2)
+-- Dumped from database version 18.6
+-- Dumped by pg_dump version 18.6 (Debian 18.6-1.pgdg12+2)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -34,6 +33,28 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: deactivate_feeds_on_entity_delete(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.deactivate_feeds_on_entity_delete() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    UPDATE public.rss_feeds
+    SET is_active = false
+    WHERE client_id = OLD.client_id
+      AND feed_name IN (
+        OLD.name || ' Google News Feed',
+        OLD.name || ' GDELT Feed',
+        OLD.name || ' HN Algolia Feed'
+      )
+      AND is_active = true;
+    RETURN OLD;
+END;
+$$;
+
 
 SET default_tablespace = '';
 
@@ -865,7 +886,7 @@ CREATE TABLE public.users (
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     role character varying(20) DEFAULT 'client_user'::character varying NOT NULL,
-    CONSTRAINT ck_users_role CHECK (((role)::text = ANY ((ARRAY['super_admin'::character varying, 'client_user'::character varying])::text[])))
+    CONSTRAINT ck_users_role CHECK (((role)::text = ANY (ARRAY[('super_admin'::character varying)::text, ('client_user'::character varying)::text])))
 );
 
 
@@ -990,22 +1011,6 @@ ALTER TABLE ONLY public.entities
 
 
 --
--- Name: product_benchmarks product_benchmarks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.product_benchmarks
-    ADD CONSTRAINT product_benchmarks_pkey PRIMARY KEY (id);
-
-
---
--- Name: product_benchmarks uq_product_benchmark_run; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.product_benchmarks
-    ADD CONSTRAINT uq_product_benchmark_run UNIQUE (product_entity_id, run_id);
-
-
---
 -- Name: entity_aliases entity_aliases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1094,6 +1099,14 @@ ALTER TABLE ONLY public.pipeline_runs
 
 
 --
+-- Name: product_benchmarks product_benchmarks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT product_benchmarks_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: reputation_scores reputation_scores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1123,14 +1136,6 @@ ALTER TABLE ONLY public.risk_client_states
 
 ALTER TABLE ONLY public.risk_events
     ADD CONSTRAINT risk_events_pkey PRIMARY KEY (id);
-
-
---
--- Name: rss_feeds uq_rss_feeds_client_id_feed_url; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.rss_feeds
-    ADD CONSTRAINT uq_rss_feeds_client_id_feed_url UNIQUE (client_id, feed_url);
 
 
 --
@@ -1307,6 +1312,22 @@ ALTER TABLE ONLY public.executive_candidates
 
 ALTER TABLE ONLY public.executive_reputation_scores
     ADD CONSTRAINT uq_exec_reputation_run UNIQUE (entity_id, run_id);
+
+
+--
+-- Name: product_benchmarks uq_product_benchmark_run; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT uq_product_benchmark_run UNIQUE (product_entity_id, run_id);
+
+
+--
+-- Name: rss_feeds uq_rss_feeds_client_id_feed_url; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rss_feeds
+    ADD CONSTRAINT uq_rss_feeds_client_id_feed_url UNIQUE (client_id, feed_url);
 
 
 --
@@ -1534,20 +1555,6 @@ CREATE INDEX ix_entities_parent_entity_id ON public.entities USING btree (parent
 
 
 --
--- Name: ix_product_benchmarks_client_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_product_benchmarks_client_id ON public.product_benchmarks USING btree (client_id);
-
-
---
--- Name: ix_product_benchmarks_product_entity_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_product_benchmarks_product_entity_id ON public.product_benchmarks USING btree (product_entity_id);
-
-
---
 -- Name: ix_entity_aliases_alias_text; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1632,17 +1639,17 @@ CREATE INDEX ix_executive_reputation_scores_entity_id ON public.executive_reputa
 
 
 --
--- Name: ix_llm_call_log_client_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_llm_call_log_client_id ON public.llm_call_log USING btree (client_id);
-
-
---
 -- Name: ix_llm_call_log_call_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_llm_call_log_call_type ON public.llm_call_log USING btree (call_type);
+
+
+--
+-- Name: ix_llm_call_log_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_llm_call_log_client_id ON public.llm_call_log USING btree (client_id);
 
 
 --
@@ -1678,6 +1685,20 @@ CREATE INDEX ix_pipeline_runs_client_id_started_at ON public.pipeline_runs USING
 --
 
 CREATE UNIQUE INDEX ix_pipeline_runs_run_id ON public.pipeline_runs USING btree (run_id);
+
+
+--
+-- Name: ix_product_benchmarks_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_product_benchmarks_client_id ON public.product_benchmarks USING btree (client_id);
+
+
+--
+-- Name: ix_product_benchmarks_product_entity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_product_benchmarks_product_entity_id ON public.product_benchmarks USING btree (product_entity_id);
 
 
 --
@@ -1804,6 +1825,13 @@ CREATE UNIQUE INDEX uq_risk_events_daily ON public.risk_events USING btree (clie
 --
 
 CREATE UNIQUE INDEX uq_trend_events_daily ON public.trend_events USING btree (client_id, trend_type, COALESCE((entity_id)::text, ''::text), COALESCE((topic_id)::text, ''::text), trend_date) WHERE (trend_date IS NOT NULL);
+
+
+--
+-- Name: entities deactivate_feeds_on_entity_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER deactivate_feeds_on_entity_delete AFTER DELETE ON public.entities FOR EACH ROW EXECUTE FUNCTION public.deactivate_feeds_on_entity_delete();
 
 
 --
@@ -1959,22 +1987,6 @@ ALTER TABLE ONLY public.entities
 
 
 --
--- Name: product_benchmarks product_benchmarks_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.product_benchmarks
-    ADD CONSTRAINT product_benchmarks_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
-
-
---
--- Name: product_benchmarks product_benchmarks_product_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.product_benchmarks
-    ADD CONSTRAINT product_benchmarks_product_entity_id_fkey FOREIGN KEY (product_entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
-
-
---
 -- Name: entity_aliases entity_aliases_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2055,19 +2067,19 @@ ALTER TABLE ONLY public.executive_reputation_scores
 
 
 --
--- Name: llm_call_log llm_call_log_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.llm_call_log
-    ADD CONSTRAINT llm_call_log_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
-
-
---
 -- Name: rss_feeds fk_rss_feeds_client_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.rss_feeds
     ADD CONSTRAINT fk_rss_feeds_client_id FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE SET NULL;
+
+
+--
+-- Name: llm_call_log llm_call_log_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.llm_call_log
+    ADD CONSTRAINT llm_call_log_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
 
 
 --
@@ -2084,6 +2096,22 @@ ALTER TABLE ONLY public.model_runs
 
 ALTER TABLE ONLY public.narratives
     ADD CONSTRAINT narratives_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: product_benchmarks product_benchmarks_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT product_benchmarks_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: product_benchmarks product_benchmarks_product_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product_benchmarks
+    ADD CONSTRAINT product_benchmarks_product_entity_id_fkey FOREIGN KEY (product_entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
 
 
 --
