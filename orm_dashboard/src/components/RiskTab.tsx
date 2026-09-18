@@ -97,27 +97,28 @@ export function RiskTab({
   // fires once, finds no #active-alerts-section yet, and never retries
   // once the real content mounts.
   //
-  // The double rAF defer is load-bearing, not decorative: confirmed live
-  // on xoop.theaicompany.co that calling scrollIntoView synchronously in
-  // this effect DOES run (verified via a patched scrollIntoView) but gets
-  // silently overridden back to scrollY=0 -- Next.js App Router's own
-  // scroll-restoration-to-top for this navigation lands in the same
-  // commit/paint window and wins the race. Pushing the call two frames out
-  // lets that settle first (the standard workaround for this exact
-  // App Router behavior) before we scroll.
+  // Confirmed live on xoop.theaicompany.co, twice: the scrollIntoView call
+  // genuinely fires (verified via a patched scrollIntoView) with the right
+  // target, but scrollY snaps back to 0 anyway -- something in Next.js App
+  // Router's own scroll handling for this navigation keeps re-asserting
+  // scroll-to-top, and a single deferred call (even two rAFs out) still
+  // loses that race. Since the reset's exact duration isn't knowable from
+  // here, re-assert the scroll every 150ms for up to ~1.5s instead of
+  // once -- whichever call lands after Next stops resetting is the one
+  // that sticks, and re-asserting an already-correct scroll position is a
+  // no-op.
   const focusParam = searchParams.get("focus");
   useEffect(() => {
     if (focusParam !== "alerts") return;
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const tryScroll = () => {
+      document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      attempts += 1;
+      if (attempts < 10) timer = setTimeout(tryScroll, 150);
     };
+    tryScroll();
+    return () => clearTimeout(timer);
   }, [focusParam, documentsLoading, alertsLoading]);
 
   // The /documents/client/{id} list (source of `documents`) doesn't include
