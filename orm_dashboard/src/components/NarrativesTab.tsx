@@ -146,8 +146,19 @@ export function NarrativesTab({
     });
   }, [narratives, searchTerm, minMentions, minRisk]);
 
+  // Phase 2 Item 4: plotting one point per narrative (2,416 on Tesla) plus
+  // this O(n^2) nudge loop below was a real DOM/paint cost on the same page
+  // whose freeze this effort was about fixing (Phase 0 finding, not fixed
+  // then). Capped to the HEALTH_MATRIX_MAX_POINTS most significant
+  // narratives, using mention count descending -- the same "significant"
+  // ranking client_intelligence.py's /top-narratives endpoint already uses
+  // (order_by mention_count desc), just with a larger N since this is a
+  // dense scatter chart, not a top-5 list.
+  const HEALTH_MATRIX_MAX_POINTS = 300;
+  const healthMatrixCapped = filteredNarratives.length > HEALTH_MATRIX_MAX_POINTS;
   const healthMatrixData = useMemo(() => {
-    const rawData = filteredNarratives.map(n => ({
+    const bySignificance = [...filteredNarratives].sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
+    const rawData = bySignificance.slice(0, HEALTH_MATRIX_MAX_POINTS).map(n => ({
       ...n,
       label: n.name
     }));
@@ -158,7 +169,7 @@ export function NarrativesTab({
       for (let j = i + 1; j < resolvedData.length; j++) {
         const dx = Math.abs(resolvedData[i].trend - resolvedData[j].trend);
         const dy = Math.abs(resolvedData[i].risk - resolvedData[j].risk);
-        
+
         // If they are within 3 units in Velocity (trend) and Risk, nudge them slightly
         if (dx < 3.0 && dy < 3.0) {
           const angle = (j * 0.95) % (2 * Math.PI);
@@ -349,6 +360,11 @@ export function NarrativesTab({
               <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#EF4444" }} />Negative sentiment</span>
               <span>Bubble size = coverage volume</span>
             </div>
+            {healthMatrixCapped && (
+              <p className={`text-xs font-mono pt-1 ${mutedText(theme)}`}>
+                Showing the {HEALTH_MATRIX_MAX_POINTS} most-mentioned of {filteredNarratives.length} narratives.
+              </p>
+            )}
           </CardHeader>
           <CardContent className="h-[480px]">
             {healthMatrixData.length > 0 ? (
