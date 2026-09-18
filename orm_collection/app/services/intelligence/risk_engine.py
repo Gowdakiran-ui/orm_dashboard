@@ -681,18 +681,32 @@ class RiskEngine:
         reach_trust_modifier = 1.0
         reach_trust_basis = None
         reach_trust_eligible = True
-        if document.document_type == "youtube" and document.view_count is not None:
+        if document.document_type == "youtube":
+            # No "and view_count is not None" guard -- a YouTube document
+            # with no view_count at all (no stats fetched, whether because
+            # collection predates the stats-fetch code or the videos.list
+            # call failed) has no distinguishing "not yet attempted" marker
+            # in the schema (confirmed: view_count is the only signal,
+            # nothing records whether a fetch was ever attempted), so it
+            # cannot be treated as exempt from the gate -- missing data must
+            # not score more favorably than known-low data. is_youtube_reach_eligible
+            # already resolves None to 0 via `(view_count or 0)`, so removing
+            # this guard correctly fails the gate (reach_trust_eligible=False)
+            # instead of silently defaulting to the eligible=True initializer
+            # above. get_reach_modifier(None, ...) still returns a neutral
+            # 1.0 modifier, but that's moot once reach_trust_eligible is False
+            # -- the is_risk_relevant check below zeroes final_score regardless.
             reach_trust_modifier = get_reach_modifier(document.view_count, document.comment_count)
             reach_trust_basis = "reach"
             reach_trust_eligible = is_youtube_reach_eligible(document.view_count, document.comment_count)
         elif document.document_type == "instagram":
-            # Unlike youtube above, no "and view_count is not None" guard --
-            # view_count is legitimately None for image posts (no play/view
-            # count exists at all), and is_instagram_reach_eligible already
-            # handles that by falling back to comment_count alone. Guarding
-            # it here the same way as youtube would silently give every
-            # image post the neutral 1.0/eligible=True default below instead
-            # of ever applying the comment-count floor.
+            # Same no-guard shape as youtube above -- view_count is
+            # legitimately None for image posts (no play/view count exists
+            # at all), and is_instagram_reach_eligible already handles that
+            # by falling back to comment_count alone. Guarding this branch
+            # on view_count would silently give every image post the
+            # neutral 1.0/eligible=True default above instead of ever
+            # applying the comment-count floor.
             reach_trust_modifier = get_reach_modifier(document.view_count, document.comment_count)
             reach_trust_basis = "reach"
             reach_trust_eligible = is_instagram_reach_eligible(document.view_count, document.comment_count)

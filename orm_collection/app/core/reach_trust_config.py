@@ -143,9 +143,15 @@ def is_youtube_reach_eligible(view_count, comment_count=None) -> bool:
     """
     Hard gate for YouTube: eligible only at or above the real "genuinely
     non-negligible audience" reach floor (published 2026 benchmarks) on views
-    or comments. Callers must only invoke this when view_count is not None --
-    a document with no reach data at all has no reach signal to gate on (see
-    get_reach_modifier).
+    or comments. Safe to call with view_count=None (or comment_count=None) --
+    resolves to 0 via `(view_count or 0)` and correctly fails the gate. A
+    document with no reach data at all has no way to prove it cleared the
+    floor, so it must not be treated as exempt from the gate the way an
+    earlier version of both call sites (risk_engine.py, is_document_reach_trust_eligible
+    below) used to -- missing data must not score more favorably than
+    known-low data. (get_reach_modifier separately still returns a neutral
+    1.0 *modifier* for view_count=None; that's unrelated to this eligibility
+    gate and moot once reach_trust_eligible is False.)
     """
     return (view_count or 0) >= YOUTUBE_MIN_VIEW_COUNT or (comment_count or 0) >= YOUTUBE_MIN_COMMENT_COUNT
 
@@ -191,7 +197,13 @@ def is_document_reach_trust_eligible(document_type, title, view_count=None, comm
     since the schema has no dedicated upvote column, the same reuse-not-add
     approach view_count/comment_count already take for every other source.
     """
-    if document_type == "youtube" and view_count is not None:
+    if document_type == "youtube":
+        # No "and view_count is not None" guard -- mirrors the identical fix
+        # in risk_engine.py's inline dispatch (see its comment): a YouTube
+        # document with no view_count at all has no "not yet attempted"
+        # marker distinct from "attempted and got nothing", so it must fail
+        # the gate like any other missing/low-reach document, not bypass it.
+        # is_youtube_reach_eligible already resolves None to 0 safely.
         return is_youtube_reach_eligible(view_count, comment_count)
     elif document_type == "instagram":
         return is_instagram_reach_eligible(view_count, comment_count)
