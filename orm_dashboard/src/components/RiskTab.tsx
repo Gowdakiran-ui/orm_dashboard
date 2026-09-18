@@ -97,23 +97,26 @@ export function RiskTab({
   // fires once, finds no #active-alerts-section yet, and never retries
   // once the real content mounts.
   //
-  // Confirmed live on xoop.theaicompany.co, twice: the scrollIntoView call
-  // genuinely fires (verified via a patched scrollIntoView) with the right
-  // target, but scrollY snaps back to 0 anyway -- something in Next.js App
-  // Router's own scroll handling for this navigation keeps re-asserting
-  // scroll-to-top, and a single deferred call (even two rAFs out) still
-  // loses that race. Since the reset's exact duration isn't knowable from
-  // here, re-assert the scroll every 150ms for up to ~1.5s instead of
-  // once -- whichever call lands after Next stops resetting is the one
-  // that sticks, and re-asserting an already-correct scroll position is a
-  // no-op.
+  // Confirmed live on xoop.theaicompany.co across three attempts: the call
+  // genuinely fires (verified via a patched scrollIntoView) targeting the
+  // right element, yet scrollY kept snapping back to 0 -- including with a
+  // repeat-every-150ms retry loop, which ruled out a one-shot timing miss.
+  // A manual scrollIntoView from the console, run well after mount, worked
+  // and stuck immediately -- with behavior:"instant" specifically. The
+  // remaining variable was "smooth": firing a new smooth scrollIntoView
+  // every 150ms while the target's own layout is still shifting (charts/
+  // data settling in) restarts the browser's scroll animation against a
+  // moving target each time instead of letting any one animation finish,
+  // which reads exactly like "never actually scrolls". Using "instant"
+  // sidesteps that whole class of bug -- each call is an immediate,
+  // idempotent jump, not an animation that can be interrupted.
   const focusParam = searchParams.get("focus");
   useEffect(() => {
     if (focusParam !== "alerts") return;
     let attempts = 0;
     let timer: ReturnType<typeof setTimeout>;
     const tryScroll = () => {
-      document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" });
       attempts += 1;
       if (attempts < 10) timer = setTimeout(tryScroll, 150);
     };
