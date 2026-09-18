@@ -90,11 +90,18 @@ export function RiskTab({
   // Sidebar's dedicated "Active Alerts" nav entry (Phase 2 Item 1) links
   // here via ?tab=risk&focus=alerts instead of a new page/component --
   // this just scrolls the existing Active Alerts card into view once.
+  // Depends on the loading flags too, not just focusParam -- on a direct/
+  // hard navigation (vs. an in-app tab switch) this component mounts with
+  // documentsLoading/alertsLoading still true and renders the skeleton
+  // below instead of the real card, so an effect keyed on focusParam alone
+  // fires once, finds no #active-alerts-section yet, and never retries
+  // once the real content mounts (confirmed live: scrollY stayed 0 on a
+  // fresh /dashboard?tab=risk&focus=alerts load).
   const focusParam = searchParams.get("focus");
   useEffect(() => {
     if (focusParam !== "alerts") return;
     document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [focusParam]);
+  }, [focusParam, documentsLoading, alertsLoading]);
 
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
