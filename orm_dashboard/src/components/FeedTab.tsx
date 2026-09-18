@@ -54,6 +54,14 @@ export function FeedTab({
   const FEED_PAGE_SIZE = 50;
   const [feedRenderCount, setFeedRenderCount] = useState(FEED_PAGE_SIZE);
 
+  // Phase 2 Item 2: the three lower feeds (ingest stream, document detail,
+  // activity log) used to render as three simultaneous columns -- all
+  // still fully functional, just consolidated behind a tab switcher so
+  // only one competes for attention by default. Ingest stream first since
+  // it's the one the other two depend on (selecting a doc there drives
+  // Document Intelligence Details).
+  const [feedView, setFeedView] = useState<"ingest" | "details" | "activity">("ingest");
+
   // Automatically select the first document on load
   useEffect(() => {
     if (documents.length > 0 && !selectedDocId) {
@@ -360,11 +368,37 @@ export function FeedTab({
 
           </div>
 
-          {/* LOWER SPLIT LAYOUT: Ingested Feed List (Left), Document Details Panel (Middle-Right), Telemetry (Right) */}
-          <div className="grid gap-6 lg:grid-cols-12 items-start">
-            
-            {/* LEFT COLUMN: Real-Time Ingested Feed List */}
-            <Card className={`lg:col-span-5 ${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
+          {/* LOWER SECTION: Ingested Feed List, Document Details Panel, Activity
+              Log -- consolidated behind a tab switcher (Phase 2 Item 2),
+              same underline-tab pattern as AnalyticsTabHeader.tsx. */}
+          <div>
+            <div className={`flex space-x-6 border-b pb-0 mb-4 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
+              {[
+                { id: "ingest" as const, label: "Real-Time Brand Ingest Stream" },
+                { id: "details" as const, label: "Document Intelligence Details" },
+                { id: "activity" as const, label: "Live Activity Log" }
+              ].map(sub => {
+                const isActive = feedView === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => setFeedView(sub.id)}
+                    className={`pb-3 text-xs font-mono transition-all relative ${
+                      isActive
+                        ? "font-bold border-b-2"
+                        : `${mutedText(theme)} border-b-2 border-transparent ${isDark ? "hover:text-zinc-200" : "hover:text-zinc-800"}`
+                    }`}
+                    style={isActive ? { color: accent, borderColor: accent } : undefined}
+                  >
+                    {sub.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Real-Time Ingested Feed List */}
+            {feedView === "ingest" && (
+            <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
               <div className={SPECULAR_LINE} />
               <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
@@ -440,9 +474,11 @@ export function FeedTab({
                 )}
               </CardContent>
             </Card>
+            )}
 
-            {/* MIDDLE-RIGHT COLUMN: Document Intelligence Detail Panel */}
-            <Card className={`lg:col-span-5 ${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`} style={{ borderRightWidth: 2, borderRightColor: `${accent}73` }}>
+            {/* Document Intelligence Detail Panel */}
+            {feedView === "details" && (
+            <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
               <div className={SPECULAR_LINE} />
               <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
@@ -572,9 +608,11 @@ export function FeedTab({
                 )}
               </CardContent>
             </Card>
+            )}
 
-            {/* FAR-RIGHT COLUMN: Live Telemetry activity log */}
-            <Card className={`lg:col-span-2 ${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
+            {/* Live Telemetry activity log */}
+            {feedView === "activity" && (
+            <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
               <div className={SPECULAR_LINE} />
               <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
@@ -603,6 +641,7 @@ export function FeedTab({
                 })}
               </CardContent>
             </Card>
+            )}
 
           </div>
 
