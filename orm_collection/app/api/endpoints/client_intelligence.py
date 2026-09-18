@@ -697,6 +697,17 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
     from app.services.intelligence.entity_discovery import entity_discovery_engine
 
     def _executive_payload(entity: "Entity", score) -> Dict[str, Any]:
+        # Phase 2 Item 3: component_scores/document_count already computed
+        # and persisted per row by executive_reputation_engine.py
+        # (calculation_lineage JSONB, written at
+        # _evaluate_single_executive_optimized's "component_scores"/
+        # "raw_values" -- see lines ~540-554) -- this is the first read path
+        # to actually expose that existing driver breakdown to the frontend,
+        # not a new computation. component_scores preserves real None for an
+        # unavailable component (unlike the *_component DB columns, which
+        # store 0.0 for "unavailable" -- see model/engine comments), so the
+        # frontend can tell "no evidence" apart from "genuinely scored zero".
+        lineage = (score.calculation_lineage or {}) if score else {}
         return {
             "status": "tracked",
             "executive": {
@@ -710,7 +721,9 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
                 "top_negative": score.top_negative_narrative if score else None,
                 "confidence_score": score.confidence_score if score else None,
                 "data_coverage": score.data_coverage if score else None,
-                "health_status": score.health_status if score else "INSUFFICIENT_EVIDENCE"
+                "health_status": score.health_status if score else "INSUFFICIENT_EVIDENCE",
+                "component_scores": lineage.get("component_scores") if score else None,
+                "document_count": lineage.get("raw_values", {}).get("document_count") if score else None
             }
         }
 

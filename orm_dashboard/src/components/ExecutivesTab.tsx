@@ -32,6 +32,46 @@ function gradeBandClass(grade: string | null | undefined): string {
   return "border-transparent";
 }
 
+// Phase 2 Item 3: same 35/30/15/10/10 weighting ExecutiveReputationGradeDefinition
+// already documents (metricDefinitions.tsx) and executive_reputation_engine.py
+// applies -- used only to pick which already-computed component most dragged
+// the grade down, not to recompute the score itself.
+const COMPONENT_LABELS: Record<string, { label: string; weight: number }> = {
+  sentiment: { label: "Sentiment", weight: 0.35 },
+  risk: { label: "Risk", weight: 0.30 },
+  narrative: { label: "Narrative exposure", weight: 0.15 },
+  trend: { label: "Coverage trend", weight: 0.10 },
+  visibility: { label: "Mention visibility", weight: 0.10 }
+};
+
+// Grade "why" line: identifies the lowest-scoring *active* component
+// (component_scores keeps a real null for anything the engine had no
+// evidence for -- see client_intelligence.py's _executive_payload) and
+// states it plainly, e.g. "Grade D -- primarily driven by weak Sentiment
+// (32/100) across 7 mentions this period." Ties broken by weight, since a
+// heavier-weighted component moves the score more.
+function gradeDriverLine(executive: any): string | null {
+  const scores = executive?.component_scores;
+  if (!scores || typeof scores !== "object") return null;
+
+  let worstKey: string | null = null;
+  let worstValue = Infinity;
+  for (const [key, meta] of Object.entries(COMPONENT_LABELS)) {
+    const value = scores[key];
+    if (value === null || value === undefined) continue;
+    if (value < worstValue || (value === worstValue && worstKey && meta.weight > COMPONENT_LABELS[worstKey].weight)) {
+      worstValue = value;
+      worstKey = key;
+    }
+  }
+  if (!worstKey) return null;
+
+  const coverage = typeof executive.document_count === "number"
+    ? ` across ${executive.document_count} mention${executive.document_count === 1 ? "" : "s"} this period`
+    : "";
+  return `Grade ${executive.grade ?? "N/A"} — primarily driven by weak ${COMPONENT_LABELS[worstKey].label} (${Math.round(worstValue)}/100)${coverage}.`;
+}
+
 export interface ExecutivesTabProps {
   execHistoryLoading: boolean;
   execHistory: Record<string, any[]>;
@@ -381,6 +421,11 @@ export function ExecutivesTab({
                     <span className={`font-bold ${bodyText(theme)}`}>{searchResult.executive.grade ?? 'N/A'}</span>
                   </div>
                 </div>
+              )}
+              {gradeDriverLine(searchResult.executive) && (
+                <p className={`text-xs font-mono pt-1 border-t ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"} ${mutedText(theme)}`}>
+                  {gradeDriverLine(searchResult.executive)}
+                </p>
               )}
             </div>
           )}
