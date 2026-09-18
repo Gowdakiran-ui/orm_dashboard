@@ -87,6 +87,15 @@ export function RiskTab({
   const hasListFilter = Boolean(severityParam || dateParam);
   const clearListFilter = () => navigateTo("risk");
 
+  // Sidebar's dedicated "Active Alerts" nav entry (Phase 2 Item 1) links
+  // here via ?tab=risk&focus=alerts instead of a new page/component --
+  // this just scrolls the existing Active Alerts card into view once.
+  const focusParam = searchParams.get("focus");
+  useEffect(() => {
+    if (focusParam !== "alerts") return;
+    document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusParam]);
+
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
   // single-document detail endpoint does return it.
@@ -309,7 +318,7 @@ export function RiskTab({
       </div>
 
       {/* 1b. Active Alerts */}
-      <Card className={glassCard(theme)}>
+      <Card id="active-alerts-section" className={glassCard(theme)}>
         <div className={SPECULAR_LINE} />
         <CardHeader>
           <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
