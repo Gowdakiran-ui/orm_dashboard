@@ -95,12 +95,29 @@ export function RiskTab({
   // documentsLoading/alertsLoading still true and renders the skeleton
   // below instead of the real card, so an effect keyed on focusParam alone
   // fires once, finds no #active-alerts-section yet, and never retries
-  // once the real content mounts (confirmed live: scrollY stayed 0 on a
-  // fresh /dashboard?tab=risk&focus=alerts load).
+  // once the real content mounts.
+  //
+  // The double rAF defer is load-bearing, not decorative: confirmed live
+  // on xoop.theaicompany.co that calling scrollIntoView synchronously in
+  // this effect DOES run (verified via a patched scrollIntoView) but gets
+  // silently overridden back to scrollY=0 -- Next.js App Router's own
+  // scroll-restoration-to-top for this navigation lands in the same
+  // commit/paint window and wins the race. Pushing the call two frames out
+  // lets that settle first (the standard workaround for this exact
+  // App Router behavior) before we scroll.
   const focusParam = searchParams.get("focus");
   useEffect(() => {
     if (focusParam !== "alerts") return;
-    document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, [focusParam, documentsLoading, alertsLoading]);
 
   // The /documents/client/{id} list (source of `documents`) doesn't include
