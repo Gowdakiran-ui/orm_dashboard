@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -191,6 +191,35 @@ export function RiskTab({
       return true;
     });
   }, [riskDocs, severityParam, dateParam]);
+
+  // Risk Events table horizontal-scroll affordance (tablet-width finding,
+  // ui_redesign_plan_tablet.md Section 4): the shared <Table> primitive's
+  // own overflow-x-auto wrapper gives no visual cue that columns are
+  // scrolled off-screen, so on a touch device (where scrollbars are
+  // invisible until touched) the "Details" action link can go undiscovered.
+  // Reads the table's own container div (Table's `data-slot="table-container"`)
+  // rather than modifying that shared primitive, since it's reused by five
+  // other tables that don't have this problem.
+  const riskTableWrapperRef = useRef<HTMLDivElement | null>(null);
+  const [riskTableScrollable, setRiskTableScrollable] = useState(false);
+
+  useEffect(() => {
+    const container = riskTableWrapperRef.current?.querySelector('[data-slot="table-container"]') as HTMLElement | null;
+    if (!container) return;
+
+    const checkScrollable = () => {
+      setRiskTableScrollable(container.scrollWidth > container.clientWidth + 1);
+    };
+
+    checkScrollable();
+    const resizeObserver = new ResizeObserver(checkScrollable);
+    resizeObserver.observe(container);
+    window.addEventListener("resize", checkScrollable);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", checkScrollable);
+    };
+  }, [filteredRiskDocs]);
 
   const selectedDoc = useMemo(() => {
     if (!selectedDocId) return null;
@@ -639,9 +668,9 @@ export function RiskTab({
               {/* X Axis Labels */}
               <div className="col-span-1" />
               <div className={`col-span-11 grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-xs ${mutedText(theme)}`}>
-                <span>LOW LIKELIHOOD</span>
-                <span>MED LIKELIHOOD</span>
-                <span>HIGH LIKELIHOOD</span>
+                <span className="min-w-0 break-words">LOW LIKELIHOOD</span>
+                <span className="min-w-0 break-words">MED LIKELIHOOD</span>
+                <span className="min-w-0 break-words">HIGH LIKELIHOOD</span>
               </div>
             </div>
           </CardContent>
@@ -713,72 +742,90 @@ export function RiskTab({
               </button>
             </div>
           )}
-          <Table>
-            <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
-              <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>INCIDENT HEADLINE</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>SEVERITY</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>CORE TOPIC</TableHead>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
-                <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRiskDocs.map((doc, idx) => (
-                <TableRow
-                  key={doc.id}
-                  className={`transition-colors cursor-pointer ${isDark ? "border-white/[0.08] hover:bg-white/[0.04]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}
-                  onClick={() => setSelectedDocId(doc.id)}
-                >
-                  <TableCell className={`font-mono text-xs font-bold max-w-[320px] truncate ${bodyText(theme)}`}>
-                    {doc.title}
-                  </TableCell>
-                  <TableCell className={`text-center font-mono text-xs font-black ${
-                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
-                  }`}>
-                    {Math.round(doc.risk || 0)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge className={`font-mono text-xs ${
-                      doc.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
-                      doc.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
-                      "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
+          <div ref={riskTableWrapperRef} className="relative">
+            <Table>
+              <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
+                <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
+                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>INCIDENT HEADLINE</TableHead>
+                  <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
+                  {/* Reduced default column set at tablet widths (<lg, matching
+                      the sidebar's own breakpoint) -- SEVERITY/CORE TOPIC/SOURCE
+                      stay reachable via the existing row-level "Details" modal
+                      instead of squeezing all 7 columns into the scroll
+                      container (ui_redesign_plan_tablet.md Section 4/8). */}
+                  <TableHead className={`hidden lg:table-cell font-mono text-xs text-center ${mutedText(theme)}`}>SEVERITY</TableHead>
+                  <TableHead className={`hidden lg:table-cell font-mono text-xs text-center ${mutedText(theme)}`}>CORE TOPIC</TableHead>
+                  <TableHead className={`hidden lg:table-cell font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
+                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
+                  <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRiskDocs.map((doc, idx) => (
+                  <TableRow
+                    key={doc.id}
+                    className={`transition-colors cursor-pointer ${isDark ? "border-white/[0.08] hover:bg-white/[0.04]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}
+                    onClick={() => setSelectedDocId(doc.id)}
+                  >
+                    <TableCell className={`font-mono text-xs font-bold max-w-[320px] truncate ${bodyText(theme)}`}>
+                      {doc.title}
+                    </TableCell>
+                    <TableCell className={`text-center font-mono text-xs font-black ${
+                      doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
                     }`}>
-                      {doc.severity}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] font-mono text-xs" : "border-[#3B82F6]/30 text-[#3B82F6] font-mono text-xs"}>
-                      {doc.topic}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className={`font-mono text-xs truncate max-w-[120px] ${mutedText(theme)}`}>
-                    {doc.source || "Unknown Source"}
-                  </TableCell>
-                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
-                    {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedDocId(doc.id); }}
-                      className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-xs rounded px-3 min-h-[44px] inline-flex items-center justify-center"
-                    >
-                      Details
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredRiskDocs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
-                    {hasListFilter ? "No risk incidents match this filter." : "No risk incidents flagged."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                      {Math.round(doc.risk || 0)}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-center">
+                      <Badge className={`font-mono text-xs ${
+                        doc.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                        doc.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
+                        "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
+                      }`}>
+                        {doc.severity}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-center">
+                      <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] font-mono text-xs" : "border-[#3B82F6]/30 text-[#3B82F6] font-mono text-xs"}>
+                        {doc.topic}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className={`hidden lg:table-cell font-mono text-xs truncate max-w-[120px] ${mutedText(theme)}`}>
+                      {doc.source || "Unknown Source"}
+                    </TableCell>
+                    <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
+                      {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedDocId(doc.id); }}
+                        className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-xs rounded px-3 min-h-[44px] inline-flex items-center justify-center"
+                      >
+                        Details
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredRiskDocs.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
+                      {hasListFilter ? "No risk incidents match this filter." : "No risk incidents flagged."}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+            {/* Horizontal-scroll affordance: only rendered when the table's own
+                container actually overflows (ResizeObserver-driven), so it
+                doesn't appear once the reduced column set already fits. */}
+            {riskTableScrollable && (
+              <div
+                aria-hidden="true"
+                className={`pointer-events-none absolute top-0 right-0 bottom-0 w-10 bg-gradient-to-l ${
+                  isDark ? "from-zinc-900/90 to-transparent" : "from-white/90 to-transparent"
+                }`}
+              />
+            )}
+          </div>
         </CardContent>
       </Card>
 

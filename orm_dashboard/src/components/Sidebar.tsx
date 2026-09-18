@@ -73,7 +73,7 @@ export function Sidebar({
       {/* Mobile backdrop — dims content and closes the drawer on tap */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
@@ -84,7 +84,7 @@ export function Sidebar({
           isDark ? "border-white/[0.12] bg-zinc-900/60" : "border-white/70 bg-white/60"
         } ${
           isOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 md:sticky md:top-0`}
+        } lg:translate-x-0 lg:sticky lg:top-0`}
       >
       <div className="flex flex-col h-full overflow-y-auto no-scrollbar">
 
@@ -105,7 +105,7 @@ export function Sidebar({
             onClick={onClose}
             title="Close Menu"
             aria-label="Close navigation menu"
-            className={`md:hidden flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] transition-colors ${isDark ? "text-zinc-500 hover:text-zinc-200" : "text-zinc-400 hover:text-zinc-700"}`}
+            className={`lg:hidden flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] transition-colors ${isDark ? "text-zinc-500 hover:text-zinc-200" : "text-zinc-400 hover:text-zinc-700"}`}
           >
             <X className="h-4 w-4" />
             <span className="text-xs leading-none">Close</span>

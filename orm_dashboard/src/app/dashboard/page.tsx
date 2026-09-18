@@ -198,8 +198,8 @@ function DashboardShell() {
       {/* 2. MAIN CONTENT PANEL */}
       <main className="flex-1 flex flex-col min-w-0">
 
-        {/* Mobile top bar — hamburger trigger for the off-canvas sidebar, hidden at md+ */}
-        <div className={`md:hidden sticky top-0 z-30 flex items-center gap-3 h-14 px-4 border-b backdrop-blur-2xl ${isDark ? "border-white/[0.12] bg-zinc-900/70" : "border-black/[0.06] bg-white/70"}`}>
+        {/* Mobile/tablet top bar — hamburger trigger for the off-canvas sidebar, hidden at lg+ (Sidebar's own breakpoint) */}
+        <div className={`lg:hidden sticky top-0 z-30 flex items-center gap-3 h-14 px-4 border-b backdrop-blur-2xl ${isDark ? "border-white/[0.12] bg-zinc-900/70" : "border-black/[0.06] bg-white/70"}`}>
           <button
             onClick={() => setSidebarOpen(true)}
             title="Open Menu"

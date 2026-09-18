@@ -230,7 +230,7 @@ export function NarrativeAnalyticsPanel({
   return (
     <div className="space-y-6">
       {/* Top KPI Summary row */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 font-mono">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 font-mono">
         {kpis.map((k, idx) => {
           const Icon = k.icon;
           return (
