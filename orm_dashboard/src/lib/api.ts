@@ -395,16 +395,6 @@ export async function fetchActiveAlerts(clientId: string, signal?: AbortSignal) 
   return parseOrThrow(res);
 }
 
-/**
- * @reserved
- * Reserved for future dashboard Top Narratives widget.
- * Currently unused by the frontend but maintained for backwards compatibility.
- */
-export async function fetchTopNarratives(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/top-narratives`, { signal });
-  return parseOrThrow(res);
-}
-
 export async function fetchNarratives(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/narratives`, { signal });
   return parseOrThrow(res);

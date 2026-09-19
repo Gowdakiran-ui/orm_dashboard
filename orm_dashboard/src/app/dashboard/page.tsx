@@ -23,7 +23,6 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-import { NarrativesTab } from "@/components/NarrativesTab";
 import { RiskTab } from "@/components/RiskTab";
 import { FeedTab } from "@/components/FeedTab";
 import { ExecutivesTab } from "@/components/ExecutivesTab";
@@ -264,11 +263,8 @@ function DashboardShell() {
                         planAdvisory={data.planAdvisory}
                         planAdvisoryLoading={data.planAdvisoryLoading}
                         planAdvisoryError={data.planAdvisoryError}
-                        onViewNarrative={(name: string) => { data.openNarrativeDrawer(name); setActiveTab("narratives"); }}
                         documents={data.documents}
                         documentsLoading={data.documentsLoading}
-                        narratives={data.narratives}
-                        narrativesLoading={data.narrativesLoading}
                         executives={data.executives}
                         executivesLoading={data.executivesLoading}
                         clientRank={analytics.clientRank}
@@ -302,7 +298,6 @@ function DashboardShell() {
                         sentimentTrendData={analytics.sentimentTrendData}
                         loading={data.documentsLoading || data.historyLoading}
                         error={data.documentsError || data.historyError}
-                        onViewNarrative={(name: string) => { data.openNarrativeDrawer(name); setActiveTab("narratives"); }}
                       />
                     </ErrorBoundary>
                   )}
@@ -323,9 +318,8 @@ function DashboardShell() {
 
                   {/* Sub-tab 3: Narratives & Ingestion */}
                   {analyticsSubTab === "narratives" && (
-                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Narrative Analytics Error" />}>
+                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Ingestion Analytics Error" />}>
                       <NarrativeAnalyticsPanel
-                        narrativeBubbleData={analytics.narrativeBubbleData}
                         competitorRadarData={analytics.competitorRadarData}
                         execTrendChartData={analytics.execTrendChartData}
                         pipelineTimelineData={analytics.pipelineTimelineData}
@@ -334,8 +328,8 @@ function DashboardShell() {
                         normalizedBenchmarks={analytics.normalizedBenchmarks}
                         execHistory={data.execHistory}
                         documents={data.documents}
-                        loading={data.narrativesLoading || data.benchmarksLoading || data.documentsLoading}
-                        error={data.narrativesError || data.benchmarksError || data.documentsError}
+                        loading={data.benchmarksLoading || data.documentsLoading}
+                        error={data.benchmarksError || data.documentsError}
                       />
                     </ErrorBoundary>
                   )}
@@ -366,7 +360,6 @@ function DashboardShell() {
                     documentsError={data.documentsError}
                     documents={data.documents}
                     clientId={data.clientId}
-                    onViewNarrative={(name: string) => { data.openNarrativeDrawer(name); setActiveTab("narratives"); }}
                   />
                 </ErrorBoundary>
               )}
@@ -411,27 +404,6 @@ function DashboardShell() {
                 </ErrorBoundary>
               )}
 
-              {/* F. NARRATIVE CLUSTER VIEW */}
-              {activeTab === "narratives" && (
-                <ErrorBoundary fallback={<TelemetryErrorWidget title="Narrative Cluster Error" />}>
-                  <NarrativesTab
-                    documentsLoading={data.documentsLoading}
-                    executivesLoading={data.executivesLoading}
-                    narrativesLoading={data.narrativesLoading}
-                    documents={data.documents}
-                    executives={data.executives}
-                    narratives={data.narratives}
-                    activeClientName={activeClientName}
-                    selectedNarrative={data.selectedNarrative}
-                    setSelectedNarrative={data.setSelectedNarrative}
-                    narrativesError={data.narrativesError}
-                    clientId={data.clientId}
-                    narrativeDrawerRequest={data.narrativeDrawerRequest}
-                    onNarrativeDrawerRequestHandled={data.clearNarrativeDrawerRequest}
-                  />
-                </ErrorBoundary>
-              )}
-
               {/* G. INTELLIGENCE STREAM VIEW */}
               {activeTab === "feed" && (
                 <ErrorBoundary fallback={<TelemetryErrorWidget title="Intelligence Stream Error" />}>
@@ -439,7 +411,6 @@ function DashboardShell() {
                     documentsLoading={data.documentsLoading}
                     documentsError={data.documentsError}
                     documents={data.documents}
-                    narratives={data.narratives}
                     executives={data.executives}
                     systemStatus={data.systemStatus}
                     clientId={data.clientId}
@@ -455,7 +426,6 @@ function DashboardShell() {
                     documents={data.documents}
                     trendEvents={data.trendEvents}
                     alerts={data.alerts}
-                    narratives={data.narratives}
                     repHistory={data.repHistory}
                     executives={data.executives}
                     benchmarks={data.benchmarks}

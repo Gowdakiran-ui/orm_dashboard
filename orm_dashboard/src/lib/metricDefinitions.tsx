@@ -97,10 +97,10 @@ export function ReputationScoreDefinition() {
     <>
       <span className="block font-bold">Reputation Score</span>
       <span className="block">
-        A 0–100 score blending sentiment (30%), risk (30%), narrative
-        exposure (15%), coverage trend (10%), source reliability (10%) and
-        media visibility (5%) over a rolling window, weighted by how much
-        signal is actually available for each part.
+        A 0–100 score blending sentiment (30%), risk (30%), coverage trend
+        (10%), source reliability (10%) and media visibility (5%) over a
+        rolling window, weighted by how much signal is actually available
+        for each part.
       </span>
     </>
   );
@@ -292,10 +292,10 @@ export function ShareOfVoiceDefinition() {
  * the client-level ReputationEngine (see ReputationGradeDefinition/
  * ReputationScoreDefinition above): same letter-grade cutoffs, but its own
  * weights (executive_reputation_engine.py __init__: sentiment 35%, risk 30%,
- * narrative 15%, trend 10%, visibility 10%, each dropped and the rest
- * re-normalized if that signal has no data for this person). A low grade
- * with very little tracked coverage most often means too few mentions to
- * carry much weight, not necessarily sustained negative coverage.
+ * trend 10%, visibility 10%, each dropped and the rest re-normalized if that
+ * signal has no data for this person). A low grade with very little tracked
+ * coverage most often means too few mentions to carry much weight, not
+ * necessarily sustained negative coverage.
  */
 export function ExecutiveReputationGradeDefinition() {
   return (
@@ -303,8 +303,8 @@ export function ExecutiveReputationGradeDefinition() {
       <span className="block font-bold">Executive Reputation Grade</span>
       <span className="block">
         This person&apos;s Score (0–100) blends sentiment (35%), risk (30%),
-        narrative exposure (15%), coverage trend (10%) and mention visibility
-        (10%) from their own tracked coverage, then maps to a letter grade:
+        coverage trend (10%) and mention visibility (10%) from their own
+        tracked coverage, then maps to a letter grade:
       </span>
       <span className="mt-1 block"><b>A+</b> 90–100 &nbsp; <b>A</b> 80–89.9</span>
       <span className="block"><b>B</b> 70–79.9 &nbsp; <b>C</b> 60–69.9</span>
@@ -512,40 +512,6 @@ export function ThreatConcentrationHeatmapDefinition() {
       <span className="block mt-1">
         <b>R:</b> that cell&apos;s average Risk Score (0–100). <b>S:</b> its
         average sentiment (-1.0 to +1.0).
-      </span>
-    </>
-  );
-}
-
-/**
- * NarrativeAnalyticsPanel.tsx's "Narrative Landscape Matrix (Velocity ×
- * Risk)" bubble chart. Traced against narrative_engine.py:
- *   - Velocity (X axis, "strength" in narrativeBubbleData) is the absolute
- *     value of the narrative's trend_strength -- a % change in that
- *     narrative's coverage volume (TrendEvent.percentage_change), not a
- *     directional value.
- *   - Risk (Y axis) is the narrative's average Risk Score (0-100), the same
- *     scale as Risk Severity elsewhere in this dashboard.
- *   - Bubble size is mention volume (document count in the narrative
- *     cluster), log-scaled on the frontend only so a handful of very large
- *     narratives don't dwarf every other bubble.
- */
-export function NarrativeVelocityRiskDefinition() {
-  return (
-    <>
-      <span className="block font-bold">Narrative Landscape: Velocity × Risk</span>
-      <span className="block">
-        <b>Velocity</b> (x-axis) — the size of the recent % change in that
-        narrative&apos;s coverage volume, regardless of direction.
-      </span>
-      <span className="mt-1 block">
-        <b>Risk</b> (y-axis) — the narrative&apos;s average Risk Score (0–100),
-        the same scale used everywhere else in this dashboard.
-      </span>
-      <span className="mt-1 block">
-        <b>Bubble size</b> — how many documents are in that narrative&apos;s
-        cluster, log-scaled here only so very large narratives don&apos;t
-        dwarf the rest of the chart.
       </span>
     </>
   );

@@ -297,7 +297,7 @@ export function CompetitorsTab({
 
     let recommendation = "Maintain market visibility and monitor key brand metrics.";
     if (clientBrand && leader && leader.isClient) {
-      recommendation = `Maintain market leadership by prioritizing high-sentiment narrative tracks. Monitor ${competitor ? competitor.name : "this competitor"} closely.`;
+      recommendation = `Maintain market leadership by prioritizing high-sentiment coverage. Monitor ${competitor ? competitor.name : "this competitor"} closely.`;
     } else if (clientBrand && leader && !leader.isClient) {
       recommendation = `Increase visibility and address sentiment deficits to close the gap with ${leader.name}.`;
     }

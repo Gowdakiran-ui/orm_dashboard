@@ -22,7 +22,7 @@ export function AnalyticsTabHeader({
       {[
         { id: "overview", label: "Reputation & Sentiment Trends" },
         { id: "risk", label: "Risk & Alert Profile" },
-        { id: "narratives", label: "Narrative & Ingestion Analytics" },
+        { id: "narratives", label: "Ingestion & Coverage Analytics" },
         // Internal ops telemetry (latency ms, engine success rates) -- not
         // for a client exec's nav (xoop_ui_clarity_review.md Phase 4).
         ...(isSuperAdmin ? [{ id: "pipeline", label: "AI Platform Diagnostics" }] : [])

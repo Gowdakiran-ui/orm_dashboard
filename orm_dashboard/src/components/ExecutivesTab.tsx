@@ -32,14 +32,21 @@ function gradeBandClass(grade: string | null | undefined): string {
   return "border-transparent";
 }
 
-// Phase 2 Item 3: same 35/30/15/10/10 weighting ExecutiveReputationGradeDefinition
-// already documents (metricDefinitions.tsx) and executive_reputation_engine.py
+// Phase 2 Item 3: same weighting ExecutiveReputationGradeDefinition already
+// documents (metricDefinitions.tsx) and executive_reputation_engine.py
 // applies -- used only to pick which already-computed component most dragged
 // the grade down, not to recompute the score itself.
+//
+// Narrative Cluster removal (2026-09-19): the "narrative" component is
+// dropped from this map entirely, not just left in with its old weight --
+// executive_reputation_engine.py's narrative_component is now permanently
+// null (no narratives ever generate), so it would never be selectable as
+// the worst-scoring driver below anyway (the `value === null` guard skips
+// it); keeping a dead, never-firing entry here would just misdescribe this
+// map as covering an active, weighted component it no longer does.
 const COMPONENT_LABELS: Record<string, { label: string; weight: number }> = {
   sentiment: { label: "Sentiment", weight: 0.35 },
   risk: { label: "Risk", weight: 0.30 },
-  narrative: { label: "Narrative exposure", weight: 0.15 },
   trend: { label: "Coverage trend", weight: 0.10 },
   visibility: { label: "Mention visibility", weight: 0.10 }
 };

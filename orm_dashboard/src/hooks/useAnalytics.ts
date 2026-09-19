@@ -233,18 +233,6 @@ export function useAnalytics({
     });
   }, [documents]);
 
-  const narrativeBubbleData = useMemo(() => {
-    return (narratives || [])
-      .filter(n => n && n.trend !== undefined && n.trend !== null && n.mentions !== undefined && n.mentions !== null && n.risk !== undefined && n.risk !== null)
-      .map(n => ({
-        name: n.name || "Narrative",
-        strength: Math.abs(n.trend),
-        risk: n.risk,
-        mentions: n.mentions,
-        type: n.type || "General"
-      }));
-  }, [narratives]);
-
   const riskHeatmapData = useMemo(() => {
     const categories = Array.from(new Set((documents || []).map(d => d?.topic || "General")));
     const severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -470,10 +458,6 @@ export function useAnalytics({
     const critAlerts = (alerts || []).filter((a: any) => a?.severity === 'CRITICAL').length;
     const warnings = (alerts || []).filter((a: any) => a?.severity === 'HIGH' || a?.severity === 'MEDIUM').length;
     
-    const narrativeCount = (narratives || []).length;
-    const largestNarrative = (narratives || []).sort((a: any, b: any) => (b?.mentions || 0) - (a?.mentions || 0))[0]?.name || 'N/A';
-    const totalMentions = (narratives || []).reduce((sum: number, n: any) => sum + (n?.mentions || 0), 0);
-    
     const currentRep = reputation?.score ?? 0;
     const currentGrade = reputation?.grade ?? 'N/A';
     // repHistory is in chronological (oldest-first) order -- see
@@ -509,7 +493,6 @@ export function useAnalytics({
     const tr_t = telemetry?.trend || {};
     const r_t = telemetry?.risk || {};
     const a_t = telemetry?.alert || {};
-    const n_t = telemetry?.narrative || {};
     const rep_t = telemetry?.reputation || {};
     const er_t = telemetry?.exec_reputation || {};
     const b_t = telemetry?.benchmark || {};
@@ -654,21 +637,6 @@ export function useAnalytics({
         navigationId: "risk"
       },
       {
-        name: "Narrative Engine",
-        status: getEngineStatus(docCount > 0, (n_t.produced || narrativeCount) > 0),
-        processed: docCount,
-        produced: n_t.produced !== undefined ? n_t.produced : narrativeCount,
-        successRate: "Not Available",
-        success: "Not Available",
-        failed: null,
-        metrics: [
-          { label: "Narratives", value: n_t.produced !== undefined ? n_t.produced : narrativeCount },
-          { label: "Clusters", value: narrativeCount }
-        ],
-        description: "Groups emerging topics and clusters into distinct corporate narrative tracks.",
-        navigationId: "narratives"
-      },
-      {
         name: "Reputation Engine",
         status: getEngineStatus(docCount > 0, (rep_t.produced || repHistory.length) > 0),
         processed: docCount,
@@ -731,7 +699,6 @@ export function useAnalytics({
     sourceContData,
     competitorRadarData,
     riskMatrixData,
-    narrativeBubbleData,
     riskHeatmapData,
     alertSeverityData,
     execTrendChartData,

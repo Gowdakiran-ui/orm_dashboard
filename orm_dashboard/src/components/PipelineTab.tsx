@@ -10,7 +10,6 @@ export interface PipelineTabProps {
   documents: any[];
   trendEvents: any[];
   alerts: any[];
-  narratives: any[];
   repHistory: any[];
   executives: any[];
   benchmarks: any[];
@@ -23,7 +22,6 @@ export function PipelineTab({
   documents,
   trendEvents,
   alerts,
-  narratives,
   repHistory,
   executives,
   benchmarks,
@@ -60,7 +58,6 @@ export function PipelineTab({
               { name: "Trend Detection", count: trendEvents.length, label: "Trends" },
               { name: "Risk Engine", count: documents.filter(d => d.risk > 0).length, label: "Threats" },
               { name: "Alert Engine", count: alerts.length, label: "Alerts" },
-              { name: "Narrative Engine", count: narratives.length, label: "Clusters" },
               { name: "Reputation Engine", count: repHistory.length, label: "Equity Index" },
               { name: "Executive Reputation", count: executives.length, label: "Tracked" },
               { name: "Benchmark Engine", count: benchmarks.length, label: "Competitors" }

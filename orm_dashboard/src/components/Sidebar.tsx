@@ -2,7 +2,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import {
   Shield, Search, Plus, Trash2, Loader2, Play, Radio, Award,
-  ShieldAlert, Users, BarChart3, LineChart, FileText, Cpu, Server,
+  ShieldAlert, Users, BarChart3, FileText, Cpu, Server,
   BarChart as BarChartIcon, LogOut, ShieldCheck, X, AlertTriangle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -215,7 +215,6 @@ export function Sidebar({
             { id: "competitors", label: "Competitor Compare", icon: BarChart3 },
             { id: "executives", label: "Executive Reputation", icon: Users },
             { id: "analytics", label: "Executive Analytics", icon: BarChartIcon },
-            { id: "narratives", label: "Narrative Cluster", icon: LineChart },
             { id: "feed", label: "Intelligence Stream", icon: FileText },
             // Internal ops telemetry (engine success rates, latency,
             // failure counts) -- not for a client exec's nav, same

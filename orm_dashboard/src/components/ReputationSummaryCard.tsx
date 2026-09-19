@@ -16,11 +16,8 @@ export interface ReputationSummaryCardProps {
   planAdvisory?: any;
   planAdvisoryLoading?: boolean;
   planAdvisoryError?: string | null;
-  onViewNarrative?: (narrativeName: string) => void;
   documents: any[];
   documentsLoading?: boolean;
-  narratives: any[];
-  narrativesLoading?: boolean;
   executives: any[];
   executivesLoading?: boolean;
   clientRank: string;
@@ -38,12 +35,9 @@ const RISK_COLOR: Record<string, string> = {
   LOW: "text-emerald-500",
 };
 
-// Same small-caps section header / body text styling as the Narrative
-// Registry's "AI Executive Summary" block (NarrativeIntelligenceWorkbench.tsx
-// lines 352-359) -- that block is a plain template-literal string, not an
-// LLM call, so this panel's text stays deterministic/template-based too.
-// Theme-aware functions instead of static strings since the accent + border
-// now depend on light/dark glass mode.
+// Small-caps section header / body text styling, deterministic/template-based
+// text (no LLM call). Theme-aware functions instead of static strings since
+// the accent + border now depend on light/dark glass mode.
 function sectionLabelClass(isDark: boolean, withInlineIcon = false) {
   return `text-xs font-bold uppercase tracking-wider ${withInlineIcon ? "flex items-center gap-1" : "block"} border-b pb-1 ${
     isDark ? "text-[#00F5D4] border-white/[0.12]" : "text-[#3B82F6] border-black/[0.06]"
@@ -60,11 +54,8 @@ export function ReputationSummaryCard({
   planAdvisory,
   planAdvisoryLoading = false,
   planAdvisoryError = null,
-  onViewNarrative,
   documents = [],
   documentsLoading = false,
-  narratives = [],
-  narrativesLoading = false,
   executives = [],
   executivesLoading = false,
   clientRank,
@@ -78,9 +69,9 @@ export function ReputationSummaryCard({
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const { navigateTo } = useTabNavigation();
   // Anchor for the top-of-page verdict line's "See what it's about" link,
-  // when there's nothing more specific (an alert, a risk-worthy narrative)
-  // to jump straight to -- scrolls down to the "What to do about it" card
-  // instead of duplicating its content a second time near the top.
+  // when there's nothing more specific (an alert, a risk count) to jump
+  // straight to -- scrolls down to the "What to do about it" card instead
+  // of duplicating its content a second time near the top.
   const whatToDoRef = useRef<HTMLDivElement>(null);
   const scrollToWhatToDo = () => whatToDoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   // Total risks + severity breakdown + avg risk score. Requires MEDIUM+
@@ -119,32 +110,9 @@ export function ReputationSummaryCard({
     return { total, critical, high, medium, low, avg, dominantLevel, dangerCount: critical + high, topRiskDocs };
   }, [documents]);
 
-  // Highest risk / fastest growing narrative + monitored count, same
-  // computation as Narrative Cluster's stat cards (NarrativesTab.tsx `summaryKpis`).
-  const narrativeStats = useMemo(() => {
-    // Requires MEDIUM+ (same RISK_THRESHOLDS.LOW_TO_MEDIUM floor as
-    // riskStats.topRiskDocs above) -- without it, "highest risk narrative"
-    // just meant "whichever narrative scored the most, even 0", which
-    // could name a trivial or entirely risk-free narrative as one
-    // "requiring strategic review".
-    const riskyNarratives = narratives.filter(n => (n.risk || 0) > RISK_THRESHOLDS.LOW_TO_MEDIUM);
-    const sortedByRisk = [...riskyNarratives].sort((a, b) => (b.risk || 0) - (a.risk || 0));
-    const sortedByTrend = [...narratives].sort((a, b) => (b.trend || 0) - (a.trend || 0));
-    const highest = sortedByRisk[0] || null;
-    const fastest = sortedByTrend[0] || null;
-    return {
-      total: narratives.length,
-      highestRisk: highest?.name || "None Detected",
-      highestRiskScore: highest?.risk,
-      fastestGrowing: fastest?.name || "None Detected",
-      fastestGrowingTrend: fastest?.trend,
-    };
-  }, [narratives]);
-
-  // Most mentioned executive + tracked leaders count, same computation as
-  // NarrativesTab.tsx `summaryKpis`. Highest/lowest scoring executive uses
-  // the same `.score` field and `?? 0` fallback as ExecutivesTab's summary
-  // memo (ExecutivesTab.tsx lines 97-99).
+  // Most mentioned executive + tracked leaders count. Highest/lowest scoring
+  // executive uses the same `.score` field and `?? 0` fallback as
+  // ExecutivesTab's summary memo (ExecutivesTab.tsx lines 97-99).
   const execStats = useMemo(() => {
     const mostMentioned = [...executives].sort((a, b) => (b.mention_count || 0) - (a.mention_count || 0))[0]?.name || "None Detected";
     const sortedByScore = [...executives].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
@@ -159,24 +127,6 @@ export function ReputationSummaryCard({
   const topCompetitor = useMemo(() => {
     return (normalizedBenchmarks || []).find(b => b.rank === 1) || null;
   }, [normalizedBenchmarks]);
-
-  // Dominant sentiment "driving theme": the narrative whose own sentiment
-  // sign matches the platform-wide dominant sentiment, picked by largest
-  // magnitude -- reuses the `narratives[].sentiment` field already powering
-  // the Narrative Registry, no new computation. Computed here (ahead of the
-  // loading/error early-returns below) so hook call order stays constant
-  // across renders; falls back to null when summary data isn't loaded yet.
-  const dominantSentiment: string | null = reputationSummary?.sentiment?.dominant ?? null;
-  const drivingTheme = useMemo(() => {
-    if (!dominantSentiment || (dominantSentiment !== "positive" && dominantSentiment !== "negative")) return null;
-    const wantPositive = dominantSentiment === "positive";
-    const candidates = (narratives || []).filter(n =>
-      typeof n.sentiment === "number" && (wantPositive ? n.sentiment > 0 : n.sentiment < 0)
-    );
-    if (candidates.length === 0) return null;
-    candidates.sort((a, b) => Math.abs(b.sentiment) - Math.abs(a.sentiment));
-    return candidates[0];
-  }, [narratives, dominantSentiment]);
 
   if (reputationSummaryLoading) {
     return (
@@ -230,8 +180,8 @@ export function ReputationSummaryCard({
   // Critical/High risk count, then the AI Advisory's own lead sentence,
   // then an honest steady-state default naming what's being watched.
   const verdict: { emoji: string; text: string; actionLabel: string | null; onAction: (() => void) | null } =
-    documentsLoading || narrativesLoading
-      ? { emoji: "⏳", text: "Checking current risk and narrative activity…", actionLabel: null, onAction: null }
+    documentsLoading
+      ? { emoji: "⏳", text: "Checking current risk activity…", actionLabel: null, onAction: null }
       : execAlert.open
       ? {
           emoji: alertSeverity === "CRITICAL" ? "🔴" : "🟡",
@@ -255,12 +205,12 @@ export function ReputationSummaryCard({
         }
       : {
           emoji: "🟢",
-          text: `Your reputation is stable this week. Watching ${narrativeStats.total} active narrative${narrativeStats.total === 1 ? "" : "s"} and ${riskStats.total} tracked risk${riskStats.total === 1 ? "" : "s"}.`,
+          text: `Your reputation is stable this week. Watching ${riskStats.total} tracked risk${riskStats.total === 1 ? "" : "s"}.`,
           actionLabel: null,
           onAction: null,
         };
 
-  // documents/narratives/executives each load independently and can settle
+  // documents/executives each load independently and can settle
   // at noticeably different times after a client switch (confirmed live:
   // reputationSummary -- which sentiment reads from -- lands well before
   // documents does), so a card computed off a still-loading source showed a
@@ -317,9 +267,6 @@ export function ReputationSummaryCard({
     { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: severityBreakdownSub, color: RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment entity mentions", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
     { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative} mentions`, color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
-    { label: "Narratives Monitored", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.total, sub: "Active media clusters", color: "text-sky-500", onClick: () => navigateTo("narratives") },
-    { label: "Highest Risk Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.highestRisk, sub: "Requires strategic review", color: "text-red-500" },
-    { label: "Fastest Growing Narrative", value: narrativesLoading ? LOADING_PLACEHOLDER : narrativeStats.fastestGrowing, sub: "High velocity trend", color: "text-orange-400" },
     { label: "Most Mentioned Person", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
     { label: "Notable People Tracked", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Mentioned in coverage, not necessarily this client's own staff", color: "text-sky-500" },
     { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500", def: <CompetitorRankShareOfVoiceDefinition /> },
@@ -445,14 +392,6 @@ export function ReputationSummaryCard({
               </span>
               <p className={sectionTextClass(isDark)}>
                 Sentiment is running {sentiment.dominant ?? "unknown"} across this client's own entity mentions ({sentiment.positive} positive / {sentiment.neutral} neutral / {sentiment.negative} negative mentions — see Executive Analytics for the document-level Sentiment Breakdown).
-                {drivingTheme && <> The leading driver is the "{drivingTheme.name}" narrative ({drivingTheme.sentiment.toFixed(2)} sentiment).</>}
-              </p>
-            </div>
-
-            <div>
-              <span className={sectionLabelClass(isDark)}>Narrative Landscape</span>
-              <p className={sectionTextClass(isDark)}>
-                {narrativeStats.total} narrative{narrativeStats.total === 1 ? "" : "s"} are being monitored. The highest-risk narrative is "{narrativeStats.highestRisk}"{typeof narrativeStats.highestRiskScore === "number" ? ` (Risk Score ${narrativeStats.highestRiskScore.toFixed(1)} pts)` : ""}. The fastest-growing narrative is "{narrativeStats.fastestGrowing}"{typeof narrativeStats.fastestGrowingTrend === "number" ? ` (Coverage Trend ${narrativeStats.fastestGrowingTrend >= 0 ? "+" : ""}${narrativeStats.fastestGrowingTrend.toFixed(1)}%)` : ""}.
               </p>
             </div>
 
@@ -502,20 +441,10 @@ export function ReputationSummaryCard({
                   ))}
                 </ul>
               )}
-              {planAdvisory.top_narrative_name && onViewNarrative && (
-                <button
-                  type="button"
-                  onClick={() => onViewNarrative(planAdvisory.top_narrative_name)}
-                  className="flex items-center min-h-[44px] text-sm font-mono font-semibold mt-2 hover:underline"
-                  style={{ color: accent }}
-                >
-                  View full narrative &rarr;
-                </button>
-              )}
             </>
           ) : (
             <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
-              Nothing significant to flag right now — actively watching {narrativeStats.total} tracked narrative{narrativeStats.total === 1 ? "" : "s"} and {riskStats.total} tracked risk{riskStats.total === 1 ? "" : "s"} for {activeClientName}. You'll see a recommendation here the moment something needs attention.
+              Nothing significant to flag right now — actively watching {riskStats.total} tracked risk{riskStats.total === 1 ? "" : "s"} for {activeClientName}. You'll see a recommendation here the moment something needs attention.
             </p>
           )}
         </CardContent>

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
 import { 
-  FileText, Globe, Layers, Users, ShieldAlert, Activity, 
+  FileText, Globe, Users, ShieldAlert, Activity,
   ExternalLink, Cpu, Calendar, TrendingUp, CheckCircle2,
   AlertTriangle, Info, Sparkles, Clock, BarChart2
 } from "lucide-react";
@@ -23,7 +23,6 @@ export interface FeedTabProps {
   documentsLoading: boolean;
   documentsError: string | null;
   documents: any[];
-  narratives?: any[];
   executives?: any[];
   systemStatus?: any;
   clientId?: string | null;
@@ -33,7 +32,6 @@ export function FeedTab({
   documentsLoading,
   documentsError,
   documents = [],
-  narratives = [],
   executives = [],
   systemStatus,
   clientId
@@ -92,7 +90,6 @@ export function FeedTab({
   const metrics = useMemo(() => {
     const totalDocs = documents.length;
     const uniqueSources = new Set(documents.map(d => d.source).filter(Boolean)).size;
-    const activeNarrativesCount = narratives.length;
     const totalExecutivesCount = executives.length;
     const avgRisk = totalDocs > 0 
       ? Math.round(documents.reduce((acc, d) => acc + (d.risk || 0), 0) / totalDocs) 
@@ -105,12 +102,11 @@ export function FeedTab({
     return {
       totalDocs,
       uniqueSources: uniqueSources || systemStatus?.active_feeds || 4,
-      activeNarrativesCount,
       totalExecutivesCount,
       avgRisk,
       processedToday: processedToday || Math.min(totalDocs, 6)
     };
-  }, [documents, narratives, executives, systemStatus]);
+  }, [documents, executives, systemStatus]);
 
   // Section 2: Timeline Chart Data (grouped by date)
   const timelineData = useMemo(() => {
@@ -259,7 +255,6 @@ export function FeedTab({
             {[
               { label: "Scanned Feed", value: metrics.totalDocs, desc: "Total documents", icon: FileText, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
               { label: "Active Channels", value: metrics.uniqueSources, desc: "Monitored RSS Feeds", icon: Globe, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
-              { label: "Active Narratives", value: metrics.activeNarrativesCount, desc: "Identified story clusters", icon: Layers, color: "text-purple-400" },
               { label: "Notable People Tracked", value: metrics.totalExecutivesCount, desc: "People mentioned in coverage", icon: Users, color: "text-emerald-400" },
               { label: "Avg Risk Level", value: `${metrics.avgRisk} pts`, desc: "Severity risk rating", icon: ShieldAlert, color: "text-rose-500" },
               { label: "Ingested Today", value: metrics.processedToday, desc: "Last 24h count", icon: Activity, color: "text-amber-400" }
@@ -542,10 +537,12 @@ export function FeedTab({
                             : "100%"}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-[8px] dash-muted uppercase block font-bold">Associated Narrative</span>
-                        <span className="dash-strong truncate block max-w-[150px]">{selectedDocDetails.narrative?.name || "General Narrative"}</span>
-                      </div>
+                      {selectedDocDetails.narrative?.name && (
+                        <div>
+                          <span className="text-[8px] dash-muted uppercase block font-bold">Associated Narrative</span>
+                          <span className="dash-strong truncate block max-w-[150px]">{selectedDocDetails.narrative.name}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Entities Mentioned */}
