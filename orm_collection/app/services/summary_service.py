@@ -14,7 +14,6 @@ from app.models.topic import DocumentTopic
 from app.models.sentiment import DocumentSentiment, EntitySentiment
 from app.models.risk import RiskEvent
 from app.models.alert import Alert
-from app.models.narrative import Narrative
 from app.models.reputation import ReputationScore
 from app.models.client_processing_summary import ClientProcessingSummary
 from sqlalchemy import func
@@ -58,7 +57,6 @@ def update_client_summaries():
                 
             risks_generated = db.query(RiskEvent).filter(RiskEvent.client_id == client.id).count()
             alerts_generated = db.query(Alert).filter(Alert.client_id == client.id).count()
-            narratives_generated = db.query(Narrative).filter(Narrative.client_id == client.id).count()
             
             # Get latest reputation score
             latest_rep = db.query(ReputationScore).filter(ReputationScore.client_id == client.id).order_by(ReputationScore.created_at.desc()).first()
@@ -77,7 +75,6 @@ def update_client_summaries():
                     sentiments_generated=sentiments_generated,
                     risks_generated=risks_generated,
                     alerts_generated=alerts_generated,
-                    narratives_generated=narratives_generated,
                     reputation_score=reputation_score,
                     last_processed_at=datetime.now(timezone.utc)
                 )
@@ -90,7 +87,6 @@ def update_client_summaries():
                 summary.sentiments_generated = sentiments_generated
                 summary.risks_generated = risks_generated
                 summary.alerts_generated = alerts_generated
-                summary.narratives_generated = narratives_generated
                 summary.reputation_score = reputation_score
                 summary.last_processed_at = datetime.now(timezone.utc)
                 

@@ -16,6 +16,5 @@ class ClientProcessingSummary(Base):
     sentiments_generated = Column(Integer, default=0)
     risks_generated = Column(Integer, default=0)
     alerts_generated = Column(Integer, default=0)
-    narratives_generated = Column(Integer, default=0)
     reputation_score = Column(Float, default=0.0)
     last_processed_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

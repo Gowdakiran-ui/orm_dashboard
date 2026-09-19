@@ -15,7 +15,6 @@ from app.models.entity import Entity, EntityMention
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
 from app.models.trends import TrendEvent
-from app.models.narrative import Narrative
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.client import Client
 from app.models.alert import Alert
@@ -98,7 +97,6 @@ class ExecutiveReputationEngine:
         self.weights = {
             "sentiment": 0.35,
             "risk": 0.30,
-            "narrative": 0.15,
             "trend": 0.10,
             "visibility": 0.10
         }
@@ -246,7 +244,7 @@ class ExecutiveReputationEngine:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         lookback_date = now_utc - datetime.timedelta(days=30)
 
-        # P3: Batch preloading of all executive mentions, risks, trends, alerts, and narratives
+        # P3: Batch preloading of all executive mentions, risks, trends, and alerts
         #
         # Brand co-occurrence containment, per-mention not per-entity
         # (2026-09-13 granularity fix): only a mention whose OWN document
@@ -312,12 +310,6 @@ class ExecutiveReputationEngine:
         for t in trends:
             trend_map[t.entity_id].append(t)
 
-        # Batch preload narratives (shared pool)
-        narratives = db.query(Narrative).filter(
-            Narrative.client_id == client_id,
-            Narrative.updated_at >= lookback_date
-        ).all()
-
         # Batch preload alerts (shared pool)
         alerts = db.query(Alert).filter(
             Alert.client_id == client_id,
@@ -337,7 +329,7 @@ class ExecutiveReputationEngine:
                 
                 self._evaluate_single_executive_optimized(
                     db, client_id, exec_entity,
-                    exec_doc_ids, exec_doc_urls, exec_risks, exec_trends, narratives, alerts, sentiment_map,
+                    exec_doc_ids, exec_doc_urls, exec_risks, exec_trends, alerts, sentiment_map,
                     run_id=rid, batch_id=bid, worker_id=wid, attempt=attempt
                 )
                 savepoint.commit()
@@ -357,7 +349,6 @@ class ExecutiveReputationEngine:
         doc_urls: List[str],
         supporting_risks: List[RiskEvent],
         supporting_trends: List[TrendEvent],
-        all_narratives: List[Narrative],
         supporting_alerts: List[Alert],
         sentiment_map: Dict[str, float],
         run_id: str,
@@ -400,56 +391,6 @@ class ExecutiveReputationEngine:
             avg_risk = sum(r.risk_score for r in supporting_risks) / len(supporting_risks)
             risk_component = 100.0 - avg_risk
 
-        # 3. Executive Narratives
-        # KNOWN GAP (2026-09-05, deferred -- see FINDINGS.md "Known gap: narrative
-        # attribution is not role-classification-aware"): unlike sentiment_component
-        # above, this does NOT exclude BYSTANDER/EXONERATED documents. A narrative's
-        # evidence_metadata.supporting_entities (narrative_engine.py's
-        # calculate_narratives, ~line 824-832) is built by iterating every
-        # EntityMention across the narrative's whole document cluster and adding
-        # every person-entity found, with no role check -- so an executive merely
-        # mentioned in passing in ONE document belonging to a narrative can show
-        # that narrative's theme as their own top_positive/top_negative, even with
-        # zero real evidence otherwise (confirmed live: Thomas Edison, a Tesla
-        # candidate promoted on a single incidental mention, inherited a genuine
-        # Tesla EV-charging narrative's theme this way). Fixable in principle by
-        # reusing narrative_engine.py's already-preloaded risk_map (keyed by
-        # document_id, RiskEvent rows carry entity_id + explainability) to skip an
-        # entity for a given document when that (document, entity) pair has a
-        # BYSTANDER/EXONERATED classification -- the same pattern as the sentiment
-        # fix above. NOT done here: that loop is shared narrative-computation
-        # logic (narrative_engine.py), consumed by NarrativesTab/CompetitorsTab/
-        # NarrativeIntelligenceWorkbench too, not exclusive to Executive
-        # Reputation -- changing it needs its own verification pass against those
-        # other consumers, not a same-session addition to this file.
-        supporting_narratives = []
-        narrative_penalty = 0
-        top_positive = None
-        top_negative = None
-        max_pos = -1.0
-        min_neg = 1.0
-
-        for n in all_narratives:
-            meta = n.evidence_metadata or {}
-            entities_in_narrative = meta.get("supporting_entities", [])
-            if str(exec_entity.id) in entities_in_narrative or exec_entity.name.lower() in n.narrative_name.lower():
-                supporting_narratives.append(n)
-                if n.sentiment_score < 0 and n.status in ["GROWING", "PEAK"]:
-                    narrative_penalty += 20
-                elif n.sentiment_score > 0 and n.status in ["GROWING", "PEAK"]:
-                    narrative_penalty -= 10
-
-                if n.sentiment_score > max_pos:
-                    max_pos = n.sentiment_score
-                    top_positive = n.narrative_name
-                if n.sentiment_score < min_neg:
-                    min_neg = n.sentiment_score
-                    top_negative = n.narrative_name
-
-        narrative_component = None
-        if supporting_narratives:
-            narrative_component = max(0.0, min(100.0, 100.0 - narrative_penalty))
-
         # 4. Executive Trend
         trend_component = None
         # Sort preloaded trends by date and limit to 10
@@ -480,7 +421,6 @@ class ExecutiveReputationEngine:
         components = {
             "sentiment": sentiment_component,
             "risk": risk_component,
-            "narrative": narrative_component,
             "trend": trend_component,
             "visibility": visibility_component,
         }
@@ -540,7 +480,6 @@ class ExecutiveReputationEngine:
             "component_scores": {
                 "sentiment": round(sentiment_component, 2) if sentiment_component is not None else None,
                 "risk": round(risk_component, 2) if risk_component is not None else None,
-                "narrative": round(narrative_component, 2) if narrative_component is not None else None,
                 "trend": round(trend_component, 2) if trend_component is not None else None,
                 "visibility": round(visibility_component, 2) if visibility_component is not None else None
             },
@@ -570,7 +509,6 @@ class ExecutiveReputationEngine:
             "supporting_risks": [str(r.id) for r in supporting_risks],
             "supporting_trends": [str(t.id) for t in sorted_trends],
             "supporting_alerts": [str(a.id) for a in supporting_alerts],
-            "supporting_narratives": [str(n.id) for n in supporting_narratives],
             "supporting_executive_entity": str(exec_entity.id)
         }
 
@@ -590,7 +528,6 @@ class ExecutiveReputationEngine:
         # active_weight/has_evidence above were computed from.
         sentiment_component_db = sentiment_component if sentiment_component is not None else 0.0
         risk_component_db = risk_component if risk_component is not None else 0.0
-        narrative_component_db = narrative_component if narrative_component is not None else 0.0
         trend_component_db = trend_component if trend_component is not None else 0.0
         visibility_component_db = visibility_component if visibility_component is not None else 0.0
 
@@ -604,13 +541,10 @@ class ExecutiveReputationEngine:
             grade=grade,
             sentiment_component=sentiment_component_db,
             risk_component=risk_component_db,
-            narrative_component=narrative_component_db,
             trend_component=trend_component_db,
             visibility_component=visibility_component_db,
             confidence_score=confidence_score,
             reputation_trend=rep_trend,
-            top_positive_narrative=top_positive,
-            top_negative_narrative=top_negative,
             run_id=run_id,
             batch_id=batch_id,
             worker_id=worker_id,
@@ -627,13 +561,10 @@ class ExecutiveReputationEngine:
                 "grade": grade,
                 "sentiment_component": sentiment_component_db,
                 "risk_component": risk_component_db,
-                "narrative_component": narrative_component_db,
                 "trend_component": trend_component_db,
                 "visibility_component": visibility_component_db,
                 "confidence_score": confidence_score,
                 "reputation_trend": rep_trend,
-                "top_positive_narrative": top_positive,
-                "top_negative_narrative": top_negative,
                 "batch_id": batch_id,
                 "worker_id": worker_id,
                 "latency_ms": latency_ms,

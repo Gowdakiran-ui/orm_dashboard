@@ -34,7 +34,6 @@ CREATE INDEX IF NOT EXISTS ix_executive_candidates_name ON public.executive_cand
 CREATE INDEX IF NOT EXISTS ix_executive_reputation_scores_client_id ON public.executive_reputation_scores USING btree (client_id);
 CREATE INDEX IF NOT EXISTS ix_executive_reputation_scores_entity_id ON public.executive_reputation_scores USING btree (entity_id);
 CREATE INDEX IF NOT EXISTS ix_model_runs_document_id ON public.model_runs USING btree (document_id);
-CREATE INDEX IF NOT EXISTS ix_narratives_client_id ON public.narratives USING btree (client_id);
 CREATE INDEX IF NOT EXISTS ix_reputation_scores_client_id ON public.reputation_scores USING btree (client_id);
 CREATE INDEX IF NOT EXISTS ix_risk_events_client_id ON public.risk_events USING btree (client_id);
 CREATE INDEX IF NOT EXISTS ix_risk_events_document_id ON public.risk_events USING btree (document_id);

@@ -15,7 +15,6 @@ This module contains two categories of tasks:
    - calculate_client_risks
    - calculate_document_risk
    - evaluate_alerts
-   - calculate_narratives
    - calculate_reputation_score
    - calculate_executive_reputation
    - calculate_competitor_benchmarks
@@ -59,8 +58,8 @@ Pipeline Execution Model
         ↓ PROCESSING   (nlp_queue)          (20% → 40%)
         ↓ TREND        (aggregation_queue)  (40% → 50%)
         ↓ RISK         (aggregation_queue)  (50% → 60%)
-        ↓ ALERT        (aggregation_queue)  (60% → 70%)
-        ↓ NARRATIVE    (aggregation_queue)  (70% → 80%)
+        ↓ ALERT        (aggregation_queue)  (60% → 75%)
+        ↓ AI_SUMMARY   (aggregation_queue)  (75% → 80%)
         ↓ REPUTATION   (aggregation_queue)  (80% → 85%)
         ↓ EXECUTIVE    (aggregation_queue)  (85% → 90%)
         ↓ BENCHMARK    (aggregation_queue)  (90% → 95%)
@@ -393,99 +392,6 @@ def evaluate_alerts(self):
         raise
     except Exception as exc:
         raise self.retry(exc=exc, countdown=300)
-
-
-# ---------------------------------------------------------------------------
-# Narrative Engine scheduler task
-# ---------------------------------------------------------------------------
-
-from app.services.intelligence.narrative_engine import NarrativeEngine, NarrativeStateMachine
-narrative_engine = NarrativeEngine()
-
-
-def _process_single_client_narrative_with_retry(client_id, run_id, batch_id, worker_id, log):
-    attempt = 1
-    last_exc = None
-    max_retries = 3
-    while attempt <= max_retries + 1:
-        if attempt > 1:
-            backoff = min(1.0 * math.pow(2, attempt - 2), 10.0)
-            time.sleep(backoff)
-            state_db = SessionLocal()
-            try:
-                client = state_db.query(Client).filter(Client.id == client_id).first()
-                if client:
-                    NarrativeStateMachine.transition(state_db, client, NarrativeStateMachine.RETRYING, run_id=run_id, batch_id=batch_id, failure_reason=str(last_exc), retry_count=attempt - 1)
-                    state_db.commit()
-            except Exception:
-                state_db.rollback()
-            finally:
-                state_db.close()
-
-        client_db = SessionLocal()
-        t0 = time.perf_counter()
-        try:
-            client = client_db.query(Client).filter(Client.id == client_id).with_for_update().first()
-            if client:
-                NarrativeStateMachine.transition(client_db, client, NarrativeStateMachine.PROCESSING, run_id=run_id, batch_id=batch_id, retry_count=attempt - 1)
-                client_db.commit()
-            narrative_engine.process_client(client_db, client_id, run_id=run_id, batch_id=batch_id, worker_id=worker_id, attempt=attempt - 1)
-            client = client_db.query(Client).filter(Client.id == client_id).first()
-            if client:
-                latency_ms = (time.perf_counter() - t0) * 1000
-                NarrativeStateMachine.transition(client_db, client, NarrativeStateMachine.COMPLETE, run_id=run_id, batch_id=batch_id, latency_ms=latency_ms)
-                client_db.commit()
-            return {"client_id": client_id, "status": "success", "retry_count": attempt - 1, "error": None, "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
-        except Exception as exc:
-            client_db.rollback()
-            last_exc = exc
-            if not _is_transient_error(exc):
-                break
-            attempt += 1
-        finally:
-            client_db.close()
-
-    state_db = SessionLocal()
-    try:
-        client = state_db.query(Client).filter(Client.id == client_id).first()
-        if client:
-            NarrativeStateMachine.transition(state_db, client, NarrativeStateMachine.FAILED, run_id=run_id, batch_id=batch_id, failure_reason=str(last_exc), retry_count=attempt - 1)
-            state_db.commit()
-    except Exception:
-        state_db.rollback()
-    finally:
-        state_db.close()
-    return {"client_id": client_id, "status": "failed", "retry_count": attempt - 1, "error": str(last_exc) if last_exc else "unknown", "latency_ms": None}
-
-
-@shared_task(bind=True, queue="aggregation_queue")
-def calculate_narratives(self):
-    """Narrative Engine batch task — runs on schedule for ALL clients."""
-    run_id = uuid.uuid4().hex
-    batch_id = uuid.uuid4().hex[:12]
-    worker_id = str(os.getpid())
-    log = logger.bind(run_id=run_id, batch_id=batch_id, worker_id=worker_id, task="calculate_narratives")
-    log.info("narrative_batch_started")
-    t_batch_start = time.perf_counter()
-
-    try:
-        list_db = SessionLocal()
-        try:
-            clients = list_db.query(Client).all()
-            client_ids = [str(c.id) for c in clients]
-        finally:
-            list_db.close()
-    except Exception as exc:
-        log.error("narrative_batch_client_list_failed", error=str(exc))
-        raise self.retry(exc=exc, countdown=300)
-
-    if not client_ids:
-        return
-
-    results = [_process_single_client_narrative_with_retry(cid, run_id, batch_id, worker_id, log.bind(client_id=cid)) for cid in client_ids]
-    failed = [r for r in results if r["status"] == "failed"]
-    log.info("narrative_batch_complete", total=len(client_ids), success=len(results) - len(failed), failed=len(failed),
-             latency_ms=round((time.perf_counter() - t_batch_start) * 1000, 2))
 
 
 # ---------------------------------------------------------------------------
@@ -844,7 +750,7 @@ def _update_run(db, pipeline_run_id: str, new_stage: str, log_line: str = "") ->
     MUST check this and skip their real stage work when it's False -- the
     real chain already did (or is doing) that work under its own task, so
     running it again would silently double-write that stage's results
-    (duplicate trend/risk/alert/narrative rows etc.), not just risk a crash.
+    (duplicate trend/risk/alert rows etc.), not just risk a crash.
 
     Real-run verification of the timeout fix (see _PIPELINE_RUN_TIMEOUT_MINUTES
     above) hit this live: nlp_queue's --pool=solo worker freezes the whole
@@ -1573,25 +1479,16 @@ def _stage_alert(ctx: PipelineContext, db) -> None:
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
 
 
-def _stage_narrative(ctx: PipelineContext, db) -> None:
-    from app.services.intelligence.narrative_engine import NarrativeEngine as _NarrativeEngine
-    log = logger.bind(stage="NARRATIVE", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
-    t0 = time.perf_counter()
-    log.info("stage_started")
-    _NarrativeEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
-    log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
-
-
 # _stage_ai_summary (the old fully-synchronous AI_SUMMARY stage function)
 # was removed here, not left as dead code like _stage_process above --
 # unlike that one, it would no longer behave correctly if called: it relied
 # on AISummaryEngine.process_client() itself calling _generate_how_to_solve
 # and writing every result, but process_client is now a decide-only pass
 # (see its docstring) that returns pending items instead of generating them.
-# Runs after NARRATIVE so each Risk Event/Alert's AI Summary can reuse a
-# just-computed narrative RCA (evidence_metadata.rca) instead of generating
-# a second, potentially-conflicting explanation -- pipeline_stage_ai_summary
-# below preserves that same chain position.
+# Runs directly after ALERT now (the NARRATIVE stage it used to follow is
+# removed entirely) -- pipeline_stage_ai_summary below always falls back to
+# fresh per-item LLM generation, since there is no longer a narrative RCA to
+# reuse.
 
 
 def _stage_is_fresh_enough(db, model, client_id: str, hours: float) -> bool:
@@ -1822,10 +1719,10 @@ def pipeline_stage_process_gather(
 
 def _make_aggregation_stage_task(stage_name: str, stage_fn, log_line: str, task_name: str):
     """
-    Factory for the five identically-shaped aggregation stages (TREND, RISK,
-    ALERT, NARRATIVE, REPUTATION, EXECUTIVE, BENCHMARK all follow the same
-    pattern: load ctx, transition FSM, call the stage function, done). Avoids
-    seven copy-pasted task bodies that all differ only in stage name/fn/log.
+    Factory for the six identically-shaped aggregation stages (TREND, RISK,
+    ALERT, REPUTATION, EXECUTIVE, BENCHMARK all follow the same pattern:
+    load ctx, transition FSM, call the stage function, done). Avoids six
+    copy-pasted task bodies that all differ only in stage name/fn/log.
     """
     @shared_task(bind=True, queue="aggregation_queue", max_retries=0, name=task_name)
     def _task(self, run_id: str, client_id: str, owner_id: str) -> None:
@@ -1860,9 +1757,6 @@ pipeline_stage_risk = _make_aggregation_stage_task(
 pipeline_stage_alert = _make_aggregation_stage_task(
     "ALERT", _stage_alert, "Evaluating alerts",
     "app.workers.aggregation_tasks.pipeline_stage_alert")
-pipeline_stage_narrative = _make_aggregation_stage_task(
-    "NARRATIVE", _stage_narrative, "Generating narratives",
-    "app.workers.aggregation_tasks.pipeline_stage_narrative")
 # pipeline_stage_ai_summary is NOT built from _make_aggregation_stage_task
 # (see its own definition below, next to pipeline_ai_summary_generate_one /
 # pipeline_stage_ai_summary_gather) -- it fans its per-item LLM generation
@@ -1883,7 +1777,7 @@ pipeline_stage_benchmark = _make_aggregation_stage_task(
 # pipeline_stage_process / pipeline_process_one_document /
 # pipeline_stage_process_gather above: a cheap synchronous decide pass,
 # then one Celery task per item needing a fresh LLM call, then a gather
-# callback that writes the results back. Chain position (after NARRATIVE,
+# callback that writes the results back. Chain position (after ALERT,
 # before REPUTATION) is unchanged -- this only changes how AI_SUMMARY does
 # its own work, not where it sits in run_client_pipeline's chain.
 # ---------------------------------------------------------------------------
@@ -1893,8 +1787,8 @@ def pipeline_stage_ai_summary(self, run_id: str, client_id: str, owner_id: str) 
     """
     AI_SUMMARY stage entry point. Does the FSM transition (cheap, DB-only),
     then AISummaryEngine.process_client's decide-only pass -- which writes
-    every item needing no LLM call (narrative-linked reuse, or unchanged
-    cache) immediately, and returns only the items that need a fresh
+    every item needing no LLM call (unchanged cache) immediately, and
+    returns only the items that need a fresh
     _generate_how_to_solve call. Which items those are is only known after
     that pass runs, so (like pipeline_stage_process) the chord can't be
     built up-front in run_client_pipeline's static chain() call; self.replace()
@@ -1948,8 +1842,7 @@ def pipeline_ai_summary_generate_one(self, item: Dict[str, Any]) -> Dict[str, An
     stage's items instead of a single task looping over them serially --
     same reasoning as pipeline_process_one_document for PROCESSING.
     AISummaryEngine._generate_how_to_solve already catches its own
-    exceptions and returns None on any failure (fail-safe convention shared
-    with narrative_engine.py's _generate_rca), so this task never raises;
+    exceptions and returns None on any failure, so this task never raises;
     it just passes that result through to the gather callback.
     """
     from app.services.intelligence.ai_summary_engine import AISummaryEngine
@@ -2166,12 +2059,12 @@ def run_client_pipeline(self, run_id: str, client_id: str):
         pipeline_stage_trend.si(run_id, client_id, owner_id),
         pipeline_stage_risk.si(run_id, client_id, owner_id),
         pipeline_stage_alert.si(run_id, client_id, owner_id),
-        # NARRATIVE stage removed from the chain (Narrative Cluster feature
-        # removal -- threshold unachievable on real data volume, see
-        # PART_NARRATIVE_VOLUME_COST_FORENSICS_2026-09-19.md). pipeline_stage_narrative/
-        # _stage_narrative/NarrativeEngine are left in place, unused, same as
-        # the already-dead calculate_narratives task -- not deleted here.
-        # AI_SUMMARY below no longer has a narrative RCA to reuse; it already
+        # NARRATIVE stage removed entirely (Narrative Cluster feature removal
+        # -- threshold unachievable on real data volume, see
+        # PART_NARRATIVE_VOLUME_COST_FORENSICS_2026-09-19.md). narrative_engine.py,
+        # pipeline_stage_narrative/_stage_narrative, and calculate_narratives
+        # are all deleted (full data + code purge, not just the pipeline
+        # stage). AI_SUMMARY below has no narrative RCA to reuse; it always
         # falls back to fresh per-item LLM generation for every Risk Event/Alert.
         pipeline_stage_ai_summary.si(run_id, client_id, owner_id),
         pipeline_stage_reputation.si(run_id, client_id, owner_id),

@@ -134,7 +134,6 @@ CREATE TABLE public.client_processing_summary (
     sentiments_generated integer DEFAULT 0,
     risks_generated integer DEFAULT 0,
     alerts_generated integer DEFAULT 0,
-    narratives_generated integer DEFAULT 0,
     reputation_score double precision DEFAULT 0.0,
     last_processed_at timestamp with time zone DEFAULT now()
 );
@@ -149,13 +148,6 @@ CREATE TABLE public.clients (
     name character varying(255) NOT NULL,
     industry character varying(100),
     created_at timestamp with time zone DEFAULT now(),
-    narrative_processing_status character varying(50) DEFAULT 'NARRATIVE_PENDING'::character varying,
-    narrative_failure_reason character varying(4000),
-    narrative_retry_count integer DEFAULT 0,
-    narrative_run_id character varying(100),
-    narrative_batch_id character varying(100),
-    narrative_latency_ms double precision,
-    narrative_failed_at timestamp with time zone,
     reputation_processing_status character varying(50) DEFAULT 'REPUTATION_PENDING'::character varying,
     reputation_failure_reason character varying(4000),
     reputation_retry_count integer DEFAULT 0,
@@ -212,7 +204,6 @@ CREATE TABLE public.competitor_benchmarks (
     risk_score double precision NOT NULL,
     visibility_score double precision NOT NULL,
     share_of_voice double precision NOT NULL,
-    top_narrative character varying(255),
     rank integer NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     run_id character varying(100),
@@ -461,13 +452,10 @@ CREATE TABLE public.executive_reputation_scores (
     grade character varying(2) NOT NULL,
     sentiment_component double precision NOT NULL,
     risk_component double precision NOT NULL,
-    narrative_component double precision NOT NULL,
     trend_component double precision NOT NULL,
     visibility_component double precision NOT NULL,
     confidence_score double precision NOT NULL,
     reputation_trend character varying(20) NOT NULL,
-    top_positive_narrative character varying(255),
-    top_negative_narrative character varying(255),
     created_at timestamp with time zone DEFAULT now(),
     run_id character varying(100),
     batch_id character varying(100),
@@ -528,36 +516,6 @@ CREATE TABLE public.model_runs (
 
 
 --
--- Name: narratives; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.narratives (
-    id uuid NOT NULL,
-    client_id uuid NOT NULL,
-    narrative_name character varying(255) NOT NULL,
-    narrative_type character varying(100) NOT NULL,
-    mention_count integer NOT NULL,
-    sentiment_score double precision NOT NULL,
-    risk_score double precision NOT NULL,
-    trend_strength double precision NOT NULL,
-    status character varying(50) NOT NULL,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    run_id character varying(100),
-    batch_id character varying(100),
-    worker_id character varying(100),
-    latency_ms double precision,
-    retry_count integer,
-    summary_text character varying(4000),
-    confidence_score double precision DEFAULT 1.0 NOT NULL,
-    evidence_metadata jsonb,
-    CONSTRAINT ck_narratives_confidence_score CHECK (((confidence_score >= (0)::double precision) AND (confidence_score <= (1)::double precision))),
-    CONSTRAINT ck_narratives_risk_score CHECK (((risk_score >= (0)::double precision) AND (risk_score <= (100)::double precision))),
-    CONSTRAINT ck_narratives_sentiment_score CHECK (((sentiment_score >= ('-1'::integer)::double precision) AND (sentiment_score <= (1)::double precision)))
-);
-
-
---
 -- Name: pipeline_runs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -595,7 +553,6 @@ CREATE TABLE public.product_benchmarks (
     risk_score double precision NOT NULL,
     visibility_score double precision NOT NULL,
     share_of_voice double precision NOT NULL,
-    top_narrative character varying(255),
     rank integer NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     run_id character varying(100),
@@ -623,7 +580,6 @@ CREATE TABLE public.reputation_scores (
     grade character varying(2),
     sentiment_component double precision,
     risk_component double precision,
-    narrative_component double precision,
     trend_component double precision,
     source_component double precision,
     visibility_component double precision,
@@ -1083,14 +1039,6 @@ ALTER TABLE ONLY public.model_runs
 
 
 --
--- Name: narratives narratives_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.narratives
-    ADD CONSTRAINT narratives_pkey PRIMARY KEY (id);
-
-
---
 -- Name: pipeline_runs pipeline_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1240,14 +1188,6 @@ ALTER TABLE ONLY public.trend_events
 
 ALTER TABLE ONLY public.document_topics
     ADD CONSTRAINT unique_document_topic UNIQUE (document_id, topic_id);
-
-
---
--- Name: narratives uq_client_narrative; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.narratives
-    ADD CONSTRAINT uq_client_narrative UNIQUE (client_id, narrative_name);
 
 
 --
@@ -1657,13 +1597,6 @@ CREATE INDEX ix_llm_call_log_client_id ON public.llm_call_log USING btree (clien
 --
 
 CREATE INDEX ix_model_runs_document_id ON public.model_runs USING btree (document_id);
-
-
---
--- Name: ix_narratives_client_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_narratives_client_id ON public.narratives USING btree (client_id);
 
 
 --
@@ -2089,13 +2022,6 @@ ALTER TABLE ONLY public.llm_call_log
 ALTER TABLE ONLY public.model_runs
     ADD CONSTRAINT model_runs_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
 
-
---
--- Name: narratives narratives_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.narratives
-    ADD CONSTRAINT narratives_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
 
 
 --

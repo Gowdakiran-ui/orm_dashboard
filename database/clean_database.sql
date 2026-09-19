@@ -3,7 +3,6 @@ TRUNCATE TABLE
     alerts, alert_client_states,
     reputation_scores, executive_reputation_scores, competitor_benchmarks,
     executive_candidates, competitor_candidates,
-    narratives,
     risk_events, risk_client_states,
     trend_events, trend_client_states,
     entity_mentions, entity_sentiments, document_sentiments,

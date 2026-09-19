@@ -133,7 +133,6 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     from app.models.sentiment import DocumentSentiment
     from app.models.risk import RiskEvent
     from app.models.topic import DocumentTopic
-    from app.models.narrative import Narrative
     from app.models.alert import Alert
     
     source = db.query(Source).filter(Source.id == doc.source_id).first()
@@ -185,29 +184,6 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
         "severity": getattr(alert_rec, "severity", "INFO")
     } if alert_rec else None
     
-    # Real cluster membership, not a topic-name guess: a narrative's
-    # evidence_metadata.supporting_documents is the exact list of document
-    # ids narrative_engine.py put in that narrative's own cluster (see
-    # calculate_narratives), so matching against it is the actual
-    # relationship rather than the previous Narrative.narrative_name.ilike
-    # topic-substring heuristic, which could match a narrative this document
-    # was never actually clustered into. None (not a placeholder name) when
-    # this document isn't part of any narrative's cluster -- an expected,
-    # not-yet-narrative-worthy state, not an error.
-    narrative_name = None
-    narrative_id = None
-    narrative_mentions = 0
-    doc_id_str = str(doc.id)
-    narrative_candidates = db.query(Narrative).filter(Narrative.client_id == client_id).all()
-    for narr_rec in narrative_candidates:
-        supporting_docs = (narr_rec.evidence_metadata or {}).get("supporting_documents") or []
-        if doc_id_str in supporting_docs:
-            narrative_name = narr_rec.narrative_name
-            narrative_id = str(narr_rec.id)
-            narrative_mentions = narr_rec.mention_count or 0
-            break
-
-    narrative_data = {"name": narrative_name, "id": narrative_id, "mentions": narrative_mentions}
     rep_impact = f"{'+' if sentiment_val >= 0 else ''}{sentiment_val * 10:.1f}"
     
     return {
@@ -224,7 +200,6 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
         # 75.4 -> 75 reads as HIGH under the <=75 rule instead of CRITICAL)
         "risk_explainability": risk_explainability,
         "alert": alert_data,
-        "narrative": narrative_data,
         "reputation_impact": rep_impact
     }
 
@@ -232,9 +207,9 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
     """
     Shared enrichment: turns a list of already-fetched Document rows into
     the exact response shape the frontend's `documents` array expects
-    (id/title/source/timestamp/sentiment/risk/narrative/topic/...). Used by
+    (id/title/source/timestamp/sentiment/risk/topic/...). Used by
     both read_client_documents (the main 500-most-recent window) and
-    read_client_documents_by_ids (the targeted evidence-id fallback) so the
+    read_client_documents_by_ids (the targeted id-based fallback) so the
     two paths can never silently drift into different shapes for the same
     fields -- this project has already been bitten once by that exact
     failure mode (see get_client_visible_documents's docstring).
@@ -248,7 +223,6 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
     from app.models.sentiment import DocumentSentiment
     from app.models.risk import RiskEvent
     from app.models.topic import DocumentTopic
-    from app.models.narrative import Narrative
     from app.models.document import DocumentMatch
     doc_ids = [doc.id for doc in docs]
     
@@ -295,18 +269,6 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
                 "entity_type": getattr(m.entity, "entity_type", "unknown")
             })
         
-    # Real cluster membership, not a topic-name guess -- same reasoning as
-    # read_document above. Built once as a doc_id -> (name, id) reverse
-    # index off every client narrative's evidence_metadata.supporting_documents,
-    # so this stays a single query for the whole page instead of one per
-    # document.
-    client_narratives = db.query(Narrative).filter(Narrative.client_id == client_id).all()
-    doc_to_narrative: dict = {}
-    for narr_rec in client_narratives:
-        supporting_docs = (narr_rec.evidence_metadata or {}).get("supporting_documents") or []
-        for supporting_doc_id in supporting_docs:
-            doc_to_narrative.setdefault(supporting_doc_id, (narr_rec.narrative_name, str(narr_rec.id)))
-
     matches = db.query(DocumentMatch).filter(DocumentMatch.document_id.in_(doc_ids)).all()
     confidence_map = {getattr(m, "document_id", None): getattr(m, "match_confidence", 1.0) for m in matches if m}
 
@@ -327,10 +289,6 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
         
         extracted_entities = mention_map.get(doc.id, [])
 
-        narrative_match = doc_to_narrative.get(str(doc.id))
-        narrative_name = narrative_match[0] if narrative_match else None
-        narrative_id = narrative_match[1] if narrative_match else None
-
         rep_impact = f"{'+' if sentiment_val >= 0 else ''}{sentiment_val * 10:.1f}"
 
         results.append({
@@ -342,8 +300,6 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
             "sentiment": sentiment_val,
             "risk": round(risk_val),  # was int() -- see read_document above
             "risk_explainability": risk_explainability,
-            "narrative": narrative_name,
-            "narrative_id": narrative_id,
             "original_content": doc.normalized_content,
             "extracted_entities": extracted_entities,
             "topic": topic_name,
@@ -368,16 +324,10 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
 @router.get("/client/{client_id}/by-ids")
 def read_client_documents_by_ids(client_id: UUID, ids: List[UUID] = Query(...), db: Session = Depends(get_db)):
     """
-    Targeted fallback for a narrative's Source Evidence panel: a
-    narrative's real evidence_metadata.supporting_documents can reference
-    ids that have aged out of this client's main 500-most-recent-document
-    window (get_client_visible_documents) by the time the panel is opened
-    -- confirmed live, a narrative's document from ~21 hours before the
-    window's current cutoff was already excluded. This fetches exactly the
-    requested ids back, scoped to this client via the same
-    DocumentMatch/Entity join and brand-gating every other read here uses,
-    so the panel can render the narrative's real, complete evidence
-    regardless of whether each document is still in the main window.
+    Targeted fetch for a specific set of document ids -- e.g. ids that have
+    aged out of this client's main 500-most-recent-document window
+    (get_client_visible_documents). Scoped to this client via the same
+    DocumentMatch/Entity join and brand-gating every other read here uses.
 
     Deliberately NOT a general search/filter endpoint: no ordering, no
     paging, no free-form query -- just "give me these specific ids back."
@@ -394,7 +344,7 @@ def read_client_documents_by_ids(client_id: UUID, ids: List[UUID] = Query(...), 
 
     if not ids:
         return []
-    # A narrative's own evidence set is realistically tens of documents at
+    # A caller's requested id set is realistically tens of documents at
     # most; this caps the id list the same way limit=500 caps the main
     # window, so this can't become an unbounded bulk-fetch path dressed up
     # as a "by ids" lookup.

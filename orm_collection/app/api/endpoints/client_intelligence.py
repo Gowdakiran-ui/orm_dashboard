@@ -166,101 +166,6 @@ def get_client_active_alerts(client_id: UUID, db: Session = Depends(get_db)):
         })
     return results
 
-from app.models.narrative import Narrative
-from app.models.document import Document
-
-
-def _filter_stale_narratives(db: Session, narratives: List[Narrative]) -> List[Narrative]:
-    """
-    Stale-evidence containment (xoop_ui_clarity_review.md Phase 0, second
-    confirmed bug, 2026-09-13): narratives are never invalidated or
-    recomputed when their source evidence (documents, risk events) is later
-    deleted or a client's data is reseeded -- calculate_narratives only ever
-    inserts/updates a narrative when its own topic-clustering pass produces
-    one again, it never removes a narrative whose underlying evidence has
-    since evaporated. Confirmed live: a narrative's evidence_metadata claims
-    a cluster of real articles, but 0 of its own supporting_documents ids
-    still exist in `documents` -- the drill-through view then shows "0
-    Sources / No supporting documents found" directly contradicting the AI
-    summary's "based on a cluster of N articles" in the very same drawer.
-    Confirmed via a platform-wide query (2026-09-13) that this is rare (2 of
-    2,957 narratives, both with supporting_documents fully gone, none
-    partially gone) -- a full recompute/invalidation system is the real fix
-    and is scoped as its own follow-up, not attempted here; this filter is a
-    read-path containment that hides a narrative once ALL of its own listed
-    supporting documents have disappeared, rather than showing that
-    contradiction to a user. A narrative with no supporting_documents listed
-    at all (nothing to check) is left untouched -- this only catches
-    evidence that once existed and later vanished, not narratives that never
-    had per-document evidence recorded.
-    """
-    all_doc_ids = set()
-    for n in narratives:
-        all_doc_ids.update((n.evidence_metadata or {}).get("supporting_documents") or [])
-    if not all_doc_ids:
-        return narratives
-
-    existing_doc_ids = set()
-    id_list = list(all_doc_ids)
-    batch_size = 500
-    for i in range(0, len(id_list), batch_size):
-        batch = id_list[i:i + batch_size]
-        rows = db.query(Document.id).filter(Document.id.in_(batch)).all()
-        existing_doc_ids.update(str(r[0]) for r in rows)
-
-    result = []
-    for n in narratives:
-        supporting_docs = (n.evidence_metadata or {}).get("supporting_documents") or []
-        if supporting_docs and not any(did in existing_doc_ids for did in supporting_docs):
-            logger.warning(
-                "narrative_stale_evidence_hidden",
-                narrative_id=str(n.id),
-                client_id=str(n.client_id),
-                narrative_name=n.narrative_name,
-                supporting_document_count=len(supporting_docs),
-            )
-            continue
-        result.append(n)
-    return result
-
-
-@router.get("/{client_id}/narratives", response_model=List[Dict[str, Any]])
-def get_client_narratives(client_id: UUID, db: Session = Depends(get_db)):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    narratives = db.query(Narrative).filter(Narrative.client_id == client_id).order_by(Narrative.updated_at.desc()).all()
-    narratives = _filter_stale_narratives(db, narratives)
-    results = [{
-        "id": str(n.id),
-        "name": n.narrative_name,
-        "type": n.narrative_type,
-        "mentions": n.mention_count,
-        "sentiment": n.sentiment_score,
-        "risk": n.risk_score,
-        "trend": n.trend_strength,
-        "status": n.status,
-        "summary_text": n.summary_text,
-        "confidence_score": n.confidence_score,
-        "evidence_metadata": n.evidence_metadata
-    } for n in narratives]
-    return results
-
-@router.get("/{client_id}/top-narratives", response_model=List[Dict[str, Any]])
-def get_client_top_narratives(client_id: UUID, db: Session = Depends(get_db)):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    narratives = db.query(Narrative).filter(Narrative.client_id == client_id).order_by(Narrative.mention_count.desc(), Narrative.id.desc()).limit(5).all()
-    narratives = _filter_stale_narratives(db, narratives)
-    results = [{
-        "id": str(n.id),
-        "name": n.narrative_name,
-        "status": n.status,
-        "mentions": n.mention_count
-    } for n in narratives]
-    return results
-
 from app.models.reputation import ReputationScore
 
 @router.get("/{client_id}/reputation", response_model=Dict[str, Any])
@@ -306,7 +211,6 @@ def get_client_reputation_breakdown(client_id: UUID, db: Session = Depends(get_d
         return {
             "sentiment": None,
             "risk": None,
-            "narrative": None,
             "trend": None,
             "source": None,
             "visibility": None
@@ -314,7 +218,6 @@ def get_client_reputation_breakdown(client_id: UUID, db: Session = Depends(get_d
     return {
         "sentiment": rep.sentiment_component,
         "risk": rep.risk_component,
-        "narrative": rep.narrative_component,
         "trend": rep.trend_component,
         "source": rep.source_component,
         "visibility": rep.visibility_component
@@ -333,7 +236,7 @@ def _brand_or_product_gated_person_entity_ids(db: Session, client_id):
     mixed with wholly unrelated people (Elon Musk, Sam Altman, Howard
     Lutnick, Satya Nadella, Liang Wenfeng) and outright NER garbage
     ("Russian Hackers", "Fortune Tech", "Rules DOD" as a "person"). Same
-    fix pattern as narrative_engine.py/documents.py: only trust a person
+    fix pattern as documents.py: only trust a person
     entity's reputation score if at least one of their mentioned documents
     also mentions this client's own brand or product entity.
 
@@ -408,8 +311,6 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
         "score": s.score,
         "grade": s.grade,
         "trend": s.reputation_trend,
-        "top_positive": s.top_positive_narrative,
-        "top_negative": s.top_negative_narrative,
         "confidence_score": s.confidence_score,
         "data_coverage": s.data_coverage,
         "health_status": s.health_status
@@ -535,7 +436,6 @@ def get_client_benchmark(
         "health_status": b.CompetitorBenchmark.health_status,
         "confidence_score": b.CompetitorBenchmark.confidence_score,
         "data_coverage": b.CompetitorBenchmark.data_coverage,
-        "top_narrative": b.CompetitorBenchmark.top_narrative
     } for b in benchmarks]
 
 @router.get("/{client_id}/share-of-voice", response_model=List[Dict[str, Any]])
@@ -717,8 +617,6 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
                 "score": score.score if score else None,
                 "grade": score.grade if score else None,
                 "trend": score.reputation_trend if score else None,
-                "top_positive": score.top_positive_narrative if score else None,
-                "top_negative": score.top_negative_narrative if score else None,
                 "confidence_score": score.confidence_score if score else None,
                 "data_coverage": score.data_coverage if score else None,
                 "health_status": score.health_status if score else "INSUFFICIENT_EVIDENCE",
@@ -1003,7 +901,6 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
                 "risk_score": benchmark.risk_score if benchmark else None,
                 "share_of_voice": benchmark.share_of_voice if benchmark else None,
                 "rank": benchmark.rank if benchmark else 0,
-                "top_narrative": benchmark.top_narrative if benchmark else None,
                 "confidence_score": benchmark.confidence_score if benchmark else None,
                 "data_coverage": benchmark.data_coverage if benchmark else None,
                 # Same sentinel used everywhere else in this table when there
@@ -1218,7 +1115,6 @@ def search_client_product(
                 "risk_score": benchmark.risk_score if benchmark else None,
                 "share_of_voice": benchmark.share_of_voice if benchmark else None,
                 "rank": benchmark.rank if benchmark else 0,
-                "top_narrative": benchmark.top_narrative if benchmark else None,
                 "confidence_score": benchmark.confidence_score if benchmark else None,
                 "data_coverage": benchmark.data_coverage if benchmark else None,
                 "health_status": benchmark.health_status if benchmark else "INSUFFICIENT_EVIDENCE",
@@ -1462,17 +1358,6 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 
     sentiment = {"positive": positive, "neutral": neutral, "negative": negative, "dominant": dominant}
 
-    # 4. Narratives -- "active" = not DECLINING (EMERGING/GROWING/PEAK), top by confidence.
-    active_narratives = db.query(Narrative).filter(
-        Narrative.client_id == client_id,
-        Narrative.status != "DECLINING"
-    ).order_by(Narrative.confidence_score.desc(), Narrative.id.desc()).all()
-    top_narrative = None
-    if active_narratives:
-        top_narrative = {"name": active_narratives[0].narrative_name, "confidence": active_narratives[0].confidence_score}
-
-    narratives = {"active_count": len(active_narratives), "top": top_narrative}
-
     # 5. Trends -- direction values differ by trend_type (RISING/FALLING for
     # Mention/Topic, positive/negative for Sentiment), so both sets are handled.
     trend_total = db.query(func.count(TrendEvent.id)).filter(TrendEvent.client_id == client_id).scalar() or 0
@@ -1542,317 +1427,31 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         "reputation": reputation,
         "risk": risk,
         "sentiment": sentiment,
-        "narratives": narratives,
         "trends": trends,
         "executive_alert": executive_alert
     }
-
-def _select_advisory_narratives(db: Session, client_id: UUID):
-    """
-    Narrative Cluster removal (2026-09-19): always returns [] now, not just
-    when a client happens to have no risk-worthy narratives. The NARRATIVE
-    pipeline stage no longer runs (aggregation_tasks.py), but the
-    `narratives` table and its pre-existing rows are deliberately kept (not
-    purged) as dormant historical data -- unlike every other narrative
-    consumer, which only needed to tolerate an empty/absent result, this
-    Advisor call generates live text, so a client with old risk-worthy
-    narrative rows from before generation stopped would otherwise keep
-    surfacing advisory bullets built from them indefinitely. Returning []
-    unconditionally makes get_client_plan_advisory take its own
-    already-coded "nothing to flag" empty-state path (see
-    get_client_plan_advisory's `if not top_narratives` branch below), the
-    same effective behavior as if narratives had never existed, without
-    touching the dormant table itself.
-    """
-    return []
-
-
-def _generate_plan_advisory_text(rep, reputation_text, risk_counts, top_narratives, alert_titles, client_id, run_id=None):
-    """
-    Calls Claude Haiku 4.5 (via a dedicated OPENROUTER_API_KEY_ADVISOR key,
-    separate from role-classification/RCA usage, for its own budget/usage
-    tracking) to produce ONLY a short "primary concern" phrase plus 2-4
-    action bullets. Reuses each narrative's own root_cause/recommended_action
-    -- never re-derives them, never sees raw documents.
-
-    The reputation-score/trend clause and the "N <level>-risk narratives are
-    being tracked; the primary concern is ..." framing are built here in
-    Python, not left to the model -- the model previously drifted on this
-    exact phrasing (e.g. "N narratives require attention", wrongly implying
-    every tracked narrative is equally urgent) and occasionally repeated the
-    same point under separate headings. Composing the deterministic parts in
-    code and asking the model for only the one free-text phrase it's needed
-    for removes both failure modes by construction instead of by instruction.
-
-    Model choice: evaluated against DeepSeek V4 Pro (reasoning enabled) on
-    5 real Godrej Properties narratives -- DeepSeek's reasoning mode burned
-    its entire completion budget on internal reasoning and returned zero
-    content on every attempt (finish_reason="length", 0 usable output),
-    while Haiku 4.5 passed cleanly on groundedness, length discipline, and
-    filter discipline (a positive narrative injected into the test input
-    never appeared in its output).
-
-    Returns {"lead": str, "bullets": [str, ...]} on success, or None on
-    ANY failure -- same fail-safe convention as every other LLM call in
-    this codebase. None means "show the deterministic fallback", never an
-    error surfaced to the user.
-    """
-    import requests
-    import json as _json
-    from app.utils.llm_call_logging import log_llm_call
-
-    api_key = os.environ.get("OPENROUTER_API_KEY_ADVISOR")
-    if not api_key:
-        return None
-
-    log = logger.bind(run_id=run_id, task="plan_advisory_generate", client_id=str(client_id))
-    t_call_start = time.perf_counter()
-
-    def _record(success, usage=None):
-        log_llm_call(
-            call_type="plan_advisory_generate",
-            client_id=client_id,
-            run_id=run_id,
-            tokens_prompt=(usage or {}).get("prompt_tokens"),
-            tokens_completion=(usage or {}).get("completion_tokens"),
-            latency_ms=(time.perf_counter() - t_call_start) * 1000,
-            success=success,
-        )
-
-    narratives_block = _json.dumps([
-        {
-            "name": n.narrative_name,
-            "root_cause": (n.evidence_metadata or {}).get("rca", {}).get("root_cause", ""),
-            "recommended_action": (n.evidence_metadata or {}).get("rca", {}).get("recommended_action", ""),
-        }
-        for n in top_narratives
-    ], indent=2)
-
-    # Pick the single dominant severity band to name in the assessment
-    # sentence -- computed here, not left for the model to infer, so the
-    # "N <level>-risk narratives are being tracked" clause is always backed
-    # by a real count rather than the model guessing which band matters.
-    level_order = ["critical", "high", "medium", "low"]
-    dominant_level, dominant_count = next(
-        ((lvl, risk_counts[lvl]) for lvl in level_order if risk_counts.get(lvl, 0) > 0),
-        ("low", risk_counts.get("low", 0)),
-    )
-
-    user_prompt = _json.dumps({
-        "reputation": reputation_text,
-        "risk_counts": risk_counts,
-        "top_narratives": _json.loads(narratives_block),
-        "active_alerts": alert_titles,
-    }, indent=2)
-
-    system_prompt = (
-        "You are an AI Advisory generator for a brand reputation dashboard. "
-        "You are given a compact pre-selected context: the client's reputation "
-        "score/trend, risk aggregate counts by severity, a short ranked list of "
-        "top risk-worthy narratives (each with an already-computed root_cause "
-        "and recommended_action -- reuse these verbatim in spirit, do not "
-        "re-derive or invent new ones), and any active alerts.\n\n"
-        "Return exactly two things, nothing else:\n"
-        "1. primary_concern: a short phrase (under 15 words, no leading capital, "
-        "no trailing period) naming the single biggest issue, drawn from the "
-        "top-ranked narrative. This phrase will be inserted verbatim after the "
-        "words 'the primary concern is ' in a sentence you do not see -- do not "
-        "write that lead-in yourself, do not restate the reputation score/trend "
-        "here, and do not repeat this same point again in the bullets below.\n"
-        "2. bullets: 2-4 action bullets (each under 15 words), one per "
-        "narrative from the list (biggest risk first), phrased as a concrete "
-        "next step compressed from that narrative's own recommended_action. "
-        "Do not repeat the primary_concern point in a bullet -- each bullet "
-        "must add a distinct action, not restate the headline concern.\n\n"
-        "Hard rules:\n"
-        "- Do not add any labeled section or heading of any kind -- no "
-        "'Priority:', 'Confidence:', 'Why it matters:', 'Assessment:', or "
-        "similar. No confidence level of any kind (e.g. 'Confidence: "
-        "High/Medium/Low') -- nothing in the input measures confidence, so "
-        "never assert one.\n"
-        "- NEVER mention, praise, or reference any positive or neutral-non-risk "
-        "narrative, even if one appears in the input. Only the given top_narratives "
-        "are eligible for bullets.\n"
-        "- Never invent facts, numbers, or events not present in the input data.\n"
-        'Return strict JSON: {"primary_concern": "...", "bullets": ["...", ...]}'
-    )
-
-    try:
-        resp = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": "anthropic/claude-haiku-4.5",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.2,
-                # Hard backstop -- the model now only produces a short phrase
-                # plus a few bullets (the assessment boilerplate is composed
-                # in Python below), so this budget is intentionally tighter
-                # than the old 600-token cap that covered a full lead sentence.
-                "max_tokens": 350,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=20.0,
-        )
-        if resp.status_code != 200:
-            log.warning("plan_advisory_http_error", status=resp.status_code, body=resp.text[:300])
-            _record(success=False)
-            return None
-
-        resp_json = resp.json()
-        usage = resp_json.get("usage")
-        content = resp_json["choices"][0]["message"]["content"]
-        if content is None:
-            log.warning("plan_advisory_null_content")
-            _record(success=False, usage=usage)
-            return None
-
-        # Haiku wraps JSON in ```json fences despite response_format being
-        # requested -- confirmed live during model evaluation. Strip
-        # defensively rather than relying on strict compliance.
-        stripped = content.strip()
-        if stripped.startswith("```"):
-            stripped = stripped.split("```")[1]
-            if stripped.startswith("json"):
-                stripped = stripped[4:]
-            stripped = stripped.strip()
-
-        parsed = _json.loads(stripped)
-        primary_concern = parsed.get("primary_concern")
-        bullets = parsed.get("bullets")
-        if not isinstance(primary_concern, str) or not primary_concern.strip() or not isinstance(bullets, list):
-            log.warning("plan_advisory_malformed", raw=str(content)[:400])
-            _record(success=False, usage=usage)
-            return None
-
-        # The reputation clause and the "N <level>-risk narratives are being
-        # tracked; the primary concern is ..." framing are composed here in
-        # Python, not by the model -- see the docstring above for why.
-        if rep and rep.score is not None:
-            reputation_clause = f"Reputation is {rep.score:.1f} ({rep.grade}), trending {(rep.reputation_trend or 'STABLE').lower()}."
-        else:
-            reputation_clause = "Reputation data is currently insufficient."
-        narrative_noun = "narrative" if dominant_count == 1 else "narratives"
-        narrative_verb = "is" if dominant_count == 1 else "are"
-        risk_clause = (
-            f"{dominant_count} {dominant_level}-risk {narrative_noun} {narrative_verb} being tracked; "
-            f"the primary concern is {primary_concern.strip().rstrip('.')}."
-        )
-        lead = f"{reputation_clause} {risk_clause}"
-
-        result = {"lead": lead, "bullets": [str(b).strip() for b in bullets]}
-        log.info("plan_advisory_generated")
-        _record(success=True, usage=usage)
-        return result
-
-    except Exception as exc:
-        log.warning("plan_advisory_failed", error=str(exc))
-        _record(success=False)
-        return None
-
 
 @router.get("/{client_id}/plan-advisory", response_model=Dict[str, Any])
 def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
     """
     Brand Equity page's "Plan Advisory" card: a ~60-100 word digest of
     what's actually wrong right now and what to do about it, sitting
-    directly below the Overview card. Reuses already-computed data only --
-    reputation summary, risk counts, top risk-worthy narratives' own
-    root_cause/recommended_action fields, active alerts -- never re-derives
-    root cause from raw documents itself.
+    directly below the Overview card.
 
-    Cached in Redis, keyed by a hash of the selected top-narrative set (not
-    a flat TTL): regenerates only when that set changes materially, not on
-    every page load. A 7-day TTL on the cache entry is a safety net against
-    unbounded growth, not the real invalidation mechanism.
+    Narrative Cluster removal (2026-09-19): this card's entire content used
+    to be built from top risk-worthy narratives' own root_cause/
+    recommended_action fields (an LLM-composed lead + action bullets, cached
+    in Redis). Narratives no longer generate, so there is nothing left to
+    build that content from -- this always returns the same deterministic
+    "nothing to flag" response now, same effective behavior as the
+    old code's own already-coded empty-state path for a client with zero
+    risk-worthy narratives.
     """
-    import hashlib
-    import json as _json
-    from app.utils.redis_client import redis_client
-    from app.models.entity import Entity
-
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    # Reputation summary text, same source as the Overview card.
-    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(
-        ReputationScore.created_at.desc(), ReputationScore.id.desc()
-    ).first()
-    if rep and rep.score is not None:
-        reputation_text = f"{rep.score:.1f} ({rep.grade}), trending {rep.reputation_trend}"
-    else:
-        reputation_text = "insufficient data"
-
-    # Risk counts, same competitor exclusion as every other risk aggregate.
-    risk_counts_raw = db.query(RiskEvent.risk_level, func.count(RiskEvent.id)).outerjoin(
-        Entity, Entity.id == RiskEvent.entity_id
-    ).filter(
-        RiskEvent.client_id == client_id,
-        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
-    ).group_by(RiskEvent.risk_level).all()
-    risk_counts_map = {level: count for level, count in risk_counts_raw}
-    risk_counts = {
-        "critical": risk_counts_map.get("CRITICAL", 0),
-        "high": risk_counts_map.get("HIGH", 0),
-        "medium": risk_counts_map.get("MEDIUM", 0),
-        "low": risk_counts_map.get("LOW", 0),
-    }
-
-    top_narratives = _select_advisory_narratives(db, client_id)
-
-    alert_titles = [
-        a.title for a in db.query(Alert).outerjoin(Entity, Entity.id == Alert.entity_id).filter(
-            Alert.client_id == client_id,
-            Alert.is_acknowledged == False,
-            or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), Alert.entity_id.is_(None)),
-        ).all()
-    ]
-
-    if not top_narratives:
-        return {"lead": "Nothing significant to flag right now.", "bullets": [], "cache_hit": False, "narrative_count": 0}
-
-    cache_key_material = _json.dumps({
-        "narrative_ids": sorted(str(n.id) for n in top_narratives),
-        "risk_counts": risk_counts,
-        "reputation_text": reputation_text,
-        "alert_titles": sorted(alert_titles),
-    }, sort_keys=True)
-    cache_key = f"plan_advisory:{client_id}:{hashlib.sha256(cache_key_material.encode()).hexdigest()[:16]}"
-
-    # Evidence link is built here in code from the actual top-ranked
-    # narrative, never generated as free text by the model -- avoids the
-    # model hallucinating link text or being inconsistent about which
-    # narrative it points to.
-    top_narrative_name = top_narratives[0].narrative_name
-    top_narrative_id = str(top_narratives[0].id)
-
-    cached = redis_client.get(cache_key)
-    if cached:
-        result = _json.loads(cached)
-        result["cache_hit"] = True
-        result["narrative_count"] = len(top_narratives)
-        result["top_narrative_name"] = top_narrative_name
-        result["top_narrative_id"] = top_narrative_id
-        return result
-
-    generated = _generate_plan_advisory_text(rep, reputation_text, risk_counts, top_narratives, alert_titles, client_id)
-    if generated is None:
-        # Deterministic fallback -- never surface an LLM outage as an error.
-        generated = {
-            "lead": f"{len(top_narratives)} risk-relevant narrative{'s' if len(top_narratives) != 1 else ''} currently tracked.",
-            "bullets": [n.narrative_name for n in top_narratives[:3]],
-        }
-
-    redis_client.set(cache_key, _json.dumps(generated), ex=7 * 24 * 60 * 60)
-    generated["cache_hit"] = False
-    generated["narrative_count"] = len(top_narratives)
-    generated["top_narrative_name"] = top_narrative_name
-    generated["top_narrative_id"] = top_narrative_id
-    return generated
+    return {"lead": "Nothing significant to flag right now.", "bullets": []}
 
 
 @router.get("/{client_id}/telemetry", response_model=Dict[str, Any])
@@ -1873,7 +1472,6 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
     from app.models.trends import TrendEvent
     from app.models.risk import RiskEvent
     from app.models.alert import Alert
-    from app.models.narrative import Narrative
     from app.models.reputation import ReputationScore
     from app.models.executive_reputation import ExecutiveReputationScore
     from app.models.competitor_benchmark import CompetitorBenchmark
@@ -1926,11 +1524,6 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
     alerts = db.query(Alert).filter(Alert.client_id == client_id).all()
     alert_produced = len(alerts)
     alert_last_run = format_dt(max(a.created_at for a in alerts)) if alerts else None
-
-    # 7. Narrative Engine
-    narratives = db.query(Narrative).filter(Narrative.client_id == client_id).all()
-    narrative_produced = len(narratives)
-    narrative_last_run = format_dt(max(n.updated_at for n in narratives)) if narratives else None
 
     # 8. Reputation Engine
     reps = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).all()
@@ -1986,10 +1579,6 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
         "alert": {
             "produced": alert_produced,
             "last_run": alert_last_run
-        },
-        "narrative": {
-            "produced": narrative_produced,
-            "last_run": narrative_last_run
         },
         "reputation": {
             "produced": rep_produced,

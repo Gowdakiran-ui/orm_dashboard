@@ -341,8 +341,8 @@ function DashboardShell() {
                         pipelineDiagnostics={analytics.engineDiagnosticsList}
                         documents={data.documents}
                         lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
-                        loading={data.documentsLoading || data.telemetryLoading || data.alertsLoading || data.narrativesLoading}
-                        error={data.documentsError || data.telemetryError || data.alertsError || data.narrativesError}
+                        loading={data.documentsLoading || data.telemetryLoading || data.alertsLoading}
+                        error={data.documentsError || data.telemetryError || data.alertsError}
                       />
                     </ErrorBoundary>
                   )}

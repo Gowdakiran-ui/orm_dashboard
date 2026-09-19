@@ -15,7 +15,6 @@ from app.models.entity import EntityMention, Entity
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
 from app.models.trends import TrendEvent
-from app.models.narrative import Narrative
 from app.models.reputation import ReputationScore
 from app.models.client import Client
 from app.models.alert import Alert
@@ -89,7 +88,6 @@ class ReputationEngine:
         self.weights = {
             "sentiment": 0.30,
             "risk": 0.30,
-            "narrative": 0.15,
             "trend": 0.10,
             "source": 0.10,
             "visibility": 0.05
@@ -265,25 +263,6 @@ class ReputationEngine:
         except Exception as e:
             log.warning("reputation_risk_calculation_failed", error=str(e))
 
-        # 3. Narratives Component (R5 Isolated)
-        narrative_component = None
-        supporting_narratives = []
-        try:
-            supporting_narratives = db.query(Narrative).filter(
-                Narrative.client_id == client_id,
-                Narrative.updated_at >= lookback_date
-            ).all()
-            if supporting_narratives:
-                narrative_penalty = 0
-                for n in supporting_narratives:
-                    if n.sentiment_score < 0 and n.status in ["GROWING", "PEAK"]:
-                        narrative_penalty += 20
-                    elif n.sentiment_score > 0 and n.status in ["GROWING", "PEAK"]:
-                        narrative_penalty -= 10
-                narrative_component = max(0.0, min(100.0, 100.0 - narrative_penalty))
-        except Exception as e:
-            log.warning("reputation_narrative_calculation_failed", error=str(e))
-
         # 4. Trend Component (R5 Isolated). Excludes entity_type='competitor'
         # -- entity_id is nullable on TrendEvent (Topic-type trends have
         # none; Mention-type trends carry the entity they're tracking
@@ -377,7 +356,6 @@ class ReputationEngine:
         active_weights = {
             "sentiment": sentiment_component,
             "risk": risk_component,
-            "narrative": narrative_component,
             "trend": trend_component,
             "source": source_component,
             "visibility": visibility_component
@@ -434,7 +412,6 @@ class ReputationEngine:
             "component_scores": {
                 "sentiment": round(sentiment_component, 2) if sentiment_component is not None else None,
                 "risk": round(risk_component, 2) if risk_component is not None else None,
-                "narrative": round(narrative_component, 2) if narrative_component is not None else None,
                 "trend": round(trend_component, 2) if trend_component is not None else None,
                 "source": round(source_component, 2) if source_component is not None else None,
                 "visibility": round(visibility_component, 2) if visibility_component is not None else None
@@ -463,8 +440,7 @@ class ReputationEngine:
             "supporting_documents": [str(did) for did in doc_ids],
             "supporting_risks": [str(r.id) for r in supporting_risks],
             "supporting_trends": [str(t.id) for t in supporting_trends],
-            "supporting_alerts": [str(a.id) for a in supporting_alerts],
-            "supporting_narratives": [str(n.id) for n in supporting_narratives]
+            "supporting_alerts": [str(a.id) for a in supporting_alerts]
         }
 
         latency_ms = (time.perf_counter() - t0) * 1000
@@ -481,7 +457,6 @@ class ReputationEngine:
                 grade=self._determine_grade(final_score),
                 sentiment_component=sentiment_component,
                 risk_component=risk_component,
-                narrative_component=narrative_component,
                 trend_component=trend_component,
                 source_component=source_component,
                 visibility_component=visibility_component,
@@ -503,7 +478,6 @@ class ReputationEngine:
                     "grade": self._determine_grade(final_score),
                     "sentiment_component": sentiment_component,
                     "risk_component": risk_component,
-                    "narrative_component": narrative_component,
                     "trend_component": trend_component,
                     "source_component": source_component,
                     "visibility_component": visibility_component,

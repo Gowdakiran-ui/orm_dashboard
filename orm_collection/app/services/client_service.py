@@ -411,7 +411,6 @@ def delete_client(db: Session, client_id: UUID) -> dict:
     # already had one timeout bug from too many sequential queries.
     audit_counts = db.execute(text("""
         SELECT
-            (SELECT COUNT(*) FROM narratives WHERE client_id=:cid) AS narratives,
             (SELECT COUNT(*) FROM risk_events WHERE client_id=:cid) AS risk_events,
             (SELECT COUNT(*) FROM alerts WHERE client_id=:cid) AS alerts,
             (SELECT COUNT(*) FROM reputation_scores WHERE client_id=:cid) AS reputation_scores,
@@ -422,7 +421,6 @@ def delete_client(db: Session, client_id: UUID) -> dict:
 
     pre_counts = {
         "entities":                  len(entities),
-        "narratives":                audit_counts.narratives,
         "risk_events":               audit_counts.risk_events,
         "alerts":                    audit_counts.alerts,
         "reputation_scores":         audit_counts.reputation_scores,

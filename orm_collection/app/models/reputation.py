@@ -15,7 +15,6 @@ class ReputationScore(Base):
     
     sentiment_component = Column(Float, nullable=True, default=None)
     risk_component = Column(Float, nullable=True, default=None)
-    narrative_component = Column(Float, nullable=True, default=None)
     trend_component = Column(Float, nullable=True, default=None)
     source_component = Column(Float, nullable=True, default=None)
     visibility_component = Column(Float, nullable=True, default=None)

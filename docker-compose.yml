@@ -261,23 +261,23 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
-    # This queue's name is legacy: the 7 standalone calculate_client_trends/
+    # This queue's name is legacy: the standalone calculate_client_trends/
     # .../calculate_competitor_benchmarks tasks it was originally sized for
     # are dead code (no beat schedule entry, no caller -- confirmed via
     # grep, Phase 15 Run-Pipeline-gated architecture). What actually runs
-    # here today are 7 of run_client_pipeline's 10 per-client chain stages
-    # -- pipeline_stage_trend/risk/alert/narrative/reputation/executive/
+    # here today are 6 of run_client_pipeline's 9 per-client chain stages
+    # -- pipeline_stage_trend/risk/alert/reputation/executive/
     # benchmark (aggregation_tasks.py, same "aggregation_queue" name,
     # different task) -- so this queue is live, not idle, on every single
     # pipeline run. concurrency 2 -> 3 (2026-09-09): this is the queue that
     # actually gates how many clients can have an active pipeline stage
-    # running at once (7 of the chain's 10 stages route here vs. 2 on
+    # running at once (6 of the chain's 9 stages route here vs. 2 on
     # cpu_queue), so it -- not celery-worker-pipeline's orchestration-only
     # solo pool -- was the real multi-client concurrency ceiling. Matching
     # nlp_queue's already-accepted concurrency=3 on this same 2-vCPU box;
     # lower CPU risk than nlp_queue's 3, since this queue's work is DB
-    # queries + network-bound LLM calls (risk role classification, RCA,
-    # narrative splitting), not CPU-bound transformer inference, and it
+    # queries + network-bound LLM calls (risk role classification, RCA),
+    # not CPU-bound transformer inference, and it
     # already routes through the pooled DB URL above so the extra process
     # doesn't add direct Postgres connections.
     command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=aggregation@%h", "--pool=prefork", "--concurrency=3", "-Q", "aggregation_queue"]

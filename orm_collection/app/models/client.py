@@ -12,15 +12,6 @@ class Client(Base):
     industry = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Narrative State Machine Observability
-    narrative_processing_status = Column(String(50), default="NARRATIVE_PENDING")
-    narrative_failure_reason = Column(String(4000))
-    narrative_retry_count = Column(Integer, default=0)
-    narrative_run_id = Column(String(100))
-    narrative_batch_id = Column(String(100))
-    narrative_latency_ms = Column(Float)
-    narrative_failed_at = Column(DateTime(timezone=True))
-
     # Reputation State Machine Observability (Phase 8.1)
     reputation_processing_status = Column(String(50), default="REPUTATION_PENDING")
     reputation_failure_reason = Column(String(4000))

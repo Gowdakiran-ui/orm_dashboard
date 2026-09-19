@@ -25,7 +25,6 @@ class ProductBenchmark(Base):
     visibility_score = Column(Float, nullable=False, default=0.0)
     share_of_voice = Column(Float, nullable=False, default=0.0)
 
-    top_narrative = Column(String(255), nullable=True)
     rank = Column(Integer, nullable=False, default=0)
 
     # Observability columns

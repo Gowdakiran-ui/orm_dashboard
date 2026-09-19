@@ -395,11 +395,6 @@ export async function fetchActiveAlerts(clientId: string, signal?: AbortSignal) 
   return parseOrThrow(res);
 }
 
-export async function fetchNarratives(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/narratives`, { signal });
-  return parseOrThrow(res);
-}
-
 /**
  * @reserved
  * Reserved for future Share of Voice (SOV) analytics view.

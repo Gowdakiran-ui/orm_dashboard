@@ -20,18 +20,18 @@ unconditionally for every client/feed, regardless of activity):
         the literal mechanism that would poll YouTube once any
         SearchSourceConfiguration row for it is enabled),
     calculate_client_trends, calculate_client_risks, evaluate_alerts,
-        calculate_narratives, calculate_reputation_score,
-        calculate_executive_reputation, calculate_competitor_benchmarks
+        calculate_reputation_score, calculate_executive_reputation,
+        calculate_competitor_benchmarks
         (aggregation -- these only ever read data collection already
-        wrote; see risk_engine.py/narrative_engine.py etc. for the
-        equivalent per-client stage functions now run in-chain instead).
+        wrote; see risk_engine.py etc. for the equivalent per-client
+        stage functions now run in-chain instead).
 
-The underlying task functions for the seven aggregation jobs above still
+The underlying task functions for the aggregation jobs above still
 exist in aggregation_tasks.py (not deleted -- a separate cleanup
 decision, not part of this change) but are no longer registered on any
 schedule; they will not fire unless invoked manually. The equivalent
 per-client work now happens via pipeline_stage_trend/risk/alert/
-narrative/reputation/executive/benchmark inside run_client_pipeline's
+reputation/executive/benchmark inside run_client_pipeline's
 chain -- see that module's docstring for the full chain order.
 
 Pure infrastructure/maintenance beat entries (flush_metrics_task,
@@ -87,7 +87,6 @@ celery_app.conf.update(
         'app.workers.aggregation_tasks.calculate_client_risks':       {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_document_risk':      {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.evaluate_alerts':              {'queue': 'aggregation_queue'},
-        'app.workers.aggregation_tasks.calculate_narratives':         {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_reputation_score':   {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_executive_reputation': {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_competitor_benchmarks': {'queue': 'aggregation_queue'},
@@ -174,7 +173,7 @@ celery_app.conf.update(
             'schedule': crontab(minute='*/15'),
         },
 
-        # --- Trend / Risk / Alert / Narrative / Reputation / Executive
+        # --- Trend / Risk / Alert / Reputation / Executive
         # Reputation / Competitor Benchmarks ---
         # REMOVED (Phase 15, Run-Pipeline-gated architecture -- see module
         # docstring). These only ever read data collection already wrote,
@@ -182,7 +181,7 @@ celery_app.conf.update(
         # 2h/4h for the three higher-order ones) -- exactly the
         # "cost/work regardless of activity" pattern this change removes.
         # The equivalent per-client work now runs in-chain via
-        # pipeline_stage_trend/risk/alert/narrative/reputation/executive/
+        # pipeline_stage_trend/risk/alert/reputation/executive/
         # benchmark inside run_client_pipeline, triggered by Run Pipeline.
         # REPUTATION/EXECUTIVE/BENCHMARK keep an in-chain staleness guard
         # (_stage_is_fresh_enough in aggregation_tasks.py) matching their

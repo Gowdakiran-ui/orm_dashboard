@@ -14,10 +14,8 @@ from app.models.document import Document
 from app.models.topic import Topic, DocumentTopic
 from app.models.sentiment import DocumentSentiment, EntitySentiment
 from app.models.risk import RiskEvent
-from app.models.narrative import Narrative
 from app.models.reputation import ReputationScore
 from app.models.competitor_benchmark import CompetitorBenchmark
-from app.services.intelligence.narrative_engine import NarrativeEngine
 from app.services.intelligence.reputation_engine import ReputationEngine
 from app.services.intelligence.benchmark_engine import BenchmarkEngine
 
@@ -103,7 +101,6 @@ def seed_db(num_clients):
     print("Seeding complete.")
 
 def run_tests():
-    narrative_engine = NarrativeEngine()
     reputation_engine = ReputationEngine()
     benchmark_engine = BenchmarkEngine()
     
@@ -115,12 +112,6 @@ def run_tests():
         
         # We only measure the time it takes to run for a sample client (or all clients to see the scale)
         # Let's run for ALL clients to measure total system scaling impact
-        
-        # Narrative
-        start = time.time()
-        for cid in client_ids:
-            narrative_engine.calculate_narratives(db, cid)
-        n_time = time.time() - start
         
         # Reputation
         start = time.time()
@@ -136,7 +127,6 @@ def run_tests():
         
         metrics.append({
             "clients": total_clients,
-            "narrative_time": n_time,
             "reputation_time": r_time,
             "benchmark_time": b_time
         })
@@ -168,8 +158,8 @@ if __name__ == "__main__":
     after_metrics = run_tests()
     
     print("\n=== RESULTS ===")
-    print("Clients | Nar(B) | Rep(B) | Ben(B) || Nar(A) | Rep(A) | Ben(A)")
+    print("Clients | Rep(B) | Ben(B) || Rep(A) | Ben(A)")
     for i in range(4):
         b = before_metrics[i]
         a = after_metrics[i]
-        print(f"{b['clients']:7} | {b['narrative_time']:6.2f} | {b['reputation_time']:6.2f} | {b['benchmark_time']:6.2f} || {a['narrative_time']:6.2f} | {a['reputation_time']:6.2f} | {a['benchmark_time']:6.2f}")
+        print(f"{b['clients']:7} | {b['reputation_time']:6.2f} | {b['benchmark_time']:6.2f} || {a['reputation_time']:6.2f} | {a['benchmark_time']:6.2f}")

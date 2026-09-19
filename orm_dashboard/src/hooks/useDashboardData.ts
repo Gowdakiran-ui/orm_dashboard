@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import {
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
   fetchPlanAdvisory,
-  fetchActiveAlerts, fetchNarratives, fetchCompetitorBenchmarks, fetchRisks,
+  fetchActiveAlerts, fetchCompetitorBenchmarks, fetchRisks,
   fetchExecutives, fetchExecutiveHistory, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed,
   fetchCommandCenterStats,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
@@ -52,8 +52,6 @@ export function useDashboardData() {
   const [alertsError, setAlertsError] = useState<string | null>(null);
 
   const [narratives, setNarratives] = useState<any[]>([]);
-  const [narrativesLoading, setNarrativesLoading] = useState(true);
-  const [narrativesError, setNarrativesError] = useState<string | null>(null);
 
   const [benchmarks, setBenchmarks] = useState<any[]>([]);
   const [benchmarksLoading, setBenchmarksLoading] = useState(true);
@@ -123,7 +121,6 @@ export function useDashboardData() {
           setHistoryLoading(false);
           setBreakdownLoading(false);
           setAlertsLoading(false);
-          setNarrativesLoading(false);
           setBenchmarksLoading(false);
           setRisksLoading(false);
           setExecutivesLoading(false);
@@ -144,7 +141,6 @@ export function useDashboardData() {
           setHistoryLoading(false);
           setBreakdownLoading(false);
           setAlertsLoading(false);
-          setNarrativesLoading(false);
           setBenchmarksLoading(false);
           setRisksLoading(false);
           setExecutivesLoading(false);
@@ -219,7 +215,6 @@ export function useDashboardData() {
     setHistoryLoading(true);
     setBreakdownLoading(true);
     setAlertsLoading(true);
-    setNarrativesLoading(true);
     setBenchmarksLoading(true);
     setRisksLoading(true);
     setExecutivesLoading(true);
@@ -237,7 +232,6 @@ export function useDashboardData() {
     setHistoryError(null);
     setBreakdownError(null);
     setAlertsError(null);
-    setNarrativesError(null);
     setBenchmarksError(null);
     setRisksError(null);
     setExecutivesError(null);
@@ -325,19 +319,6 @@ export function useDashboardData() {
             })
             .catch(() => { if (!signal.aborted) { setPlanAdvisory(null); setPlanAdvisoryError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setPlanAdvisoryLoading(false); }),
-
-          fetchNarratives(activeClientId, signal)
-            .then(data => {
-              if (!signal.aborted) {
-                const seen = new Set<string>();
-                const uniqueNarrs = (data || []).filter((n: any) => n && n.id && !seen.has(n.id) && seen.add(n.id));
-                if (hasChanged(narratives, uniqueNarrs)) {
-                  setNarratives(uniqueNarrs);
-                }
-              }
-            })
-            .catch(() => { if (!signal.aborted) { setNarratives([]); setNarrativesError("Telemetry Offline"); } })
-            .finally(() => { if (!signal.aborted) setNarrativesLoading(false); }),
 
           fetchCompetitorBenchmarks(activeClientId, signal)
             .then(data => {
@@ -531,13 +512,6 @@ export function useDashboardData() {
           fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) { setAlerts(data || []); setAlertsError(null); } }),
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
-          fetchNarratives(clientId, signal).then(data => {
-            if (!signal.aborted && data) {
-              const seen = new Set<string>();
-              setNarratives(data.filter((n: any) => { if (n?.id && !seen.has(n.id)) { seen.add(n.id); return true; } return false; }));
-              setNarrativesError(null);
-            }
-          }),
           fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
           fetchIntelligenceFeed(clientId, signal).then(data => { if (!signal.aborted) setTrendEvents(data || []); }), // no matching error state -- see initial-load effect's own untracked .catch for this fetch
           fetchSystemStatus(clientId, signal).then(data => { if (!signal.aborted) { setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); setSystemStatusError(null); } })
@@ -610,7 +584,6 @@ export function useDashboardData() {
     setHistoryLoading(isLoading);
     setBreakdownLoading(isLoading);
     setAlertsLoading(isLoading);
-    setNarrativesLoading(isLoading);
     setBenchmarksLoading(isLoading);
     setRisksLoading(isLoading);
     setExecutivesLoading(isLoading);
@@ -629,7 +602,6 @@ export function useDashboardData() {
     setHistoryError(null);
     setBreakdownError(null);
     setAlertsError(null);
-    setNarrativesError(null);
     setBenchmarksError(null);
     setRisksError(null);
     setExecutivesError(null);
@@ -676,8 +648,6 @@ export function useDashboardData() {
     alertsLoading,
     alertsError,
     narratives,
-    narrativesLoading,
-    narrativesError,
     benchmarks,
     benchmarksLoading,
     benchmarksError,
@@ -733,7 +703,6 @@ export function useDashboardData() {
     setHistoryLoading,
     setBreakdownLoading,
     setAlertsLoading,
-    setNarrativesLoading,
     setBenchmarksLoading,
     setRisksLoading,
     setExecutivesLoading,
@@ -748,7 +717,6 @@ export function useDashboardData() {
     setHistoryError,
     setBreakdownError,
     setAlertsError,
-    setNarrativesError,
     setBenchmarksError,
     setRisksError,
     setExecutivesError,

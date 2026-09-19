@@ -17,7 +17,6 @@ from app.models.document import Document
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
 from app.models.trends import TrendEvent
-from app.models.narrative import Narrative
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.services.intelligence.executive_reputation_engine import ExecutiveReputationEngine
 
@@ -37,7 +36,7 @@ engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-def setup_client_and_exec(db, name, avg_sentiment, risk_score, mentions, narrative_sentiment, trend_type):
+def setup_client_and_exec(db, name, avg_sentiment, risk_score, mentions, trend_type):
     client_id = uuid.uuid4()
     client = Client(id=client_id, name=name)
     db.add(client)
@@ -56,9 +55,6 @@ def setup_client_and_exec(db, name, avg_sentiment, risk_score, mentions, narrati
         db.add(EntityMention(document_id=doc_id, entity_id=entity_id, mention_count=mentions // 5))
         db.add(DocumentSentiment(document_id=doc_id, sentiment_score=avg_sentiment, confidence_score=1.0, weighted_sentiment_score=avg_sentiment, sentiment_label="Neutral"))
         db.add(RiskEvent(client_id=client_id, entity_id=entity_id, document_id=doc_id, risk_score=risk_score, risk_level="HIGH"))
-    
-    # Narrative
-    db.add(Narrative(client_id=client_id, narrative_name="Exec Narrative", narrative_type="General", mention_count=mentions, sentiment_score=narrative_sentiment, status="PEAK"))
     
     # Trend
     if trend_type == "GOOD":
@@ -86,13 +82,13 @@ def test_validation():
     db = Session()
     try:
         # 1. Positive Executive Scenario
-        client_pos = setup_client_and_exec(db, "Positive", 0.9, 5.0, 500, 0.9, "GOOD")
-        
+        client_pos = setup_client_and_exec(db, "Positive", 0.9, 5.0, 500, "GOOD")
+
         # 2. Mixed Executive Scenario
-        client_neu = setup_client_and_exec(db, "Mixed", 0.0, 30.0, 400, 0.0, "NONE")
-        
+        client_neu = setup_client_and_exec(db, "Mixed", 0.0, 30.0, 400, "NONE")
+
         # 3. Negative Executive Scenario
-        client_neg = setup_client_and_exec(db, "Negative", -0.9, 95.0, 600, -0.9, "BAD")
+        client_neg = setup_client_and_exec(db, "Negative", -0.9, 95.0, 600, "BAD")
         
         engine_svc = ExecutiveReputationEngine()
         

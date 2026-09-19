@@ -51,7 +51,6 @@ tables = [
     "trend_events",
     "risk_events",
     "alerts",
-    "narratives",
     "reputation_scores",
     "executive_reputation_scores",
     "competitor_benchmarks"

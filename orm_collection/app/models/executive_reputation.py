@@ -17,16 +17,12 @@ class ExecutiveReputationScore(Base):
     
     sentiment_component = Column(Float, nullable=False, default=0.0)
     risk_component = Column(Float, nullable=False, default=0.0)
-    narrative_component = Column(Float, nullable=False, default=0.0)
     trend_component = Column(Float, nullable=False, default=0.0)
     visibility_component = Column(Float, nullable=False, default=0.0)
-    
+
     confidence_score = Column(Float, nullable=False, default=1.0)
     reputation_trend = Column(String(20), nullable=False) # IMPROVING, STABLE, DECLINING
-    
-    top_positive_narrative = Column(String(255), nullable=True)
-    top_negative_narrative = Column(String(255), nullable=True)
-    
+
     # Observability columns
     run_id = Column(String(100))
     batch_id = Column(String(100))

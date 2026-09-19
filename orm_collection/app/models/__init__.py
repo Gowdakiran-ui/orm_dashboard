@@ -16,7 +16,6 @@ from app.models.risk import RiskEvent
 from app.models.risk_state import RiskClientState
 from app.models.alert import Alert
 from app.models.alert_state import AlertClientState
-from app.models.narrative import Narrative
 from app.models.reputation import ReputationScore
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.competitor_benchmark import CompetitorBenchmark

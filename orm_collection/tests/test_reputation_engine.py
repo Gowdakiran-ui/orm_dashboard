@@ -17,7 +17,6 @@ from app.models.document import Document
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
 from app.models.trends import TrendEvent
-from app.models.narrative import Narrative
 from app.models.reputation import ReputationScore
 from app.services.intelligence.reputation_engine import ReputationEngine
 
@@ -37,7 +36,7 @@ engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-def setup_client(db, name, avg_sentiment, risk_score, mentions, narrative_sentiment, trend_type):
+def setup_client(db, name, avg_sentiment, risk_score, mentions, trend_type):
     client_id = uuid.uuid4()
     client = Client(id=client_id, name=name)
     db.add(client)
@@ -53,10 +52,7 @@ def setup_client(db, name, avg_sentiment, risk_score, mentions, narrative_sentim
         db.add(EntityMention(document_id=doc_id, entity_id=entity_id, mention_count=mentions // 5))
         db.add(DocumentSentiment(document_id=doc_id, sentiment_score=avg_sentiment, confidence_score=1.0, weighted_sentiment_score=avg_sentiment, sentiment_label="Neutral"))
         db.add(RiskEvent(client_id=client_id, document_id=doc_id, risk_score=risk_score, risk_level="HIGH"))
-    
-    # Narrative
-    db.add(Narrative(client_id=client_id, narrative_name="Test Narrative", narrative_type="General", mention_count=mentions, sentiment_score=narrative_sentiment, status="PEAK"))
-    
+
     # Trend
     if trend_type == "GOOD":
         db.add(TrendEvent(client_id=client_id, trend_type="Topic", percentage_change=50.0, severity="HIGH"))
@@ -76,33 +72,21 @@ def setup_client(db, name, avg_sentiment, risk_score, mentions, narrative_sentim
            "of scope for this phase (FINDINGS.md Phase 11 #38).",
     strict=False,
 )
-# Note (Narrative Cluster removal, 2026-09-19): this test's fixture still
-# seeds one Narrative row per client and never asserts on health_status, so
-# it was never covering (and still doesn't cover) the zero-narrative case
-# that has_recent_narrative's removal from the health_status check targets.
-# Since this test already can't run to a real assertion in this harness
-# (xfail above, pre-existing and unrelated), a new assertion here wouldn't
-# actually execute either. The zero-narrative -> health_status == "COMPLETE"
-# behavior was instead verified directly against a real (in-memory SQLite)
-# DB outside this suite -- see the task's verification output. Real
-# Postgres-backed coverage for both this upsert issue and health_status is
-# still a gap, tracked by the existing FINDINGS.md Phase 11 #38 note above,
-# not newly introduced by this change.
 def test_validation():
     print("Setting up mock database for Reputation Engine...")
     db = Session()
     try:
         # 1. Strong Positive Brand Scenario
-        # Sentiment=0.8, Risk=10, High Mentions=2000, Positive Narrative=0.8, Good Trend
-        client_pos = setup_client(db, "Positive Brand", 0.8, 10.0, 2000, 0.8, "GOOD")
-        
+        # Sentiment=0.8, Risk=10, High Mentions=2000, Good Trend
+        client_pos = setup_client(db, "Positive Brand", 0.8, 10.0, 2000, "GOOD")
+
         # 2. Neutral Brand Scenario
-        # Sentiment=0.0, Risk=40, Med Mentions=500, Neutral Narrative=0.0, No Trend
-        client_neu = setup_client(db, "Neutral Brand", 0.0, 40.0, 500, 0.0, "NONE")
-        
+        # Sentiment=0.0, Risk=40, Med Mentions=500, No Trend
+        client_neu = setup_client(db, "Neutral Brand", 0.0, 40.0, 500, "NONE")
+
         # 3. High Risk Negative Brand Scenario
-        # Sentiment=-0.9, Risk=90, Mentions=1500, Negative Narrative=-0.9, Bad Trend
-        client_neg = setup_client(db, "Negative Brand", -0.9, 90.0, 1500, -0.9, "BAD")
+        # Sentiment=-0.9, Risk=90, Mentions=1500, Bad Trend
+        client_neg = setup_client(db, "Negative Brand", -0.9, 90.0, 1500, "BAD")
         
         engine_svc = ReputationEngine()
         

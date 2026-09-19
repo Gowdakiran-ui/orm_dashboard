@@ -3,13 +3,12 @@ import time
 import hashlib
 import json as _json
 import structlog
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.models.risk import RiskEvent
 from app.models.alert import Alert
-from app.models.narrative import Narrative
 from app.models.document import Document
 from app.models.topic import DocumentTopic
 from app.models.entity import Entity
@@ -42,10 +41,9 @@ def _content_signature(*parts) -> str:
     get re-stamped by risk_engine.py/alert_engine.py on every single
     re-evaluation, regardless of whether the score/content actually
     changed -- so a timestamp-keyed cache never holds, and every eligible
-    item was being re-billed to the LLM on every pipeline run. Mirrors
-    narrative_engine.py's own convention of keying on a value that only
-    changes when the underlying data actually changes (there,
-    mention_count) rather than a clock.
+    item was being re-billed to the LLM on every pipeline run. Keys on a
+    value that only changes when the underlying data actually changes,
+    rather than a clock.
     """
     joined = "\x1f".join("" if p is None else str(p) for p in parts)
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
@@ -54,17 +52,8 @@ def _content_signature(*parts) -> str:
 class AISummaryEngine:
     """
     Per-item AI Summary (what / when / how_to_solve) for individual MEDIUM+
-    Risk Events and Active Alerts -- the same RCA discipline
-    narrative_engine.py's _generate_rca already applies at the narrative
-    level, extended down to the individual item so a Risk Event/Alert never
-    shows only a raw score with nothing explaining it.
-
-    Reuse-first: if this item is already covered by a linked narrative that
-    has a real, evidence-grounded RCA (narrative_engine.py's
-    evidence_metadata.rca), that RCA's root_cause/recommended_action is
-    reused verbatim as how_to_solve rather than generating a second,
-    potentially-conflicting explanation for the same underlying story. Only
-    items with no such linked RCA get a fresh, item-scoped LLM call.
+    Risk Events and Active Alerts, so a Risk Event/Alert never shows only a
+    raw score with nothing explaining it.
 
     Cost-scoped to what's actually on screen: a Risk Event tied to a
     document outside Risk Center's own visible window (see
@@ -81,36 +70,6 @@ class AISummaryEngine:
     risk_explainability) and the active-alerts endpoint exposes it the same
     way, so no new API surface is needed beyond adding that one field.
     """
-
-    def _narrative_maps(self, db: Session, client_id: str) -> Tuple[Dict[str, tuple], Dict[str, tuple]]:
-        """
-        Reverse index from RiskEvent id / Alert id -> (Narrative, rca dict),
-        built off each narrative's own evidence_metadata.supporting_risks /
-        supporting_alerts -- the exact same fields narrative_engine.py
-        already populates per narrative (see calculate_narratives), just
-        read in the other direction. Same mechanism documents.py already
-        uses for the "Part of: narrative" badge (there via
-        supporting_documents); this is that identical pattern applied to
-        the two other id lists the narrative already carries, not a new
-        lookup path.
-
-        Only narratives with a real `rca` dict are included -- a narrative
-        linkage without an RCA has nothing to reuse, so those items fall
-        through to fresh generation, same as an unlinked item.
-        """
-        narratives = db.query(Narrative).filter(Narrative.client_id == client_id).all()
-        risk_map: Dict[str, tuple] = {}
-        alert_map: Dict[str, tuple] = {}
-        for n in narratives:
-            em = n.evidence_metadata or {}
-            rca = em.get("rca")
-            if not isinstance(rca, dict):
-                continue
-            for rid in em.get("supporting_risks") or []:
-                risk_map.setdefault(rid, (n, rca))
-            for aid in em.get("supporting_alerts") or []:
-                alert_map.setdefault(aid, (n, rca))
-        return risk_map, alert_map
 
     @staticmethod
     def _severity_label(risk_score: float) -> str:
@@ -134,13 +93,10 @@ class AISummaryEngine:
         document_snippet: Optional[str], client_name: str, client_id: str, run_id: Optional[str],
     ) -> Optional[str]:
         """
-        Single-field LLM call, same DeepSeek/OpenRouter call pattern and
-        fail-safe convention as narrative_engine.py's _generate_rca (returns
+        Single-field LLM call over DeepSeek/OpenRouter. Fail-safe: returns
         None on ANY failure -- missing key, timeout, non-200, malformed
-        JSON -- never a fabricated fallback string). Grounded only in this
-        one item's own real fields and its own source document snippet, not
-        the narrative-level cluster context _generate_rca uses -- there is
-        no cluster here, only one item.
+        JSON -- never a fabricated fallback string. Grounded only in this
+        one item's own real fields and its own source document snippet.
         """
         import requests
 
@@ -194,10 +150,9 @@ class AISummaryEngine:
                     ],
                     "temperature": 0.2,
                     "max_tokens": 400,
-                    # Same reasoning=False choice as narrative_engine.py's
-                    # _generate_rca: this is a bounded, single-field task, and
-                    # reasoning burns the completion budget on chain-of-thought
-                    # before reaching the actual JSON on this model.
+                    # reasoning=False: this is a bounded, single-field task,
+                    # and reasoning burns the completion budget on
+                    # chain-of-thought before reaching the actual JSON.
                     "reasoning": {"enabled": False},
                     "response_format": {"type": "json_object"},
                 },
@@ -232,28 +187,17 @@ class AISummaryEngine:
             _record(success=False)
             return None
 
-    def _build_risk_event_what(self, re: RiskEvent, linked: Optional[tuple]) -> str:
+    def _build_risk_event_what(self, re: RiskEvent) -> str:
         """
         Real description of what specifically triggered this risk event --
         not the old risk_level/title/category restatement, which told the
         reader nothing beyond what the Badge/title already show on the same
-        card. Reuse-first, same as _build_alert_what: when this risk event
-        is narrative-linked, that narrative's RCA already has a real,
-        evidence-grounded problem_statement describing the actual cluster
-        this event belongs to, so it's reused verbatim.
-
-        Falls back to the event's own real trigger signals -- already
+        card. Built from the event's own real trigger signals -- already
         computed and stored on it by risk_engine.py (explainability.
         decision_reason, a deterministic sentence built from real topic/
         sentiment/trend/source values, and risk_factors), not a new data
-        path -- only when there's no linked RCA to reuse.
+        path.
         """
-        if linked:
-            _, rca = linked
-            problem_statement = rca.get("problem_statement")
-            if problem_statement:
-                return problem_statement
-
         explainability = re.explainability or {}
         decision_reason = explainability.get("decision_reason")
         if decision_reason:
@@ -269,7 +213,7 @@ class AISummaryEngine:
         return f"{re.risk_level} risk flagged with no further trigger detail available."
 
     def _prepare_risk_event(
-        self, db: Session, re: RiskEvent, risk_narrative_map: Dict[str, tuple],
+        self, db: Session, re: RiskEvent,
         client_name: str, client_id: str, run_id: Optional[str],
     ) -> Optional[Dict[str, Any]]:
         """
@@ -279,11 +223,9 @@ class AISummaryEngine:
         out to its own task (see pipeline_stage_ai_summary in
         aggregation_tasks.py) instead of happening inline in this loop.
 
-        Returns None (nothing to do -- cache unchanged, no write needed),
-        {"action": "ready", "summary": {...}} (narrative-linked reuse or a
-        result computable with no LLM call -- caller writes it immediately),
-        or {"action": "generate", "gen_kwargs": {...}, "partial": {...}}
-        (needs a fresh LLM call; "partial" is every summary field except
+        Returns None (nothing to do -- cache unchanged, no write needed) or
+        {"action": "generate", "gen_kwargs": {...}, "partial": {...}} (needs
+        a fresh LLM call; "partial" is every summary field except
         how_to_solve, merged with the LLM result by the gather step).
         """
         existing = (re.explainability or {}).get("ai_summary")
@@ -297,8 +239,7 @@ class AISummaryEngine:
         # be able to bust the cache either.
         snippet = (document.normalized_content if document else "") [:1500]
 
-        linked = risk_narrative_map.get(str(re.id))
-        what = self._build_risk_event_what(re, linked)
+        what = self._build_risk_event_what(re)
         when = self._format_when(re.computed_at or re.created_at)
 
         # Cache key: a hash of exactly the fields that feed how_to_solve
@@ -306,28 +247,7 @@ class AISummaryEngine:
         # a cache hit can't leave a stale `what` behind after risk_engine.py
         # updates the trigger signals it's built from on a later pipeline
         # run -- same fix as _prepare_alert's item_signature.
-        item_signature = _content_signature(re.risk_level, topic_name, title, snippet, what)
-
-        if linked:
-            narrative, rca = linked
-            # Also folds in the linked narrative's own rca text, so a reused
-            # summary refreshes if that narrative's RCA is later regenerated
-            # -- cheap either way since this branch never calls the LLM.
-            cache_key = _content_signature(item_signature, "narrative", str(narrative.id), rca.get("root_cause"), rca.get("recommended_action"))
-            if existing and existing.get("_cache_key") == cache_key:
-                return None
-            return {"action": "ready", "summary": {
-                "what": what,
-                "when": when,
-                "how_to_solve": rca.get("recommended_action"),
-                "root_cause": rca.get("root_cause"),
-                "source": "narrative",
-                "narrative_id": str(narrative.id),
-                "narrative_name": narrative.narrative_name,
-                "_cache_key": cache_key,
-            }}
-
-        cache_key = item_signature
+        cache_key = _content_signature(re.risk_level, topic_name, title, snippet, what)
         if existing and existing.get("_cache_key") == cache_key:
             return None
 
@@ -347,33 +267,17 @@ class AISummaryEngine:
             "_cache_key": cache_key,
         }}
 
-    def _build_alert_what(self, db: Session, alert: Alert, linked: Optional[tuple]) -> str:
+    def _build_alert_what(self, db: Session, alert: Alert) -> str:
         """
         Real description of what specifically triggered this alert -- not
         the old severity/alert_type/title restatement, which told the
         reader nothing beyond what the Badge/title already show on the same
-        card. Reuse-first, same as how_to_solve: when this alert is
-        narrative-linked, that narrative's
-        RCA already has a real, evidence-grounded problem_statement
-        (narrative_engine.py's _build_problem_statement_and_impact -- a
-        deterministic template off real document/outlet/sentiment counts,
-        not an LLM call) describing the actual cluster this alert belongs
-        to, so it's reused verbatim rather than re-deriving a second
-        description from scratch.
-
-        Falls back to the alert's own real trigger signals -- already
+        card. Built from the alert's own real trigger signals -- already
         computed and stored on it by alert_engine.py's
         _upsert_hardened_alert (explainability.supporting_evidence,
         supporting_signals, evidence_score, confidence_score), not a new
-        data path -- only when there's no linked RCA to reuse. Still real
-        numbers even in the fallback, never a fabricated-sounding sentence.
+        data path. Still real numbers, never a fabricated-sounding sentence.
         """
-        if linked:
-            _, rca = linked
-            problem_statement = rca.get("problem_statement")
-            if problem_statement:
-                return problem_statement
-
         explainability = alert.explainability or {}
         supporting_evidence = explainability.get("supporting_evidence") or {}
         supporting_signals = alert.supporting_signals or {}
@@ -413,7 +317,7 @@ class AISummaryEngine:
         return sentence
 
     def _prepare_alert(
-        self, db: Session, alert: Alert, alert_narrative_map: Dict[str, tuple], risk_narrative_map: Dict[str, tuple],
+        self, db: Session, alert: Alert,
         client_name: str, client_id: str, run_id: Optional[str],
     ) -> Optional[Dict[str, Any]]:
         """Decide-only half of what used to be _build_for_alert -- see
@@ -426,21 +330,7 @@ class AISummaryEngine:
         snippet = (document.normalized_content if document else "") [:1500]
 
         when = self._format_when(alert.created_at)
-
-        # Direct link first (narrative's own supporting_alerts); if this
-        # alert isn't directly in any narrative's cluster, fall through to
-        # the risk events that fed it (Alert.explainability.contributing_risks,
-        # already populated by alert_engine.py) and reuse whichever of those
-        # is itself narrative-linked. Same two reverse-index maps built once
-        # per client, no second lookup mechanism.
-        linked = alert_narrative_map.get(str(alert.id))
-        if not linked:
-            for rid in (alert.explainability or {}).get("contributing_risks") or []:
-                if rid in risk_narrative_map:
-                    linked = risk_narrative_map[rid]
-                    break
-
-        what = self._build_alert_what(db, alert, linked)
+        what = self._build_alert_what(db, alert)
 
         # Cache key: a hash of exactly the fields that feed how_to_solve
         # (severity, alert_type, title, topic, source excerpt) plus `what`
@@ -449,25 +339,7 @@ class AISummaryEngine:
         # later pipeline run -- not alert.updated_at, which gets re-stamped
         # on every re-evaluation regardless of whether content actually
         # changed (see _content_signature's docstring).
-        item_signature = _content_signature(alert.severity, alert.alert_type, alert.title, topic_name, snippet, what)
-
-        if linked:
-            narrative, rca = linked
-            cache_key = _content_signature(item_signature, "narrative", str(narrative.id), rca.get("root_cause"), rca.get("recommended_action"))
-            if existing and existing.get("_cache_key") == cache_key:
-                return None
-            return {"action": "ready", "summary": {
-                "what": what,
-                "when": when,
-                "how_to_solve": rca.get("recommended_action"),
-                "root_cause": rca.get("root_cause"),
-                "source": "narrative",
-                "narrative_id": str(narrative.id),
-                "narrative_name": narrative.narrative_name,
-                "_cache_key": cache_key,
-            }}
-
-        cache_key = item_signature
+        cache_key = _content_signature(alert.severity, alert.alert_type, alert.title, topic_name, snippet, what)
         if existing and existing.get("_cache_key") == cache_key:
             return None
 
@@ -514,8 +386,6 @@ class AISummaryEngine:
             log.error("ai_summary_client_not_found")
             return []
 
-        risk_narrative_map, alert_narrative_map = self._narrative_maps(db, client_id)
-
         # The exact document set Risk Center can ever show for this client --
         # imported from documents.py, not reimplemented here, so a future
         # change to the cap/ordering there is automatically inherited
@@ -547,41 +417,24 @@ class AISummaryEngine:
         ).all()
 
         pending: List[Dict[str, Any]] = []
-        reused = 0
         skipped = 0
 
         for re in risk_events:
-            result = self._prepare_risk_event(db, re, risk_narrative_map, client.name, client_id, run_id)
+            result = self._prepare_risk_event(db, re, client.name, client_id, run_id)
             if result is None:
                 skipped += 1
-                continue
-            if result["action"] == "ready":
-                explainability = dict(re.explainability or {})
-                explainability["ai_summary"] = result["summary"]
-                re.explainability = explainability
-                reused += 1
                 continue
             pending.append({"kind": "risk_event", "id": str(re.id), **result})
 
-        db.commit()
-
         for alert in alerts:
-            result = self._prepare_alert(db, alert, alert_narrative_map, risk_narrative_map, client.name, client_id, run_id)
+            result = self._prepare_alert(db, alert, client.name, client_id, run_id)
             if result is None:
                 skipped += 1
                 continue
-            if result["action"] == "ready":
-                explainability = dict(alert.explainability or {})
-                explainability["ai_summary"] = result["summary"]
-                alert.explainability = explainability
-                reused += 1
-                continue
             pending.append({"kind": "alert", "id": str(alert.id), **result})
 
-        db.commit()
-
         log.info("ai_summary_decide_complete", risk_events=len(risk_events), alerts=len(alerts),
-                  reused=reused, skipped=skipped, pending_generation=len(pending))
+                  skipped=skipped, pending_generation=len(pending))
         return pending
 
     def finalize_generated(self, db: Session, kind: str, item_id: str, partial: Dict[str, Any], how_to_solve: Optional[str]) -> bool:

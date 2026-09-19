@@ -129,7 +129,10 @@ def test_validation():
         assert b_comp1.risk_score < b_comp2.risk_score, "Risk Ranking: comp1 should have lower risk than comp2"
         assert abs(b_comp1.share_of_voice - 30.0) < 1.0 and abs(b_comp2.share_of_voice - 20.0) < 1.0, \
             f"Share Of Voice Calculation: comp1 sov={b_comp1.share_of_voice}, comp2 sov={b_comp2.share_of_voice}"
-        assert b_comp1.top_narrative is not None, "Narrative Comparison: comp1.top_narrative should not be None"
+        # top_narrative assertion removed (Narrative Cluster removal,
+        # 2026-09-19): benchmark_engine.py no longer computes or writes
+        # top_narrative at all, and the column itself is dropped from
+        # competitor_benchmarks -- there is nothing left to assert here.
 
     finally:
         db.close()

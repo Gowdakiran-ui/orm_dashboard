@@ -13,7 +13,6 @@ from app.models.entity import Entity, EntityMention
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
 from app.models.trends import TrendEvent
-from app.models.narrative import Narrative
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.reputation import ReputationScore
 from app.models.competitor_benchmark import CompetitorBenchmark
@@ -180,8 +179,8 @@ class BenchmarkEngine:
         so left untouched rather than changed without live confirmation.
 
         Returns a dict: mentions_map, sentiment_map, risk_map, exec_rep_map,
-        top_narrative_text, total_mentions (sum of mentions_map across
-        entity_ids, the SOV denominator), weights, and components_for(entity_id).
+        total_mentions (sum of mentions_map across entity_ids, the SOV
+        denominator), weights, and components_for(entity_id).
         """
         # 30-day mentions in bulk
         mentions_query = db.query(EntityMention.entity_id, func.sum(EntityMention.mention_count)).filter(
@@ -289,16 +288,6 @@ class BenchmarkEngine:
         except Exception as exc:
             log.warning("benchmark_source_component_unavailable", error=str(exc))
 
-        # 30-day top narrative in bulk.
-        # NOTE: client-scoped, not entity-scoped — `narratives` has no
-        # entity_id column. Retained as descriptive context on the row; it is
-        # deliberately NOT a scoring component (see COMPARABLE_COMPONENTS).
-        top_narr_record = db.query(Narrative).filter(
-            Narrative.client_id == client_id,
-            Narrative.updated_at >= lookback_date
-        ).order_by(Narrative.confidence_score.desc(), Narrative.updated_at.desc()).first()
-        top_narrative_text = top_narr_record.narrative_name if top_narr_record else None
-
         # Calculate Total Mentions for Share of Voice
         total_mentions = sum(mentions_map.values())
 
@@ -350,7 +339,6 @@ class BenchmarkEngine:
             "sentiment_map": sentiment_map,
             "risk_map": risk_map,
             "exec_rep_map": exec_rep_map,
-            "top_narrative_text": top_narrative_text,
             "total_mentions": total_mentions,
             "weights": weights,
             "components_for": components_for,
@@ -411,7 +399,7 @@ class BenchmarkEngine:
         ).all()
 
         # Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 5,
-        # same root cause and pattern as narrative_engine.py/documents.py/
+        # same root cause and pattern as documents.py/
         # executive_reputation_engine.py): a client's own competitor roster
         # can include generic/globally-common names ("Huawei", "White House",
         # "IPO Filing" -- confirmed live under Anthropic's own benchmarks)
@@ -482,7 +470,6 @@ class BenchmarkEngine:
         sentiment_map = inputs["sentiment_map"]
         risk_map = inputs["risk_map"]
         exec_rep_map = inputs["exec_rep_map"]
-        top_narrative_text = inputs["top_narrative_text"]
         total_mentions = inputs["total_mentions"]
         weights = inputs["weights"]
         _components_for = inputs["components_for"]
@@ -541,7 +528,6 @@ class BenchmarkEngine:
                     "risk_score": avg_risk,
                     "visibility_score": float(mentions),
                     "share_of_voice": sov,
-                    "top_narrative": top_narrative_text,
                     "health_status": health_status,
                     "confidence_score": confidence_score,
                     "doc_confidence": doc_confidence,
@@ -602,10 +588,6 @@ class BenchmarkEngine:
                 },
                 "component_weights": {k: weights[k] for k in self.COMPARABLE_COMPONENTS},
                 "active_weight_sum": round(res["active_weight"], 4),
-                "excluded_components": {
-                    "narrative": "not computable per entity — narratives table has no entity_id; "
-                                 "excluded for the client entity too so both sides are comparable"
-                },
                 # Same formula, same window, same weights, computed for the
                 # client's brand entity — the apples-to-apples counterpart the
                 # UI needs. Recorded here rather than in a new column: no
@@ -647,7 +629,6 @@ class BenchmarkEngine:
                 risk_score=res["risk_score"],
                 visibility_score=res["visibility_score"],
                 share_of_voice=res["share_of_voice"],
-                top_narrative=res["top_narrative"],
                 rank=entity_rank,
                 run_id=rid,
                 batch_id=bid,
@@ -668,7 +649,6 @@ class BenchmarkEngine:
                     "risk_score": res["risk_score"],
                     "visibility_score": res["visibility_score"],
                     "share_of_voice": res["share_of_voice"],
-                    "top_narrative": res["top_narrative"],
                     "rank": entity_rank,
                     "batch_id": bid,
                     "worker_id": wid,
@@ -760,7 +740,6 @@ class BenchmarkEngine:
         mentions_map = inputs["mentions_map"]
         sentiment_map = inputs["sentiment_map"]
         risk_map = inputs["risk_map"]
-        top_narrative_text = inputs["top_narrative_text"]
         total_mentions = inputs["total_mentions"]
         weights = inputs["weights"]
         components_for = inputs["components_for"]
@@ -802,7 +781,6 @@ class BenchmarkEngine:
                     "risk_score": avg_risk,
                     "visibility_score": float(mentions),
                     "share_of_voice": sov,
-                    "top_narrative": top_narrative_text,
                     "health_status": health_status,
                     "confidence_score": confidence_score,
                 })
@@ -840,7 +818,6 @@ class BenchmarkEngine:
                 "component_weights": {k: weights[k] for k in self.COMPARABLE_COMPONENTS},
                 "active_weight_sum": round(res["active_weight"], 4),
                 "excluded_components": {
-                    "narrative": "not computable per entity — narratives table has no entity_id",
                     "executive_reputation": "not applicable to a product entity — always MISSING_EXECUTIVE_SCORE, not fabricated",
                 },
                 "decision_reason": (
@@ -871,7 +848,6 @@ class BenchmarkEngine:
                 risk_score=res["risk_score"],
                 visibility_score=res["visibility_score"],
                 share_of_voice=res["share_of_voice"],
-                top_narrative=res["top_narrative"],
                 rank=entity_rank,
                 run_id=rid,
                 batch_id=bid,
@@ -892,7 +868,6 @@ class BenchmarkEngine:
                     "risk_score": res["risk_score"],
                     "visibility_score": res["visibility_score"],
                     "share_of_voice": res["share_of_voice"],
-                    "top_narrative": res["top_narrative"],
                     "rank": entity_rank,
                     "batch_id": bid,
                     "worker_id": wid,
