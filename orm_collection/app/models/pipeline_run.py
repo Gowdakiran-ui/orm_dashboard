@@ -7,9 +7,15 @@ No AsyncResult. No Redis parsing.
 
 FSM States (ordered):
     QUEUED → COLLECTING → AWAITING_PROCESSING → PROCESSING → TREND → RISK →
-    ALERT → NARRATIVE → AI_SUMMARY → REPUTATION → EXECUTIVE → BENCHMARK →
+    ALERT → AI_SUMMARY → REPUTATION → EXECUTIVE → BENCHMARK →
     FINALIZING → SUCCESS
                         ↘ FAILED (from any state)
+
+NARRATIVE removed from the FSM (Narrative Cluster feature removal, see
+PART_NARRATIVE_VOLUME_COST_FORENSICS_2026-09-19.md): ALERT now transitions
+directly to AI_SUMMARY. pipeline_stage_narrative/_stage_narrative/
+NarrativeEngine are left in place, unused -- only this ordered stage list
+(and the chain in aggregation_tasks.py) changed.
 
 AWAITING_PROCESSING (2026-09-03): pipeline_stage_process doesn't start
 executing the moment it's dispatched -- it queues behind whatever's already
@@ -47,7 +53,6 @@ _STAGE_ORDER = [
     "TREND",
     "RISK",
     "ALERT",
-    "NARRATIVE",
     "AI_SUMMARY",
     "REPUTATION",
     "EXECUTIVE",
@@ -82,7 +87,6 @@ STAGE_PROGRESS: dict[str, int] = {
     "TREND":       40,
     "RISK":        50,
     "ALERT":       60,
-    "NARRATIVE":   70,
     "AI_SUMMARY":  75,
     "REPUTATION":  80,
     "EXECUTIVE":   85,

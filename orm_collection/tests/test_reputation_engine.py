@@ -76,6 +76,18 @@ def setup_client(db, name, avg_sentiment, risk_score, mentions, narrative_sentim
            "of scope for this phase (FINDINGS.md Phase 11 #38).",
     strict=False,
 )
+# Note (Narrative Cluster removal, 2026-09-19): this test's fixture still
+# seeds one Narrative row per client and never asserts on health_status, so
+# it was never covering (and still doesn't cover) the zero-narrative case
+# that has_recent_narrative's removal from the health_status check targets.
+# Since this test already can't run to a real assertion in this harness
+# (xfail above, pre-existing and unrelated), a new assertion here wouldn't
+# actually execute either. The zero-narrative -> health_status == "COMPLETE"
+# behavior was instead verified directly against a real (in-memory SQLite)
+# DB outside this suite -- see the task's verification output. Real
+# Postgres-backed coverage for both this upsert issue and health_status is
+# still a gap, tracked by the existing FINDINGS.md Phase 11 #38 note above,
+# not newly introduced by this change.
 def test_validation():
     print("Setting up mock database for Reputation Engine...")
     db = Session()

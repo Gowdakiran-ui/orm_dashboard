@@ -2166,7 +2166,13 @@ def run_client_pipeline(self, run_id: str, client_id: str):
         pipeline_stage_trend.si(run_id, client_id, owner_id),
         pipeline_stage_risk.si(run_id, client_id, owner_id),
         pipeline_stage_alert.si(run_id, client_id, owner_id),
-        pipeline_stage_narrative.si(run_id, client_id, owner_id),
+        # NARRATIVE stage removed from the chain (Narrative Cluster feature
+        # removal -- threshold unachievable on real data volume, see
+        # PART_NARRATIVE_VOLUME_COST_FORENSICS_2026-09-19.md). pipeline_stage_narrative/
+        # _stage_narrative/NarrativeEngine are left in place, unused, same as
+        # the already-dead calculate_narratives task -- not deleted here.
+        # AI_SUMMARY below no longer has a narrative RCA to reuse; it already
+        # falls back to fresh per-item LLM generation for every Risk Event/Alert.
         pipeline_stage_ai_summary.si(run_id, client_id, owner_id),
         pipeline_stage_reputation.si(run_id, client_id, owner_id),
         pipeline_stage_executive.si(run_id, client_id, owner_id),

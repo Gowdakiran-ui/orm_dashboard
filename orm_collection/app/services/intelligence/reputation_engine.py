@@ -406,14 +406,18 @@ class ReputationEngine:
         rep_trend = self._determine_trend(final_score, prev_score)
 
         # A9: Upstream Health Status Checking
+        # Narrative Cluster removed from this check (feature removal, see
+        # PART_NARRATIVE_VOLUME_COST_FORENSICS_2026-09-19.md) -- the NARRATIVE
+        # stage no longer runs, so has_recent_narrative would otherwise be
+        # permanently False and pin health_status at PARTIAL forever,
+        # regardless of actual data freshness.
         health_status = "COMPLETE"
         one_day_ago = now_utc - datetime.timedelta(days=1)
-        
+
         has_recent_risk = db.query(RiskEvent).filter(RiskEvent.client_id == client_id, RiskEvent.created_at >= one_day_ago).limit(1).first() is not None
         has_recent_trend = db.query(TrendEvent).filter(TrendEvent.client_id == client_id, TrendEvent.created_at >= one_day_ago).limit(1).first() is not None
-        has_recent_narrative = db.query(Narrative).filter(Narrative.client_id == client_id, Narrative.updated_at >= one_day_ago).limit(1).first() is not None
 
-        if not (has_recent_risk and has_recent_trend and has_recent_narrative):
+        if not (has_recent_risk and has_recent_trend):
             health_status = "PARTIAL"
 
         # A8: Reputation Confidence Calculation

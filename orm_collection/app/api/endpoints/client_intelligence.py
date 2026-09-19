@@ -1549,23 +1549,22 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 
 def _select_advisory_narratives(db: Session, client_id: UUID):
     """
-    Risk-worthy narratives with a real RCA (evidence_metadata.rca is an
-    object, not the JSON-null placeholder narrative_engine.py stores for
-    non-risk-relevant narratives), ranked by severity x coverage/velocity
-    and capped to the top 5 -- keeps the Advisor's output short by
-    construction, not by asking the LLM to compress a long list.
+    Narrative Cluster removal (2026-09-19): always returns [] now, not just
+    when a client happens to have no risk-worthy narratives. The NARRATIVE
+    pipeline stage no longer runs (aggregation_tasks.py), but the
+    `narratives` table and its pre-existing rows are deliberately kept (not
+    purged) as dormant historical data -- unlike every other narrative
+    consumer, which only needed to tolerate an empty/absent result, this
+    Advisor call generates live text, so a client with old risk-worthy
+    narrative rows from before generation stopped would otherwise keep
+    surfacing advisory bullets built from them indefinitely. Returning []
+    unconditionally makes get_client_plan_advisory take its own
+    already-coded "nothing to flag" empty-state path (see
+    get_client_plan_advisory's `if not top_narratives` branch below), the
+    same effective behavior as if narratives had never existed, without
+    touching the dormant table itself.
     """
-    all_narratives = db.query(Narrative).filter(Narrative.client_id == client_id).all()
-    risk_worthy = [n for n in all_narratives if isinstance((n.evidence_metadata or {}).get("rca"), dict)]
-
-    def severity_score(n):
-        risk = n.risk_score or 0.0
-        mentions = n.mention_count or 0
-        trend = max(n.trend_strength or 0.0, 0.0)
-        return risk * mentions * (1 + trend / 100.0)
-
-    risk_worthy.sort(key=severity_score, reverse=True)
-    return risk_worthy[:5]
+    return []
 
 
 def _generate_plan_advisory_text(rep, reputation_text, risk_counts, top_narratives, alert_titles, client_id, run_id=None):
