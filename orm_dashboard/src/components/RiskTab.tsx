@@ -335,7 +335,7 @@ export function RiskTab({
           the two numbers an exec most needs land first, at a glance. */}
       <div className="space-y-3">
         <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>At a Glance</span>
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 font-mono">
+        <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 font-mono">
           {[
             { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true },
             { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition />, captionNode: <CriticalRisksVsActiveAlertsDefinition /> },
