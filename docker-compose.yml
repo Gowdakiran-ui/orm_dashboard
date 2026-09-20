@@ -233,7 +233,30 @@ services:
     # referenced here in earlier revisions was never-deployed planning
     # config, not a live second environment; don't treat it as "what
     # production actually runs" without confirming it's been deployed.
-    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=nlp@%h", "--pool=prefork", "--concurrency=3", "-Q", "nlp_queue"]
+    #
+    # concurrency 3 -> 2 (2026-09-20): the 4-13s/doc figure the 3-concurrency
+    # decision above rests on was never matched by three weeks of real
+    # production telemetry (13-70s/doc, climbing over time -- see
+    # PART_F_TOPIC_CLASSIFICATION_COST_FORENSICS_2026-09-20.md), so it was
+    # re-tested directly against real load rather than trusted further.
+    # Real isolated Google pipeline runs, same client/method both times,
+    # confirmed no other run concurrent, host healthy throughout (disk
+    # 70%/15GB free unchanged, all containers healthy):
+    #   - concurrency=3 (3 data points, same isolated-run method): avg
+    #     topic_processing_time_ms/doc of 47.8s, 52.4s, and 55.6s.
+    #   - concurrency=2 (this test, matching the real 2 vCPUs -- `nproc`
+    #     inside this container is 2, confirmed live, same as the original
+    #     3x sizing test above): avg topic_processing_time_ms/doc of 34.8s
+    #     -- ~37% faster than the closest concurrency=3 comparison point.
+    #   - No throughput tradeoff found: whole-pipeline duration for a
+    #     comparable batch was effectively unchanged (2325.3s/100 docs at
+    #     concurrency=2 vs 2292.1s/95 docs at concurrency=3), and
+    #     whole-pipeline s/doc was slightly better at concurrency=2 (23.25
+    #     vs 24.13). The 1.5x oversubscription (3 processes / 2 physical
+    #     cores) this service ran under from Sep 1 to Sep 20 bought no
+    #     measured throughput gain in this real test, only added per-document
+    #     latency from CPU contention on this 2-vCPU droplet.
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=nlp@%h", "--pool=prefork", "--concurrency=2", "-Q", "nlp_queue"]
     healthcheck:
       test: ["CMD-SHELL", "python -m celery -A app.core.celery_app.celery_app inspect ping -d nlp@$(hostname) --timeout 10 | grep -q OK"]
       interval: 15s
