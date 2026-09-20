@@ -50,6 +50,23 @@ import re
 # guard remains the sole active defense.
 COMPETING_SCORE_MULTIPLIER = 2.0
 
+# Degenerate-scoring guard threshold, generalized from an exact 17/17 match
+# to a fraction of the active taxonomy (2026-09-20 investigation). Real data
+# (post-guard document_topics, created_at >= 2026-09-14) showed the guard's
+# exact-match check missed a real, uncaught tail: 45 real documents sitting
+# at 10-16/17 topics (10/17 = 59% up through 16/17 = 94%), all reviewed and
+# all clearly degenerate (e.g. a Godrej real-estate listing scoring
+# "Financial Results", "Environmental", "Mergers & Acquisitions"; a gaming-
+# convention video scoring "Safety Recall") -- none resembled genuine
+# multi-topic coverage. The real, confirmed-genuine multi-topic case from
+# the same investigation (OpenAI/Anthropic academic credit dispute, 6 real
+# topics: Innovation, Competition, Executive Leadership, Legal Risk, Product
+# Launch, Market Share) sits at 6/17 = 35%. 0.5 sits in the real gap between
+# those two data points (35% genuine vs. 59% lowest-confirmed-degenerate),
+# with margin on both sides -- not chosen to exactly split any single
+# document's fraction.
+DEGENERATE_TOPIC_FRACTION_THRESHOLD = 0.5
+
 TOPIC_KEYWORDS = {
     "Financial Results": ["earnings", "financials", "target of rs", "stock to buy"],
     "Executive Leadership": ["entrepreneur", "lead whatsapp", "tapped by meta"],
@@ -549,19 +566,18 @@ class HardenedTopicClassifier:
                 else:
                     topics_rejected += 1
 
-            # Sanity guard: a document where literally every candidate topic
-            # passed its threshold is a degenerate/uncalibrated classification
-            # run, not a genuinely topic-diverse document. Confirmed live
-            # (contamination_bug_sweep follow-up, 2026-09-14): real multi-topic
-            # documents form a smooth decay from 1 topic up through the high
-            # teens across every client (Tesla's most complex real stories top
-            # out at 15/17) -- documents where the model fires on 100% of the
-            # active taxonomy are a distinct outlier spike, not the tail of
-            # that same distribution (e.g. 24 of Anthropic's 500 gated docs
-            # sat at exactly 17/17, vs. 1-2 docs at 15 or 16). When this
-            # fires, the whole result is unreliable -- write nothing rather
-            # than guess which of the topics are the "real" ones.
-            if topic_names and len(passed_threshold_topics) >= len(topic_names):
+            # Sanity guard: a document where a large fraction of the candidate
+            # topics passed threshold is a degenerate/uncalibrated
+            # classification run, not a genuinely topic-diverse document.
+            # Originally an exact 17/17 match only (contamination_bug_sweep
+            # follow-up, 2026-09-14); generalized to a fraction (see
+            # DEGENERATE_TOPIC_FRACTION_THRESHOLD above) after real data
+            # showed the exact-match check missed a real, uncaught tail of
+            # 45 documents sitting at 10-16/17 -- same degenerate pattern,
+            # just below literal 100%. When this fires, the whole result is
+            # unreliable -- write nothing rather than guess which of the
+            # topics are the "real" ones.
+            if topic_names and len(passed_threshold_topics) >= DEGENERATE_TOPIC_FRACTION_THRESHOLD * len(topic_names):
                 doc_logger.warning("topic_classification_degenerate_all_topics_fired",
                                     topics_fired=len(passed_threshold_topics),
                                     taxonomy_size=len(topic_names))
@@ -969,7 +985,7 @@ class HardenedTopicClassifier:
                 # so the batch write path (used by backfill/reprocessing) can't
                 # drift from the per-document path actually running in
                 # production (HardenedTopicClassifier._process_with_retry).
-                if topic_names and len(passed_threshold_topics) >= len(topic_names):
+                if topic_names and len(passed_threshold_topics) >= DEGENERATE_TOPIC_FRACTION_THRESHOLD * len(topic_names):
                     doc_logger.warning("topic_classification_degenerate_all_topics_fired",
                                         topics_fired=len(passed_threshold_topics),
                                         taxonomy_size=len(topic_names))

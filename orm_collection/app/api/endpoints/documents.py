@@ -167,7 +167,11 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     risk_val = getattr(risk_rec, "risk_score", 0.0) if risk_rec else 0.0
     risk_explainability = getattr(risk_rec, "explainability", None) if risk_rec else None
     
-    doc_topic = db.query(DocumentTopic).filter(DocumentTopic.document_id == doc.id).first()
+    # Highest-confidence topic, not an arbitrary DB-order row -- a document
+    # can have several DocumentTopic rows (2026-09-20 investigation), and an
+    # unordered .first() was surfacing whichever one Postgres happened to
+    # return first, not the classifier's own top-scoring topic.
+    doc_topic = db.query(DocumentTopic).filter(DocumentTopic.document_id == doc.id).order_by(DocumentTopic.confidence_score.desc()).first()
     topic_name = "General"
     if doc_topic and doc_topic.topic:
         topic_name = getattr(doc_topic.topic, "name", "General")
@@ -254,7 +258,11 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
             risk_map[r.document_id] = r.risk_score
             risk_explain_map[r.document_id] = r.explainability
     
-    doc_topics = db.query(DocumentTopic).options(joinedload(DocumentTopic.topic)).filter(DocumentTopic.document_id.in_(doc_ids)).all()
+    # Ordered by confidence_score desc so the first-seen-per-document_id loop
+    # below keeps the highest-confidence topic, not an arbitrary DB-order row
+    # (2026-09-20 investigation -- Coverage-by-Topic and the Threat
+    # Concentration Heatmap both consume this single flattened "topic" field).
+    doc_topics = db.query(DocumentTopic).options(joinedload(DocumentTopic.topic)).filter(DocumentTopic.document_id.in_(doc_ids)).order_by(DocumentTopic.confidence_score.desc()).all()
     doc_topic_map = {}
     for dt in doc_topics:
         if dt and dt.document_id and dt.document_id not in doc_topic_map:
