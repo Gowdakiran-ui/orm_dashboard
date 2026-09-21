@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import {
   Shield, Search, Plus, Trash2, Loader2, Play, Radio, Award,
   ShieldAlert, Users, BarChart3, FileText, Server,
-  BarChart as BarChartIcon, LogOut, ShieldCheck, X, AlertTriangle
+  BarChart as BarChartIcon, LogOut, ShieldCheck, X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { logout } from "@/lib/api";
@@ -207,11 +207,6 @@ export function Sidebar({
           {[
             { id: "reputation", label: "Brand Equity", icon: Award },
             { id: "risk", label: "Risk Center", icon: ShieldAlert },
-            // Dedicated nav target for the Active Alerts card inside Risk
-            // Center (Phase 2 Item 1) -- not a new page/section, just a
-            // named entry point so this persona doesn't have to first
-            // learn Active Alerts lives inside Risk Center.
-            { id: "alerts", label: "Active Alerts", icon: AlertTriangle },
             { id: "competitors", label: "Competitor Compare", icon: BarChart3 },
             { id: "executives", label: "Executive Reputation", icon: Users },
             { id: "analytics", label: "Executive Analytics", icon: BarChartIcon },

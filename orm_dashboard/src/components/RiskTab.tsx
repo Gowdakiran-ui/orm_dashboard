@@ -87,43 +87,6 @@ export function RiskTab({
   const hasListFilter = Boolean(severityParam || dateParam);
   const clearListFilter = () => navigateTo("risk");
 
-  // Sidebar's dedicated "Active Alerts" nav entry (Phase 2 Item 1) links
-  // here via ?tab=risk&focus=alerts instead of a new page/component --
-  // this just scrolls the existing Active Alerts card into view once.
-  // Depends on the loading flags too, not just focusParam -- on a direct/
-  // hard navigation (vs. an in-app tab switch) this component mounts with
-  // documentsLoading/alertsLoading still true and renders the skeleton
-  // below instead of the real card, so an effect keyed on focusParam alone
-  // fires once, finds no #active-alerts-section yet, and never retries
-  // once the real content mounts.
-  //
-  // Confirmed live on xoop.theaicompany.co across three attempts: the call
-  // genuinely fires (verified via a patched scrollIntoView) targeting the
-  // right element, yet scrollY kept snapping back to 0 -- including with a
-  // repeat-every-150ms retry loop, which ruled out a one-shot timing miss.
-  // A manual scrollIntoView from the console, run well after mount, worked
-  // and stuck immediately -- with behavior:"instant" specifically. The
-  // remaining variable was "smooth": firing a new smooth scrollIntoView
-  // every 150ms while the target's own layout is still shifting (charts/
-  // data settling in) restarts the browser's scroll animation against a
-  // moving target each time instead of letting any one animation finish,
-  // which reads exactly like "never actually scrolls". Using "instant"
-  // sidesteps that whole class of bug -- each call is an immediate,
-  // idempotent jump, not an animation that can be interrupted.
-  const focusParam = searchParams.get("focus");
-  useEffect(() => {
-    if (focusParam !== "alerts") return;
-    let attempts = 0;
-    let timer: ReturnType<typeof setTimeout>;
-    const tryScroll = () => {
-      document.getElementById("active-alerts-section")?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" });
-      attempts += 1;
-      if (attempts < 10) timer = setTimeout(tryScroll, 150);
-    };
-    tryScroll();
-    return () => clearTimeout(timer);
-  }, [focusParam, documentsLoading, alertsLoading]);
-
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
   // single-document detail endpoint does return it.

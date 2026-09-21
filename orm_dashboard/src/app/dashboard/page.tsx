@@ -58,13 +58,7 @@ export default function Home() {
 function DashboardShell() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const { activeTab, analyticsSubTab, setActiveTab, setAnalyticsSubTab, navigateTo, searchParams } = useTabNavigation();
-  // Sidebar's "Active Alerts" entry (id "alerts") isn't a real tab -- it's
-  // the Risk Center tab with a focus param that scrolls to the existing
-  // Active Alerts card (RiskTab.tsx). Highlight it instead of "Risk
-  // Center" whenever that param is set, so the sidebar reflects where the
-  // user actually asked to go.
-  const sidebarActiveId = activeTab === "risk" && searchParams.get("focus") === "alerts" ? "alerts" : activeTab;
+  const { activeTab, analyticsSubTab, setActiveTab, setAnalyticsSubTab } = useTabNavigation();
   const [currentTime, setCurrentTime] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -167,7 +161,7 @@ function DashboardShell() {
 
       <Sidebar
         clientId={data.clientId}
-        activeTab={sidebarActiveId}
+        activeTab={activeTab}
         filteredClients={filteredClients}
         companySearch={companySearch}
         threatLevel={threatLevel}
@@ -183,8 +177,7 @@ function DashboardShell() {
         onDeleteCompanyClick={company.setDeleteTarget}
         onRunPipeline={pipeline.handleRunPipeline}
         onSelectTab={(tab) => {
-          if (tab === "alerts") navigateTo("risk", { focus: "alerts" });
-          else setActiveTab(tab);
+          setActiveTab(tab);
           setSidebarOpen(false);
         }}
         pipelineError={pipeline.pipelineError}
