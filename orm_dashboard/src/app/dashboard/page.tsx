@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useState, useMemo, useEffect, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -55,12 +56,33 @@ export default function Home() {
   );
 }
 
+// The complete set of tab ids the routing chain below actually renders --
+// keep in sync with the `activeTab === "..."` blocks in DashboardShell's
+// return. Anything outside this set (a stale/bookmarked link, e.g. the
+// removed `?tab=pipeline`) falls back to DEFAULT_FALLBACK_TAB instead of
+// rendering a blank content area under a mismatched header.
+const VALID_TABS = ["reputation", "analytics", "risk", "competitors", "executives", "feed", "admin"];
+const DEFAULT_FALLBACK_TAB = "reputation"; // matches useTabNavigation's own DEFAULT_TAB
+
 function DashboardShell() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const { activeTab, analyticsSubTab, setActiveTab, setAnalyticsSubTab } = useTabNavigation();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { activeTab: rawActiveTab, analyticsSubTab, setActiveTab, setAnalyticsSubTab } = useTabNavigation();
+  const activeTab = VALID_TABS.includes(rawActiveTab) ? rawActiveTab : DEFAULT_FALLBACK_TAB;
   const [currentTime, setCurrentTime] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Clean up the URL for an unrecognized tab param so Back doesn't return
+  // to the broken link; `activeTab` above already renders the fallback
+  // immediately, so this replace is cosmetic (address bar only), not what
+  // fixes the blank screen.
+  useEffect(() => {
+    if (rawActiveTab !== activeTab) {
+      router.replace(`${pathname}?tab=${activeTab}`);
+    }
+  }, [rawActiveTab, activeTab, pathname, router]);
 
   useEffect(() => {
     setCurrentTime(new Date().toLocaleTimeString());
