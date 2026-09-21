@@ -87,22 +87,6 @@ export function useAnalytics({
     return `${(sum / confidences.length * 100).toFixed(1)}%`;
   }, [executiveCandidates, competitorCandidates]);
 
-  const pipelineDiagnostics = useMemo(() => {
-    const total = (documents || []).length;
-    const failed = (documents || []).filter(d => d && d.status === "FAILED").length;
-    const success = total - failed;
-    const rate = total > 0 ? `${((success / total) * 100).toFixed(1)}%` : "Unavailable";
-    const status = failed > 0 ? "WARNING" : total === 0 ? "NO FINDINGS" : "HEALTHY";
-
-    return [
-      { name: "Entity Matcher", processed: total, success: rate, failed, status },
-      { name: "Topic Classifier", processed: total, success: "Not Available", failed: 0, status: total === 0 ? "NO FINDINGS" : "HEALTHY" },
-      { name: "Sentiment Analyzer", processed: total, success: "Not Available", failed: 0, status: total === 0 ? "NO FINDINGS" : "HEALTHY" },
-      { name: "Risk Evaluator", processed: total, success: "Not Available", failed: 0, status: total === 0 ? "NO FINDINGS" : "HEALTHY" },
-      { name: "Alert Generator", processed: total, success: "Not Available", failed: 0, status: total === 0 ? "NO FINDINGS" : "HEALTHY" }
-    ];
-  }, [documents]);
-
   const lastProcessedTimestamp = useMemo(() => {
     if ((documents || []).length === 0) return "N/A";
     const times = (documents || []).map(d => d && d.timestamp ? new Date(d.timestamp).getTime() : 0);
@@ -690,7 +674,6 @@ export function useAnalytics({
     clientRankValue,
     clientRank,
     avgConfidence,
-    pipelineDiagnostics,
     lastProcessedTimestamp,
     sentimentDistData,
     topicDistData,

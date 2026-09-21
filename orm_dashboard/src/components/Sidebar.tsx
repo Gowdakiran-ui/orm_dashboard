@@ -2,7 +2,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import {
   Shield, Search, Plus, Trash2, Loader2, Play, Radio, Award,
-  ShieldAlert, Users, BarChart3, FileText, Cpu, Server,
+  ShieldAlert, Users, BarChart3, FileText, Server,
   BarChart as BarChartIcon, LogOut, ShieldCheck, X, AlertTriangle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -216,12 +216,6 @@ export function Sidebar({
             { id: "executives", label: "Executive Reputation", icon: Users },
             { id: "analytics", label: "Executive Analytics", icon: BarChartIcon },
             { id: "feed", label: "Intelligence Stream", icon: FileText },
-            // Internal ops telemetry (engine success rates, latency,
-            // failure counts) -- not for a client exec's nav, same
-            // isSuperAdmin gate as Access Control (xoop_ui_clarity_review.md
-            // Phase 4: this was undermining trust in every other number
-            // on the site by sitting one click away).
-            ...(isSuperAdmin ? [{ id: "pipeline", label: "AI Pipeline Health", icon: Cpu }] : []),
             ...(isSuperAdmin ? [{ id: "admin", label: "Access Control", icon: ShieldCheck }] : [])
           ].map(tab => {
             const Icon = tab.icon;

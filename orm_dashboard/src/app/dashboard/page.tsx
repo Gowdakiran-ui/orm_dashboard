@@ -27,7 +27,6 @@ import { RiskTab } from "@/components/RiskTab";
 import { FeedTab } from "@/components/FeedTab";
 import { ExecutivesTab } from "@/components/ExecutivesTab";
 import { CompetitorsTab } from "@/components/CompetitorsTab";
-import { PipelineTab } from "@/components/PipelineTab";
 import { AdminUsersPanel } from "@/components/AdminUsersPanel";
 
 // Custom Hooks & Utilities
@@ -414,23 +413,6 @@ function DashboardShell() {
                     executives={data.executives}
                     systemStatus={data.systemStatus}
                     clientId={data.clientId}
-                  />
-                </ErrorBoundary>
-              )}
-
-              {/* H. AI PIPELINE HEALTH VIEW (super_admin only, see Sidebar.tsx) */}
-              {activeTab === "pipeline" && isSuperAdmin && (
-                <ErrorBoundary fallback={<TelemetryErrorWidget title="Pipeline Health Error" />}>
-                  <PipelineTab
-                    commandStats={data.commandStats}
-                    documents={data.documents}
-                    trendEvents={data.trendEvents}
-                    alerts={data.alerts}
-                    repHistory={data.repHistory}
-                    executives={data.executives}
-                    benchmarks={data.benchmarks}
-                    engineDiagnosticsList={analytics.engineDiagnosticsList}
-                    onSelectTab={setActiveTab}
                   />
                 </ErrorBoundary>
               )}
