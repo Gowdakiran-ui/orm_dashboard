@@ -55,22 +55,40 @@ export function OverviewAnalyticsPanel({
     const latestRep = repHistory.length > 0 ? repHistory[repHistory.length - 1].score : 0;
     const latestRepScore = latestRep > 0 ? latestRep.toFixed(2) : "0.00";
     
-    const latestSent = sentimentTrendData.length > 0 ? sentimentTrendData[0].Sentiment : 0.0;
-    const latestSentScore = latestSent > 0 ? `+${latestSent.toFixed(2)}` : latestSent.toFixed(2);
-    
     const dimensionsCount = topicDistData.length;
-    
+
     const posVal = sentimentDistData.find(d => d.name === "Positive")?.value || 0;
     const totalVal = sentimentDistData.reduce((acc, curr) => acc + (curr.value || 0), 0);
     const posRatio = totalVal > 0 ? `${((posVal / totalVal) * 100).toFixed(0)}%` : "0%";
 
+    // Derived from the exact same Positive/Neutral/Negative counts that
+    // feed the Sentiment Breakdown donut below (sentimentDistData), not a
+    // separate query or the trend chart's single latest bucket -- tile and
+    // donut can now never visibly disagree, since they're the same numbers.
+    // Weighting matches the backend's own convention (sentiment_analyzer.py
+    // score_map: positive=1.0, neutral=0.0, negative=-1.0, see
+    // metricDefinitions.tsx's Sentiment scale note) rather than inventing a
+    // new one.
+    const negVal = sentimentDistData.find(d => d.name === "Negative")?.value || 0;
+    // Same "too few to trust" floor risk_engine.py already uses for trend
+    // significance (risk_engine.py:790,796), reused here rather than picking
+    // a new threshold in isolation.
+    const SENTIMENT_SCORE_MIN_SAMPLE = 5;
+    const hasEnoughSentimentData = totalVal >= SENTIMENT_SCORE_MIN_SAMPLE;
+    const sentimentScoreValue = hasEnoughSentimentData ? (posVal - negVal) / totalVal : null;
+    const latestSentScore = sentimentScoreValue === null
+      ? "Not enough data yet"
+      : sentimentScoreValue > 0
+      ? `+${sentimentScoreValue.toFixed(2)}`
+      : sentimentScoreValue.toFixed(2);
+
     return [
       { label: "Current Reputation", value: latestRepScore, desc: "Overall reputation score", icon: Activity, color: accentColor, def: <ReputationScoreDefinition /> },
-      { label: "Sentiment Score", value: latestSentScore, desc: "How positive coverage is (-1.0 to +1.0)", icon: Smile, color: accentColor, def: <SentimentScaleDefinition /> },
+      { label: "Sentiment Score", value: latestSentScore, desc: hasEnoughSentimentData ? "How positive coverage is (-1.0 to +1.0)" : "Awaiting more coverage to compute", icon: Smile, color: accentColor, def: <SentimentScaleDefinition /> },
       { label: "Topics Covered", value: dimensionsCount, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400", def: undefined as React.ReactNode },
       { label: "Positive Share", value: posRatio, desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400", def: undefined as React.ReactNode }
     ];
-  }, [repHistory, sentimentTrendData, topicDistData, sentimentDistData, accentColor]);
+  }, [repHistory, topicDistData, sentimentDistData, accentColor]);
 
   const tooltipStyle = {
     backgroundColor: isDark ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
