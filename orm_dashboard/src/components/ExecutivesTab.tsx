@@ -546,7 +546,12 @@ export function ExecutivesTab({
                   <ResponsiveContainer width="100%" height="100%">
                     <RechartsLineChart data={execTrendChartData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                      <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+                      {/* execTrendChartData is already bucketed to one point
+                          per calendar day (useAnalytics.ts) -- this interval
+                          is a second-layer guard using recharts' own
+                          built-in tick-skip for a date range still too wide
+                          at daily granularity. */}
+                      <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} interval="preserveStartEnd" />
                       <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} />
                       <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
                       {Object.keys(execHistory).map((name, idx) => {

@@ -3,7 +3,7 @@ import { Users, TrendingUp, Cpu } from "lucide-react";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 import {
   XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart as RechartsLineChart, Line,
+  Tooltip, Legend, ResponsiveContainer, LineChart as RechartsLineChart, Line,
   AreaChart, Area, BarChart, Bar, Cell
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,13 +172,20 @@ export function NarrativeAnalyticsPanel({
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsLineChart data={trendChartDataWithMA} margin={{ top: 15, right: 30, bottom: 10, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
-                  <XAxis dataKey="date" stroke={axisStroke} fontSize={9} />
+                  {/* Data is already bucketed to one point per calendar day
+                      above (useAnalytics.ts execTrendChartData) -- this
+                      interval is a second-layer guard for a long enough date
+                      range that daily ticks still overflow the available
+                      width, using recharts' own built-in tick-skip rather
+                      than custom thinning logic. */}
+                  <XAxis dataKey="date" stroke={axisStroke} fontSize={9} interval="preserveStartEnd" />
                   <YAxis stroke={axisStroke} fontSize={9} />
                   <Tooltip
                     shared
                     formatter={tooltipScoreFormatter}
                     contentStyle={tooltipStyle}
                   />
+                  <Legend wrapperStyle={{ fontSize: 10, fontFamily: "monospace" }} />
                   {Object.keys(execHistory || {}).map((name, idx) => {
                     const colors = [accent, isDark ? "#7B2CBF" : "#8B5CF6", "#EF4444", "#EAB308", "#10B981"];
                     const color = colors[idx % colors.length];
@@ -187,13 +194,14 @@ export function NarrativeAnalyticsPanel({
                     return (
                       <React.Fragment key={idx}>
                         {/* Primary Trend Line */}
-                        <Line 
-                          type="monotone" 
-                          dataKey={name} 
-                          stroke={color} 
-                          strokeWidth={2} 
-                          dot={{ r: 3, strokeWidth: 1 }} 
-                          activeDot={{ r: 5 }} 
+                        <Line
+                          type="monotone"
+                          dataKey={name}
+                          name={name}
+                          stroke={color}
+                          strokeWidth={2}
+                          dot={{ r: 3, strokeWidth: 1 }}
+                          activeDot={{ r: 5 }}
                           isAnimationActive={true}
                           animationDuration={850}
                         />
