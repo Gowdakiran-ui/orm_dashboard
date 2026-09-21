@@ -103,6 +103,20 @@ export function useAnalytics({
     ].filter(item => item.value > 0);
   }, [documents]);
 
+  // The 17-topic taxonomy is shared across every client regardless of
+  // industry fit (by design -- not something this filter changes), so a
+  // client can show a handful of documents under a category that's
+  // structurally irrelevant to them (e.g. Anthropic under "Electric
+  // Vehicles"). The classification itself is real and correct -- this is
+  // a display-only floor, same "not enough to trust/show as its own data
+  // point" convention already used for Sentiment Score's minimum-sample
+  // guard (itself reusing risk_engine.py's existing trend-significance
+  // floor, risk_engine.py:790,796) rather than a new number invented here.
+  // Applies to both Coverage-by-Topic and the Threat Concentration Heatmap
+  // below, since both are keyed off the same per-document `topic` field --
+  // confirmed by reading both, not assumed.
+  const MIN_TOPIC_DOCUMENT_COUNT = 5;
+
   const topicDistData = useMemo(() => {
     const counts: Record<string, number> = {};
     (documents || []).forEach(d => {
@@ -113,6 +127,7 @@ export function useAnalytics({
     });
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
+      .filter(item => item.value >= MIN_TOPIC_DOCUMENT_COUNT)
       .sort((a, b) => b.value - a.value);
   }, [documents]);
 
@@ -254,7 +269,14 @@ export function useAnalytics({
       });
     });
 
-    return { categories, severities, grid };
+    // Same display-only floor as Coverage-by-Topic (topicDistData) above --
+    // same underlying `topic` field, same "near-zero for this client" issue.
+    const visibleCategories = categories.filter(c => {
+      const total = severities.reduce((sum, sev) => sum + grid[c][sev].count, 0);
+      return total >= MIN_TOPIC_DOCUMENT_COUNT;
+    });
+
+    return { categories: visibleCategories, severities, grid };
   }, [documents]);
 
   const alertSeverityData = useMemo(() => {
