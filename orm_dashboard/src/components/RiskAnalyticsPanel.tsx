@@ -58,7 +58,13 @@ export function RiskAnalyticsPanel({
       { label: "Documents Analyzed", value: totalIncidents, desc: "Every document scanned, not just confirmed risk incidents", icon: Shield, color: accentColor, def: <DocumentsAnalyzedDefinition /> },
       { label: "Avg Risk Score (Full Feed)", value: avgRiskVal.toFixed(2), desc: "Diluted by zero-risk documents — see Risk Center for confirmed-incidents-only average", icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
       { label: "Critical-Risk Documents", value: criticalCount, desc: `Risk score ${RISK_THRESHOLDS.HIGH_TO_CRITICAL + 1}+`, icon: ShieldAlert, color: "text-red-500", def: <RiskSeverityDefinition /> },
-      { label: "Ingestion Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400", def: undefined as React.ReactNode }
+      // Was titled "Ingestion Status" -- title and content described two
+      // different things (a value of "System Stable"/"Active Alerts" is not
+      // an ingestion-pipeline status). "Alert Status" rather than the
+      // literal "Active Alerts": the card can show either state, and
+      // "Active Alerts" as a title would itself be wrong on a client with
+      // none.
+      { label: "Alert Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400", def: undefined as React.ReactNode }
     ];
   }, [riskMatrixData, alertTimelineData, accentColor]);
 

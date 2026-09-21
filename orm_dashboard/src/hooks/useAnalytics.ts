@@ -637,7 +637,12 @@ export function useAnalytics({
         success: "Not Available",
         failed: null,
         metrics: [
-          { label: "Alerts Generated", value: a_t.produced !== undefined ? a_t.produced : critAlerts + warnings },
+          // Same raw-vs-confirmed gap as Risk Engine's "Risks Detected"
+          // above (confirmed live on Google: "Alerts Generated: 4" here vs.
+          // "0 Active Alerts" on Risk Center at the same moment) -- Risk
+          // Center is the right destination, not a new one: this engine's
+          // own navigationId below already points there.
+          { label: "Alerts Generated", value: a_t.produced !== undefined ? a_t.produced : critAlerts + warnings, desc: "Raw pipeline output, not the client-facing count -- see Risk Center for confirmed alerts" },
           { label: "Warnings", value: warnings }
         ],
         description: "Dispatches real-time crisis notifications on critical risk threshold breaks.",
