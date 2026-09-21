@@ -91,8 +91,23 @@ export function FeedTab({
     const totalDocs = documents.length;
     const uniqueSources = new Set(documents.map(d => d.source).filter(Boolean)).size;
     const totalExecutivesCount = executives.length;
-    const avgRisk = totalDocs > 0 
-      ? Math.round(documents.reduce((acc, d) => acc + (d.risk || 0), 0) / totalDocs) 
+    // documents.py defaults `risk` to 0.0 via a dict-lookup (risk_map.get(id,
+    // 0.0)) for any document with no RiskEvent row at all -- indistinguishable
+    // from a real risk_score of exactly 0 by value alone. `risk_explainability`
+    // (same dict-lookup pattern, defaults to null) is only ever set when a real
+    // RiskEvent row exists, so it's the reliable signal here. Matches the same
+    // "average only over documents with real evidence" convention
+    // executive_reputation_engine.py already uses for its own risk component
+    // (averages over `supporting_risks`, actual RiskEvent rows, not every
+    // doc_id defaulted to 0) -- the more general fit than
+    // ReputationSummaryCard's `risk > LOW_TO_MEDIUM` filter, which
+    // deliberately excludes real LOW-risk documents too (a different metric:
+    // "severity of flagged incidents", not "average risk across evaluated
+    // documents"). Both reference implementations divide by the filtered
+    // count, not the full document count -- same here.
+    const riskEvaluatedDocs = documents.filter(d => d && d.risk_explainability != null);
+    const avgRisk = riskEvaluatedDocs.length > 0
+      ? Math.round(riskEvaluatedDocs.reduce((acc, d) => acc + (d.risk || 0), 0) / riskEvaluatedDocs.length)
       : 0;
 
     // Documents processed today (timestamp within 24h)
