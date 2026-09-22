@@ -153,6 +153,24 @@ export function CompetitorsTab({
     return () => { searchPollRef.current.cancelled = true; };
   }, []);
 
+  // Reset search state whenever the active client changes (Part L
+  // forensics, 2026-09-22): this component stays mounted across a client
+  // switch -- only activeTab, not clientId, gates whether it's rendered
+  // (dashboard/page.tsx:369-385) -- so without this, a search result for
+  // the previous client stayed on screen after switching to a new one, and
+  // an in-flight poll for the previous client could still land later and
+  // overwrite the new client's view with stale data. The unmount-only
+  // cleanup above still handles the tab-switch-and-back case unchanged;
+  // this is a second, narrower reset for staying on this tab while
+  // switching clients.
+  useEffect(() => {
+    searchPollRef.current.cancelled = true;
+    setSearchQuery("");
+    setSearchResult(null);
+    setSearchLoading(false);
+    setSearchErrorMsg(null);
+  }, [clientId]);
+
   // Hyperfocus redesign (per explicit product direction): this tab shows
   // exactly one competitor at a time -- whichever one is currently searched
   // -- never every historically-tracked competitor a client happens to have
