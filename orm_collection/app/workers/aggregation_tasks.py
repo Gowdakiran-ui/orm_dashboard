@@ -673,6 +673,41 @@ def calculate_competitor_benchmarks(self):
              latency_ms=round((time.perf_counter() - t_batch_start) * 1000, 2))
 
 
+@shared_task(bind=True, queue="aggregation_queue")
+def process_client_risk_and_benchmark(self, client_id: str):
+    """
+    On-demand, single-client counterpart to calculate_client_risks /
+    calculate_competitor_benchmarks above -- dispatched by
+    search_client_competitor (client_intelligence.py) instead of calling
+    RiskEngine/BenchmarkEngine synchronously inline in that HTTP request
+    (PART_K forensics: a freshly-tracked competitor's documents are cache
+    misses on their first role classification, and RiskEngine's per-document
+    LLM call can take up to 8s each -- two or more of them reliably exceeded
+    the frontend's fixed 15s request timeout, "Request timed out after
+    15000ms"). Reuses the exact same per-client retry/state-machine helpers
+    the batch tasks above use, just for the one client that triggered this
+    search instead of every client.
+
+    The in-flight dispatch guard (a short-TTL Redis key, not a DB row) is
+    set by the caller before dispatching and always cleared here, success or
+    failure, so a client is never left permanently unable to retry.
+    """
+    run_id = uuid.uuid4().hex
+    batch_id = uuid.uuid4().hex[:12]
+    worker_id = str(os.getpid())
+    log = logger.bind(run_id=run_id, batch_id=batch_id, worker_id=worker_id, client_id=client_id,
+                       task="process_client_risk_and_benchmark")
+    log.info("on_demand_risk_benchmark_started")
+    t0 = time.perf_counter()
+    try:
+        _process_single_client_risk_with_retry(client_id, run_id, batch_id, worker_id, log)
+        _process_single_client_benchmark_with_retry(client_id, run_id, batch_id, worker_id, log)
+        log.info("on_demand_risk_benchmark_complete", latency_ms=round((time.perf_counter() - t0) * 1000, 2))
+    finally:
+        from app.utils.redis_client import redis_client
+        redis_client.delete(f"competitor_search_processing:{client_id}")
+
+
 # ===========================================================================
 # SECTION 2 — PIPELINE ORCHESTRATOR (Phase 13)
 # ===========================================================================

@@ -948,25 +948,38 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
 
         if search_feeds:
             # Collection just finished and nothing has scored this entity yet
-            # -- run the same aggregation a Run Pipeline call would eventually
-            # do for it, right now, instead of leaving the user staring at
-            # INSUFFICIENT_EVIDENCE until the next scheduled run picks it up.
-            # Both engines are safe to call directly outside the pipeline
-            # chain's freshness gate -- BenchmarkEngine has no LLM cost at
-            # all, and promote_competitor_candidates already calls it this
-            # same way after every promotion. RiskEngine's only real cost
-            # (the SELF/BYSTANDER/EXONERATED classification) is cached per
+            # -- kick off the same aggregation a Run Pipeline call would
+            # eventually do for it, asynchronously, instead of leaving the
+            # user staring at INSUFFICIENT_EVIDENCE until the next scheduled
+            # run picks it up. Both engines are still safe to call this way
+            # outside the pipeline chain's freshness gate -- BenchmarkEngine
+            # has no LLM cost at all, and RiskEngine's only real cost (the
+            # SELF/BYSTANDER/EXONERATED classification) is cached per
             # (client, document, entity) triple, so this does not re-bill for
-            # any of the client's already-classified documents -- confirmed
-            # in risk_engine.py, only the newly collected documents here can
-            # incur a new LLM call.
-            from app.services.intelligence.risk_engine import RiskEngine
-            from app.services.intelligence.benchmark_engine import BenchmarkEngine
-            RiskEngine().process_client(db, str(client_id))
-            BenchmarkEngine().process_client(db, str(client_id))
-            benchmark = db.query(CompetitorBenchmark).filter(
-                CompetitorBenchmark.competitor_entity_id == tracked_entity.id
-            ).order_by(CompetitorBenchmark.created_at.desc()).first()
+            # any of the client's already-classified documents.
+            #
+            # Dispatched as a background task rather than called inline
+            # (PART_K forensics, "ikea" timeout): a freshly-tracked
+            # competitor's documents are cache misses on their first
+            # classification here, and RiskEngine's per-document LLM call
+            # can take up to 8s each -- two or more of them reliably
+            # exceeded the frontend's fixed 15s request timeout when this
+            # ran synchronously inline. Guarded by a short-TTL Redis flag
+            # (not a DB row -- purely a dispatch-dedup guard, nothing else
+            # needs to query it) so repeated polls while processing is
+            # already in flight for this client don't each enqueue a
+            # redundant duplicate task; the TTL is the self-healing safety
+            # net if a worker dies mid-task without clearing it, same
+            # pattern this codebase's watchdogs already use elsewhere.
+            from app.utils.redis_client import redis_client
+            from app.core.celery_app import celery_app
+            processing_key = f"competitor_search_processing:{client_id}"
+            if redis_client.set(processing_key, "1", nx=True, ex=900):
+                celery_app.send_task(
+                    "app.workers.aggregation_tasks.process_client_risk_and_benchmark",
+                    args=[str(client_id)],
+                )
+            return {"status": "searching"}
 
         return _benchmark_payload(tracked_entity, benchmark)
 

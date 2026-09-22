@@ -90,6 +90,7 @@ celery_app.conf.update(
         'app.workers.aggregation_tasks.calculate_reputation_score':   {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_executive_reputation': {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_competitor_benchmarks': {'queue': 'aggregation_queue'},
+        'app.workers.aggregation_tasks.process_client_risk_and_benchmark': {'queue': 'aggregation_queue'},
         # Phase 13: Manual pipeline runs on isolated pipeline_queue
         # This keeps scheduler tasks and manual runs from competing for the same workers
         'app.workers.aggregation_tasks.run_client_pipeline': {'queue': 'pipeline_queue'},
