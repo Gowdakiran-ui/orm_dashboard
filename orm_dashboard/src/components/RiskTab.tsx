@@ -298,26 +298,40 @@ export function RiskTab({
           the two numbers an exec most needs land first, at a glance. */}
       <div className="space-y-3">
         <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>At a Glance</span>
-        <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 font-mono">
+        <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 font-mono">
           {[
             { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true },
-            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition />, wide: true },
+            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
             { label: "High Risks", value: stats.high, color: "text-orange-500" },
             { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
             { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
-            { label: "Avg Risk Score", value: stats.avg, color: bodyText(theme) },
+            { label: "Avg Risk Score", value: stats.avg, color: bodyText(theme), def: <AverageRiskScoreTrackedDefinition /> },
             { label: "Highest Risk", value: stats.highest, color: "text-red-500 font-black" }
           ].map((card, idx) => (
             <div
               key={idx}
-              className={`${glassCard(theme)} p-4 flex flex-col justify-between ${
-                'wide' in card && card.wide ? "sm:col-span-2 lg:col-span-2" : ""
-              }`}
+              className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
             >
               <div className={SPECULAR_LINE} />
-              <span className={`text-xs ${mutedText(theme)} uppercase tracking-wider flex items-center gap-1 mb-2`}>
+              {/* Label stays plain, single-line text -- the (i) trigger is
+                  pinned to the card's corner instead of sharing the flex row
+                  with it. Inline placement (fine on wide headers like
+                  Severity Profile/Risk Matrix) forced a wrap here: these
+                  tiles are only 1/7 of the row's width, too narrow for
+                  label text + the tooltip's 44px touch target on one line. */}
+              {'def' in card && card.def && (
+                // Wrapper div carries the absolute positioning -- passing
+                // "absolute" straight into InfoTooltip's own className prop
+                // fights the "relative" class already hardcoded on that
+                // same element (Tailwind's cascade order doesn't guarantee
+                // which wins), which left the button sitting in normal flow
+                // and inflating this tile's height instead of escaping it.
+                <div className="absolute top-3 right-3">
+                  <InfoTooltip label={`About ${card.label}`}>{card.def}</InfoTooltip>
+                </div>
+              )}
+              <span className={`text-xs ${mutedText(theme)} uppercase tracking-wider block truncate pr-6 mb-2`}>
                 {card.label}
-                {'def' in card && card.def && <InfoTooltip label={`About ${card.label}`}>{card.def}</InfoTooltip>}
               </span>
               <span className={`${card.highlight ? "text-2xl" : "text-xl"} font-bold ${card.color}`}>{card.value}</span>
             </div>
