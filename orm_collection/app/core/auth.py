@@ -1,20 +1,27 @@
 from uuid import UUID
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import SESSION_COOKIE_NAME, get_session
+from app.core.security import SESSION_COOKIE_NAME, get_session, set_session_cookie
 from app.models.user import ROLE_SUPER_ADMIN, User, UserClientAccess
 
 
 def get_current_user(
+    response: Response,
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
     db: Session = Depends(get_db),
 ) -> User:
     """Real per-user auth (replaces the platform-wide shared-secret gate --
     API_FORENSICS.md Section 1). Reads the httpOnly session cookie, looks it
     up in Redis, and loads the corresponding user.
+
+    Sliding-window session: a successful lookup here re-issues the cookie
+    with a fresh max_age (get_session() has already slid the matching Redis
+    TTL forward) so an actively-used session -- browser cookie and Redis
+    record together -- only expires after SESSION_TTL_SECONDS of genuine
+    inactivity, not a fixed window from the original login.
     """
     if not session_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
@@ -26,6 +33,8 @@ def get_current_user(
     user = db.query(User).filter(User.id == session["user_id"], User.is_active == True).first()  # noqa: E712
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    set_session_cookie(response, session_token)
 
     return user
 

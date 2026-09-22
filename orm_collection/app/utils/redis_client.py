@@ -64,6 +64,13 @@ class RedisClientWrapper:
             logger.exception(f"Redis delete failed for key {key}")
             raise
 
+    def expire(self, key, seconds):
+        try:
+            return self.client.expire(key, seconds)
+        except Exception:
+            logger.exception(f"Redis expire failed for key {key}")
+            raise
+
     def ping(self):
         try:
             return self.client.ping()

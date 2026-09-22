@@ -2,29 +2,13 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
-from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import limiter, STRICT_RATE_LIMIT
-from app.core.security import SESSION_COOKIE_NAME, create_session, delete_session, verify_password
+from app.core.security import SESSION_COOKIE_NAME, create_session, delete_session, set_session_cookie, verify_password
 from app.models.user import User, UserClientAccess
 from app.schemas.auth import LoginRequest, MeResponse, UserResponse
 
 router = APIRouter()
-
-
-def _set_session_cookie(response: Response, token: str) -> None:
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=token,
-        max_age=settings.SESSION_TTL_SECONDS,
-        httponly=True,
-        secure=settings.SESSION_COOKIE_SECURE,
-        samesite="lax",
-        path="/",
-        # Hardcoded for now -- should become a COOKIE_DOMAIN setting/env var
-        # if another domain is ever added.
-        domain=".theaicompany.co",
-    )
 
 
 @router.post("/login", response_model=UserResponse)
@@ -40,7 +24,7 @@ def login(request: Request, body: LoginRequest, response: Response, db: Session 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     token = create_session(user.id, user.email)
-    _set_session_cookie(response, token)
+    set_session_cookie(response, token)
 
     return {"id": str(user.id), "email": user.email}
 
