@@ -31,12 +31,20 @@ export function DashboardHeader({
           <span className={`relative inline-flex rounded-full h-2 w-2 ${liveDegraded ? "bg-amber-500" : "bg-emerald-500"}`}></span>
         </span>
         <Terminal className="h-5 w-5 ml-2" style={{ color: accent }} />
-        <h2 className={`text-xs font-mono font-extrabold tracking-wider uppercase ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
+        <h2 className={`text-xs font-mono font-extrabold tracking-wider uppercase line-clamp-2 ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
           {/* Access Control is a global, cross-client admin panel (see
               AdminUsersPanel, gated on isSuperAdmin, not on the selected
               client) -- prefixing it with whichever client happens to be
               selected in the sidebar falsely implied a per-client setting
               (xoop_ui_clarity_review.md). */}
+          {/* line-clamp-2: the header's h-20 box doesn't grow to fit its
+              content, and this title's length is unbounded (client name +
+              tab, or "XOOP — GLOBAL ACCESS CONTROL") -- at mobile width it
+              can wrap to 3-4 lines, overflowing the fixed-height box both
+              above and below and colliding with the sticky mobile top bar
+              above it. Clamping to 2 lines keeps it inside the box at any
+              width; desktop/tablet never need more than 1 line today, so
+              this is a no-op there (confirmed live). */}
           {activeTab === "admin" ? "XOOP — GLOBAL ACCESS CONTROL" : `${activeClientName} — ${activeTab.toUpperCase()}`}
         </h2>
       </div>
