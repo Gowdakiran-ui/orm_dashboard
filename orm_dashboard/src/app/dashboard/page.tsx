@@ -135,17 +135,6 @@ function DashboardShell() {
   const threatLevel = data.risks?.average_recent_risk_score > 70 ? "CRITICAL" : 
                        data.risks?.average_recent_risk_score > 40 ? "ELEVATED" : "STABLE";
 
-  // Derived Ingestion Telemetry (UI-only helper)
-  const derivedPipelineHealth = {
-    documents: data.documents.length,
-    entity_mentions: data.documents.reduce((acc: any, d: any) => acc + (d.extracted_entities?.length || 0), 0),
-    document_topics: data.documents.length,
-    document_sentiments: data.documents.length,
-    risk_events: (data.risks?.recent_critical_events || 0) + (data.risks?.recent_high_events || 0),
-    narratives: data.narratives.length,
-    reputation_scores: data.repHistory.length
-  };
-
   // 5. Analytics Transformations
   const analytics = useAnalytics({
     documents: data.documents,
@@ -187,8 +176,6 @@ function DashboardShell() {
         filteredClients={filteredClients}
         companySearch={companySearch}
         threatLevel={threatLevel}
-        derivedPipelineHealth={derivedPipelineHealth}
-        documentsLoading={data.documentsLoading}
         pipelineRunning={pipeline.pipelineRunning}
         pipelineStatus={pipeline.pipelineStatus}
         lastUpdatedAt={analytics.lastProcessedTimestamp}

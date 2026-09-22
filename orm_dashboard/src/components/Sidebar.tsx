@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { logout } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { glassPill, GRADIENT_HEADING_CLASS, gradientHeadingStyle, mutedText, bodyText } from "@/components/theme/tokens";
+import { GRADIENT_HEADING_CLASS, gradientHeadingStyle, mutedText } from "@/components/theme/tokens";
 
 export interface SidebarProps {
   clientId: string | null;
@@ -17,8 +17,6 @@ export interface SidebarProps {
   filteredClients: any[];
   companySearch: string;
   threatLevel: string;
-  derivedPipelineHealth: { documents: number; entity_mentions: number };
-  documentsLoading: boolean;
   pipelineRunning: boolean;
   pipelineStatus?: string;
   lastUpdatedAt?: string;
@@ -41,8 +39,6 @@ export function Sidebar({
   filteredClients,
   companySearch,
   threatLevel,
-  derivedPipelineHealth,
-  documentsLoading,
   pipelineRunning,
   pipelineStatus,
   lastUpdatedAt,
@@ -241,28 +237,6 @@ export function Sidebar({
         <div className={`px-4 pb-4 pt-2 border-t flex items-center justify-between ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
           <span className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>Theme</span>
           <ThemeToggle />
-        </div>
-      </div>
-
-      {/* Live Telemetry Ingestion Stats */}
-      <div className={`p-4 border-t ${isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-white/40"}`}>
-        <div className="flex items-center justify-between mb-2">
-          <span className={`text-xs font-mono uppercase tracking-wider ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Data Collection Status</span>
-          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-        </div>
-        <div className={`grid grid-cols-2 gap-2 text-xs font-mono ${mutedText(theme)}`}>
-          <div className={glassPill(theme) + " p-2"}>
-            <span className={`block text-xs ${mutedText(theme)}`}>DOCS</span>
-            <span className={`font-bold ${bodyText(theme)}`}>
-              {documentsLoading ? "..." : derivedPipelineHealth.documents}
-            </span>
-          </div>
-          <div className={glassPill(theme) + " p-2"}>
-            <span className={`block text-xs ${mutedText(theme)}`}>ENTITIES</span>
-            <span className={`font-bold ${bodyText(theme)}`}>
-              {documentsLoading ? "..." : derivedPipelineHealth.entity_mentions}
-            </span>
-          </div>
         </div>
       </div>
       </aside>
