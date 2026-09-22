@@ -158,11 +158,23 @@ export function InfoTooltip({
             setOpen((o) => !o);
           }
         }}
-        onMouseEnter={() => {
+        onPointerEnter={(e) => {
+          // pointerType-gated, not a plain onMouseEnter: many mobile
+          // browsers fire a compatibility mouseenter/mouseover shortly
+          // after a real touch tap (to support hover-only sites), which
+          // latched hoveringRef permanently true on first tap when this
+          // used onMouseEnter -- confirmed live, it made a second tap on
+          // an already-open tooltip never close it (onClick's "hovering,
+          // so just keep it open" branch fired every time). Checking
+          // pointerType instead of merely "did a mouse-shaped event fire"
+          // keeps real mouse hover working and keeps touch out of it
+          // regardless of a given browser's compatibility-event quirks.
+          if (e.pointerType !== "mouse") return;
           hoveringRef.current = true;
           setOpen(true);
         }}
-        onMouseLeave={() => {
+        onPointerLeave={(e) => {
+          if (e.pointerType !== "mouse") return;
           hoveringRef.current = false;
           setOpen(false);
         }}
