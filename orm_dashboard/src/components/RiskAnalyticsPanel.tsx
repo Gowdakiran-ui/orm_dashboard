@@ -21,6 +21,35 @@ import {
   DocumentsAnalyzedDefinition,
 } from "@/lib/metricDefinitions";
 
+// Threat Concentration Heatmap row labels at mobile width (Responsive
+// Layout Forensics, mobile section): the topic-category column is a hard
+// 100px (700px min-width table / 7 grid columns) below the sm breakpoint,
+// vs. ~121px+ once the table grows past 700px at sm and up -- so several
+// topic names truncate at mobile that already fit at desktop/tablet.
+// Same graceful-abbreviation approach as the Risk Matrix's Likelihood-axis
+// labels (spelled-out standard short forms, not mid-word ellipsis), applied
+// only where a genuinely standard, unambiguous short form exists. Topics not
+// listed here either already fit in 100px (Legal Risk, Innovation,
+// Competition, General) or don't have a clean short form and are left as
+// plain truncation rather than forcing a confusing one: Market Share
+// (abbreviating to "Market" or "Share" alone changes/loses the meaning) and
+// Customer Satisfaction (no standard short form that isn't jargon like
+// "CSAT", which cuts against this product's own anti-jargon direction).
+const HEATMAP_TOPIC_MOBILE_ABBREVIATIONS: Record<string, string> = {
+  "Financial Results": "Financials",
+  "Executive Leadership": "Executives",
+  "Product Launch": "Launches",
+  "Regulatory Risk": "Regulatory",
+  "Environmental": "Environment",
+  "Labor Relations": "Labor",
+  "Mergers & Acquisitions": "M&A",
+  "Electric Vehicles": "EVs",
+  "Full Self-Driving / Autopilot": "Autopilot",
+  "Cybersecurity": "Cyber",
+  "Safety Recall": "Recall",
+  "Energy Storage": "Energy",
+};
+
 export interface RiskAnalyticsPanelProps {
   riskMatrixData: any[];
   alertSeverityData: any[];
@@ -413,7 +442,12 @@ export function RiskAnalyticsPanel({
 
                   return (
                     <div key={idx} className={`grid grid-cols-7 py-3 items-center border-b transition-colors ${isDark ? "border-white/[0.08] hover:bg-white/[0.03]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}>
-                      <div className={`font-bold truncate pr-2 ${bodyText(theme)}`}>{cat}</div>
+                      <div className={`font-bold pr-2 ${bodyText(theme)}`}>
+                        <span className="hidden sm:block sm:truncate">{cat}</span>
+                        <span className="block truncate sm:hidden">
+                          {HEATMAP_TOPIC_MOBILE_ABBREVIATIONS[cat] ?? cat}
+                        </span>
+                      </div>
                       {riskHeatmapData.severities.map((sev: string, sIdx: number) => {
                         const cellData = riskHeatmapData.grid[cat]?.[sev] || { count: 0, avgRisk: 0, avgSentiment: 0 };
                         const cellPercent = rowTot > 0 ? ((cellData.count / rowTot) * 100).toFixed(0) : "0";

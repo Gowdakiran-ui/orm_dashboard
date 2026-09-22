@@ -18,7 +18,16 @@ export function AnalyticsTabHeader({
   const accent = isDark ? "#00F5D4" : "#3B82F6";
 
   return (
-    <div className={`flex space-x-6 border-b pb-0 mb-4 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
+    // Same responsive-collapse pattern as RiskTab.tsx's "At a Glance" tile
+    // row (grid + sm:/md: column breakpoints) rather than a plain flex row
+    // -- a flex row with no wrap just squeezes every button down to fit,
+    // which is what forced these 4 labels into a 45.7px-wide vertical
+    // waterfall of single words at mobile width (Responsive Layout
+    // Forensics, mobile section). 2 columns below sm gives each label
+    // roughly half the row instead of a quarter; md:grid-cols-4 keeps the
+    // single-row layout from 768px up, where the audit already confirmed
+    // there's enough room (85.6px-tall buttons, comfortable gaps).
+    <div className={`grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 border-b pb-0 mb-4 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
       {[
         { id: "overview", label: "Reputation & Sentiment Trends" },
         { id: "risk", label: "Risk & Alert Profile" },
@@ -32,7 +41,7 @@ export function AnalyticsTabHeader({
           <button
             key={sub.id}
             onClick={() => onSelectSubTab(sub.id)}
-            className={`pb-3 text-xs font-mono transition-all relative ${
+            className={`pb-3 text-xs font-mono transition-all relative text-left ${
               isActive
                 ? "font-bold border-b-2"
                 : `${mutedText(theme)} border-b-2 border-transparent ${isDark ? "hover:text-zinc-200" : "hover:text-zinc-800"}`
