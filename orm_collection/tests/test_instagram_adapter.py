@@ -22,7 +22,7 @@ def test_instagram_adapter_normalize():
 
     normalized = adapter.normalize(mock_raw_data, "test_source_id")
 
-    assert normalized["title"] == ""
+    assert normalized["title"] == "Godrej Properties has settled its dispute over the Godrej Air project."
     assert normalized["content"] == "Godrej Properties has settled its dispute over the Godrej Air project."
     assert normalized["url"] == "https://www.instagram.com/p/DdLp7OuCRx_/"
     assert normalized["source_id"] == "test_source_id"
