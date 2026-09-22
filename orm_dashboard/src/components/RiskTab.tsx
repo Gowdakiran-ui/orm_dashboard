@@ -301,7 +301,7 @@ export function RiskTab({
         <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 font-mono">
           {[
             { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true },
-            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
+            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition />, wide: true },
             { label: "High Risks", value: stats.high, color: "text-orange-500" },
             { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
             { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
@@ -310,7 +310,9 @@ export function RiskTab({
           ].map((card, idx) => (
             <div
               key={idx}
-              className={`${glassCard(theme)} p-4 flex flex-col justify-between`}
+              className={`${glassCard(theme)} p-4 flex flex-col justify-between ${
+                'wide' in card && card.wide ? "sm:col-span-2 lg:col-span-2" : ""
+              }`}
             >
               <div className={SPECULAR_LINE} />
               <span className={`text-xs ${mutedText(theme)} uppercase tracking-wider flex items-center gap-1 mb-2`}>
