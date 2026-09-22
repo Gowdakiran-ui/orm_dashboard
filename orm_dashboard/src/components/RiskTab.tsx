@@ -382,9 +382,9 @@ export function RiskTab({
                     <button
                       type="button"
                       onClick={() => setExpandedAlertId(isExpanded ? null : alert.id)}
-                      className="w-full flex items-center justify-between p-3 min-h-[44px] text-left"
+                      className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 p-3 min-h-[44px] text-left"
                     >
-                      <div className="flex items-center space-x-3 min-w-0">
+                      <div className="flex items-center space-x-3 min-w-0 w-full sm:w-auto">
                         <Badge className={`font-mono text-xs shrink-0 ${
                           alert.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
                           alert.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
@@ -401,7 +401,7 @@ export function RiskTab({
                         </span>
                         <span className={`text-xs shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
                       </div>
-                      <span className={`text-xs shrink-0 ml-3 ${mutedText(theme)}`}>
+                      <span className={`text-xs shrink-0 sm:ml-3 ${mutedText(theme)}`}>
                         {alert.created_at ? new Date(alert.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
                       </span>
                     </button>
