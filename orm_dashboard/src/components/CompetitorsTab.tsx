@@ -2,9 +2,9 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
+import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer 
+  BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { 
   Compass, Users, BarChart3, Search, ShieldCheck,
@@ -66,6 +66,12 @@ export function CompetitorsTab({
   const tableHeaderBg = isDark ? "bg-black/20" : "bg-black/[0.02]";
   // 44x44px-floor touch target helper for compact icon/text action controls.
   const touchTarget = "min-h-[44px] inline-flex items-center justify-center";
+  // Part 3: fixed palette for the multi-competitor head-to-head radar, cycled
+  // by index so an arbitrary number of tracked competitors each gets a
+  // distinct, stable-per-render color (the client's own gold/accent styling
+  // used elsewhere on this page is reserved for its own dedicated cases, so
+  // this is a separate palette rather than reusing #D4AF37/accent here).
+  const HEAD_TO_HEAD_COLORS = ["#D4AF37", "#38BDF8", "#F97316", "#A78BFA", "#34D399", "#F472B6", "#FBBF24", "#60A5FA"];
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
@@ -216,7 +222,17 @@ export function CompetitorsTab({
     data[0][activeClientName] = reputation?.score ?? 0;
     data[1][activeClientName] = repBreakdown?.sentiment ?? 0;
     data[2][activeClientName] = 100 - clientAvgRisk;
-    data[3][activeClientName] = calculateClientSOV(singleCompetitorBenchmarks);
+    // C6: was calculateClientSOV(singleCompetitorBenchmarks) -- the
+    // hyperfocus redesign narrowed that array to just the one currently
+    // searched competitor, so "100 - this one competitor's SOV" silently
+    // overstated the client's share whenever other tracked competitors also
+    // held real share. normalizedBenchmarks (already fetched/computed
+    // upstream in useAnalytics.ts and threaded in as a prop, just unused
+    // here until now) holds every tracked competitor's row, which is what
+    // the client's own remaining share must be derived against (Part O/Part
+    // 1 fix). Identical result to before for a client with exactly one
+    // tracked competitor, since normalizedBenchmarks then has that one row.
+    data[3][activeClientName] = calculateClientSOV(normalizedBenchmarks);
 
     if (selectedCompetitor) {
       data[0][selectedCompetitor.name] = selectedCompetitor.reputation_score ?? 0;
@@ -225,7 +241,7 @@ export function CompetitorsTab({
       data[3][selectedCompetitor.name] = selectedCompetitor.share_of_voice ?? 0;
     }
     return data;
-  }, [activeClientName, reputation, repBreakdown, selectedCompetitor, singleCompetitorBenchmarks]);
+  }, [activeClientName, reputation, repBreakdown, selectedCompetitor, normalizedBenchmarks]);
 
   // 1. CLIENT + THE ONE SELECTED COMPETITOR
   // C3: rank is no longer computed here. There were three independent,
@@ -247,8 +263,10 @@ export function CompetitorsTab({
       ? 100 - repBreakdown.risk
       : 0;
 
-    // Calculate Client SOV
-    const clientSOV = calculateClientSOV(singleCompetitorBenchmarks);
+    // Calculate Client SOV. Derived from normalizedBenchmarks (every tracked
+    // competitor), not singleCompetitorBenchmarks (just the one in focus) --
+    // same C6 fix as singleCompetitorRadarData above.
+    const clientSOV = calculateClientSOV(normalizedBenchmarks);
 
     const list = [
       {
@@ -298,7 +316,7 @@ export function CompetitorsTab({
     });
 
     return list;
-  }, [activeClientName, reputation, repBreakdown, singleCompetitorBenchmarks, clientRank]);
+  }, [activeClientName, reputation, repBreakdown, singleCompetitorBenchmarks, normalizedBenchmarks, clientRank]);
 
   // 2. CLIENT VS. SELECTED COMPETITOR SUMMARY
   // Simplified for the hyperfocus redesign: with exactly one competitor in
@@ -407,6 +425,17 @@ export function CompetitorsTab({
   }, [competitorEvents]);
 
   const hasTrackedCompetitors = singleCompetitorBenchmarks.length > 0;
+
+  // 6. MULTI-COMPETITOR HEAD-TO-HEAD -- Part 3. Recreates the client-vs-many
+  // comparison the hyperfocus redesign narrowed to one competitor at a time.
+  // competitorRadarData (parent prop, useAnalytics.ts) already computes this
+  // exact shape -- client + every tracked competitor across the same 4 axes
+  // -- it was just never rendered here. No new data plumbing, additive only:
+  // the single-competitor search/pairwise flow above is untouched.
+  const headToHeadEntities = useMemo(() => {
+    const names = [activeClientName, ...(normalizedBenchmarks || []).map(b => b.competitor_name).filter(Boolean)];
+    return Array.from(new Set(names));
+  }, [activeClientName, normalizedBenchmarks]);
 
   return (
     <div className="space-y-6">
@@ -662,6 +691,11 @@ export function CompetitorsTab({
                   Share of Voice (SOV)
                   <InfoTooltip label="About Share of Voice"><ShareOfVoiceDefinition /></InfoTooltip>
                 </CardTitle>
+                {/* Part 2: disambiguates this pairwise chart from the
+                    Overall Share of Voice tile below, which is the client's
+                    real share across every tracked competitor, not just
+                    this one. */}
+                <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>vs. {selectedCompetitor?.name || "selected competitor"} only</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
                 <div className="h-[260px]">
@@ -671,7 +705,7 @@ export function CompetitorsTab({
                           data={[
                           {
                               name: activeClientName,
-                              'Share of Voice': calculateClientSOV(singleCompetitorBenchmarks)
+                              'Share of Voice': calculateClientSOV(normalizedBenchmarks)
                           },
                           ...singleCompetitorBenchmarks.map((b) => ({
                               name: b.competitor_name,
@@ -700,10 +734,86 @@ export function CompetitorsTab({
         </ErrorBoundary>
       </div>
 
+      {/* OVERALL SHARE OF VOICE TILE -- Part 2. Distinct from the pairwise
+          "Share of Voice (SOV)" chart above (client vs. just the one
+          searched competitor): this is the client's real remaining share
+          once every tracked competitor's SOV is accounted for, not just
+          the one currently in focus (Part 1's fix / Part O finding).
+          Reuses the same card styling as the Competitor Summary card
+          above rather than introducing new visual treatment. */}
+      {!benchmarksLoading && !benchmarksError && (
+        <Card className={`${glassCard(theme)} font-mono`}>
+          <CardHeader className={`pb-3 border-b ${cardBorder}`}>
+            <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+              <Users className="h-4 w-4 text-blue-500 mr-2" />
+              Overall Share of Voice
+              <InfoTooltip label="About Overall Share of Voice"><ShareOfVoiceDefinition /></InfoTooltip>
+            </CardTitle>
+            <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
+              Across all {normalizedBenchmarks.length} tracked competitor{normalizedBenchmarks.length === 1 ? "" : "s"} -- not just {selectedCompetitor?.name || "the one selected above"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {normalizedBenchmarks.length > 0 ? (
+              <span className="font-bold text-2xl" style={{ color: accent }}>
+                {calculateClientSOV(normalizedBenchmarks).toFixed(1)}%
+              </span>
+            ) : (
+              <p className={`text-xs font-mono ${mutedText(theme)}`}>Waiting for verified competitor data.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* COMPETITIVE LANDSCAPE INDEX removed per hyperfocus redesign -- a
           multi-brand ranking table has no place in a view scoped to exactly
           one client + one competitor. Its only helper, getThreatLevel, was
           removed with it (verified unused elsewhere before deleting). */}
+
+      {/* MULTI-COMPETITOR HEAD-TO-HEAD -- Part 3. Additive to, not a
+          replacement of, the single-competitor search/pairwise flow above.
+          Only shown with 2+ tracked competitors: with exactly one, this
+          would just duplicate the "Competitor Comparison" radar above with
+          nothing new to add, so it stays hidden rather than looking like a
+          broken/empty near-duplicate. */}
+      {normalizedBenchmarks.length >= 2 && (
+        <ErrorBoundary fallback={<TelemetryErrorWidget title="Head-to-Head Chart Error" />}>
+          <Card className={glassCard(theme)}>
+            <CardHeader>
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+                <Compass className="h-4 w-4 text-[#D4AF37] mr-2" />
+                Head-to-Head: All Tracked Competitors
+                <InfoTooltip label="About these metrics"><CompetitorRadarAxesDefinition /></InfoTooltip>
+              </CardTitle>
+              <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
+                {activeClientName} vs. all {normalizedBenchmarks.length} tracked competitors at once — same axes as the single-competitor view above
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-center items-center h-[400px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={competitorRadarData}>
+                  <PolarGrid stroke={isDark ? "#3f3f46" : "#d4d4d8"} />
+                  <PolarAngleAxis dataKey="subject" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} stroke={isDark ? "#3f3f46" : "#d4d4d8"} tick={false} />
+                  {headToHeadEntities.map((name, idx) => (
+                    <Radar
+                      key={name}
+                      name={name}
+                      dataKey={name}
+                      stroke={HEAD_TO_HEAD_COLORS[idx % HEAD_TO_HEAD_COLORS.length]}
+                      fill={HEAD_TO_HEAD_COLORS[idx % HEAD_TO_HEAD_COLORS.length]}
+                      fillOpacity={0.12}
+                      strokeWidth={2}
+                    />
+                  ))}
+                  <Legend wrapperStyle={{ fontFamily: 'monospace', fontSize: 11 }} />
+                  <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', borderRadius: '6px', fontFamily: 'monospace', fontSize: 12 }} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </ErrorBoundary>
+      )}
 
       {/* ACTIVITY SUMMARY CARD */}
       <Card className={`${glassCard(theme)} font-mono`}>
