@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
@@ -6,7 +6,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, SPECULAR_LINE } from "@/components/theme/tokens";
 import { HeroGlass } from "@/components/theme/HeroGlass";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition, CompetitorRankShareOfVoiceDefinition, EntitySentimentSplitDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition, EntitySentimentSplitDefinition } from "@/lib/metricDefinitions";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface ReputationSummaryCardProps {
@@ -68,12 +68,6 @@ export function ReputationSummaryCard({
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const { navigateTo } = useTabNavigation();
-  // Anchor for the top-of-page verdict line's "See what it's about" link,
-  // when there's nothing more specific (an alert, a risk count) to jump
-  // straight to -- scrolls down to the "What to do about it" card instead
-  // of duplicating its content a second time near the top.
-  const whatToDoRef = useRef<HTMLDivElement>(null);
-  const scrollToWhatToDo = () => whatToDoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   // Total risks + severity breakdown + avg risk score. Requires MEDIUM+
   // (RiskTab.tsx's Incident Command Register applies the same floor) --
   // a matched document with no RiskEvent row defaults to risk=0, and a
@@ -171,26 +165,12 @@ export function ReputationSummaryCard({
   const gradeDisplay = scoreKnown ? (rep.grade ?? "N/A") : "N/A";
   const trendDisplay = rep.trend ?? "STABLE";
   const sovDisplay = clientSOV.toFixed(1);
-  // Trend Direction only updates when this client's pipeline is re-run
-  // (Phase 15 -- collection/aggregation is trigger-driven, not continuous),
-  // so it can go stale between runs with zero indication. Understated
-  // context, not a warning -- same short-date convention CompetitorsTab's
-  // PUBLISHED DATE column already uses.
-  const trendAsOf = rep.computed_at
-    ? new Date(rep.computed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    : null;
 
   const alertNames = execAlert.open && execAlert.alert?.entity_name ? execAlert.alert.entity_name : null;
   const alertSeverity = execAlert.open ? execAlert.alert?.severity ?? null : null;
   const alertLine = execAlert.open
     ? `1 open executive-risk alert: ${alertNames ?? "unknown"}.`
     : "No open executive-risk alerts.";
-  // Severity preview so the tile itself signals how serious the alert is,
-  // not just who it's about -- reuses the `severity` field already returned
-  // by reputation-summary's `executive_alert.alert`, no new computation.
-  const alertTileSub = execAlert.open
-    ? `${alertNames ?? "Open alert"}${alertSeverity ? ` (${alertSeverity} — needs review)` : ""}`
-    : "None open";
 
   // One-line top-of-page verdict + action, promoted from content that
   // already exists further down this same page (the alert line, the risk
@@ -221,8 +201,8 @@ export function ReputationSummaryCard({
       ? {
           emoji: "🟡",
           text: planAdvisory.lead,
-          actionLabel: "See what to do about it →",
-          onAction: scrollToWhatToDo,
+          actionLabel: null,
+          onAction: null,
         }
       : {
           emoji: "🟢",
@@ -284,23 +264,9 @@ export function ReputationSummaryCard({
   }> = [
     { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}` : "", color: "text-[#D4AF37]", highlight: true, def: reputationScoreAndGradeDef },
     { label: "Risk Signals", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.dangerCount, sub: "Critical + High", color: riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
-    { label: "Trend Direction", value: trendDisplay, sub: trendAsOf ? `Reputation momentum · as of ${trendAsOf}` : "Reputation momentum", color: "text-sky-500", highlight: true, compactValue: true },
     { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: severityBreakdownSub, color: RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment entity mentions", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
     { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative} mentions`, color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
-    {
-      label: "Most Mentioned Person",
-      value: executivesLoading
-        ? LOADING_PLACEHOLDER
-        : execStats.mostMentioned ?? (
-            <span className={`text-sm font-normal normal-case ${mutedText(theme)}`}>No executives tracked yet</span>
-          ),
-      sub: "Overall visibility",
-      color: "text-sky-500",
-    },
-    { label: "Notable People Tracked", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Mentioned in coverage, not necessarily this client's own staff", color: "text-sky-500" },
-    { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500", def: <CompetitorRankShareOfVoiceDefinition /> },
-    { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: alertTileSub, color: execAlert.open ? "text-red-500" : "text-emerald-500" },
   ];
 
   // Only the Reputation Score tile (index 0 -- the single number this whole
@@ -360,7 +326,7 @@ export function ReputationSummaryCard({
 
       <div className="space-y-3">
         <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>At a Glance</span>
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 font-mono">
+        <div className="grid gap-4 sm:grid-cols-2 font-mono">
           {heroCards.map(({ card, idx }) =>
             idx === 0 ? (
               <HeroGlass key={idx} theme={theme} className="p-4 flex flex-col justify-between min-w-0">
@@ -378,7 +344,7 @@ export function ReputationSummaryCard({
 
       <div className="space-y-3">
         <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>More Detail</span>
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 font-mono">
+        <div className="grid gap-4 sm:grid-cols-3 font-mono">
           {detailCards.map(({ card, idx }) => (
             <div key={idx} className={`${glassCard(theme)} p-4 flex flex-col justify-between min-w-0`}>
               <div className={SPECULAR_LINE} />
@@ -449,36 +415,6 @@ export function ReputationSummaryCard({
               <span className={sectionLabelClass(isDark)}>Alerts</span>
               <p className={sectionTextClass(isDark)}>{alertLine}</p>
             </div>
-        </CardContent>
-      </Card>
-
-      <Card className={glassCard(theme)} ref={whatToDoRef}>
-        <div className={SPECULAR_LINE} />
-        <CardContent className="p-4 space-y-2">
-          <span className={sectionLabelClass(isDark)}>What to do about it</span>
-          {planAdvisoryLoading ? (
-            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Analyzing current risk posture...</p>
-          ) : planAdvisoryError ? (
-            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Advisory temporarily unavailable.</p>
-          ) : planAdvisory?.lead ? (
-            <>
-              <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-200" : "text-zinc-700"}`}>{planAdvisory.lead}</p>
-              {Array.isArray(planAdvisory.bullets) && planAdvisory.bullets.length > 0 && (
-                <ul className="space-y-1.5 mt-2">
-                  {planAdvisory.bullets.map((b: string, idx: number) => (
-                    <li key={idx} className={`text-sm leading-relaxed font-mono flex gap-2 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
-                      <span className="shrink-0" style={{ color: accent }}>&#8226;</span>
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          ) : (
-            <p className={`text-sm leading-relaxed font-mono mt-1.5 ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
-              Nothing significant to flag right now — actively watching {riskStats.total} tracked risk{riskStats.total === 1 ? "" : "s"} for {activeClientName}. You'll see a recommendation here the moment something needs attention.
-            </p>
-          )}
         </CardContent>
       </Card>
     </div>
