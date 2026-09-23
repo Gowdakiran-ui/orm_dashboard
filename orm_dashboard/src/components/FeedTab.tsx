@@ -106,12 +106,15 @@ export function FeedTab({
   return (
     <ErrorBoundary fallback={<TelemetryErrorWidget title="Intelligence Stream Panel Error" />}>
       {documentsLoading ? (
-        <div className="space-y-6">
+        <div className="h-full flex flex-col">
           {/* Skeleton for the Real-Time Brand Ingest Stream -- the only
               section this page shows now (client-facing: showing full
               collection mechanics undercuts the ORM service, so metrics/
-              timeline/source/risk-distribution telemetry was removed). */}
-          <Card className={`${glassTokens[theme].card} rounded-3xl h-[780px] animate-pulse`}>
+              timeline/source/risk-distribution telemetry was removed).
+              flex-1 (not a fixed h-[780px]) so it fills the page instead of
+              leaving a gap now that the removed sections aren't pushing the
+              viewport height down. */}
+          <Card className={`${glassTokens[theme].card} rounded-3xl flex-1 min-h-[500px] animate-pulse`}>
             <CardHeader className="space-y-2">
               <div className={`h-4 rounded w-1/3 ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
             </CardHeader>
@@ -127,13 +130,17 @@ export function FeedTab({
           <TelemetryErrorWidget title="Intelligence Stream Telemetry Offline" message={documentsError} />
         </Card>
       ) : (
-        <div className="space-y-6 relative select-none">
+        <div className="h-full flex flex-col select-none">
 
           {/* Real-Time Ingested Feed List. Document Intelligence Details used
               to be a separate tab; it's now a per-row Details button that
               opens a slide-over drawer for that row's document, same
-              pattern as ExecutivesTab.tsx's per-row Details drawer. */}
-          <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
+              pattern as ExecutivesTab.tsx's per-row Details drawer.
+              flex-1/min-h-[500px] instead of a fixed h-[780px] -- with the
+              metrics/timeline/distribution sections gone, this is the only
+              content on the page, so it should fill the available viewport
+              height rather than leaving a gap below it. */}
+          <Card className={`${glassCard(theme)} overflow-hidden flex flex-col flex-1 min-h-[500px]`}>
             <div className={SPECULAR_LINE} />
             <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
               <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
