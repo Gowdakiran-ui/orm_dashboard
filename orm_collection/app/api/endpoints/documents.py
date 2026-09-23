@@ -303,6 +303,13 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
             "id": str(doc.id),
             "title": doc.title or source_name,
             "source": source_name,
+            # Real ingest-time source category (rss/youtube/instagram/reddit/
+            # gdelt/hn_algolia -- set in document_service.py's
+            # process_and_save_document from each adapter's source_type,
+            # already relied on by risk_engine.py/reach_trust_config.py).
+            # Distinct from `source` above, which is the human-facing Source
+            # display name and doesn't reliably imply the category.
+            "document_type": doc.document_type,
             "timestamp": (doc.published_at or doc.collected_at).isoformat() if (doc.published_at or doc.collected_at) else None,
             "status": doc.processing_status or "COMPLETED",
             "sentiment": sentiment_val,

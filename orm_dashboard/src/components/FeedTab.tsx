@@ -19,6 +19,21 @@ import { glassCard, glassTokens, mutedText, bodyText, SPECULAR_LINE } from "@/co
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 
 
+// Real ingest-time source categories (Document.document_type, exposed by
+// _build_document_responses in orm_collection/app/api/endpoints/documents.py)
+// -- confirmed live distribution: rss, youtube, gdelt, hn_algolia, instagram,
+// reddit, zero nulls. `gdelt` and `hn_algolia` are grouped into "RSS Feeds"
+// rather than given their own pills: both are link/no-full-text aggregator
+// sources (hn_algolia.py's own docstring: "same 'no full text available'
+// pattern as the RSS/GDELT adapters"), so to a non-technical user they read
+// as the same kind of thing RSS is, unlike Reddit's genuine forum content.
+const SOURCE_TYPE_GROUPS: { key: string; label: string; types: string[] }[] = [
+  { key: "rss", label: "RSS Feeds", types: ["rss", "gdelt", "hn_algolia"] },
+  { key: "youtube", label: "YouTube", types: ["youtube"] },
+  { key: "instagram", label: "Instagram", types: ["instagram"] },
+  { key: "reddit", label: "Reddit", types: ["reddit"] },
+];
+
 export interface FeedTabProps {
   documentsLoading: boolean;
   documentsError: string | null;
@@ -51,6 +66,24 @@ export function FeedTab({
   // virtualization dependency.
   const FEED_PAGE_SIZE = 50;
   const [feedRenderCount, setFeedRenderCount] = useState(FEED_PAGE_SIZE);
+
+  // Source-type filter pills above the ingest stream -- display-layer filter
+  // over the already-fetched `documents` array, no extra fetch per source.
+  const [selectedSourceGroup, setSelectedSourceGroup] = useState<string>("all");
+
+  const filteredDocuments = useMemo(() => {
+    if (selectedSourceGroup === "all") return documents;
+    const group = SOURCE_TYPE_GROUPS.find(g => g.key === selectedSourceGroup);
+    if (!group) return documents;
+    return documents.filter(d => d && group.types.includes(d.document_type));
+  }, [documents, selectedSourceGroup]);
+
+  // Reset paging when the source filter changes so "Load more" starts from
+  // the top of the newly-filtered list instead of an index sized for the
+  // previous (likely larger) unfiltered/differently-filtered list.
+  useEffect(() => {
+    setFeedRenderCount(FEED_PAGE_SIZE);
+  }, [selectedSourceGroup]);
 
   // Fetch document details when selected ID changes
   useEffect(() => {
@@ -344,9 +377,31 @@ export function FeedTab({
                 <Activity className="h-3.5 w-3.5 text-emerald-400" /> Real-time Brand Ingest Stream
               </CardTitle>
               <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
+              {/* Source-type filter pills -- filters the already-fetched
+                  `documents` array client-side, no per-source fetch. */}
+              <div className="flex flex-wrap gap-1.5 pt-3">
+                {[{ key: "all", label: "All" }, ...SOURCE_TYPE_GROUPS].map(group => {
+                  const isActive = selectedSourceGroup === group.key;
+                  return (
+                    <button
+                      key={group.key}
+                      type="button"
+                      onClick={() => setSelectedSourceGroup(group.key)}
+                      className={`min-h-[44px] inline-flex items-center justify-center px-3 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider transition-colors ${
+                        isActive
+                          ? "text-black"
+                          : isDark ? "border-white/[0.12] text-zinc-400 hover:text-zinc-200 hover:border-white/[0.2]" : "border-black/[0.08] text-zinc-500 hover:text-zinc-800 hover:border-black/[0.15]"
+                      }`}
+                      style={isActive ? { backgroundColor: accent, borderColor: accent } : undefined}
+                    >
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
             </CardHeader>
-            <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-              {documents.slice(0, feedRenderCount).map((d, i) => {
+            <CardContent key={selectedSourceGroup} className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent animate-in fade-in slide-in-from-right-4 duration-300">
+              {filteredDocuments.slice(0, feedRenderCount).map((d, i) => {
                 const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
 
                 // Timestamp formatter
@@ -391,7 +446,7 @@ export function FeedTab({
                       <button
                         type="button"
                         onClick={() => setSelectedDocId(d.id)}
-                        className={`ml-auto bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-[8px] font-bold rounded px-2 py-0.5`}
+                        className="ml-auto bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-xs font-bold rounded px-3 min-h-[44px] inline-flex items-center justify-center"
                       >
                         Details
                       </button>
@@ -399,19 +454,21 @@ export function FeedTab({
                   </div>
                 );
               })}
-              {documents.length === 0 && (
+              {filteredDocuments.length === 0 && (
                 <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
                   <AlertTriangle className={`h-8 w-8 mb-2 ${mutedText(theme)}`} />
-                  No intelligence documents matches in database.
+                  {selectedSourceGroup === "all"
+                    ? "No intelligence documents matches in database."
+                    : `No ${SOURCE_TYPE_GROUPS.find(g => g.key === selectedSourceGroup)?.label || "matching"} documents for this client.`}
                 </div>
               )}
-              {documents.length > feedRenderCount && (
+              {filteredDocuments.length > feedRenderCount && (
                 <button
                   type="button"
                   onClick={() => setFeedRenderCount((c) => c + FEED_PAGE_SIZE)}
                   className={`w-full text-center text-[10px] font-mono uppercase tracking-wider py-2.5 rounded-lg border ${isDark ? "border-white/[0.08] text-zinc-400 hover:bg-white/[0.03]" : "border-black/[0.06] text-zinc-600 hover:bg-black/[0.02]"}`}
                 >
-                  Load {Math.min(FEED_PAGE_SIZE, documents.length - feedRenderCount)} more ({feedRenderCount} of {documents.length})
+                  Load {Math.min(FEED_PAGE_SIZE, filteredDocuments.length - feedRenderCount)} more ({feedRenderCount} of {filteredDocuments.length})
                 </button>
               )}
             </CardContent>
