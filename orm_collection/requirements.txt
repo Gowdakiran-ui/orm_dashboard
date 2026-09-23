@@ -1,3 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi==0.109.2
 uvicorn==0.27.1
 python-multipart==0.0.9
@@ -17,7 +19,7 @@ playwright==1.41.2
 flashtext==2.7
 boto3==1.34.34
 python-dotenv==1.0.1
-torch==2.12.0
+torch==2.12.0+cpu
 spacy==3.8.14
 structlog==26.1.0
 transformers==5.12.1
