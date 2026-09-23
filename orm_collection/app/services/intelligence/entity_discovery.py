@@ -1834,12 +1834,41 @@ class EntityDiscoveryEngine:
         client_id: str
     ) -> Dict[str, Any]:
         """
-        Promote competitor candidates to verified competitors based on rules:
-        - minimum_mentions reached
-        - confidence threshold reached
-        - appears in multiple independent documents
-        - passes org name validity check (filters media outlets, abbreviations, etc.)
+        DISABLED (Part P/Q forensics, 2026-09-23): automated promotion was
+        the confirmed root cause of ~230+ nonsensical tracked "competitors"
+        live across every client (Pentagon, White House, Trump, US Navy,
+        AGI, AI Slowdown, city names, HTML-artifact fragments, ...) -- the
+        Wikidata KB gate added 2026-09-15 only checks not-yet-promoted
+        candidates (no retroactive re-check) and defaults to ALLOW whenever
+        Wikidata returns no confident match, which a government agency
+        mentioned twice, an abstract acronym, or a near-miss label variant
+        ("the White House") all satisfy. Manual search
+        (search_client_competitor, client_intelligence.py:861) is the
+        trusted path today and is completely unaffected by this change.
+        Early-returned here (both known callers -- the automatic per-
+        document pipeline stage in intelligence_tasks.py, and the
+        POST /{client_id}/promote-competitors endpoint -- go through this
+        one function) rather than removing the call sites, so re-enabling
+        promotion (e.g. once a human-review queue exists, Part P's option 3)
+        is a single-line revert instead of restoring deleted call sites.
+        CompetitorCandidate rows are still created by _process_org_entity
+        (a separate pipeline stage, untouched) -- discovery data keeps
+        accumulating, it just no longer auto-promotes into a live Entity.
         """
+        logger.info(
+            "competitor_candidate_promotion_disabled",
+            client_id=client_id,
+            reason="Automated promotion disabled platform-wide (Part P/Q forensics) -- manual search is the only path to a tracked competitor.",
+        )
+        return {"promoted_count": 0, "disabled": True}
+
+        # --- Everything below is unreachable while promotion is disabled
+        # above. Kept in place (not deleted) so re-enabling this is a
+        # single-line revert of the early return, not a restoration from
+        # git history. Original behavior, docstring included below for
+        # reference: promotes a candidate once it reaches minimum_mentions,
+        # the confidence threshold, appears in multiple independent
+        # documents, and passes the org-name validity check. ---
         candidates = db.query(CompetitorCandidate).filter(
             CompetitorCandidate.client_id == client_id,
             CompetitorCandidate.promoted_to_competitor_id.is_(None)
