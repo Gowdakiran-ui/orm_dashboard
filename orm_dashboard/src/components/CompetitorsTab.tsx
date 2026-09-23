@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { 
   Compass, Users, BarChart3, Search, ShieldCheck,
-  Trophy, Info, Calendar, AlertOctagon, X, ExternalLink
+  Info, Calendar, AlertOctagon, X, ExternalLink
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -272,110 +272,6 @@ export function CompetitorsTab({
     return data;
   }, [activeClientName, reputation, repBreakdown, selectedCompetitor, normalizedBenchmarks]);
 
-  // 1. CLIENT + THE ONE SELECTED COMPETITOR
-  // C3: rank is no longer computed here. There were three independent,
-  // disagreeing rank computations in this codebase: the backend `rank`
-  // column (BenchmarkEngine, per A2.12/B6 — the canonical one, comparable
-  // across client+competitors on one formula), useAnalytics.ts's
-  // `clientRankValue`/`clientRank`, and this component's own tie-aware
-  // recomputation. Per A9/B6, the backend field is authoritative for
-  // competitors; the client's brand entity has no benchmark row of its own
-  // to read a backend rank from, so `clientRank` (computed in useAnalytics.ts
-  // from the same reputation comparison the backend ranking uses) is the one
-  // client-side stand-in, now actually wired in below instead of being a
-  // dead prop. This memo only builds row data for display/sorting; it does
-  // not invent a rank number.
-  const rankedBrands = useMemo(() => {
-    const clientRep = reputation?.score ?? 0;
-    const clientSent = repBreakdown?.sentiment ?? 0;
-    const clientRisk = repBreakdown?.risk !== undefined && repBreakdown?.risk !== null
-      ? 100 - repBreakdown.risk
-      : 0;
-
-    // Calculate Client SOV. Derived from normalizedBenchmarks (every tracked
-    // competitor), not singleCompetitorBenchmarks (just the one in focus) --
-    // same C6 fix as singleCompetitorRadarData above.
-    const clientSOV = calculateClientSOV(normalizedBenchmarks);
-
-    const list = [
-      {
-        name: activeClientName,
-        isClient: true,
-        reputation: clientRep,
-        sentiment: clientSent,
-        hasEvidence: true,
-        risk: clientRisk,
-        sov: clientSOV,
-        rankStr: clientRank
-      },
-      ...(singleCompetitorBenchmarks || []).map(b => ({
-        name: b.competitor_name,
-        isClient: false,
-        reputation: b.reputation ?? 0,
-        // C1: client sentiment (repBreakdown.sentiment) is already 0-100
-        // (ReputationEngine's ((avg+1)/2)*100). Competitor sentiment from
-        // /benchmark is the raw -1..+1 average — normalize with the same
-        // (x+1)*50 mapping the radar chart already uses below, so both are
-        // on the same scale before they're compared in this table/summary.
-        sentiment: ((b.sentiment ?? 0) + 1) * 50,
-        // C5: `b.rank` is already the canonical zero-evidence signal (0 =
-        // unranked, per B6/C3/A2.10 below) — confirmed live that
-        // rank/health_status/confidence_score always agree (0 disagreements
-        // across every current benchmark row), so this reuses that same
-        // signal instead of introducing a second, possibly-inconsistent
-        // check. A zero-evidence competitor's `sentiment` is still the raw
-        // (0+1)*50=50 computed above (not touched — same value used for
-        // sorting/leader calcs as before this fix), but the table cell
-        // below renders "No Data" instead of that number for it, so a
-        // fabricated neutral score is never shown as if it were real.
-        hasEvidence: !!b.rank,
-        risk: b.risk ?? 0,
-        sov: b.sov ?? 0,
-        // B6/C3: backend rank, 0 = unranked (no evidence — A2.10).
-        rankStr: b.rank ? `#${b.rank}` : "Unranked"
-      }))
-    ];
-
-    // Sort primarily by Reputation Score (descending), secondary by name to ensure absolute determinism
-    list.sort((a, b) => {
-      if (Math.abs(b.reputation - a.reputation) > 0.0001) {
-        return b.reputation - a.reputation;
-      }
-      return a.name.localeCompare(b.name);
-    });
-
-    return list;
-  }, [activeClientName, reputation, repBreakdown, singleCompetitorBenchmarks, normalizedBenchmarks, clientRank]);
-
-  // 2. CLIENT VS. SELECTED COMPETITOR SUMMARY
-  // Simplified for the hyperfocus redesign: with exactly one competitor in
-  // view, "closest threat" / "highest SOV" / "highest risk competitor" would
-  // always just be that same one name repeated back three times -- noise,
-  // not information. Keep only what's actually different with two entities:
-  // who's ahead on reputation, and a recommendation naming the competitor.
-  const summary = useMemo(() => {
-    if (singleCompetitorBenchmarks.length === 0) return null;
-
-    const leader = [...rankedBrands].sort((a, b) => b.reputation - a.reputation)[0];
-    const clientBrand = rankedBrands.find(b => b.isClient);
-    const competitor = rankedBrands.find(b => !b.isClient);
-
-    let recommendation = "Maintain market visibility and monitor key brand metrics.";
-    if (clientBrand && leader && leader.isClient) {
-      recommendation = `Maintain market leadership by prioritizing high-sentiment coverage. Monitor ${competitor ? competitor.name : "this competitor"} closely.`;
-    } else if (clientBrand && leader && !leader.isClient) {
-      recommendation = `Increase visibility and address sentiment deficits to close the gap with ${leader.name}.`;
-    }
-    if (competitor && competitor.risk > 40) {
-      recommendation += ` Watch ${competitor.name} for volatile risk escalations.`;
-    }
-
-    return {
-      leader: leader?.name || "N/A",
-      recommendation
-    };
-  }, [rankedBrands, singleCompetitorBenchmarks]);
-
   // 4. VERIFIED COMPETITOR EVENTS FILTERING -- scoped to the one selected
   // competitor only (hyperfocus redesign). Previously this matched against
   // every historically-tracked competitor; the register below must now only
@@ -587,28 +483,6 @@ export function CompetitorsTab({
 
       {hasTrackedCompetitors && (
       <>
-      {/* SUMMARY CARD */}
-      {summary && (
-        <Card className={`${glassCard(theme)} font-mono`}>
-          <CardHeader className={`pb-3 border-b ${cardBorder}`}>
-            <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-              <Trophy className="h-4 w-4 text-[#D4AF37] mr-2" />
-              Competitor Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 grid gap-4 sm:grid-cols-2 text-xs">
-            <div>
-              <span className={`block ${mutedText(theme)}`}>Ahead on Reputation:</span>
-              <span className={`font-bold ${bodyText(theme)}`}>{summary.leader}</span>
-            </div>
-            <div className={`border-t pt-3 sm:border-t-0 sm:pt-0 sm:border-l sm:pl-4 ${cardBorder}`}>
-              <span className={`block ${mutedText(theme)}`}>Recommendation:</span>
-              <p className={`leading-normal mt-1 ${bodyText(theme)}`}>{summary.recommendation}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* 1. Radar Comparison Matrix -- client vs. the one selected competitor only */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Radar Chart Error" />}>
         {benchmarksLoading ? (
