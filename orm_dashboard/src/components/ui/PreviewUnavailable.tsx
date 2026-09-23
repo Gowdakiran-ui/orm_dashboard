@@ -22,10 +22,9 @@ export function isPlaceholderTitle(title?: string | null, source?: string | null
 
 /**
  * Shared display-only mitigation for a title-less document/row, used
- * identically in all three places one currently renders (Narrative
- * Cluster's Source Evidence panel, Executive Reputation's activity table,
- * Intelligence Stream's Real-Time Brand Ingest Stream feed) --
- * ui_redesign_plan.md #2. Visually de-emphasized and labeled "Preview
+ * identically in both places one currently renders (Executive Reputation's
+ * activity table, Intelligence Stream's Real-Time Brand Ingest Stream feed)
+ * -- ui_redesign_plan.md #2. Visually de-emphasized and labeled "Preview
  * unavailable" instead of showing the raw source name as if it were a real,
  * evaluated headline next to a 0.00/0 score. Does not attempt to fix why
  * the title is missing -- that's the backend/ingestion issue named above,

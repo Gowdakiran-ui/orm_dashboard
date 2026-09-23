@@ -136,7 +136,6 @@ function DashboardShell() {
   // 5. Analytics Transformations
   const analytics = useAnalytics({
     documents: data.documents,
-    narratives: data.narratives,
     alerts: data.alerts,
     benchmarks: data.benchmarks,
     reputation: data.reputation,

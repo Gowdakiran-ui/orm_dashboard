@@ -43,7 +43,6 @@ export interface RiskTabProps {
   documentsError: string | null;
   documents: any[];
   clientId?: string | null;
-  onViewNarrative?: (narrativeName: string) => void;
 }
 
 export function RiskTab({
@@ -53,8 +52,7 @@ export function RiskTab({
   documentsLoading,
   documentsError,
   documents,
-  clientId,
-  onViewNarrative
+  clientId
 }: RiskTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -426,19 +424,6 @@ export function RiskTab({
                                 <p className={`leading-relaxed ${bodyText(theme)}`}>{aiSummary.how_to_solve}</p>
                               </div>
                             </div>
-                            {aiSummary.source === "narrative" && (
-                              <button
-                                type="button"
-                                onClick={() => onViewNarrative?.(aiSummary.narrative_name)}
-                                disabled={!onViewNarrative}
-                                className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
-                                  isDark ? "bg-zinc-800 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-zinc-100 border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
-                                } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
-                              >
-                                <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Via linked narrative:</span>{" "}
-                                {aiSummary.narrative_name}
-                              </button>
-                            )}
                           </div>
                         ) : (
                           <div className={`pt-2.5 text-xs italic ${mutedText(theme)}`}>
@@ -853,19 +838,6 @@ export function RiskTab({
                         <p className={`leading-relaxed ${bodyText(theme)}`}>{selectedDoc.risk_explainability.ai_summary.how_to_solve}</p>
                       </div>
                     </div>
-                    {selectedDoc.risk_explainability.ai_summary.source === "narrative" && (
-                      <button
-                        type="button"
-                        onClick={() => onViewNarrative?.(selectedDoc.risk_explainability.ai_summary.narrative_name)}
-                        disabled={!onViewNarrative}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
-                          isDark ? "bg-zinc-800 border-[#00F5D4]/30 hover:border-[#00F5D4]/60" : "bg-zinc-100 border-[#3B82F6]/30 hover:border-[#3B82F6]/60"
-                        } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
-                      >
-                        <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Via linked narrative:</span>{" "}
-                        {selectedDoc.risk_explainability.ai_summary.narrative_name}
-                      </button>
-                    )}
                   </div>
                 )}
 

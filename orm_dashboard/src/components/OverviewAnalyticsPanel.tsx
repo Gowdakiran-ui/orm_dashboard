@@ -20,10 +20,6 @@ export interface OverviewAnalyticsPanelProps {
   sentimentTrendData: any[];
   loading?: boolean;
   error?: string | null;
-  /** Tier 3 Part A: deep-link a sentiment-trend point's driving narrative into
-   *  the narrative drawer -- same navigateTo/openNarrativeDrawer mechanism
-   *  RiskTab and ReputationSummaryCard already use, not a new nav pattern. */
-  onViewNarrative?: (narrativeName: string) => void;
 }
 
 export function OverviewAnalyticsPanel({
@@ -32,8 +28,7 @@ export function OverviewAnalyticsPanel({
   repHistory = [],
   sentimentTrendData = [],
   loading = false,
-  error = null,
-  onViewNarrative
+  error = null
 }: OverviewAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -105,42 +100,22 @@ export function OverviewAnalyticsPanel({
   const gridStroke = isDark ? "#3f3f46" : "#d4d4d8";
   const axisStroke = isDark ? "#a1a1aa" : "#71717a";
 
-  // Tier 3 follow-up: root_cause is written as full-paragraph narrative-
-  // drawer content (problem_statement/impact/root_cause/recommended_action
-  // are meant to be read together there), not sized for a hover popup --
-  // shipping it verbatim regressed the "trailer, not the movie" restraint
-  // the AI Advisory digest already applies. This trims to the first
-  // sentence (or ~110 chars, whichever is shorter) so the hover stays a
-  // trailer; "Click point to open narrative" is the movie.
-  const excerpt = (text: string, maxLen = 110) => {
-    const firstSentence = text.split(/(?<=[.!?])\s/)[0];
-    const base = firstSentence.length <= maxLen ? firstSentence : text;
-    if (base.length <= maxLen) return base;
-    const cut = base.slice(0, maxLen);
-    return `${cut.slice(0, cut.lastIndexOf(" "))}…`;
-  };
-
-  // Real hover explanation for the sentiment trend, built from the driver
-  // useAnalytics.sentimentTrendData already computed (narrative name +
-  // narrative_engine.py's own root_cause) -- this replaces recharts'
-  // default single-value tooltip on this one chart instead of introducing
-  // a second popover pattern next to it.
+  // Hover explanation for the sentiment trend. Narrative clustering was
+  // removed from the pipeline (2026-09-19) -- this used to also surface a
+  // per-day "driving narrative" root-cause excerpt sourced from that
+  // feature, but with narratives never generating, that branch could never
+  // fire (its data source was permanently empty) and always fell through
+  // to a generic message anyway. Simplified to just the honest states this
+  // chart can actually support: a meaningful move with no note, or normal
+  // day-to-day fluctuation.
   const SentimentTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
     const point = payload[0].payload;
-    const driver = point.driver as { name: string; rootCause: string | null; mentions: number } | null;
     return (
       <div style={tooltipStyle} className="space-y-1 max-w-[260px]">
         <div className="font-bold">{label}</div>
         <div>Sentiment: {point.Sentiment >= 0 ? "+" : ""}{formatScore(point.Sentiment, 2)}</div>
-        {point.meaningful && driver && driver.rootCause ? (
-          <div className="pt-1 border-t border-current/10 space-y-0.5">
-            <div className="text-[10px] uppercase opacity-70">Driving narrative ({driver.mentions} doc{driver.mentions === 1 ? "" : "s"})</div>
-            <div className="font-bold truncate">{driver.name}</div>
-            <div className="text-[10px] opacity-80 leading-snug">{excerpt(driver.rootCause)}</div>
-            {onViewNarrative && <div className="text-[9px] opacity-60 italic">Click point for full root-cause detail &rarr;</div>}
-          </div>
-        ) : point.meaningful ? (
+        {point.meaningful ? (
           <div className="pt-1 border-t border-current/10 text-[10px] italic opacity-70">
             Sentiment moved but no specific narrative or risk event is linked to it in the data.
           </div>
@@ -154,9 +129,8 @@ export function OverviewAnalyticsPanel({
   };
 
   const SentimentDot = (props: any) => {
-    const { cx, cy, payload } = props;
+    const { cx, cy } = props;
     if (cx === undefined || cy === undefined) return null;
-    const hasDriver = Boolean(payload?.meaningful && payload?.driver?.rootCause && onViewNarrative);
     return (
       <circle
         cx={cx}
@@ -165,10 +139,6 @@ export function OverviewAnalyticsPanel({
         stroke={accent}
         strokeWidth={1.5}
         fill={isDark ? "#09090b" : "#ffffff"}
-        style={{ cursor: hasDriver ? "pointer" : "default" }}
-        onClick={() => {
-          if (hasDriver) onViewNarrative!(payload.driver.name);
-        }}
       />
     );
   };

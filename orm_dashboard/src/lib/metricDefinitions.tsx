@@ -451,8 +451,7 @@ export function OverviewSentimentBreakdownDefinition() {
 
 /**
  * ReputationSummaryCard.tsx's "Positive Signals" / "Dominant Sentiment"
- * tiles and Overview paragraph (Dashboard + Narrative Cluster pages, shared
- * component) -- a THIRD, differently-scoped sentiment split from the two
+ * tiles and Overview paragraph -- a THIRD, differently-scoped sentiment split from the two
  * document-threshold-based ones above. This one comes straight from the
  * backend (client_intelligence.py get_reputation_summary): a count of
  * EntitySentiment rows (one per entity mention, not one per document) whose
@@ -486,8 +485,8 @@ export function EntitySentimentSplitDefinition() {
  * OverviewAnalyticsPanel.tsx's "Average Sentiment Over Time" line chart --
  * useAnalytics.ts sentimentTrendData averages each document's sentiment
  * score (-1.0/0.0/+1.0 per SentimentScaleDefinition) within each calendar
- * day. Hovering a point that moved by 0.25 or more from the prior day also
- * surfaces the narrative most likely driving that shift, when one is linked.
+ * day. Hovering a point that moved by 0.25 or more from the prior day is
+ * flagged as a meaningful shift on hover.
  */
 export function AverageSentimentTrendDefinition() {
   return (
@@ -496,8 +495,7 @@ export function AverageSentimentTrendDefinition() {
       <span className="block">
         Each point is the average sentiment score (-1.0 to +1.0) across every
         document published that day. A day-over-day move of 0.25 or more is
-        treated as meaningful and, when a narrative is linked to it, shows
-        that narrative&apos;s driving root cause on hover.
+        flagged as meaningful on hover.
       </span>
     </>
   );
@@ -541,40 +539,6 @@ export function ThreatConcentrationHeatmapDefinition() {
       <span className="block mt-1">
         <b>R:</b> that cell&apos;s average Risk Score (0–100). <b>S:</b> its
         average sentiment (-1.0 to +1.0).
-      </span>
-    </>
-  );
-}
-
-/**
- * NarrativeAnalyticsPanel.tsx's "Daily Ingestion Ingestion Volume" stacked
- * area chart -- a per-day count of every monitored document, stacked by
- * its source.
- */
-export function DailyIngestionVolumeDefinition() {
-  return (
-    <>
-      <span className="block font-bold">Daily Ingestion Volume</span>
-      <span className="block">
-        How many documents this client&apos;s feed ingested each day, stacked
-        by which source (RSS, Reddit, Instagram, etc.) they came from.
-      </span>
-    </>
-  );
-}
-
-/**
- * NarrativeAnalyticsPanel.tsx's "Sources Distribution Matrix" ranked bar
- * chart -- a plain count of every monitored document grouped by source,
- * across the whole feed (not just one day).
- */
-export function SourcesDistributionDefinition() {
-  return (
-    <>
-      <span className="block font-bold">Sources Distribution</span>
-      <span className="block">
-        Total document count per source (RSS, Reddit, Instagram, etc.) across
-        this client&apos;s entire feed, ranked highest to lowest.
       </span>
     </>
   );

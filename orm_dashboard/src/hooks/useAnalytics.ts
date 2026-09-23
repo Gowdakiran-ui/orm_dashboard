@@ -5,7 +5,6 @@ import { calculateClientSOV } from "@/utils/shareOfVoice";
 
 interface AnalyticsProps {
   documents: any[];
-  narratives: any[];
   alerts: any[];
   benchmarks: any[];
   reputation: any;
@@ -21,7 +20,6 @@ interface AnalyticsProps {
 
 export function useAnalytics({
   documents,
-  narratives,
   alerts,
   benchmarks,
   reputation,
@@ -296,61 +294,31 @@ export function useAnalytics({
     ].filter(a => a.value > 0);
   }, [alerts]);
 
-  // Tier 3 Part A: per-bucket driving narrative, reusing the same
-  // narrative_engine.py RCA (evidence_metadata.rca.root_cause) the
-  // narrative drawer already renders -- not a second, independently
-  // computed explanation. Each document already carries the exact
-  // narrative_name it was clustered into (client_intelligence.py
-  // read_client_documents), so the driver for a given day is just "which
-  // narrative do this day's documents mostly belong to," tie-broken
-  // toward whichever pulled more negative-sentiment documents that day.
-  // Narratives only get an RCA when narrative_engine.py judged them
-  // risk-worthy (avg_sentiment < 0 or a weighted topic) -- a day whose
-  // narrative has no RCA, or no narrative-linked documents at all, is a
-  // real "no material driver" case, not a gap to paper over.
+  // Day-bucketed average sentiment. Previously also computed a per-day
+  // "driving narrative" (name + root-cause excerpt) sourced from a
+  // narratives fetch -- narrative clustering was removed from the pipeline
+  // (2026-09-19), that fetch was never wired back up, and the lookup could
+  // never resolve, so the feature was dead code producing a permanently
+  // empty result. Dropped along with it, not carried forward as unreachable
+  // branches.
   const sentimentTrendData = useMemo(() => {
-    const buckets: Record<string, { sum: number, count: number, narrativeCounts: Record<string, { count: number; negCount: number }> }> = {};
+    const buckets: Record<string, { sum: number, count: number }> = {};
     (documents || []).forEach(d => {
       if (d && d.timestamp) {
         const dateStr = new Date(d.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         if (!buckets[dateStr]) {
-          buckets[dateStr] = { sum: 0, count: 0, narrativeCounts: {} };
+          buckets[dateStr] = { sum: 0, count: 0 };
         }
-        const sentimentVal = d.sentiment ?? 0;
-        buckets[dateStr].sum += sentimentVal;
+        buckets[dateStr].sum += d.sentiment ?? 0;
         buckets[dateStr].count += 1;
-        if (d.narrative) {
-          const nc = buckets[dateStr].narrativeCounts[d.narrative] || { count: 0, negCount: 0 };
-          nc.count += 1;
-          if (sentimentVal < 0) nc.negCount += 1;
-          buckets[dateStr].narrativeCounts[d.narrative] = nc;
-        }
       }
     });
 
-    const narrativeByName = new Map<string, any>();
-    (narratives || []).forEach(n => {
-      if (n?.name) narrativeByName.set(n.name.toLowerCase(), n);
-    });
-
     const rows = Object.entries(buckets)
-      .map(([date, info]) => {
-        const narrativeEntries = Object.entries(info.narrativeCounts);
-        let driver: { name: string; rootCause: string | null; mentions: number } | null = null;
-        if (narrativeEntries.length > 0) {
-          const [topName, topStats] = narrativeEntries.sort((a, b) =>
-            b[1].negCount - a[1].negCount || b[1].count - a[1].count
-          )[0];
-          const narr = narrativeByName.get(topName.toLowerCase());
-          const rootCause = narr?.evidence_metadata?.rca?.root_cause ?? null;
-          driver = { name: topName, rootCause, mentions: topStats.count };
-        }
-        return {
-          date,
-          Sentiment: Number((info.sum / info.count).toFixed(2)),
-          driver
-        };
-      })
+      .map(([date, info]) => ({
+        date,
+        Sentiment: Number((info.sum / info.count).toFixed(2)),
+      }))
       .reverse();
 
     // Day-over-day delta decides whether a movement is even worth
@@ -360,9 +328,9 @@ export function useAnalytics({
     // different unit than this -1..1 sentiment average). 0.25 instead
     // reuses the codebase's own most-repeated real precedent for "a
     // meaningful magnitude on this exact sentiment scale" -- the
-    // positive/negative color-coding cutoff NarrativesTab already applies
-    // in four places (bubble matrix, badges, drawer headers), rather than
-    // inventing a new number for this one chart.
+    // positive/negative color-coding cutoff this session's earlier work
+    // already applied elsewhere, rather than inventing a new number for
+    // this one chart.
     const MEANINGFUL_DELTA = 0.25;
     return rows.map((row, idx) => {
       const prev = idx > 0 ? rows[idx - 1] : null;
@@ -370,7 +338,7 @@ export function useAnalytics({
       const meaningful = delta !== null && Math.abs(delta) >= MEANINGFUL_DELTA;
       return { ...row, delta, meaningful };
     });
-  }, [documents, narratives]);
+  }, [documents]);
 
   const alertTimelineData = useMemo(() => {
     const buckets: Record<string, number> = {};
@@ -664,7 +632,7 @@ export function useAnalytics({
         navigationId: "competitors"
       }
     ];
-  }, [documents, trendEvents, alerts, narratives, repHistory, executives, benchmarks, reputation, activeClientName, avgConfidence, clientRank, normalizedBenchmarks, telemetry]);
+  }, [documents, trendEvents, alerts, repHistory, executives, benchmarks, reputation, activeClientName, avgConfidence, clientRank, normalizedBenchmarks, telemetry]);
 
   return {
     normalizedBenchmarks,

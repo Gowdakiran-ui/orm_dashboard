@@ -465,17 +465,6 @@ export async function fetchDocumentDetails(clientId: string, documentId: string,
   return parseOrThrow(res);
 }
 
-// Targeted fallback for a narrative's Source Evidence panel: fetches only
-// the specific document ids passed in, regardless of whether they're still
-// inside the main 500-most-recent-document window fetchDocuments() loads.
-// Not a general list/search call -- always pass exactly the ids you need.
-export async function fetchDocumentsByIds(clientId: string, ids: string[], signal?: AbortSignal) {
-  if (!ids.length) return [];
-  const params = ids.map((id) => `ids=${encodeURIComponent(id)}`).join("&");
-  const res = await fetchWithRetry(`${API_BASE}/documents/client/${clientId}/by-ids?${params}`, { signal });
-  const docs = await parseOrThrow(res);
-  return Array.isArray(docs) ? docs.map((d: any) => (d && d.title ? { ...d, title: decodeHtmlEntities(d.title) } : d)) : docs;
-}
 
 // Not client-scoped -- /sources/ is a global endpoint. This function has no
 // callers anywhere in the codebase (confirmed via grep); kept as-is pending

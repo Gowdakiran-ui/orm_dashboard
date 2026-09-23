@@ -13,12 +13,11 @@ const DEFAULT_REPUTATION_SUMMARY = {
   reputation: { score: null, grade: null, trend: 'STABLE', status: 'no_data' },
   risk: { total: 0, critical: 0, high: 0, medium: 0, low: 0, most_severe: null },
   sentiment: { positive: 0, neutral: 0, negative: 0, dominant: null },
-  narratives: { active_count: 0, top: null },
   trends: { total: 0, growing: 0, declining: 0 },
   executive_alert: { open: false, alert: null }
 };
 
-const DEFAULT_PLAN_ADVISORY = { lead: "", bullets: [] as string[], narrative_count: 0 };
+const DEFAULT_PLAN_ADVISORY = { lead: "", bullets: [] as string[] };
 
 export function useDashboardData() {
   const [clients, setClients] = useState<any[]>([]);
@@ -43,15 +42,13 @@ export function useDashboardData() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  const [repBreakdown, setRepBreakdown] = useState<any>({ sentiment: 0, risk: 0, narrative: 0, trend: 0, source: 0, visibility: 0 });
+  const [repBreakdown, setRepBreakdown] = useState<any>({ sentiment: 0, risk: 0, trend: 0, source: 0, visibility: 0 });
   const [breakdownLoading, setBreakdownLoading] = useState(true);
   const [breakdownError, setBreakdownError] = useState<string | null>(null);
 
   const [alerts, setAlerts] = useState<any[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
   const [alertsError, setAlertsError] = useState<string | null>(null);
-
-  const [narratives, setNarratives] = useState<any[]>([]);
 
   const [benchmarks, setBenchmarks] = useState<any[]>([]);
   const [benchmarksLoading, setBenchmarksLoading] = useState(true);
@@ -192,9 +189,8 @@ export function useDashboardData() {
       setReputationSummary(DEFAULT_REPUTATION_SUMMARY);
       setPlanAdvisory(DEFAULT_PLAN_ADVISORY);
       setRepHistory([]);
-      setRepBreakdown({ sentiment: 0, risk: 0, narrative: 0, trend: 0, source: 0, visibility: 0 });
+      setRepBreakdown({ sentiment: 0, risk: 0, trend: 0, source: 0, visibility: 0 });
       setAlerts([]);
-      setNarratives([]);
       setBenchmarks([]);
       setRisks({ average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 });
       setExecutives([]);
@@ -396,7 +392,7 @@ export function useDashboardData() {
           fetchReputationBreakdown(activeClientId, signal)
             .then(data => {
               if (!signal.aborted) {
-                const nextVal = data || { sentiment: 0, risk: 0, narrative: 0, trend: 0, source: 0, visibility: 0 };
+                const nextVal = data || { sentiment: 0, risk: 0, trend: 0, source: 0, visibility: 0 };
                 if (hasChanged(repBreakdown, nextVal)) {
                   setRepBreakdown(nextVal);
                 }
@@ -546,7 +542,6 @@ export function useDashboardData() {
     setRepHistory([]);
     setRepBreakdown(null);
     setAlerts([]);
-    setNarratives([]);
     setBenchmarks([]);
     setRisks(null);
     setExecutives([]);
@@ -628,7 +623,6 @@ export function useDashboardData() {
     alerts,
     alertsLoading,
     alertsError,
-    narratives,
     benchmarks,
     benchmarksLoading,
     benchmarksError,
@@ -669,7 +663,6 @@ export function useDashboardData() {
     setRepHistory,
     setRepBreakdown,
     setAlerts,
-    setNarratives,
     setBenchmarks,
     setRisks,
     setExecutives,
