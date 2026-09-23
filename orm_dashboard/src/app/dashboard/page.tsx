@@ -16,8 +16,6 @@ import Link from 'next/link';
 import { AnalyticsTabHeader } from "@/components/AnalyticsTabHeader";
 import { OverviewAnalyticsPanel } from "@/components/OverviewAnalyticsPanel";
 import { RiskAnalyticsPanel } from "@/components/RiskAnalyticsPanel";
-import { NarrativeAnalyticsPanel } from "@/components/NarrativeAnalyticsPanel";
-import { PipelineDiagnosticsPanel } from "@/components/PipelineDiagnosticsPanel";
 import { ReputationSummaryCard } from "@/components/ReputationSummaryCard";
 import { Sidebar } from "@/components/Sidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -313,37 +311,6 @@ function DashboardShell() {
                         alertTimelineData={analytics.alertTimelineData}
                         loading={data.documentsLoading || data.alertsLoading}
                         error={data.documentsError || data.alertsError}
-                      />
-                    </ErrorBoundary>
-                  )}
-
-                  {/* Sub-tab 3: Narratives & Ingestion */}
-                  {analyticsSubTab === "narratives" && (
-                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Ingestion Analytics Error" />}>
-                      <NarrativeAnalyticsPanel
-                        competitorRadarData={analytics.competitorRadarData}
-                        execTrendChartData={analytics.execTrendChartData}
-                        pipelineTimelineData={analytics.pipelineTimelineData}
-                        sourceContData={analytics.sourceContData}
-                        activeClientName={activeClientName}
-                        normalizedBenchmarks={analytics.normalizedBenchmarks}
-                        execHistory={data.execHistory}
-                        documents={data.documents}
-                        loading={data.benchmarksLoading || data.documentsLoading}
-                        error={data.benchmarksError || data.documentsError}
-                      />
-                    </ErrorBoundary>
-                  )}
-
-                  {/* Sub-tab 4: AI Ingestion Pipeline Diagnostics (super_admin only, see AnalyticsTabHeader.tsx) */}
-                  {analyticsSubTab === "pipeline" && isSuperAdmin && (
-                    <ErrorBoundary fallback={<TelemetryErrorWidget title="Pipeline Diagnostics Error" />}>
-                      <PipelineDiagnosticsPanel
-                        pipelineDiagnostics={analytics.engineDiagnosticsList}
-                        documents={data.documents}
-                        lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
-                        loading={data.documentsLoading || data.telemetryLoading || data.alertsLoading}
-                        error={data.documentsError || data.telemetryError || data.alertsError}
                       />
                     </ErrorBoundary>
                   )}
