@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 import { fetchDocumentDetails, searchCompetitor } from "@/lib/api";
@@ -860,11 +859,9 @@ export function CompetitorsTab({
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>COMPETITOR</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EVENT HEADLINE</TableHead>
                 <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>BUSINESS TOPIC</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>REPUTATION IMPACT</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
-                <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
+                <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>DETAILS</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -876,16 +873,6 @@ export function CompetitorsTab({
                     <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-xs bg-[#D4AF37]/5">
                       {doc.topic}
                     </Badge>
-                  </TableCell>
-                  <TableCell className={`text-center font-mono text-xs font-bold ${
-                    parseFloat(doc.reputation_impact) >= 0 ? "text-emerald-500" : "text-red-500"
-                  }`}>
-                    {doc.reputation_impact}
-                  </TableCell>
-                  <TableCell className={`text-center font-mono text-xs font-bold ${
-                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
-                  }`}>
-                    {Math.round(doc.risk || 0)}
                   </TableCell>
                   <TableCell className={`font-mono text-xs truncate max-w-[100px] ${mutedText(theme)}`}>{doc.source}</TableCell>
                   <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
@@ -903,7 +890,7 @@ export function CompetitorsTab({
               ))}
               {competitorEvents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
+                  <TableCell colSpan={6} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
                     No competitor events recorded.
                   </TableCell>
                 </TableRow>
@@ -968,10 +955,6 @@ export function CompetitorsTab({
 
                 {/* Risk score calculation breakdown */}
                 <div className={`p-4 rounded border border-red-500/20 space-y-3 ${surfaceBg}`}>
-                  <div className={`flex justify-between items-center border-b pb-2 ${cardBorder}`}>
-                    <span className="text-xs font-bold text-red-500">Risk Rating</span>
-                    <span className="text-lg font-black text-red-500">{selectedDoc.risk} / 100</span>
-                  </div>
                   <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between">
                       <span className={mutedText(theme)}>Impact Score:</span>
@@ -991,22 +974,6 @@ export function CompetitorsTab({
                   </span>
                   <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
                     {selectedDoc.original_content || "No original content available."}
-                  </div>
-                </div>
-
-                {/* Detected Entities */}
-                <div className="space-y-2">
-                  <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Extracted Named Entities</span>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDoc.extracted_entities && selectedDoc.extracted_entities.length > 0 ? (
-                      selectedDoc.extracted_entities.map((ent: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-500 text-xs bg-blue-500/5">
-                          {ent.name} ({ent.entity_type})
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className={`text-xs ${mutedText(theme)}`}>No matching corporate entities identified.</span>
-                    )}
                   </div>
                 </div>
 
