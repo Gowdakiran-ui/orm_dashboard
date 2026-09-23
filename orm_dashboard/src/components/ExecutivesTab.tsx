@@ -316,7 +316,7 @@ export function ExecutivesTab({
     let negative = 0;
 
     execEvents.forEach(e => {
-      const score = e.sentiment_score !== undefined ? parseFloat(e.sentiment_score) : 0;
+      const score = e.sentiment !== undefined ? parseFloat(e.sentiment) : 0;
       if (score > 0.25) positive++;
       else if (score < -0.25) negative++;
       else neutral++;
@@ -514,7 +514,11 @@ export function ExecutivesTab({
               Reputation Score:
               <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
             </span>
-            <span className={`font-bold ${bodyText(theme)}`}>{summary.score}</span>
+            <span className={`font-bold ${bodyText(theme)}`}>
+              {selectedExecutive?.health_status === 'INSUFFICIENT_EVIDENCE'
+                ? "No qualifying coverage yet — tracked, but not enough evidence to score"
+                : summary.score}
+            </span>
           </div>
           <div>
             <span className={`block ${mutedText(theme)}`}>Latest Event:</span>
@@ -775,7 +779,7 @@ export function ExecutivesTab({
                     </Badge>
                   </TableCell>
                   <TableCell className={`text-center font-mono text-xs ${bodyText(theme)}`}>
-                    {doc.sentiment_score !== undefined ? parseFloat(doc.sentiment_score).toFixed(2) : "0.00"}
+                    {doc.sentiment !== undefined ? parseFloat(doc.sentiment).toFixed(2) : "0.00"}
                   </TableCell>
                   <TableCell className={`text-center font-mono text-xs font-bold ${
                     parseFloat(doc.reputation_impact) >= 0 ? "text-emerald-500" : "text-red-500"
@@ -867,7 +871,7 @@ export function ExecutivesTab({
                     </div>
                     <div className="flex justify-between">
                       <span className={mutedText(theme)}>Sentiment Score:</span>
-                      <span className={bodyText(theme)}>{selectedDoc.sentiment_score !== undefined ? parseFloat(selectedDoc.sentiment_score).toFixed(2) : "0.00"}</span>
+                      <span className={bodyText(theme)}>{selectedDoc.sentiment !== undefined ? parseFloat(selectedDoc.sentiment).toFixed(2) : "0.00"}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className={mutedText(theme)}>Reputation Impact:</span>
