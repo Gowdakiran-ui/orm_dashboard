@@ -354,8 +354,6 @@ function DashboardShell() {
               {activeTab === "executives" && (
                 <ErrorBoundary fallback={<TelemetryErrorWidget title="Executive Reputation Error" />}>
                   <ExecutivesTab
-                    executivesLoading={data.executivesLoading}
-                    executivesError={data.executivesError}
                     executives={data.executives}
                     lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
                     documents={data.documents}

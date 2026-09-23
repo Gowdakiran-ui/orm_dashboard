@@ -6,18 +6,16 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar
 } from 'recharts';
 import {
-  Users, Activity, Search, AlertTriangle, ShieldCheck, Trophy, Info,
+  Users, Activity, Search, AlertTriangle, ShieldCheck, Info,
   TrendingUp, AlertOctagon, X, ExternalLink
 } from "lucide-react";
-import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { glassCard, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
-import { ReputationScoreDefinition, ExecutiveSentimentBreakdownDefinition, ExecutiveScorecardMetricsDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
+import { ExecutiveSentimentBreakdownDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
 import { formatScore } from "@/utils/formatScore";
 
 // Reinforces the letter grade with the same red/amber/green severity palette
@@ -79,8 +77,6 @@ function gradeDriverLine(executive: any): string | null {
 }
 
 export interface ExecutivesTabProps {
-  executivesLoading: boolean;
-  executivesError: string | null;
   executives: any[];
   lastProcessedTimestamp: string;
   documents: any[];
@@ -92,8 +88,6 @@ export interface ExecutivesTabProps {
 }
 
 export function ExecutivesTab({
-  executivesLoading,
-  executivesError,
   executives,
   lastProcessedTimestamp,
   documents,
@@ -273,35 +267,6 @@ export function ExecutivesTab({
     return execEvents.find(d => d.id === selectedDocId) || null;
   }, [selectedDocId, execEvents]);
 
-  // 3. EXECUTIVE INTEL SUMMARY METRICS -- simplified for the hyperfocus
-  // redesign. With exactly one executive in focus, "highest reputation" /
-  // "highest risk" / "most mentioned" would always just echo the one
-  // selected executive's own name back, which is noise, not information
-  // (same reasoning CompetitorsTab.tsx's summary card simplification used).
-  const summary = useMemo(() => {
-    const exec = singleExecutiveList[0];
-    if (!exec) {
-      return {
-        score: "N/A",
-        latestEvent: "Insufficient historical data",
-        activeTopic: "Insufficient historical data"
-      };
-    }
-    const latestEvent = execEvents[0]?.timestamp
-      ? new Date(execEvents[0].timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-      : "Insufficient historical data";
-    const topicCounts = execEvents.map(d => d.topic).filter(Boolean).reduce((acc, t) => {
-      acc[t] = (acc[t] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const activeTopic = Object.entries(topicCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || "General";
-    return {
-      score: exec.score !== undefined && exec.score !== null ? exec.score.toFixed(2) : "N/A",
-      latestEvent,
-      activeTopic
-    };
-  }, [singleExecutiveList, execEvents]);
-
   // 5. SENTIMENT BREAKDOWN DATA
   const sentimentData = useMemo(() => {
     let positive = 0;
@@ -470,38 +435,7 @@ export function ExecutivesTab({
 
       {hasSelectedExecutive && (
       <>
-      {/* EXECUTIVE SUMMARY -- scoped to the one selected executive only. */}
-      <Card className={`${glassCard(theme)} font-mono`}>
-        <CardHeader className={`pb-3 border-b ${cardBorder}`}>
-          <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-            <Trophy className="h-4 w-4 text-[#D4AF37] mr-2" />
-            Executive Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4 grid gap-4 sm:grid-cols-3 text-xs">
-          <div>
-            <span className={`flex items-center gap-1 ${mutedText(theme)}`}>
-              Reputation Score:
-              <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
-            </span>
-            <span className={`font-bold ${bodyText(theme)}`}>
-              {selectedExecutive?.health_status === 'INSUFFICIENT_EVIDENCE'
-                ? "No qualifying coverage yet — tracked, but not enough evidence to score"
-                : summary.score}
-            </span>
-          </div>
-          <div>
-            <span className={`block ${mutedText(theme)}`}>Latest Event:</span>
-            <span className={`font-bold ${bodyText(theme)}`}>{summary.latestEvent}</span>
-          </div>
-          <div>
-            <span className={`block ${mutedText(theme)}`}>Most Active Topic:</span>
-            <span className={`font-bold ${bodyText(theme)}`}>{summary.activeTopic}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 2. Executive Sentiment Breakdown -- Reputation Distribution and
+      {/* 1. Executive Sentiment Breakdown -- Reputation Distribution and
           Influence Ranking removed per hyperfocus redesign (both were
           rankings/histograms across every historically-tracked executive,
           meaningless with exactly one executive in focus). Reputation Trend
@@ -510,9 +444,13 @@ export function ExecutivesTab({
           executive -- it rendered every tracked executive's history at
           once via the shared execHistory/execTrendChartData chain,
           mislabeled as "this executive" -- and Activity Timeline had no
-          dependents once removed. Sentiment Breakdown now stands alone
-          instead of sharing a two-column grid with the removed Activity
-          Timeline card. */}
+          dependents once removed. Executive Summary and Executive
+          Scorecard also removed 2026-09-23: both duplicated the same
+          Score/Grade/Trend already shown in the search-result panel above
+          (Part N §C) with no distinct calculation of their own; the
+          search-result panel remains the one place those values show.
+          Sentiment Breakdown now stands alone instead of sharing a
+          two-column grid with the removed Activity Timeline card. */}
       <Card className={glassCard(theme)}>
         <CardHeader>
           <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
@@ -535,94 +473,7 @@ export function ExecutivesTab({
         </CardContent>
       </Card>
 
-      {/* 3. EXECUTIVE SCORECARD */}
-      <ErrorBoundary fallback={<TelemetryErrorWidget title="Executives Error" />}>
-        {executivesLoading ? (
-          <Card className={`${glassTokens[theme].card} rounded-3xl h-48 animate-pulse`} />
-        ) : executivesError ? (
-          <Card className={`${glassCard(theme)} border-red-500/20 h-48`}>
-            <TelemetryErrorWidget title="Executives Telemetry Offline" message={executivesError} />
-          </Card>
-        ) : (
-          <Card className={glassCard(theme)}>
-            <CardHeader>
-              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-                <Users className="h-4 w-4 text-[#D4AF37] mr-2" />
-                Executive Scorecard
-                <InfoTooltip label="About Confidence, Evidence Coverage and Trend"><ExecutiveScorecardMetricsDefinition /></InfoTooltip>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader className={`${rowBorder} ${tableHeaderBg}`}>
-                  <TableRow className={rowBorder}>
-                    <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EXECUTIVE NAME</TableHead>
-                    <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>REPUTATION SCORE</TableHead>
-                    <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>CONFIDENCE</TableHead>
-                    <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>EVIDENCE COVERAGE</TableHead>
-                    <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>TREND</TableHead>
-                    <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>TOP POSITIVE THEME</TableHead>
-                    <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>TOP NEGATIVE THEME</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {singleExecutiveList.map((e, i) => (
-                    e.health_status === 'INSUFFICIENT_EVIDENCE' ? (
-                      // Honest empty state: a real 0.0/NA computed for zero-evidence
-                      // executives (executive_reputation_engine.py's own zero-evidence
-                      // sentinel) previously rendered as a plain "0.0" score -- visually
-                      // identical to a genuinely bad reputation. Surface the real reason
-                      // instead of a number that looks broken.
-                      <TableRow key={e.id ?? i} className={`${rowBorder} ${rowHoverBg} transition-colors`}>
-                        <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{e.name}</TableCell>
-                        <TableCell colSpan={6} className={`text-center font-mono text-xs uppercase tracking-wider py-3 ${mutedText(theme)}`}>
-                          No qualifying coverage yet — tracked, but not enough evidence to score
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      <TableRow key={e.id ?? i} className={`${rowBorder} ${rowHoverBg} transition-colors`}>
-                        <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{e.name}</TableCell>
-                        <TableCell className="text-center font-mono text-xs font-black text-[#D4AF37]">
-                          {e.score !== undefined && e.score !== null ? e.score.toFixed(2) : 'N/A'}
-                        </TableCell>
-                        <TableCell className={`text-center font-mono text-xs ${bodyText(theme)}`}>
-                          {e.confidence_score !== undefined ? `${(e.confidence_score * 100).toFixed(0)}%` : "100%"}
-                          {e.health_status === 'PARTIAL' && (
-                            <Badge className="ml-1.5 text-xs font-mono bg-amber-500/10 text-amber-500 border border-amber-500/30">
-                              LIMITED DATA
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className={`text-center font-mono text-xs ${bodyText(theme)}`}>
-                          {e.data_coverage !== undefined ? `${(e.data_coverage * 100).toFixed(0)}%` : "40%"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className={`text-xs font-mono ${
-                            e.trend === 'IMPROVING' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/30" :
-                            e.trend === 'DECLINING' ? "bg-red-500/10 text-red-500 border border-red-500/30" :
-                            isDark ? "bg-zinc-500/10 text-zinc-300 border border-zinc-500/30" : "bg-zinc-500/10 text-zinc-600 border border-zinc-500/30"
-                          }`}>
-                            {e.trend ?? 'STABLE'}
-                          </Badge>
-                        </TableCell>
-                        {/* An unpopulated theme showing "None" next to a
-                            real, serious grade reads as a data gap, not a
-                            genuine absence (ui_redesign_plan.md #9) -- a
-                            muted dash instead of colored "None" text, no
-                            invented fallback value. */}
-                        <TableCell className={`font-mono text-xs truncate max-w-[120px] ${e.top_positive ? "text-emerald-500" : mutedText(theme)}`}>{e.top_positive || "—"}</TableCell>
-                        <TableCell className={`font-mono text-xs truncate max-w-[120px] ${e.top_negative ? "text-red-500" : mutedText(theme)}`}>{e.top_negative || "—"}</TableCell>
-                      </TableRow>
-                    )
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-      </ErrorBoundary>
-
-      {/* 4. EXECUTIVE ACTIVITY TABLE */}
+      {/* 2. EXECUTIVE ACTIVITY TABLE */}
       <Card className={glassCard(theme)}>
         <CardHeader>
           <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
