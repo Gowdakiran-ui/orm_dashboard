@@ -17,17 +17,6 @@ import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } fr
 import { ExecutiveSentimentBreakdownDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
 import { formatScore } from "@/utils/formatScore";
 
-// Reinforces the letter grade with the same red/amber/green severity palette
-// already used for Risk severity elsewhere (e.g. RiskTab.tsx's CRITICAL/HIGH
-// badges) -- color is a secondary cue here, the letter stays primary.
-function gradeBandClass(grade: string | null | undefined): string {
-  const letter = grade ? String(grade).trim().charAt(0).toUpperCase() : "";
-  if (letter === "D" || letter === "F") return "border-red-500/40 bg-red-500/10";
-  if (letter === "C") return "border-amber-500/40 bg-amber-500/10";
-  if (letter === "A" || letter === "B") return "border-emerald-500/40 bg-emerald-500/10";
-  return "border-transparent";
-}
-
 // Phase 2 Item 3: same weighting ExecutiveReputationGradeDefinition already
 // documents (metricDefinitions.tsx) and executive_reputation_engine.py
 // applies -- used only to pick which already-computed component most dragged
@@ -331,7 +320,7 @@ export function ExecutivesTab({
           )}
 
           {searchResult && searchResult.status === "tracked" && (
-            <div className={`border border-[#D4AF37]/30 rounded p-4 space-y-2 ${surfaceBg}`}>
+            <div className={`border rounded p-4 space-y-2 ${surfaceBorder} ${surfaceBg}`}>
               <div className="flex items-center justify-between">
                 <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.executive.name}</span>
                 <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-xs">TRACKED</Badge>
@@ -352,12 +341,12 @@ export function ExecutivesTab({
                     <span className={`block ${mutedText(theme)}`}>Trend</span>
                     <span className={bodyText(theme)}>{searchResult.executive.trend ?? 'STABLE'}</span>
                   </div>
-                  <div className={`rounded border px-2 py-1 ${gradeBandClass(searchResult.executive.grade)}`}>
+                  <div>
                     <span className={`flex items-center gap-1 ${mutedText(theme)}`}>
                       Grade
                       <InfoTooltip label="About Executive Reputation Grade"><ExecutiveReputationGradeDefinition /></InfoTooltip>
                     </span>
-                    <span className={`font-bold ${bodyText(theme)}`}>{searchResult.executive.grade ?? 'N/A'}</span>
+                    <span className={`font-bold text-sm ${bodyText(theme)}`}>{searchResult.executive.grade ?? 'N/A'}</span>
                   </div>
                 </div>
               )}
