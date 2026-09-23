@@ -1,399 +1,477 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { Unbounded, Sora, JetBrains_Mono } from "next/font/google";
-import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
-import {
-  ArrowRight,
-  Mail,
-  Menu,
-  X,
-  Activity,
-  ShieldAlert,
-  TrendingUp,
-  LayoutDashboard,
-} from "lucide-react";
-import { AnimatedGrid } from "@/components/landing/AnimatedGrid";
-import { SpotlightCard } from "@/components/landing/SpotlightCard";
-import { PipelineBeams } from "@/components/landing/PipelineBeams";
-import { BorderBeam } from "@/components/landing/BorderBeam";
-import { ShimmerBadge } from "@/components/landing/ShimmerBadge";
+import { Fraunces, Inter } from "next/font/google";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowRight, Mail, Menu, X } from "lucide-react";
 import { MagneticButton } from "@/components/landing/MagneticButton";
 import { Reveal, RevealGroup, RevealItem } from "@/components/landing/Reveal";
 
 const CONTACT_EMAIL = "contact@onlynereputation.com";
 
 /**
- * Font stacks are scoped to this landing page only (via the wrapper div's
- * className below) — layout.tsx and the authenticated app keep their own
- * fonts untouched.
+ * Redesign (2026-09-23): same stack as before (Next.js App Router, React,
+ * Tailwind, framer-motion) -- new visual design (dark navy/teal editorial
+ * look, Fraunces serif + Inter body) approved via a Claude artifact
+ * reference. Font stacks are scoped to this landing page only (via the
+ * wrapper div's className below) -- layout.tsx and the authenticated app
+ * keep their own fonts untouched.
+ *
+ * Colors are literal hex values in every Tailwind className below (never
+ * interpolated via a JS template string into an arbitrary-value class,
+ * e.g. `text-[${x}]`) -- Tailwind's compiler scans source statically for
+ * class name strings, so an interpolated class is invisible to it and
+ * silently produces no CSS. Dynamic per-row colors (mock chart data below)
+ * use inline `style` instead, which has no such restriction.
  */
-const display = Unbounded({
+const display = Fraunces({
   subsets: ["latin"],
-  weight: ["500", "700", "800"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
   variable: "--font-landing-display",
 });
-const body = Sora({
+const body = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-landing-body",
 });
-const dataMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-landing-mono",
-});
 
-/**
- * Hero visual: mentions land as points, sweep past a radar arc, and resolve
- * into the risk score — the same collect -> score -> alert loop XOOP runs,
- * shown rather than described. This is the one place the accent gradient
- * (Solar Flare: #FF5E00 -> #FFB703) is used at any size.
- */
-function HeroVisual() {
-  const nodes = [
-    { x: 60, y: 95, delay: "0s" },
-    { x: 245, y: 80, delay: "0.18s" },
-    { x: 252, y: 215, delay: "0.36s" },
-    { x: 150, y: 262, delay: "0.54s" },
-    { x: 52, y: 200, delay: "0.72s" },
-  ];
-
-  return (
-    <div className="relative mx-auto aspect-square w-full max-w-[min(90vw,26rem)]">
-      <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,94,0,0.16),transparent_65%)] blur-2xl" />
-      <svg viewBox="0 0 300 300" className="relative h-full w-full overflow-visible">
-        <defs>
-          <linearGradient id="flareGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FF5E00" />
-            <stop offset="100%" stopColor="#FFB703" />
-          </linearGradient>
-        </defs>
-
-        <circle cx="150" cy="150" r="130" fill="none" stroke="#27272a" strokeWidth="1" />
-        <circle cx="150" cy="150" r="95" fill="none" stroke="#27272a" strokeWidth="1" />
-
-        <path
-          d="M150 150 L150 20 A130 130 0 0 1 280 150 Z"
-          fill="none"
-          stroke="url(#flareGrad)"
-          strokeWidth="1.6"
-          opacity="0.22"
-          className="origin-[150px_150px] animate-flareSweep"
-        />
-
-        {nodes.map((n, i) => (
-          <circle
-            key={i}
-            cx={n.x}
-            cy={n.y}
-            r="5"
-            fill="url(#flareGrad)"
-            className="animate-nodeIn"
-            style={{ animationDelay: n.delay }}
-          />
-        ))}
-
-        <circle cx="150" cy="150" r="48" fill="#09090b" stroke="#3f3f46" strokeWidth="1" />
-        <text
-          x="150"
-          y="160"
-          textAnchor="middle"
-          fill="url(#flareGrad)"
-          style={{ fontSize: "34px", fontWeight: 600, fontFamily: "var(--font-landing-mono)" }}
-        >
-          74
-        </text>
-        <text
-          x="150"
-          y="181"
-          textAnchor="middle"
-          className="fill-zinc-500"
-          style={{ fontSize: "9px", letterSpacing: "1.5px", fontFamily: "var(--font-landing-mono)" }}
-        >
-          RISK SCORE
-        </text>
-
-        <g className="animate-clusterTag">
-          <rect x="95" y="235" width="110" height="20" rx="10" fill="#18181b" stroke="#27272a" />
-          <text
-            x="150"
-            y="248"
-            textAnchor="middle"
-            fill="#9CA1AC"
-            style={{ fontSize: "9px", fontFamily: "var(--font-landing-mono)" }}
-          >
-            +3 new narrative
-          </text>
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-const navLinkClass =
-  "font-[family-name:var(--font-landing-mono)] text-xs font-bold uppercase tracking-wider text-zinc-400 transition-colors hover:text-white";
+const navLinkClass = "text-sm text-[#93A6C7] transition-colors hover:text-white";
 
 function Nav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="sticky top-3 z-40 mx-auto max-w-5xl px-3 sm:top-4 sm:px-4">
-      <header className="relative rounded-2xl border border-zinc-800 bg-zinc-950/80 shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-        <div className="flex items-center justify-between px-4 py-3 sm:px-5">
-          <span className="font-[family-name:var(--font-landing-mono)] text-lg font-bold tracking-widest text-[#FF5E00]">
-            XOOP
-          </span>
-
-          {/* Desktop actions */}
-          <div className="hidden items-center gap-5 sm:flex">
-            <Link href="/login" className={navLinkClass}>
-              Login
-            </Link>
-            <MagneticButton
-              as={motion.a}
-              href={`mailto:${CONTACT_EMAIL}`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 font-[family-name:var(--font-landing-mono)] text-xs font-bold uppercase tracking-wider text-zinc-950"
-            >
-              <Mail className="h-3.5 w-3.5" />
-              Request Access
-            </MagneticButton>
-          </div>
-
-          {/* Mobile menu toggle */}
-          <button
-            type="button"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-800 text-zinc-300 sm:hidden"
-          >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+    <nav
+      className="sticky top-0 z-40 border-b border-[#1C3355] bg-[#0A1526]/85 backdrop-blur-md"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
+      <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-5 sm:px-7">
+        <div className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-xl font-semibold">
+          <span className="h-[9px] w-[9px] rounded-full bg-[#2FD9C4] shadow-[0_0_0_4px_rgba(47,217,196,0.16)]" />
+          XOOP
         </div>
 
-        <AnimatePresence>
-          {open && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 32 }}
-              className="overflow-hidden sm:hidden"
-            >
-              <div className="flex flex-col gap-3 border-t border-zinc-800 px-4 py-4">
-                <Link href="/login" className={`${navLinkClass} py-2`} onClick={() => setOpen(false)}>
-                  Login
+        <div className="hidden items-center gap-8 sm:flex">
+          <a href="#framework" className={navLinkClass}>How it works</a>
+          <a href="#preview" className={navLinkClass}>Product</a>
+          <a href="#features" className={navLinkClass}>Features</a>
+          <a href="#benefits" className={navLinkClass}>Benefits</a>
+        </div>
+
+        <div className="hidden items-center gap-2.5 sm:flex">
+          <Link
+            href="/login"
+            className="rounded-lg border border-[#24406B] px-[19px] py-2.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
+          >
+            Sign in
+          </Link>
+          <MagneticButton
+            as={motion.a}
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="rounded-lg bg-[#2FD9C4] px-5 py-2.5 text-sm font-semibold text-[#06211C] transition-transform"
+          >
+            Request access
+          </MagneticButton>
+        </div>
+
+        <button
+          type="button"
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#24406B] text-white sm:hidden"
+        >
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 32 }}
+            className="overflow-hidden border-t border-[#1C3355] sm:hidden"
+          >
+            <div className="flex flex-col gap-1 px-5 py-4">
+              <a href="#framework" className={`${navLinkClass} py-2.5`} onClick={() => setOpen(false)}>How it works</a>
+              <a href="#preview" className={`${navLinkClass} py-2.5`} onClick={() => setOpen(false)}>Product</a>
+              <a href="#features" className={`${navLinkClass} py-2.5`} onClick={() => setOpen(false)}>Features</a>
+              <a href="#benefits" className={`${navLinkClass} py-2.5`} onClick={() => setOpen(false)}>Benefits</a>
+              <div className="mt-3 flex flex-col gap-3">
+                <Link
+                  href="/login"
+                  className="rounded-lg border border-[#24406B] px-4 py-3 text-center text-sm font-medium text-white"
+                >
+                  Sign in
                 </Link>
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-4 py-3 font-[family-name:var(--font-landing-mono)] text-xs font-bold uppercase tracking-wider text-zinc-950"
+                  className="rounded-lg bg-[#2FD9C4] px-4 py-3 text-center text-sm font-semibold text-[#06211C]"
                 >
-                  <Mail className="h-3.5 w-3.5" />
-                  Request Access
+                  Request access
                 </a>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </header>
-    </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </nav>
   );
 }
 
 function Hero() {
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start start", "end start"] });
-  const gridY = useTransform(scrollYProgress, [0, 1], ["0%", "18%"]);
-  const visualY = useTransform(scrollYProgress, [0, 1], ["0%", "-12%"]);
-  const textY = useTransform(scrollYProgress, [0, 1], ["0%", "8%"]);
-
   return (
-    <section ref={sectionRef} className="relative overflow-hidden">
-      <motion.div style={{ y: gridY }}>
-        <AnimatedGrid />
-      </motion.div>
-      <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-[clamp(2.5rem,6vw,4rem)] px-[clamp(1.25rem,4vw,3rem)] py-[clamp(5rem,14vw,9rem)] md:grid-cols-2">
-        <motion.div style={{ y: textY }}>
-          <Reveal>
-            <p className="mb-5 font-[family-name:var(--font-landing-mono)] text-xs uppercase tracking-[0.2em] text-[#FF5E00]/80">
-              eXecutive Online Opinion &amp; Perception
-            </p>
-            <h1 className="text-balance font-[family-name:var(--font-landing-display)] font-extrabold leading-[1.05] text-[clamp(2.25rem,4vw+1rem,4.25rem)]">
-              Your reputation, read the moment it changes.
-            </h1>
-            <p className="mt-6 max-w-lg text-[clamp(0.95rem,0.4vw+0.85rem,1.05rem)] leading-relaxed text-zinc-400">
-              XOOP continuously gathers what&apos;s being said about your company across the web
-              and turns it into a single, understandable picture of your reputation — sentiment,
-              risk, and trends in one place, instead of scattered across dozens of sources.
-            </p>
-            <div className="mt-10 flex flex-col gap-4 min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center">
-              <MagneticButton
-                as={motion.a}
-                href={`mailto:${CONTACT_EMAIL}`}
-                whileTap={{ scale: 0.96 }}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#FF5E00] px-5 py-3.5 text-sm font-bold uppercase tracking-wider text-[#1A0900]"
-              >
-                Request Access
-                <ArrowRight className="h-4 w-4" />
-              </MagneticButton>
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-800 px-5 py-3.5 text-sm font-bold uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-700 hover:text-white"
-              >
-                Existing client login
-              </Link>
-            </div>
-            <p className="mt-6 text-xs text-zinc-500">
-              XOOP is a closed-loop platform for onboarded clients. New accounts are set up by our
-              team — reach out at{" "}
-              <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-400 underline decoration-dotted hover:text-[#FF5E00]">
-                {CONTACT_EMAIL}
-              </a>
-              .
-            </p>
-          </Reveal>
-        </motion.div>
+    <header className="pb-16 pt-[88px]">
+      <div className="mx-auto max-w-6xl px-5 sm:px-7">
+        <Reveal>
+          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.86rem] font-medium text-[#2FD9C4]">
+            <span className="relative flex h-[7px] w-[7px]">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#2FD9C4] opacity-60" />
+              <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#2FD9C4]" />
+            </span>
+            Reputation Intelligence, not just monitoring
+          </div>
 
-        <motion.div style={{ y: visualY }}>
-          <Reveal>
-            <HeroVisual />
-          </Reveal>
-        </motion.div>
+          <h1 className="max-w-[16ch] text-balance font-[family-name:var(--font-landing-display)] font-medium leading-[1.08] text-white text-[clamp(2.3rem,5vw,3.6rem)]">
+            We don&apos;t just tell you what happened. We tell you{" "}
+            <em className="not-italic italic text-[#2FD9C4]">why it matters</em> and what to do next.
+          </h1>
+
+          <p className="mt-6 max-w-[58ch] text-[1.14rem] leading-relaxed text-[#93A6C7]">
+            Listening and monitoring tools show you the noise. XOOP connects conversations,
+            behaviour, search and stakeholder signals into one picture — so your team can act
+            on a shift before it becomes a headline, not after.
+          </p>
+
+          <div className="mt-9 flex flex-wrap gap-3.5">
+            <MagneticButton
+              as={motion.a}
+              href={`mailto:${CONTACT_EMAIL}`}
+              whileTap={{ scale: 0.96 }}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#2FD9C4] px-5 py-3.5 text-sm font-semibold text-[#06211C]"
+            >
+              <Mail className="h-4 w-4" />
+              Request access
+            </MagneticButton>
+            <a
+              href="#preview"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#24406B] px-5 py-3.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
+            >
+              See the product ↓
+            </a>
+          </div>
+
+          <p className="mt-6 text-xs text-[#5D719A]">
+            XOOP is a closed-loop platform for onboarded clients. New accounts are set up by our
+            team — reach out at{" "}
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#93A6C7] underline decoration-dotted">
+              {CONTACT_EMAIL}
+            </a>
+            .
+          </p>
+        </Reveal>
+
+        <Reveal>
+          <div className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#1C3355] bg-[#1C3355] sm:grid-cols-2">
+            <div className="bg-[#11213B] p-8">
+              <div className="text-[0.8rem] text-[#5D719A]">Monitoring &amp; listening tools</div>
+              <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-white">
+                Tell you what happened.
+              </div>
+            </div>
+            <div className="bg-[#1A3155] p-8">
+              <div className="text-[0.8rem] text-[#5D719A]">XOOP</div>
+              <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-[#2FD9C4]">
+                Tells you why it happened, what&apos;s likely next, and what to do about it.
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </header>
+  );
+}
+
+const framework = [
+  { word: "What", title: "What's actually happening right now", copy: "Every signal across every channel resolved into one clear read — a rising risk, a sentiment shift, an emerging alert — not a wall of raw mentions to sort through yourself." },
+  { word: "Where", title: "Where the conversation is happening", copy: "Press, social, forums, video — broken out by source, so you know immediately if it's one contained post or breaking across five channels at once." },
+  { word: "Why", title: "Why it's happening", copy: "The real story, topic, or stakeholder driving the shift — root-cause context tied to actual coverage, not just a number that moved without explanation." },
+  { word: "When", title: "When it started, and where it's heading", copy: "Trend direction over time, not a static score — improving, stable, or declining, and since when, so you can act before it compounds." },
+  { word: "Whom", title: "Whom it affects", copy: "Reputation risk is rarely abstract. We name the executive, the stakeholder, or the specific story actually carrying the coverage." },
+  { word: "How", title: "How to respond", copy: "A clear read on what's driving the number and what needs attention first — so your team acts on signal, not on noise." },
+];
+
+function SectionHead({ title, copy }: { title: string; copy: string }) {
+  return (
+    <div className="mb-[52px] max-w-[62ch]">
+      <h2 className="text-balance font-[family-name:var(--font-landing-display)] font-medium text-white text-[clamp(1.7rem,3.4vw,2.4rem)]">
+        {title}
+      </h2>
+      <p className="mt-3.5 text-[1.03rem] leading-relaxed text-[#93A6C7]">{copy}</p>
+    </div>
+  );
+}
+
+function Framework() {
+  return (
+    <section id="framework" className="border-t border-[#1C3355] py-24">
+      <div className="mx-auto max-w-6xl px-5 sm:px-7">
+        <Reveal>
+          <SectionHead
+            title="Every reputation problem has six real questions. We answer all of them."
+            copy="Not a feed of mentions — a straight answer to the six questions your comms team actually has to answer for leadership, every time something moves."
+          />
+        </Reveal>
+
+        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#1C3355] bg-[#1C3355] sm:grid-cols-2 lg:grid-cols-3">
+          {framework.map((f) => (
+            <RevealItem key={f.word}>
+              <div className="h-full min-h-[190px] bg-[#11213B] p-7 transition-colors hover:bg-[#152A4A]">
+                <div className="mb-3.5 font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#2FD9C4]">
+                  {f.word}
+                </div>
+                <h3 className="mb-2.5 text-[1.14rem] font-medium leading-tight text-white">{f.title}</h3>
+                <p className="text-[0.93rem] leading-relaxed text-[#93A6C7]">{f.copy}</p>
+              </div>
+            </RevealItem>
+          ))}
+        </RevealGroup>
       </div>
     </section>
   );
 }
 
-const features = [
-  {
-    icon: LayoutDashboard,
-    title: "Unified reputation view",
-    copy: "A single score and summary that pulls together everything being said about your company, updated as new coverage comes in.",
-    span: "lg:col-span-2",
-  },
-  {
-    icon: Activity,
-    title: "Sentiment & topic tracking",
-    copy: "See not just how you're being talked about, but what's driving the conversation.",
-    span: "",
-  },
-  {
-    icon: ShieldAlert,
-    title: "Risk & alert detection",
-    copy: "Get flagged on developing issues — critical coverage, negative narratives, or unusual spikes in attention.",
-    span: "",
-  },
-  {
-    icon: TrendingUp,
-    title: "Trend visibility over time",
-    copy: "Track how sentiment and reputation move over weeks and months, not just a single point-in-time snapshot.",
-    span: "lg:col-span-2",
-  },
+function MockPanel({ title, children, noPadding = false }: { title: string; children: React.ReactNode; noPadding?: boolean }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[#1C3355] bg-[#11213B]">
+      <div className="flex items-center gap-2 border-b border-[#1C3355] bg-[#152A4A] px-4 py-3">
+        <span className="h-2 w-2 rounded-full bg-[#24406B]" />
+        <span className="h-2 w-2 rounded-full bg-[#24406B]" />
+        <span className="h-2 w-2 rounded-full bg-[#24406B]" />
+        <span className="ml-1.5 text-[0.78rem] tracking-wide text-[#5D719A]">{title}</span>
+      </div>
+      <div className={noPadding ? "" : "p-5"}>{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Real product screenshots (Anthropic -- richest real data across this
+ * project), captured live and supplied by the team, replacing the
+ * illustrative mocks the v1 draft shipped with. `aspect` matches each
+ * source image's own proportions so `object-cover` never crops into
+ * meaningful content; `objectPosition` favors whichever edge (top for
+ * stat-row panels, left/center for wide multi-column ones) keeps the real
+ * subject matter in frame.
+ */
+function ScreenshotPanel({
+  title,
+  src,
+  alt,
+  aspect = "aspect-[16/10]",
+  objectPosition = "top",
+}: {
+  title: string;
+  src: string;
+  alt: string;
+  aspect?: string;
+  objectPosition?: string;
+}) {
+  return (
+    <MockPanel title={title} noPadding>
+      <div className={`relative w-full ${aspect} overflow-hidden`}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- static
+            marketing screenshots served from /public, not a page needing
+            next/image's responsive-loader pipeline. */}
+        <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition }} />
+      </div>
+    </MockPanel>
+  );
+}
+
+function ProductPreview() {
+  return (
+    <section id="preview" className="py-24">
+      <div className="mx-auto max-w-6xl px-5 sm:px-7">
+        <Reveal>
+          <SectionHead title="Inside the platform" copy="A live look at how XOOP turns raw coverage into a decision." />
+        </Reveal>
+
+        <RevealGroup className="grid grid-cols-1 gap-[18px] lg:grid-cols-2">
+          <RevealItem>
+            <ScreenshotPanel
+              title="BRAND EQUITY — OVERVIEW"
+              src="/landing/brand-equity.png"
+              alt="XOOP Brand Equity overview: reputation score, risk profile, sentiment, and competitive standing for a tracked client"
+              aspect="aspect-[4/3]"
+            />
+          </RevealItem>
+          <RevealItem>
+            <ScreenshotPanel
+              title="RISK CENTER — ACTIVE ALERTS"
+              src="/landing/active-alerts.png"
+              alt="XOOP Risk Center: total risk counts, active critical alerts, and the likelihood-by-impact risk matrix"
+              aspect="aspect-[4/3]"
+            />
+          </RevealItem>
+        </RevealGroup>
+        <RevealGroup className="mt-[18px] grid grid-cols-1 gap-[18px] sm:grid-cols-2">
+          <RevealItem>
+            <ScreenshotPanel
+              title="REAL-TIME INTELLIGENCE STREAM"
+              src="/landing/intelligence-stream.png"
+              alt="XOOP real-time brand ingest stream, showing matched coverage scored and tagged as it arrives across RSS, YouTube, Instagram, and Reddit"
+              aspect="aspect-[4/3]"
+            />
+          </RevealItem>
+          <RevealItem>
+            <ScreenshotPanel
+              title="COMPETITOR HEAD-TO-HEAD"
+              src="/landing/competitor-radar.png"
+              alt="XOOP competitor head-to-head radar comparing reputation, sentiment, risk containment, and share of voice"
+              aspect="aspect-[4/3]"
+            />
+          </RevealItem>
+        </RevealGroup>
+        <RevealGroup className="mt-[18px] grid grid-cols-1">
+          <RevealItem>
+            <ScreenshotPanel
+              title="PRODUCT COMPARE"
+              src="/landing/product-compare.png"
+              alt="XOOP Product Compare: two competing products benchmarked side by side on reputation, rank, risk, share of voice, and signature stories"
+              aspect="aspect-[16/9]"
+              objectPosition="top"
+            />
+          </RevealItem>
+        </RevealGroup>
+
+        <p className="mt-[18px] text-center text-[0.86rem] text-[#5D719A]">
+          Real screenshots from the live platform, tracking Anthropic.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+const featureRows = [
+  { title: "Real-time, multi-channel monitoring", copy: "Press, RSS, social, video and forum coverage collected continuously across every client you manage, matched automatically to the right brand, executive, or competitor." },
+  { title: "AI-scored sentiment and risk on every mention", copy: "Every piece of coverage is scored for sentiment and risk the moment it's ingested — so a single alarming article is never buried in a feed of routine mentions." },
+  { title: "Executive reputation tracking", copy: "Individual leaders get their own reputation score, grade, and a plain-language explanation of what's actually driving it — not just a number with no context." },
+  { title: "Competitor benchmarking", copy: "Share of voice, sentiment comparison, and topic ownership against every competitor you track — a real head-to-head, not a guess based on gut feel." },
+  { title: "Automated risk alerts", copy: "Critical shifts surface immediately, scored and prioritised, instead of waiting for someone to notice a bad headline in their inbox." },
+  { title: "One dashboard, every client", copy: "Switch between every brand your team manages from a single login — the same rigour applied consistently, account to account." },
 ];
+
+function Features() {
+  return (
+    <section id="features" className="border-t border-[#1C3355] py-24">
+      <div className="mx-auto max-w-6xl px-5 sm:px-7">
+        <Reveal>
+          <SectionHead title="What's under the hood" copy="Everything you need to move from &quot;we saw a mention&quot; to &quot;here's what we're doing about it.&quot;" />
+        </Reveal>
+
+        <RevealGroup className="flex flex-col">
+          {featureRows.map((f, idx) => (
+            <RevealItem key={f.title}>
+              <div className={`grid grid-cols-1 items-baseline gap-2.5 py-8 sm:grid-cols-[2fr_3fr] sm:gap-10 ${idx > 0 ? "border-t border-[#1C3355]" : ""}`}>
+                <h3 className="text-[1.28rem] font-medium text-white">{f.title}</h3>
+                <p className="max-w-[56ch] text-[0.98rem] leading-relaxed text-[#93A6C7]">{f.copy}</p>
+              </div>
+            </RevealItem>
+          ))}
+        </RevealGroup>
+      </div>
+    </section>
+  );
+}
+
+const benefitCells = [
+  { title: "Spot a shift before it's a headline", copy: "Emerging issues, crisis signals, and stakeholder concerns surface while they're still manageable — not after a journalist has already called." },
+  { title: "Walk into every client call with an answer", copy: "No more \"let me get back to you.\" What changed, why, and what's next is already on the dashboard when the question comes." },
+  { title: "Prove the value of your comms work", copy: "A real, defensible reputation score your team can point to — trending in a direction you can explain, not a vague sense that things are \"going fine.\"" },
+  { title: "Act on signal, not on noise", copy: "Stop scrolling raw mentions to guess what matters. The platform tells you what's worth your attention today, and what isn't." },
+];
+
+function Benefits() {
+  return (
+    <section id="benefits" className="border-t border-[#1C3355] bg-[#11213B] py-24">
+      <div className="mx-auto max-w-6xl px-5 sm:px-7">
+        <Reveal>
+          <SectionHead title="What this actually changes for your team" copy="Not features for their own sake — the outcomes they're built for." />
+        </Reveal>
+
+        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#1C3355] bg-[#1C3355] sm:grid-cols-2">
+          {benefitCells.map((b) => (
+            <RevealItem key={b.title}>
+              <div className="h-full bg-[#11213B] p-8">
+                <span className="mb-3.5 block font-[family-name:var(--font-landing-display)] text-2xl text-[#2FD9C4]">—</span>
+                <h3 className="mb-2 text-[1.1rem] font-medium text-white">{b.title}</h3>
+                <p className="text-[0.94rem] leading-relaxed text-[#93A6C7]">{b.copy}</p>
+              </div>
+            </RevealItem>
+          ))}
+        </RevealGroup>
+      </div>
+    </section>
+  );
+}
+
+function FinalCTA() {
+  return (
+    <section className="py-[100px] text-center">
+      <div className="mx-auto max-w-3xl px-5 sm:px-7">
+        <Reveal>
+          <span className="inline-flex items-center rounded-full border border-[#24406B] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-[#93A6C7]">
+            Now onboarding Q1 clients
+          </span>
+          <h2 className="mx-auto mt-5 max-w-[20ch] text-balance font-[family-name:var(--font-landing-display)] font-medium text-white text-[clamp(1.8rem,4vw,2.6rem)]">
+            See what your reputation data has been trying to tell you.
+          </h2>
+          <p className="mt-4 text-[1.05rem] text-[#93A6C7]">Book a walkthrough with the team behind XOOP.</p>
+          <div className="mt-8 flex justify-center">
+            <MagneticButton
+              as={motion.a}
+              href={`mailto:${CONTACT_EMAIL}`}
+              whileTap={{ scale: 0.96 }}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#2FD9C4] px-6 py-3.5 text-sm font-semibold text-[#06211C]"
+            >
+              <Mail className="h-4 w-4" />
+              Request access
+              <ArrowRight className="h-4 w-4" />
+            </MagneticButton>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
 
 export default function WelcomePage() {
   return (
     <div
-      className={`${display.variable} ${body.variable} ${dataMono.variable} min-h-screen overflow-x-hidden bg-zinc-950 text-zinc-50 font-[family-name:var(--font-landing-body)] selection:bg-[#FF5E00] selection:text-zinc-950`}
+      className={`${display.variable} ${body.variable} min-h-screen overflow-x-hidden bg-[#0A1526] font-[family-name:var(--font-landing-body)] text-white`}
     >
       <Nav />
       <Hero />
-
-      {/* PIPELINE — how mentions become a score, shown as flowing data */}
-      <section className="border-t border-zinc-900 bg-zinc-950 py-[clamp(4rem,10vw,7rem)]">
-        <div className="mx-auto max-w-6xl px-[clamp(1.25rem,4vw,3rem)]">
-          <Reveal>
-            <div className="mb-4 max-w-2xl">
-              <h2 className="text-balance font-[family-name:var(--font-landing-display)] font-bold text-[clamp(1.75rem,2vw+1.25rem,2.5rem)]">
-                How mentions become a score
-              </h2>
-              <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-                No dashboards to babysit and no manual searching. Every source XOOP watches feeds
-                the same pipeline, continuously.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal>
-            <PipelineBeams />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* BENTO — feature grid with mouse-tracking spotlight borders */}
-      <section className="border-t border-zinc-900 py-[clamp(4rem,10vw,7rem)]">
-        <div className="mx-auto max-w-6xl px-[clamp(1.25rem,4vw,3rem)]">
-          <Reveal>
-            <h2 className="mb-12 text-balance font-[family-name:var(--font-landing-display)] font-bold text-[clamp(1.75rem,2vw+1.25rem,2.5rem)] sm:mb-16">
-              What you get
-            </h2>
-          </Reveal>
-
-          <RevealGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <RevealItem key={f.title} className={f.span}>
-                <SpotlightCard className="h-full">
-                  <div className="flex gap-4 p-5 sm:p-6">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#FF5E00]/30 bg-[#FF5E00]/10">
-                      <f.icon className="h-5 w-5 text-[#FF5E00]" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold tracking-tight text-zinc-50">{f.title}</h3>
-                      <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{f.copy}</p>
-                    </div>
-                  </div>
-                </SpotlightCard>
-              </RevealItem>
-            ))}
-          </RevealGroup>
-        </div>
-      </section>
-
-      {/* FINAL CTA — border-beam card */}
-      <section className="border-t border-zinc-900 py-[clamp(4rem,10vw,7rem)]">
-        <div className="mx-auto max-w-3xl px-[clamp(1.25rem,4vw,3rem)]">
-          <Reveal>
-            <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/60 p-[clamp(2rem,6vw,3.5rem)] text-center">
-              <BorderBeam duration={7} />
-              <BorderBeam duration={7} />
-              <div className="relative">
-                <div className="mb-5 flex justify-center">
-                  <ShimmerBadge>Now onboarding Q1 clients</ShimmerBadge>
-                </div>
-                <h2 className="text-balance font-[family-name:var(--font-landing-display)] font-bold text-[clamp(1.75rem,2vw+1.25rem,2.5rem)]">
-                  See your score before it becomes a headline.
-                </h2>
-                <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-zinc-400">
-                  Request access and we&apos;ll walk you through what XOOP is already tracking for
-                  companies like yours.
-                </p>
-                <MagneticButton
-                  as={motion.a}
-                  href={`mailto:${CONTACT_EMAIL}`}
-                  whileTap={{ scale: 0.96 }}
-                  className="mt-8 inline-flex items-center justify-center gap-2 rounded-lg bg-[#FF5E00] px-6 py-3.5 text-sm font-bold uppercase tracking-wider text-[#1A0900]"
-                >
-                  Request Access
-                  <ArrowRight className="h-4 w-4" />
-                </MagneticButton>
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
+      <Framework />
+      <ProductPreview />
+      <Features />
+      <Benefits />
+      <FinalCTA />
 
       {/* PARENT COMPANY */}
-      <section className="border-t border-zinc-900 bg-zinc-950 py-[clamp(3.5rem,8vw,6rem)]">
-        <div className="mx-auto max-w-3xl px-[clamp(1.25rem,4vw,3rem)] text-center">
+      <section className="border-t border-[#1C3355] py-16">
+        <div className="mx-auto max-w-3xl px-5 text-center sm:px-7">
           <Reveal>
-            <p className="font-[family-name:var(--font-landing-mono)] text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-              Built by
-            </p>
-            <h2 className="mt-3 font-[family-name:var(--font-landing-display)] text-xl font-bold">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[#5D719A]">Built by</p>
+            <h2 className="mt-3 font-[family-name:var(--font-landing-display)] text-xl font-medium text-white">
               Onlyne Reputation
             </h2>
-            <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+            <p className="mt-4 text-sm leading-relaxed text-[#93A6C7]">
               XOOP is Onlyne Reputation&apos;s reputation intelligence product — the same team
               that supports our clients&apos; broader reputation management work builds and
               operates the platform behind it.
@@ -403,117 +481,23 @@ export default function WelcomePage() {
       </section>
 
       {/* FOOTER */}
-      <footer className="border-t border-zinc-900 py-10 sm:py-12">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-[clamp(1.25rem,4vw,3rem)] text-center">
-          <span className="font-[family-name:var(--font-landing-mono)] text-sm font-bold tracking-widest text-[#FF5E00]">
+      <footer
+        className="border-t border-[#1C3355] py-[34px]"
+        style={{ paddingBottom: "calc(34px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 sm:px-7">
+          <div className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-[1.05rem] font-semibold">
+            <span className="h-[9px] w-[9px] rounded-full bg-[#2FD9C4]" />
             XOOP
-          </span>
-          <p className="text-xs text-zinc-500">
+          </div>
+          <p className="text-[0.82rem] text-[#5D719A]">
             A product of Onlyne Reputation ·{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-400 underline decoration-dotted hover:text-[#FF5E00]">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#93A6C7] underline decoration-dotted">
               {CONTACT_EMAIL}
             </a>
           </p>
         </div>
       </footer>
-
-      <style jsx global>{`
-        @keyframes nodeIn {
-          0% {
-            opacity: 0;
-            transform: scale(0.4);
-          }
-          18% {
-            opacity: 1;
-            transform: scale(1);
-          }
-          75% {
-            opacity: 1;
-            transform: scale(1);
-          }
-          92%,
-          100% {
-            opacity: 0;
-          }
-        }
-        @keyframes flareSweep {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        @keyframes clusterTag {
-          0%,
-          55% {
-            opacity: 0;
-            transform: translateY(4px);
-          }
-          68% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-          88% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-          }
-        }
-        @keyframes gridPan {
-          from {
-            background-position: 0 0, 0 0;
-          }
-          to {
-            background-position: 64px 64px, 64px 64px;
-          }
-        }
-        @keyframes borderBeam {
-          from {
-            offset-distance: 0%;
-          }
-          to {
-            offset-distance: 100%;
-          }
-        }
-        @keyframes shimmerText {
-          from {
-            background-position: 200% 0;
-          }
-          to {
-            background-position: -200% 0;
-          }
-        }
-        .animate-nodeIn {
-          animation: nodeIn 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-        }
-        .animate-flareSweep {
-          animation: flareSweep 3.2s linear infinite;
-        }
-        .animate-clusterTag {
-          animation: clusterTag 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-        }
-        .animate-gridPan {
-          animation: gridPan 14s linear infinite;
-        }
-        .animate-borderBeam {
-          animation: borderBeam linear infinite;
-        }
-        .animate-borderBeam:nth-of-type(2) {
-          animation-delay: -3.5s;
-        }
-        .animate-shimmerText {
-          animation: shimmerText 2.5s linear infinite;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .animate-nodeIn,
-          .animate-flareSweep,
-          .animate-clusterTag,
-          .animate-gridPan,
-          .animate-borderBeam,
-          .animate-shimmerText {
-            animation: none !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
