@@ -114,7 +114,20 @@ export function ReputationSummaryCard({
   // executive uses the same `.score` field and `?? 0` fallback as
   // ExecutivesTab's summary memo (ExecutivesTab.tsx lines 97-99).
   const execStats = useMemo(() => {
-    const mostMentioned = [...executives].sort((a, b) => (b.mention_count || 0) - (a.mention_count || 0))[0]?.name || "None Detected";
+    // `document_count` (client_intelligence.py's get_client_executives) is
+    // the same real, already-computed mention count ExecutivesTab's
+    // gradeDriverLine already surfaces per-executive -- previously this
+    // sorted by `mention_count`, a field that never existed anywhere in
+    // this response, so it silently showed whichever executive the DB
+    // happened to return first. Only executives with a real count are
+    // considered; a name tiebreak keeps ties deterministic instead of
+    // depending on incidental DB row order.
+    // null (not a placeholder string) when there's no executive to name --
+    // callers must handle the zero-executive case explicitly rather than
+    // rendering this value unconditionally into name-shaped UI.
+    const mostMentioned = [...executives]
+      .filter(e => typeof e.document_count === "number")
+      .sort((a, b) => (b.document_count - a.document_count) || a.name.localeCompare(b.name))[0]?.name || null;
     const sortedByScore = [...executives].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     const highest = sortedByScore[0] || null;
     const lowest = sortedByScore.length > 0 ? sortedByScore[sortedByScore.length - 1] : null;
@@ -158,6 +171,14 @@ export function ReputationSummaryCard({
   const gradeDisplay = scoreKnown ? (rep.grade ?? "N/A") : "N/A";
   const trendDisplay = rep.trend ?? "STABLE";
   const sovDisplay = clientSOV.toFixed(1);
+  // Trend Direction only updates when this client's pipeline is re-run
+  // (Phase 15 -- collection/aggregation is trigger-driven, not continuous),
+  // so it can go stale between runs with zero indication. Understated
+  // context, not a warning -- same short-date convention CompetitorsTab's
+  // PUBLISHED DATE column already uses.
+  const trendAsOf = rep.computed_at
+    ? new Date(rep.computed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null;
 
   const alertNames = execAlert.open && execAlert.alert?.entity_name ? execAlert.alert.entity_name : null;
   const alertSeverity = execAlert.open ? execAlert.alert?.severity ?? null : null;
@@ -263,11 +284,20 @@ export function ReputationSummaryCard({
   }> = [
     { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}` : "", color: "text-[#D4AF37]", highlight: true, def: reputationScoreAndGradeDef },
     { label: "Risk Signals", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.dangerCount, sub: "Critical + High", color: riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
-    { label: "Trend Direction", value: trendDisplay, sub: "Reputation momentum", color: "text-sky-500", highlight: true, compactValue: true },
+    { label: "Trend Direction", value: trendDisplay, sub: trendAsOf ? `Reputation momentum · as of ${trendAsOf}` : "Reputation momentum", color: "text-sky-500", highlight: true, compactValue: true },
     { label: "Total Risks Tracked", value: documentsLoading ? LOADING_PLACEHOLDER : riskStats.total, sub: severityBreakdownSub, color: RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Signals", value: sentiment.positive, sub: "Positive-sentiment entity mentions", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
     { label: "Dominant Sentiment", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive}/${sentiment.neutral}/${sentiment.negative} mentions`, color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
-    { label: "Most Mentioned Person", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.mostMentioned, sub: "Overall visibility", color: "text-sky-500" },
+    {
+      label: "Most Mentioned Person",
+      value: executivesLoading
+        ? LOADING_PLACEHOLDER
+        : execStats.mostMentioned ?? (
+            <span className={`text-sm font-normal normal-case ${mutedText(theme)}`}>No executives tracked yet</span>
+          ),
+      sub: "Overall visibility",
+      color: "text-sky-500",
+    },
     { label: "Notable People Tracked", value: executivesLoading ? LOADING_PLACEHOLDER : execStats.total, sub: "Mentioned in coverage, not necessarily this client's own staff", color: "text-sky-500" },
     { label: "Competitor Rank / Share of Voice", value: clientRank, sub: `${sovDisplay}% share of voice`, color: "text-sky-500", def: <CompetitorRankShareOfVoiceDefinition /> },
     { label: "Executive Alerts", value: execAlert.open ? 1 : 0, sub: alertTileSub, color: execAlert.open ? "text-red-500" : "text-emerald-500" },
@@ -398,7 +428,9 @@ export function ReputationSummaryCard({
             <div>
               <span className={sectionLabelClass(isDark)}>Notable People in Coverage</span>
               <p className={sectionTextClass(isDark)}>
-                {execStats.mostMentioned} is the most-mentioned person, out of {execStats.total} notable people tracked in {activeClientName}'s coverage (not necessarily {activeClientName}'s own staff).
+                {execStats.mostMentioned
+                  ? <>{execStats.mostMentioned} is the most-mentioned person, out of {execStats.total} notable people tracked in {activeClientName}'s coverage (not necessarily {activeClientName}'s own staff).</>
+                  : <>No notable people have been tracked yet in {activeClientName}'s coverage.</>}
                 {execStats.highest && execStats.lowest && execStats.highest !== execStats.lowest && (
                   <> {execStats.highest.name} has the highest sentiment score in this coverage ({(execStats.highest.score ?? 0).toFixed(1)}), while {execStats.lowest.name} has the lowest ({(execStats.lowest.score ?? 0).toFixed(1)}).</>
                 )}

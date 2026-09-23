@@ -313,7 +313,14 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
         "trend": s.reputation_trend,
         "confidence_score": s.confidence_score,
         "data_coverage": s.data_coverage,
-        "health_status": s.health_status
+        "health_status": s.health_status,
+        # Same already-computed value _executive_payload below exposes for
+        # the search flow (calculation_lineage.raw_values.document_count,
+        # written once per row by executive_reputation_engine.py) -- not a
+        # second computation. Brand Equity's "Most Mentioned Person" tile
+        # previously sorted by a `mention_count` field that never existed
+        # anywhere in this response or the underlying table.
+        "document_count": (s.calculation_lineage or {}).get("raw_values", {}).get("document_count")
     } for s in scores]
 
 @router.get("/{client_id}/executive-history", response_model=Dict[str, List[Dict[str, Any]]])
@@ -1371,11 +1378,11 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         ReputationScore.created_at.desc(), ReputationScore.id.desc()
     ).first()
     if not rep:
-        reputation = {"score": None, "grade": None, "trend": "INSUFFICIENT_DATA", "status": "no_data"}
+        reputation = {"score": None, "grade": None, "trend": "INSUFFICIENT_DATA", "status": "no_data", "computed_at": None}
     elif rep.score is None:
-        reputation = {"score": None, "grade": None, "trend": rep.reputation_trend, "status": "insufficient_evidence"}
+        reputation = {"score": None, "grade": None, "trend": rep.reputation_trend, "status": "insufficient_evidence", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
     else:
-        reputation = {"score": rep.score, "grade": rep.grade, "trend": rep.reputation_trend, "status": "ok"}
+        reputation = {"score": rep.score, "grade": rep.grade, "trend": rep.reputation_trend, "status": "ok", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
 
     # 2. Risk -- full count by severity (not last-50-limited like get_client_risks),
     # plus the single most severe CRITICAL/HIGH event if one exists.
@@ -1520,22 +1527,57 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 @router.get("/{client_id}/plan-advisory", response_model=Dict[str, Any])
 def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
     """
-    Brand Equity page's "Plan Advisory" card: a ~60-100 word digest of
-    what's actually wrong right now and what to do about it, sitting
-    directly below the Overview card.
+    Brand Equity page's "What to do about it" card: a short, deterministic
+    digest of what's actually wrong right now, sitting directly below the
+    Overview card.
 
-    Narrative Cluster removal (2026-09-19): this card's entire content used
-    to be built from top risk-worthy narratives' own root_cause/
-    recommended_action fields (an LLM-composed lead + action bullets, cached
-    in Redis). Narratives no longer generate, so there is nothing left to
-    build that content from -- this always returns the same deterministic
-    "nothing to flag" response now, same effective behavior as the
-    old code's own already-coded empty-state path for a client with zero
-    risk-worthy narratives.
+    Narrative Cluster removal (2026-09-19): this card's content used to be
+    built from top risk-worthy narratives' own root_cause/recommended_action
+    fields (LLM-composed). Narratives no longer generate, so as of that
+    removal this always returned the same hardcoded "nothing to flag" text
+    for every client, forever -- not wrong data, just permanently no real
+    data.
+
+    Rebuilt (2026-09-23) off get_client_reputation_summary's own already-
+    computed executive_alert/risk/most_severe fields instead -- the same
+    real, deterministic signals, not narratives or a second LLM call.
+    Priority mirrors ReputationSummaryCard.tsx's own top-of-page verdict: an
+    open executive alert first (most urgent), then the client's current
+    highest-severity risk item, else the honest "nothing to flag" state --
+    which is now only shown when true for this client, not a permanent
+    default.
     """
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
+
+    summary = get_client_reputation_summary(client_id, Response(), db)
+    risk = summary["risk"]
+    exec_alert = summary["executive_alert"]
+
+    if exec_alert.get("open") and exec_alert.get("alert"):
+        alert = exec_alert["alert"]
+        severity = (alert.get("severity") or "critical").lower()
+        entity_name = alert.get("entity_name") or "an executive"
+        lead = f"An open {severity} executive-risk alert on {entity_name} needs review."
+        bullets = [alert["title"]] if alert.get("title") else []
+        if risk.get("critical") or risk.get("high"):
+            bullets.append(f"{risk.get('critical', 0)} critical / {risk.get('high', 0)} high risk item(s) also currently tracked.")
+        return {"lead": lead, "bullets": bullets}
+
+    most_severe = risk.get("most_severe")
+    if most_severe:
+        level = (most_severe.get("level") or "").capitalize()
+        entity_name = most_severe.get("entity_name")
+        factor = most_severe.get("factor")
+        lead = (
+            f"{level} risk currently flagged"
+            + (f" for {entity_name}" if entity_name else "")
+            + (f", driven primarily by {factor}" if factor else "")
+            + "."
+        )
+        bullets = [f"{risk.get('critical', 0)} critical, {risk.get('high', 0)} high risk item(s) currently tracked."]
+        return {"lead": lead, "bullets": bullets}
 
     return {"lead": "Nothing significant to flag right now.", "bullets": []}
 
