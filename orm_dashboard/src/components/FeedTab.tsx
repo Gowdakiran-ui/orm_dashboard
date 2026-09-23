@@ -3,15 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
-import { 
-  FileText, Globe, Users, ShieldAlert, Activity,
-  ExternalLink, Cpu, Calendar, TrendingUp, CheckCircle2,
-  AlertTriangle, Info, Sparkles, Clock, BarChart2, X
+import {
+  Activity,
+  ExternalLink, Cpu, TrendingUp, CheckCircle2,
+  AlertTriangle, Info, Sparkles, Clock, X
 } from "lucide-react";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -104,144 +103,21 @@ export function FeedTab({
       });
   }, [selectedDocId, clientId]);
 
-  // Section 1: Executive KPI Calculations
-  const metrics = useMemo(() => {
-    const totalDocs = documents.length;
-    const uniqueSources = new Set(documents.map(d => d.source).filter(Boolean)).size;
-    const totalExecutivesCount = executives.length;
-    // documents.py defaults `risk` to 0.0 via a dict-lookup (risk_map.get(id,
-    // 0.0)) for any document with no RiskEvent row at all -- indistinguishable
-    // from a real risk_score of exactly 0 by value alone. `risk_explainability`
-    // (same dict-lookup pattern, defaults to null) is only ever set when a real
-    // RiskEvent row exists, so it's the reliable signal here. Matches the same
-    // "average only over documents with real evidence" convention
-    // executive_reputation_engine.py already uses for its own risk component
-    // (averages over `supporting_risks`, actual RiskEvent rows, not every
-    // doc_id defaulted to 0) -- the more general fit than
-    // ReputationSummaryCard's `risk > LOW_TO_MEDIUM` filter, which
-    // deliberately excludes real LOW-risk documents too (a different metric:
-    // "severity of flagged incidents", not "average risk across evaluated
-    // documents"). Both reference implementations divide by the filtered
-    // count, not the full document count -- same here.
-    const riskEvaluatedDocs = documents.filter(d => d && d.risk_explainability != null);
-    const avgRisk = riskEvaluatedDocs.length > 0
-      ? Math.round(riskEvaluatedDocs.reduce((acc, d) => acc + (d.risk || 0), 0) / riskEvaluatedDocs.length)
-      : 0;
-
-    // Documents processed today (timestamp within 24h)
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const processedToday = documents.filter(d => d.timestamp && new Date(d.timestamp).getTime() > oneDayAgo).length;
-
-    return {
-      totalDocs,
-      uniqueSources: uniqueSources || systemStatus?.active_feeds || 4,
-      totalExecutivesCount,
-      avgRisk,
-      processedToday: processedToday || Math.min(totalDocs, 6)
-    };
-  }, [documents, executives, systemStatus]);
-
-  // Section 2: Timeline Chart Data (grouped by date)
-  const timelineData = useMemo(() => {
-    const datesMap: Record<string, number> = {};
-    documents.forEach(d => {
-      if (d.timestamp) {
-        const dateStr = new Date(d.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        datesMap[dateStr] = (datesMap[dateStr] || 0) + 1;
-      }
-    });
-
-    // Convert map to sorted array
-    const sorted = Object.entries(datesMap)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    // Fallback if empty
-    if (sorted.length === 0) {
-      return [
-        { date: "Jul 12", count: 2 },
-        { date: "Jul 13", count: 4 },
-        { date: "Jul 14", count: 8 },
-        { date: "Jul 15", count: 5 },
-        { date: "Jul 16", count: 12 },
-        { date: "Jul 17", count: 7 },
-        { date: "Jul 18", count: documents.length || 10 }
-      ];
-    }
-    return sorted;
-  }, [documents]);
-
-  const maxTimelineCount = useMemo(() => {
-    return Math.max(...timelineData.map(t => t.count), 1);
-  }, [timelineData]);
-
-  // Section 3: Horizontal Source Bar Chart Data
-  const sourceChartData = useMemo(() => {
-    const countsMap: Record<string, number> = {};
-    documents.forEach(d => {
-      const src = d.source || "RSS Feed";
-      countsMap[src] = (countsMap[src] || 0) + 1;
-    });
-
-    const total = documents.length || 1;
-    return Object.entries(countsMap)
-      .map(([name, count]) => ({
-        name,
-        count,
-        percentage: Math.round((count / total) * 100)
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5); // top 5
-  }, [documents]);
-
-  // Section 4: Risk Distribution
-  // D3: bands now match risk_engine.py's get_risk_level() via the shared
-  // getRiskLevel helper, instead of an independently-guessed 20/45/75 split.
-  const riskDistribution = useMemo(() => {
-    let low = 0, medium = 0, high = 0, critical = 0;
-    documents.forEach(d => {
-      const level = getRiskLevel(d.risk || 0);
-      if (level === "CRITICAL") critical++;
-      else if (level === "HIGH") high++;
-      else if (level === "MEDIUM") medium++;
-      else low++;
-    });
-
-    const total = documents.length || 1;
-    return [
-      { label: "Critical (76+)", count: critical, percentage: Math.round((critical / total) * 100), color: "bg-red-500", text: "text-red-400" },
-      { label: "High (51-75)", count: high, percentage: Math.round((high / total) * 100), color: "bg-orange-500", text: "text-orange-400" },
-      { label: "Medium (26-50)", count: medium, percentage: Math.round((medium / total) * 100), color: "bg-amber-500", text: "text-amber-400" },
-      { label: "Low (0-25)", count: low, percentage: Math.round((low / total) * 100), color: "bg-sky-500", text: "text-sky-400" }
-    ];
-  }, [documents]);
-
   return (
     <ErrorBoundary fallback={<TelemetryErrorWidget title="Intelligence Stream Panel Error" />}>
       {documentsLoading ? (
         <div className="space-y-6">
-          {/* Skeleton Executive KPIs */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map(x => (
-              <Card key={x} className={`${glassTokens[theme].card} rounded-3xl h-24 animate-pulse`}>
-                <CardContent className="h-full flex items-center justify-between p-4">
-                  <div className="space-y-2 w-2/3">
-                    <div className={`h-3 rounded w-1/2 ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
-                    <div className={`h-5 rounded w-3/4 ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
-                  </div>
-                  <div className={`h-10 w-10 rounded-full ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          {/* Skeleton body */}
-          <Card className={`${glassTokens[theme].card} rounded-3xl h-96 animate-pulse`}>
+          {/* Skeleton for the Real-Time Brand Ingest Stream -- the only
+              section this page shows now (client-facing: showing full
+              collection mechanics undercuts the ORM service, so metrics/
+              timeline/source/risk-distribution telemetry was removed). */}
+          <Card className={`${glassTokens[theme].card} rounded-3xl h-[780px] animate-pulse`}>
             <CardHeader className="space-y-2">
               <div className={`h-4 rounded w-1/3 ${isDark ? "bg-white/[0.08]" : "bg-black/[0.06]"}`} />
             </CardHeader>
             <CardContent className="space-y-4">
-              {[1, 2, 3, 4].map(x => (
-                <div key={x} className={`h-10 rounded ${isDark ? "bg-white/[0.04]" : "bg-black/[0.03]"}`} />
+              {[1, 2, 3, 4, 5, 6].map(x => (
+                <div key={x} className={`h-16 rounded ${isDark ? "bg-white/[0.04]" : "bg-black/[0.03]"}`} />
               ))}
             </CardContent>
           </Card>
@@ -252,119 +128,6 @@ export function FeedTab({
         </Card>
       ) : (
         <div className="space-y-6 relative select-none">
-
-          {/* SECTION 1 — Intelligence Collection Overview */}
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 font-mono">
-            {[
-              { label: "Scanned Feed", value: metrics.totalDocs, desc: "Total documents", icon: FileText, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
-              { label: "Active Channels", value: metrics.uniqueSources, desc: "Monitored RSS Feeds", icon: Globe, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]" },
-              { label: "Notable People Tracked", value: metrics.totalExecutivesCount, desc: "People mentioned in coverage", icon: Users, color: "text-emerald-400" },
-              { label: "Avg Risk Level", value: `${metrics.avgRisk} pts`, desc: "Severity risk rating", icon: ShieldAlert, color: "text-rose-500" },
-              { label: "Ingested Today", value: metrics.processedToday, desc: "Last 24h count", icon: Activity, color: "text-amber-400" }
-            ].map((kpi, idx) => (
-              <Card
-                key={idx}
-                className={`${glassCard(theme)} p-3.5 flex flex-col justify-between`}
-              >
-                <div className={SPECULAR_LINE} />
-                <div className="flex justify-between items-start mb-1">
-                  <span className={`text-[9px] uppercase tracking-widest block font-bold ${mutedText(theme)}`}>{kpi.label}</span>
-                  <kpi.icon className={`h-4 w-4 ${kpi.color} opacity-70`} />
-                </div>
-                <div>
-                  <span className={`text-xl font-bold block font-mono tracking-tight ${bodyText(theme)}`}>{kpi.value}</span>
-                  <span className={`text-[8px] block truncate mt-0.5 ${mutedText(theme)}`}>{kpi.desc}</span>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {/* MIDDLE VISUALIZATIONS ROW: Timeline, Sources, Severity, Ingestion Pipeline */}
-          <div className="grid gap-6 md:grid-cols-12">
-            
-            {/* SECTION 2 — Collection Volume Timeline */}
-            <Card className={`col-span-12 lg:col-span-4 ${glassCard(theme)} overflow-hidden flex flex-col`}>
-              <div className={SPECULAR_LINE} />
-              <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                  <Calendar className="h-3.5 w-3.5" style={{ color: accent }} /> Collection Volume Timeline
-                </CardTitle>
-                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Document collection frequency</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 flex-1 flex flex-col justify-center">
-                <div className="h-40 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorTimeline" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={accent} stopOpacity={0.25}/>
-                          <stop offset="95%" stopColor={accent} stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={9} tickLine={false} />
-                      <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={9} tickLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontSize: 10, fontFamily: 'monospace' }} />
-                      <Area type="monotone" dataKey="count" name="Documents" stroke={accent} strokeWidth={1.5} fillOpacity={1} fill="url(#colorTimeline)" />
-                      <ReferenceLine y={maxTimelineCount} label={{ value: 'Peak', fill: '#ef4444', fontSize: 8, position: 'top' }} stroke="#ef4444" strokeDasharray="3 3" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* SECTION 3 — Source Distribution */}
-            <Card className={`col-span-12 lg:col-span-4 ${glassCard(theme)} overflow-hidden flex flex-col`}>
-              <div className={SPECULAR_LINE} />
-              <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                  <BarChart2 className="h-3.5 w-3.5" style={{ color: accent }} /> Source Distribution
-                </CardTitle>
-                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Breakdown of ingested media channels</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 flex-1 flex flex-col justify-center space-y-3 font-mono">
-                {sourceChartData.map((src, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex justify-between text-[10px]">
-                      <span className={`truncate max-w-[180px] font-bold ${bodyText(theme)}`}>{src.name}</span>
-                      <span className={mutedText(theme)}>{src.count} ({src.percentage}%)</span>
-                    </div>
-                    <div className={`w-full rounded-full h-1.5 overflow-hidden border ${isDark ? "bg-black/40 border-white/[0.08]" : "bg-black/[0.04] border-black/[0.06]"}`}>
-                      <div
-                        className="h-full rounded-full transition-all duration-1000 ease-out"
-                        style={{ width: `${src.percentage}%`, backgroundColor: accent }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* SECTION 4 — Risk Distribution */}
-            <Card className={`col-span-12 lg:col-span-4 ${glassCard(theme)} overflow-hidden flex flex-col`}>
-              <div className={SPECULAR_LINE} />
-              <CardHeader className={`pb-2 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                  <ShieldAlert className="h-3.5 w-3.5 text-rose-500" /> Risk Severity Distribution
-                </CardTitle>
-                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Telemetry safety categorization</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 flex-1 flex flex-col justify-center space-y-3 font-mono">
-                {riskDistribution.map((risk, i) => (
-                  <div key={i} className={`flex justify-between items-center rounded-lg p-2 text-xs border ${isDark ? "bg-black/20 border-white/[0.08]" : "bg-black/[0.02] border-black/[0.06]"}`}>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${risk.color} shadow-sm animate-pulse`} />
-                      <span className={`font-bold ${bodyText(theme)}`}>{risk.label.split(" ")[0]}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className={`font-bold ${risk.text}`}>{risk.count} docs</span>
-                      <span className={`text-[10px] block ${mutedText(theme)}`}>{risk.percentage}% of feed</span>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-          </div>
 
           {/* Real-Time Ingested Feed List. Document Intelligence Details used
               to be a separate tab; it's now a per-row Details button that
