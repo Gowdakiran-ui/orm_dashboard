@@ -9,7 +9,6 @@ import {
   Users, Activity, Search, AlertTriangle, ShieldCheck, Info,
   TrendingUp, AlertOctagon, X, ExternalLink
 } from "lucide-react";
-import { RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { fetchDocumentDetails, searchExecutive } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
@@ -80,7 +79,6 @@ export interface ExecutivesTabProps {
   executives: any[];
   lastProcessedTimestamp: string;
   documents: any[];
-  narratives: any[];
   clientId?: string | null;
   executiveCandidates?: any[];
   onPromoteExecutives?: () => void;
@@ -91,7 +89,6 @@ export function ExecutivesTab({
   executives,
   lastProcessedTimestamp,
   documents,
-  narratives,
   clientId,
   executiveCandidates = [],
   onPromoteExecutives,
@@ -493,9 +490,6 @@ export function ExecutivesTab({
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EXECUTIVE</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EVENT HEADLINE</TableHead>
                 <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>BUSINESS TOPIC</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>SENTIMENT</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>REPUTATION IMPACT</TableHead>
-                <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
                 <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
@@ -515,19 +509,6 @@ export function ExecutivesTab({
                       {doc.topic}
                     </Badge>
                   </TableCell>
-                  <TableCell className={`text-center font-mono text-xs ${bodyText(theme)}`}>
-                    {doc.sentiment !== undefined ? parseFloat(doc.sentiment).toFixed(2) : "0.00"}
-                  </TableCell>
-                  <TableCell className={`text-center font-mono text-xs font-bold ${
-                    parseFloat(doc.reputation_impact) >= 0 ? "text-emerald-500" : "text-red-500"
-                  }`}>
-                    {doc.reputation_impact}
-                  </TableCell>
-                  <TableCell className={`text-center font-mono text-xs font-bold ${
-                    doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
-                  }`}>
-                    {Math.round(doc.risk || 0)}
-                  </TableCell>
                   <TableCell className={`font-mono text-xs truncate max-w-[100px] ${mutedText(theme)}`}>{doc.source}</TableCell>
                   <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
                     {doc.timestamp ? new Date(doc.timestamp).toLocaleDateString(undefined, { dateStyle: 'short' }) : "N/A"}
@@ -545,7 +526,7 @@ export function ExecutivesTab({
               })}
               {execEvents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
+                  <TableCell colSpan={6} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
                     No verified executive events recorded.
                   </TableCell>
                 </TableRow>
@@ -597,10 +578,6 @@ export function ExecutivesTab({
 
                 {/* Risk & Sentiment score calculations */}
                 <div className={`p-4 rounded border border-red-500/20 space-y-3 ${surfaceBg}`}>
-                  <div className={`flex justify-between items-center border-b pb-2 ${cardBorder}`}>
-                    <span className="text-xs font-bold text-red-500">Risk Rating</span>
-                    <span className="text-lg font-black text-red-500">{selectedDoc.risk} / 100</span>
-                  </div>
                   <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between">
                       <span className={mutedText(theme)}>Impact Score:</span>
@@ -632,22 +609,6 @@ export function ExecutivesTab({
                   </span>
                   <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
                     {selectedDoc.original_content || "No original content available."}
-                  </div>
-                </div>
-
-                {/* Related Narratives */}
-                <div className="space-y-2">
-                  <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Related Narratives</span>
-                  <div className="flex flex-wrap gap-2">
-                    {narratives && narratives.length > 0 ? (
-                      narratives.slice(0, 2).map((n: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] text-xs bg-[#D4AF37]/5">
-                          {n.theme_name || n.name}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className={`text-xs ${mutedText(theme)}`}>No matching narratives mapped.</span>
-                    )}
                   </div>
                 </div>
 

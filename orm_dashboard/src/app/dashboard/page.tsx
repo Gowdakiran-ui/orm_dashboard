@@ -357,7 +357,6 @@ function DashboardShell() {
                     executives={data.executives}
                     lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
                     documents={data.documents}
-                    narratives={data.narratives}
                     clientId={data.clientId}
                     executiveCandidates={data.executiveCandidates}
                     onPromoteExecutives={exec.handlePromoteExecutives}
