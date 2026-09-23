@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
+  BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
-import { Package, Search, TrendingUp, BarChart3, Newspaper, Info, AlertOctagon, X, ExternalLink } from "lucide-react";
+import { Package, Search, BarChart3, Newspaper, Info, AlertOctagon, X, ExternalLink } from "lucide-react";
 import { searchProduct, fetchProductDocuments, fetchTopicDistribution, fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
@@ -122,33 +122,6 @@ export function ProductCompareSection({ clientId, activeClientName, competitorEn
   // bothHaveEvidence above, never fetched off a product that isn't real yet.
   const ownDocuments = useEntityDocuments(clientId, ownProduct?.entity_id);
   const competitorDocuments = useEntityDocuments(clientId, competitorProduct?.entity_id);
-
-  // Daily-bucketed sentiment trend, same pattern as useAnalytics.ts's
-  // sentimentTrendData -- group by calendar day (toLocaleDateString), not
-  // raw data points, so the x-axis stays legible.
-  const sentimentTrendData = useMemo(() => {
-    if (!bothHaveEvidence) return [];
-    // Grouped by real ISO calendar day (sortable, unambiguous across year
-    // boundaries) with a separate short display label -- avoids reparsing
-    // a formatted "MMM D" string back into a Date just to sort it.
-    const buckets: Record<string, { own: number[]; competitor: number[] }> = {};
-    const isoDay = (ts: string) => new Date(ts).toISOString().slice(0, 10);
-    (ownDocuments || []).forEach(d => {
-      if (!d?.timestamp) return;
-      (buckets[isoDay(d.timestamp)] ||= { own: [], competitor: [] }).own.push(d.sentiment ?? 0);
-    });
-    (competitorDocuments || []).forEach(d => {
-      if (!d?.timestamp) return;
-      (buckets[isoDay(d.timestamp)] ||= { own: [], competitor: [] }).competitor.push(d.sentiment ?? 0);
-    });
-    return Object.entries(buckets)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([isoDate, vals]) => ({
-        date: new Date(isoDate).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        [ownProduct?.name || "Own"]: vals.own.length ? vals.own.reduce((a, b) => a + b, 0) / vals.own.length : null,
-        [competitorProduct?.name || "Competitor"]: vals.competitor.length ? vals.competitor.reduce((a, b) => a + b, 0) / vals.competitor.length : null,
-      }));
-  }, [bothHaveEvidence, ownDocuments, competitorDocuments, ownProduct?.name, competitorProduct?.name]);
 
   // Curated top coverage, ranked by |sentiment| -- the same magnitude
   // signal documents.py already formats and shows per-document as
@@ -359,35 +332,6 @@ export function ProductCompareSection({ clientId, activeClientName, competitorEn
 
         {bothHaveEvidence && (
           <>
-            {/* Sentiment Trajectory -- trend, not a static snapshot. */}
-            <div className="space-y-3 pt-2">
-              <span className={`flex items-center text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>
-                <TrendingUp className="h-4 w-4 mr-2" style={{ color: accent }} />
-                Sentiment Trajectory — last 30 days
-              </span>
-              {sentimentTrendData.length > 0 ? (
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={sentimentTrendData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                      <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
-                      <YAxis domain={[-1, 1]} stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', borderRadius: '6px', fontFamily: 'monospace', fontSize: 12 }}
-                      />
-                      <Legend wrapperStyle={{ fontFamily: 'monospace', fontSize: 10 }} />
-                      <Line type="monotone" dataKey={ownProduct.name} stroke={accent} strokeWidth={2} dot={false} connectNulls />
-                      <Line type="monotone" dataKey={competitorProduct.name} stroke="#F97316" strokeWidth={2} dot={false} connectNulls />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className={`text-xs font-mono text-center py-8 ${mutedText(theme)}`}>
-                  Not enough qualifying coverage in the last 30 days to chart a trend for this pair yet.
-                </p>
-              )}
-            </div>
-
             {/* Signature Stories -- curated top coverage, not the raw feed. */}
             <div className="space-y-3 pt-2">
               <span className={`flex items-center text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>
