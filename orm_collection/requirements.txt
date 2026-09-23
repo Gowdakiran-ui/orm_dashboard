@@ -1,5 +1,6 @@
 fastapi==0.109.2
 uvicorn==0.27.1
+python-multipart==0.0.9
 slowapi==0.1.9
 prometheus-fastapi-instrumentator==6.1.0
 sqlalchemy==2.0.25
