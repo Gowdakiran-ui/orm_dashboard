@@ -65,17 +65,11 @@ export function CompetitorsTab({
   const tableHeaderBg = isDark ? "bg-black/20" : "bg-black/[0.02]";
   // 44x44px-floor touch target helper for compact icon/text action controls.
   const touchTarget = "min-h-[44px] inline-flex items-center justify-center";
-  // Part 3: fixed palette for the multi-competitor head-to-head radar, cycled
-  // by index so an arbitrary number of tracked competitors each gets a
-  // distinct, stable-per-render color (the client's own gold/accent styling
-  // used elsewhere on this page is reserved for its own dedicated cases, so
-  // this is a separate palette rather than reusing #D4AF37/accent here).
-  const HEAD_TO_HEAD_COLORS = ["#D4AF37", "#38BDF8", "#F97316", "#A78BFA", "#34D399", "#F472B6", "#FBBF24", "#60A5FA"];
-  // Separate palette for the Topic Ownership chart -- up to 17 taxonomy
-  // categories can appear as stacked segments, a different visual role than
-  // HEAD_TO_HEAD_COLORS' one-color-per-entity legend above, so reusing that
-  // palette would create false visual association between an entity's bar
-  // color there and a topic's segment color here.
+  // Fixed palette for the Topic Ownership chart -- up to 17 taxonomy
+  // categories can appear as stacked segments, each needing a distinct,
+  // stable-per-render color (the client's own gold/accent styling used
+  // elsewhere on this page is reserved for its own dedicated cases, so this
+  // is a separate palette rather than reusing #D4AF37/accent here).
   const TOPIC_COLORS = ["#D4AF37", "#38BDF8", "#F97316", "#A78BFA", "#34D399", "#F472B6", "#FBBF24", "#60A5FA", "#EF4444", "#14B8A6", "#8B5CF6", "#EAB308", "#EC4899", "#22D3EE", "#84CC16", "#F87171", "#94A3B8"];
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
@@ -318,17 +312,6 @@ export function CompetitorsTab({
 
   const hasTrackedCompetitors = singleCompetitorBenchmarks.length > 0;
 
-  // 6. MULTI-COMPETITOR HEAD-TO-HEAD -- Part 3. Recreates the client-vs-many
-  // comparison the hyperfocus redesign narrowed to one competitor at a time.
-  // competitorRadarData (parent prop, useAnalytics.ts) already computes this
-  // exact shape -- client + every tracked competitor across the same 4 axes
-  // -- it was just never rendered here. No new data plumbing, additive only:
-  // the single-competitor search/pairwise flow above is untouched.
-  const headToHeadEntities = useMemo(() => {
-    const names = [activeClientName, ...(normalizedBenchmarks || []).map(b => b.competitor_name).filter(Boolean)];
-    return Array.from(new Set(names));
-  }, [activeClientName, normalizedBenchmarks]);
-
   // 7. TOPIC OWNERSHIP -- Part O/R. Same near-zero-category display floor as
   // Coverage-by-Topic (useAnalytics.ts, MIN_TOPIC_DOCUMENT_COUNT): a shared
   // 17-topic taxonomy across every client means a document can land under a
@@ -340,8 +323,23 @@ export function CompetitorsTab({
   // narrower view than that chart.
   const MIN_TOPIC_COMPARISON_COUNT = 5;
 
+  // Scoped to exactly the same [client, selectedCompetitor] pair every
+  // other comparison card on this page uses (Competitor Comparison radar,
+  // Reputation Compare, the pairwise SOV chart) -- not the multi-competitor
+  // head-to-head view's broader scope. The /topic-distribution endpoint
+  // still returns every tracked competitor in one call (same shape as
+  // /benchmark), filtered down here client-side, the same division of
+  // labour singleCompetitorBenchmarks already uses above for the identical
+  // pairwise-vs-broad-fetch situation.
+  const pairScopedTopicDistribution = useMemo(() => {
+    if (!selectedCompetitor) return [];
+    return (topicDistribution || []).filter(
+      e => e && (e.is_client || e.entity_id === selectedCompetitor.entity_id)
+    );
+  }, [topicDistribution, selectedCompetitor]);
+
   const topicOwnershipData = useMemo(() => {
-    const withEvidence = (topicDistribution || []).filter(e => e && e.total_documents > 0);
+    const withEvidence = (pairScopedTopicDistribution || []).filter(e => e && e.total_documents > 0);
     if (withEvidence.length === 0) return { chartData: [], topicKeys: [], entityNames: [] };
 
     const topicTotals: Record<string, number> = {};
@@ -365,7 +363,7 @@ export function CompetitorsTab({
     });
 
     return { chartData, topicKeys, entityNames: withEvidence.map(e => e.name) };
-  }, [topicDistribution]);
+  }, [pairScopedTopicDistribution]);
 
   return (
     <div className="space-y-6">
@@ -678,59 +676,16 @@ export function CompetitorsTab({
           one client + one competitor. Its only helper, getThreatLevel, was
           removed with it (verified unused elsewhere before deleting). */}
 
-      {/* MULTI-COMPETITOR HEAD-TO-HEAD -- Part 3. Additive to, not a
-          replacement of, the single-competitor search/pairwise flow above.
-          Only shown with 2+ tracked competitors: with exactly one, this
-          would just duplicate the "Competitor Comparison" radar above with
-          nothing new to add, so it stays hidden rather than looking like a
-          broken/empty near-duplicate. */}
-      {normalizedBenchmarks.length >= 2 && (
-        <ErrorBoundary fallback={<TelemetryErrorWidget title="Head-to-Head Chart Error" />}>
-          <Card className={glassCard(theme)}>
-            <CardHeader>
-              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-                <Compass className="h-4 w-4 text-[#D4AF37] mr-2" />
-                Head-to-Head: All Tracked Competitors
-                <InfoTooltip label="About these metrics"><CompetitorRadarAxesDefinition /></InfoTooltip>
-              </CardTitle>
-              <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-                {activeClientName} vs. all {normalizedBenchmarks.length} tracked competitors at once — same axes as the single-competitor view above
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex justify-center items-center h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={competitorRadarData}>
-                  <PolarGrid stroke={isDark ? "#3f3f46" : "#d4d4d8"} />
-                  <PolarAngleAxis dataKey="subject" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} stroke={isDark ? "#3f3f46" : "#d4d4d8"} tick={false} />
-                  {headToHeadEntities.map((name, idx) => (
-                    <Radar
-                      key={name}
-                      name={name}
-                      dataKey={name}
-                      stroke={HEAD_TO_HEAD_COLORS[idx % HEAD_TO_HEAD_COLORS.length]}
-                      fill={HEAD_TO_HEAD_COLORS[idx % HEAD_TO_HEAD_COLORS.length]}
-                      fillOpacity={0.12}
-                      strokeWidth={2}
-                    />
-                  ))}
-                  <Legend wrapperStyle={{ fontFamily: 'monospace', fontSize: 11 }} />
-                  <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', borderRadius: '6px', fontFamily: 'monospace', fontSize: 12 }} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </ErrorBoundary>
-      )}
-
       {/* TOPIC OWNERSHIP -- Part O/R, the last item from the original
-          industry-benchmarking research. Client vs. every tracked
-          competitor with qualifying evidence, same additive/no-replacement
-          stance as the head-to-head view above. The caveat below is
-          required, not optional -- this is the one view on this page most
-          likely to expose the shared-taxonomy classifier's known
-          calibration limits, so it stays visible on the card itself, not
-          just inside the InfoTooltip a viewer might not open. */}
+          industry-benchmarking research. Scoped to exactly [client,
+          selectedCompetitor] -- the same single pair the Competitor
+          Comparison radar and Reputation Compare / Share of Voice charts
+          above already use, not the multi-competitor head-to-head view's
+          broader scope. The caveat below is required, not optional -- this
+          is the one view on this page most likely to expose the
+          shared-taxonomy classifier's known calibration limits, so it
+          stays visible on the card itself, not just inside the InfoTooltip
+          a viewer might not open. */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Topic Ownership Chart Error" />}>
         {topicDistLoading ? (
           <Card className={`${glassTokens[theme].card} rounded-3xl h-[380px] animate-pulse`} />
@@ -747,7 +702,7 @@ export function CompetitorsTab({
                 <InfoTooltip label="About Topic Ownership"><TopicOwnershipDefinition /></InfoTooltip>
               </CardTitle>
               <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-                {activeClientName} vs. tracked competitors — share of each entity&apos;s coverage by topic, last 30 days
+                {activeClientName} vs. {selectedCompetitor?.name || "selected competitor"} — share of each entity&apos;s coverage by topic, last 30 days
               </CardDescription>
               <p className={`text-[11px] font-mono leading-relaxed mt-2 ${mutedText(theme)}`}>
                 Uses a shared 17-topic taxonomy applied identically across every client — a category can read as
@@ -777,7 +732,7 @@ export function CompetitorsTab({
                 <div className="flex flex-col items-center justify-center h-[200px] space-y-2">
                   <BarChart3 className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
                   <p className={`font-mono text-xs ${mutedText(theme)}`}>
-                    No entity has enough qualifying coverage in the last 30 days to compare topics yet.
+                    Not enough qualifying coverage in the last 30 days to compare topics for this pair yet.
                   </p>
                 </div>
               )}
