@@ -271,6 +271,35 @@ export function CompetitorRadarAxesDefinition() {
   );
 }
 
+/**
+ * Competitor Compare's Topic Ownership chart (CompetitorsTab.tsx) --
+ * benchmark_engine.py's get_topic_distribution: for the client and every
+ * tracked competitor, counts each qualifying document (same 30-day window
+ * and brand-co-occurrence gate as the rest of this page) by its single
+ * highest-confidence classified topic (documents.py's own convention for
+ * a multi-labeled document; falls back to "General" when a document has no
+ * topic row at all).
+ */
+export function TopicOwnershipDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Topic Ownership</span>
+      <span className="block">
+        Each entity&apos;s coverage over the last 30 days, grouped by its
+        highest-confidence classified topic — the same per-document topic
+        shown elsewhere on this dashboard.
+      </span>
+      <span className="mt-1 block">
+        <b>Known limitation:</b> the 17-topic taxonomy is shared across every
+        client on this platform regardless of industry, so a category can
+        read as structurally irrelevant for some clients (e.g. an AI company
+        showing an automotive-flavored category). Treat this as directional,
+        not precise.
+      </span>
+    </>
+  );
+}
+
 export function ShareOfVoiceDefinition() {
   return (
     <>

@@ -14,12 +14,12 @@ import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
-import { fetchDocumentDetails, searchCompetitor } from "@/lib/api";
+import { fetchDocumentDetails, searchCompetitor, fetchTopicDistribution } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { ProductCompareSection } from "@/components/ProductCompareSection";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { CompetitorRadarAxesDefinition, ReputationScoreDefinition, ShareOfVoiceDefinition } from "@/lib/metricDefinitions";
+import { CompetitorRadarAxesDefinition, ReputationScoreDefinition, ShareOfVoiceDefinition, TopicOwnershipDefinition } from "@/lib/metricDefinitions";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -71,6 +71,12 @@ export function CompetitorsTab({
   // used elsewhere on this page is reserved for its own dedicated cases, so
   // this is a separate palette rather than reusing #D4AF37/accent here).
   const HEAD_TO_HEAD_COLORS = ["#D4AF37", "#38BDF8", "#F97316", "#A78BFA", "#34D399", "#F472B6", "#FBBF24", "#60A5FA"];
+  // Separate palette for the Topic Ownership chart -- up to 17 taxonomy
+  // categories can appear as stacked segments, a different visual role than
+  // HEAD_TO_HEAD_COLORS' one-color-per-entity legend above, so reusing that
+  // palette would create false visual association between an entity's bar
+  // color there and a topic's segment color here.
+  const TOPIC_COLORS = ["#D4AF37", "#38BDF8", "#F97316", "#A78BFA", "#34D399", "#F472B6", "#FBBF24", "#60A5FA", "#EF4444", "#14B8A6", "#8B5CF6", "#EAB308", "#EC4899", "#22D3EE", "#84CC16", "#F87171", "#94A3B8"];
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   // The /documents/client/{id} list (source of `documents`) doesn't include
   // `url` -- fetch it per-selection the same way FeedTab does, since the
@@ -88,6 +94,30 @@ export function CompetitorsTab({
       .catch(() => { if (!cancelled) setSelectedDocUrl(null); });
     return () => { cancelled = true; };
   }, [selectedDocId, clientId]);
+
+  // Topic Ownership (Part O/R): independent fetch, not threaded through the
+  // parent like benchmarks/normalizedBenchmarks -- this is a new, on-demand
+  // endpoint (client-intelligence/{id}/topic-distribution) nothing else on
+  // the dashboard needs, so it's fetched directly here rather than adding a
+  // new prop plumbed through useDashboardData for a single consumer.
+  const [topicDistribution, setTopicDistribution] = useState<any[]>([]);
+  const [topicDistLoading, setTopicDistLoading] = useState(false);
+  const [topicDistError, setTopicDistError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!clientId) {
+      setTopicDistribution([]);
+      return;
+    }
+    let cancelled = false;
+    setTopicDistLoading(true);
+    setTopicDistError(null);
+    fetchTopicDistribution(clientId)
+      .then(data => { if (!cancelled) setTopicDistribution(data?.entities || []); })
+      .catch(() => { if (!cancelled) { setTopicDistribution([]); setTopicDistError("Telemetry Offline"); } })
+      .finally(() => { if (!cancelled) setTopicDistLoading(false); });
+    return () => { cancelled = true; };
+  }, [clientId]);
 
   // Competitor search (TASK.md Part 2.2-2.5): search-first, zero-noise --
   // three backend states (tracked / unpromoted_candidate / searching) plus a
@@ -402,6 +432,44 @@ export function CompetitorsTab({
     const names = [activeClientName, ...(normalizedBenchmarks || []).map(b => b.competitor_name).filter(Boolean)];
     return Array.from(new Set(names));
   }, [activeClientName, normalizedBenchmarks]);
+
+  // 7. TOPIC OWNERSHIP -- Part O/R. Same near-zero-category display floor as
+  // Coverage-by-Topic (useAnalytics.ts, MIN_TOPIC_DOCUMENT_COUNT): a shared
+  // 17-topic taxonomy across every client means a document can land under a
+  // structurally-irrelevant category for this client, so a topic with almost
+  // no real representation across the entities being compared is filtered
+  // from the chart rather than shown as if it were meaningful. Scoped to
+  // this comparison (total across only the entities with qualifying
+  // evidence), not the whole platform-wide threshold, since this is a
+  // narrower view than that chart.
+  const MIN_TOPIC_COMPARISON_COUNT = 5;
+
+  const topicOwnershipData = useMemo(() => {
+    const withEvidence = (topicDistribution || []).filter(e => e && e.total_documents > 0);
+    if (withEvidence.length === 0) return { chartData: [], topicKeys: [], entityNames: [] };
+
+    const topicTotals: Record<string, number> = {};
+    withEvidence.forEach(e => {
+      Object.entries(e.topic_counts || {}).forEach(([topic, count]) => {
+        topicTotals[topic] = (topicTotals[topic] || 0) + (count as number);
+      });
+    });
+    const topicKeys = Object.entries(topicTotals)
+      .filter(([, total]) => total >= MIN_TOPIC_COMPARISON_COUNT)
+      .sort((a, b) => b[1] - a[1])
+      .map(([topic]) => topic);
+
+    const chartData = withEvidence.map(e => {
+      const row: any = { name: e.name, isClient: e.is_client, total: e.total_documents };
+      topicKeys.forEach(topic => {
+        const count = (e.topic_counts || {})[topic] || 0;
+        row[topic] = e.total_documents > 0 ? (count / e.total_documents) * 100 : 0;
+      });
+      return row;
+    });
+
+    return { chartData, topicKeys, entityNames: withEvidence.map(e => e.name) };
+  }, [topicDistribution]);
 
   return (
     <div className="space-y-6">
@@ -780,6 +848,69 @@ export function CompetitorsTab({
           </Card>
         </ErrorBoundary>
       )}
+
+      {/* TOPIC OWNERSHIP -- Part O/R, the last item from the original
+          industry-benchmarking research. Client vs. every tracked
+          competitor with qualifying evidence, same additive/no-replacement
+          stance as the head-to-head view above. The caveat below is
+          required, not optional -- this is the one view on this page most
+          likely to expose the shared-taxonomy classifier's known
+          calibration limits, so it stays visible on the card itself, not
+          just inside the InfoTooltip a viewer might not open. */}
+      <ErrorBoundary fallback={<TelemetryErrorWidget title="Topic Ownership Chart Error" />}>
+        {topicDistLoading ? (
+          <Card className={`${glassTokens[theme].card} rounded-3xl h-[380px] animate-pulse`} />
+        ) : topicDistError ? (
+          <Card className={`${glassCard(theme)} border-red-500/20 h-[380px]`}>
+            <TelemetryErrorWidget title="Topic Ownership Offline" message={topicDistError} />
+          </Card>
+        ) : (
+          <Card className={glassCard(theme)}>
+            <CardHeader>
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+                <BarChart3 className="h-4 w-4 text-[#D4AF37] mr-2" />
+                Topic Ownership
+                <InfoTooltip label="About Topic Ownership"><TopicOwnershipDefinition /></InfoTooltip>
+              </CardTitle>
+              <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
+                {activeClientName} vs. tracked competitors — share of each entity&apos;s coverage by topic, last 30 days
+              </CardDescription>
+              <p className={`text-[11px] font-mono leading-relaxed mt-2 ${mutedText(theme)}`}>
+                Uses a shared 17-topic taxonomy applied identically across every client — a category can read as
+                structurally irrelevant for this client&apos;s industry. Treat this chart as directional, not precise.
+              </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {topicOwnershipData.chartData.length > 0 ? (
+                <div className="h-[360px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topicOwnershipData.chartData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
+                      <XAxis dataKey="name" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+                      <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} unit="%" />
+                      <Tooltip
+                        formatter={(value: any, name: any) => [`${Number(value).toFixed(1)}%`, name]}
+                        contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', borderRadius: '6px', fontFamily: 'monospace', fontSize: 12 }}
+                      />
+                      <Legend wrapperStyle={{ fontFamily: 'monospace', fontSize: 10 }} />
+                      {topicOwnershipData.topicKeys.map((topic, idx) => (
+                        <Bar key={topic} dataKey={topic} stackId="topics" fill={TOPIC_COLORS[idx % TOPIC_COLORS.length]} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-[200px] space-y-2">
+                  <BarChart3 className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+                  <p className={`font-mono text-xs ${mutedText(theme)}`}>
+                    No entity has enough qualifying coverage in the last 30 days to compare topics yet.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </ErrorBoundary>
 
       {/* COMPETITOR ACTIVITY TABLE -- events for the one selected
           competitor only (competitorEvents is already scoped above). */}

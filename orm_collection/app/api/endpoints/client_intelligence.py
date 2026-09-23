@@ -438,6 +438,23 @@ def get_client_benchmark(
         "data_coverage": b.CompetitorBenchmark.data_coverage,
     } for b in benchmarks]
 
+@router.get("/{client_id}/topic-distribution", response_model=Dict[str, Any])
+def get_client_topic_distribution(client_id: UUID, db: Session = Depends(get_db)):
+    """
+    Topic/narrative ownership (Part O/R): a small, separate on-demand
+    endpoint rather than a new field on get_client_benchmark above --
+    unlike that endpoint's columns, which are all read straight from
+    CompetitorBenchmark's periodic cached run, a topic breakdown has no
+    stored column and no LLM/external cost to justify caching it the same
+    way, so it's computed live here instead of bolting a new aggregation
+    onto the cached-row read path.
+    """
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    from app.services.intelligence.benchmark_engine import BenchmarkEngine
+    return BenchmarkEngine().get_topic_distribution(db, str(client_id))
+
 @router.get("/{client_id}/share-of-voice", response_model=List[Dict[str, Any]])
 def get_client_sov(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()

@@ -410,6 +410,11 @@ export async function fetchCompetitorBenchmarks(clientId: string, signal?: Abort
   return parseOrThrow(res);
 }
 
+export async function fetchTopicDistribution(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/topic-distribution`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function fetchRisks(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/risks`, { signal });
   return parseOrThrow(res);

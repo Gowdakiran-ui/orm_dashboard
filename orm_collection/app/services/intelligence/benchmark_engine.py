@@ -882,6 +882,135 @@ class BenchmarkEngine:
             )
             db.execute(stmt)
 
+    def get_topic_distribution(
+        self,
+        db: Session,
+        client_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Topic/narrative ownership (Part O/R): per-entity topic-distribution
+        comparison for the client vs. every tracked competitor, over the
+        same 30-day window and brand-co-occurrence gate
+        calculate_competitor_benchmarks already uses -- reused verbatim
+        here rather than inventing a second filter, so this view can never
+        disagree with the rest of Competitor Compare about which documents
+        count as evidence for which entity.
+
+        Not stored (no new column/migration): computed on demand, since it
+        is a plain document-count aggregation with no LLM cost, unlike the
+        reputation/SOV components BenchmarkEngine's periodic run caches.
+
+        Topic resolution per document reuses the platform's one existing
+        convention for "the" topic of a multi-labeled document (documents.py
+        read_documents_list/read_document): the highest-confidence
+        DocumentTopic row wins, first-seen-per-document-id after sorting by
+        confidence_score desc. A document with no DocumentTopic row falls
+        back to "General", matching topicDistData's own `d.topic || "General"`
+        convention on the frontend (useAnalytics.ts).
+
+        Returns one entry per entity (client's own brand/product first, then
+        every gated competitor): entity_id, name, is_client, total_documents
+        (0 means no qualifying evidence -- caller must show an honest empty
+        state, never a fabricated distribution), and topic_counts, a plain
+        {topic_name: document_count} dict. Percentages and any near-zero
+        display filtering are left to the caller, same division of labour
+        the rest of this page already uses (e.g. calculateClientSOV).
+        """
+        from app.models.topic import DocumentTopic, Topic
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        lookback_date = now_utc - datetime.timedelta(days=30)
+
+        client_entity = db.query(Entity).filter(
+            Entity.client_id == client_id,
+            Entity.entity_type == "brand"
+        ).first()
+        if not client_entity:
+            client_entity = db.query(Entity).filter(Entity.client_id == client_id).first()
+            if not client_entity:
+                return {"entities": []}
+
+        competitors = db.query(Entity).filter(
+            Entity.client_id == client_id,
+            Entity.entity_type == "competitor"
+        ).all()
+
+        # Identical brand co-occurrence gate to calculate_competitor_benchmarks
+        # above -- same roster pre-filter, same brand_doc_ids per-event gate.
+        brand_or_product_ids = [
+            e.id for e in db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.entity_type.in_(("brand", "product"))
+            ).all()
+        ]
+        brand_doc_ids = None
+        if brand_or_product_ids:
+            brand_doc_ids = set(
+                m.document_id for m in db.query(EntityMention).filter(
+                    EntityMention.entity_id.in_(brand_or_product_ids)
+                ).all()
+            )
+            gated_competitor_ids = set()
+            for e in competitors:
+                competitor_doc_ids = set(
+                    m.document_id for m in db.query(EntityMention).filter(
+                        EntityMention.entity_id == e.id
+                    ).all()
+                )
+                if competitor_doc_ids & brand_doc_ids:
+                    gated_competitor_ids.add(e.id)
+            competitors = [e for e in competitors if e.id in gated_competitor_ids]
+
+        all_entities = [client_entity] + competitors
+        all_entity_ids = [e.id for e in all_entities]
+
+        # Same filter shape as _preload_score_inputs' mentions_query above,
+        # just carrying document_id through instead of summing mention_count.
+        mentions_query = db.query(EntityMention.entity_id, EntityMention.document_id).filter(
+            EntityMention.entity_id.in_(all_entity_ids),
+            EntityMention.created_at >= lookback_date
+        )
+        if brand_doc_ids is not None:
+            mentions_query = mentions_query.filter(EntityMention.document_id.in_(brand_doc_ids))
+        mention_rows = mentions_query.all()
+
+        entity_doc_ids: Dict[Any, set] = {}
+        all_doc_ids: set = set()
+        for eid, doc_id in mention_rows:
+            entity_doc_ids.setdefault(eid, set()).add(doc_id)
+            all_doc_ids.add(doc_id)
+
+        # Highest-confidence topic per document, first-seen-wins -- the same
+        # resolution documents.py already uses for the single flattened
+        # "topic" field every other part of this page reads.
+        doc_topic_map: Dict[Any, str] = {}
+        if all_doc_ids:
+            doc_topics = db.query(DocumentTopic).join(
+                Topic, Topic.id == DocumentTopic.topic_id
+            ).filter(
+                DocumentTopic.document_id.in_(all_doc_ids)
+            ).order_by(DocumentTopic.confidence_score.desc()).all()
+            for dt in doc_topics:
+                if dt.document_id not in doc_topic_map:
+                    doc_topic_map[dt.document_id] = dt.topic.name
+
+        results = []
+        for e in all_entities:
+            doc_ids = entity_doc_ids.get(e.id, set())
+            topic_counts: Dict[str, int] = {}
+            for did in doc_ids:
+                topic_name = doc_topic_map.get(did, "General")
+                topic_counts[topic_name] = topic_counts.get(topic_name, 0) + 1
+            results.append({
+                "entity_id": str(e.id),
+                "name": e.name,
+                "is_client": e.id == client_entity.id,
+                "total_documents": len(doc_ids),
+                "topic_counts": topic_counts,
+            })
+
+        return {"entities": results}
+
     def process_client(
         self,
         db: Session,
