@@ -44,7 +44,7 @@ function Nav() {
 
   return (
     <nav
-      className="sticky top-0 z-40 border-b border-[#1C3355] bg-[#0A1526]/85 backdrop-blur-md"
+      className="sticky top-0 z-40 border-b border-[#163F6E] bg-[#04213F]/85 backdrop-blur-md"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-5 sm:px-7">
@@ -63,7 +63,7 @@ function Nav() {
         <div className="hidden items-center gap-2.5 sm:flex">
           <Link
             href="/login"
-            className="rounded-lg border border-[#24406B] px-[19px] py-2.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
+            className="rounded-lg border border-[#1E4C84] px-[19px] py-2.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
           >
             Sign in
           </Link>
@@ -81,7 +81,7 @@ function Nav() {
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#24406B] text-white sm:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#1E4C84] text-white sm:hidden"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -94,7 +94,7 @@ function Nav() {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 32 }}
-            className="overflow-hidden border-t border-[#1C3355] sm:hidden"
+            className="overflow-hidden border-t border-[#163F6E] sm:hidden"
           >
             <div className="flex flex-col gap-1 px-5 py-4">
               <a href="#framework" className={`${navLinkClass} py-2.5`} onClick={() => setOpen(false)}>How it works</a>
@@ -104,7 +104,7 @@ function Nav() {
               <div className="mt-3 flex flex-col gap-3">
                 <Link
                   href="/login"
-                  className="rounded-lg border border-[#24406B] px-4 py-3 text-center text-sm font-medium text-white"
+                  className="rounded-lg border border-[#1E4C84] px-4 py-3 text-center text-sm font-medium text-white"
                 >
                   Sign in
                 </Link>
@@ -159,7 +159,7 @@ function Hero() {
             </MagneticButton>
             <a
               href="#preview"
-              className="inline-flex items-center gap-2 rounded-lg border border-[#24406B] px-5 py-3.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#1E4C84] px-5 py-3.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
             >
               See the product ↓
             </a>
@@ -176,14 +176,14 @@ function Hero() {
         </Reveal>
 
         <Reveal>
-          <div className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#1C3355] bg-[#1C3355] sm:grid-cols-2">
-            <div className="bg-[#11213B] p-8">
+          <div className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#163F6E] bg-[#163F6E] sm:grid-cols-2">
+            <div className="bg-[#0B2D54] p-8">
               <div className="text-[0.8rem] text-[#5D719A]">Monitoring &amp; listening tools</div>
               <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-white">
                 Tell you what happened.
               </div>
             </div>
-            <div className="bg-[#1A3155] p-8">
+            <div className="bg-[#143D6E] p-8">
               <div className="text-[0.8rem] text-[#5D719A]">XOOP</div>
               <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-[#2FD9C4]">
                 Tells you why it happened, what&apos;s likely next, and what to do about it.
@@ -218,7 +218,7 @@ function SectionHead({ title, copy }: { title: string; copy: string }) {
 
 function Framework() {
   return (
-    <section id="framework" className="border-t border-[#1C3355] py-24">
+    <section id="framework" className="border-t border-[#163F6E] py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead
@@ -227,10 +227,10 @@ function Framework() {
           />
         </Reveal>
 
-        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#1C3355] bg-[#1C3355] sm:grid-cols-2 lg:grid-cols-3">
+        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#163F6E] bg-[#163F6E] sm:grid-cols-2 lg:grid-cols-3">
           {framework.map((f) => (
             <RevealItem key={f.word}>
-              <div className="h-full min-h-[190px] bg-[#11213B] p-7 transition-colors hover:bg-[#152A4A]">
+              <div className="h-full min-h-[190px] bg-[#0B2D54] p-7 transition-colors hover:bg-[#0F3663]">
                 <div className="mb-3.5 font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#2FD9C4]">
                   {f.word}
                 </div>
@@ -247,11 +247,11 @@ function Framework() {
 
 function MockPanel({ title, children, noPadding = false }: { title: string; children: React.ReactNode; noPadding?: boolean }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#1C3355] bg-[#11213B]">
-      <div className="flex items-center gap-2 border-b border-[#1C3355] bg-[#152A4A] px-4 py-3">
-        <span className="h-2 w-2 rounded-full bg-[#24406B]" />
-        <span className="h-2 w-2 rounded-full bg-[#24406B]" />
-        <span className="h-2 w-2 rounded-full bg-[#24406B]" />
+    <div className="overflow-hidden rounded-2xl border border-[#163F6E] bg-[#0B2D54]">
+      <div className="flex items-center gap-2 border-b border-[#163F6E] bg-[#0F3663] px-4 py-3">
+        <span className="h-2 w-2 rounded-full bg-[#1E4C84]" />
+        <span className="h-2 w-2 rounded-full bg-[#1E4C84]" />
+        <span className="h-2 w-2 rounded-full bg-[#1E4C84]" />
         <span className="ml-1.5 text-[0.78rem] tracking-wide text-[#5D719A]">{title}</span>
       </div>
       <div className={noPadding ? "" : "p-5"}>{children}</div>
@@ -368,7 +368,7 @@ const featureRows = [
 
 function Features() {
   return (
-    <section id="features" className="border-t border-[#1C3355] py-24">
+    <section id="features" className="border-t border-[#163F6E] py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead title="What's under the hood" copy="Everything you need to move from &quot;we saw a mention&quot; to &quot;here's what we're doing about it.&quot;" />
@@ -377,7 +377,7 @@ function Features() {
         <RevealGroup className="flex flex-col">
           {featureRows.map((f, idx) => (
             <RevealItem key={f.title}>
-              <div className={`grid grid-cols-1 items-baseline gap-2.5 py-8 sm:grid-cols-[2fr_3fr] sm:gap-10 ${idx > 0 ? "border-t border-[#1C3355]" : ""}`}>
+              <div className={`grid grid-cols-1 items-baseline gap-2.5 py-8 sm:grid-cols-[2fr_3fr] sm:gap-10 ${idx > 0 ? "border-t border-[#163F6E]" : ""}`}>
                 <h3 className="text-[1.28rem] font-medium text-white">{f.title}</h3>
                 <p className="max-w-[56ch] text-[0.98rem] leading-relaxed text-[#93A6C7]">{f.copy}</p>
               </div>
@@ -398,16 +398,16 @@ const benefitCells = [
 
 function Benefits() {
   return (
-    <section id="benefits" className="border-t border-[#1C3355] bg-[#11213B] py-24">
+    <section id="benefits" className="border-t border-[#163F6E] bg-[#0B2D54] py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead title="What this actually changes for your team" copy="Not features for their own sake — the outcomes they're built for." />
         </Reveal>
 
-        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#1C3355] bg-[#1C3355] sm:grid-cols-2">
+        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#163F6E] bg-[#163F6E] sm:grid-cols-2">
           {benefitCells.map((b) => (
             <RevealItem key={b.title}>
-              <div className="h-full bg-[#11213B] p-8">
+              <div className="h-full bg-[#0B2D54] p-8">
                 <span className="mb-3.5 block font-[family-name:var(--font-landing-display)] text-2xl text-[#2FD9C4]">—</span>
                 <h3 className="mb-2 text-[1.1rem] font-medium text-white">{b.title}</h3>
                 <p className="text-[0.94rem] leading-relaxed text-[#93A6C7]">{b.copy}</p>
@@ -425,7 +425,7 @@ function FinalCTA() {
     <section className="py-[100px] text-center">
       <div className="mx-auto max-w-3xl px-5 sm:px-7">
         <Reveal>
-          <span className="inline-flex items-center rounded-full border border-[#24406B] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-[#93A6C7]">
+          <span className="inline-flex items-center rounded-full border border-[#1E4C84] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-[#93A6C7]">
             Now onboarding Q1 clients
           </span>
           <h2 className="mx-auto mt-5 max-w-[20ch] text-balance font-[family-name:var(--font-landing-display)] font-medium text-white text-[clamp(1.8rem,4vw,2.6rem)]">
@@ -453,7 +453,7 @@ function FinalCTA() {
 export default function WelcomePage() {
   return (
     <div
-      className={`${display.variable} ${body.variable} min-h-screen overflow-x-hidden bg-[#0A1526] font-[family-name:var(--font-landing-body)] text-white`}
+      className={`${display.variable} ${body.variable} min-h-screen overflow-x-hidden bg-[#04213F] font-[family-name:var(--font-landing-body)] text-white`}
     >
       <Nav />
       <Hero />
@@ -464,7 +464,7 @@ export default function WelcomePage() {
       <FinalCTA />
 
       {/* PARENT COMPANY */}
-      <section className="border-t border-[#1C3355] py-16">
+      <section className="border-t border-[#163F6E] py-16">
         <div className="mx-auto max-w-3xl px-5 text-center sm:px-7">
           <Reveal>
             <p className="text-[10px] uppercase tracking-[0.2em] text-[#5D719A]">Built by</p>
@@ -482,7 +482,7 @@ export default function WelcomePage() {
 
       {/* FOOTER */}
       <footer
-        className="border-t border-[#1C3355] py-[34px]"
+        className="border-t border-[#163F6E] py-[34px]"
         style={{ paddingBottom: "calc(34px + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 sm:px-7">
