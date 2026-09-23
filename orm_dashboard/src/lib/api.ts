@@ -410,8 +410,14 @@ export async function fetchCompetitorBenchmarks(clientId: string, signal?: Abort
   return parseOrThrow(res);
 }
 
-export async function fetchTopicDistribution(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/topic-distribution`, { signal });
+export async function fetchTopicDistribution(clientId: string, entityIds?: string[], signal?: AbortSignal) {
+  const params = entityIds && entityIds.length > 0 ? `?entity_ids=${entityIds.join(",")}` : "";
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/topic-distribution${params}`, { signal });
+  return parseOrThrow(res);
+}
+
+export async function fetchProductDocuments(clientId: string, entityId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/product-documents?entity_id=${entityId}`, { signal });
   return parseOrThrow(res);
 }
 

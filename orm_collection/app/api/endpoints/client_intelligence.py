@@ -439,7 +439,11 @@ def get_client_benchmark(
     } for b in benchmarks]
 
 @router.get("/{client_id}/topic-distribution", response_model=Dict[str, Any])
-def get_client_topic_distribution(client_id: UUID, db: Session = Depends(get_db)):
+def get_client_topic_distribution(
+    client_id: UUID,
+    entity_ids: str = Query(None, description="Comma-separated entity ids to scope the comparison to (e.g. a single product pair). Omit for the default brand-vs-tracked-competitors view."),
+    db: Session = Depends(get_db)
+):
     """
     Topic/narrative ownership (Part O/R): a small, separate on-demand
     endpoint rather than a new field on get_client_benchmark above --
@@ -448,12 +452,64 @@ def get_client_topic_distribution(client_id: UUID, db: Session = Depends(get_db)
     stored column and no LLM/external cost to justify caching it the same
     way, so it's computed live here instead of bolting a new aggregation
     onto the cached-row read path.
+
+    `entity_ids` (Product Compare, Part 4): an optional override so this
+    same aggregation can scope to an explicit entity pair (e.g. one
+    product vs. a competitor's product) instead of the default client
+    brand + every gated tracked competitor. Tenant isolation is enforced
+    inside BenchmarkEngine.get_topic_distribution itself (ids not
+    belonging to this client are dropped, not trusted from the caller).
     """
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     from app.services.intelligence.benchmark_engine import BenchmarkEngine
-    return BenchmarkEngine().get_topic_distribution(db, str(client_id))
+
+    ids = None
+    primary_id = None
+    if entity_ids:
+        try:
+            ids = [UUID(x.strip()) for x in entity_ids.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="entity_ids must be a comma-separated list of UUIDs")
+        primary_id = ids[0] if ids else None
+
+    return BenchmarkEngine().get_topic_distribution(db, str(client_id), entity_ids=ids, primary_entity_id=primary_id)
+
+
+@router.get("/{client_id}/product-documents", response_model=Dict[str, Any])
+def get_client_product_documents(
+    client_id: UUID,
+    entity_id: UUID = Query(..., description="Tracked product entity id (own product or a competitor's product) to fetch 30-day evidence documents for."),
+    db: Session = Depends(get_db)
+):
+    """
+    Product Compare (Parts 2/3): the full 30-day evidence set for one
+    tracked product entity -- see BenchmarkEngine.get_entity_documents'
+    docstring. Frontend derives both the sentiment trajectory chart
+    (daily-bucketed) and Signature Stories (top-N by |sentiment|) from
+    this one response. Reuses documents.py's _build_document_responses so
+    the result renders through the exact same Details-drawer fields every
+    other document list on this page already uses.
+    """
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    from app.models.entity import Entity
+    product_entity = db.query(Entity).filter(
+        Entity.id == entity_id,
+        Entity.client_id == client_id,
+        Entity.entity_type == "product"
+    ).first()
+    if not product_entity:
+        raise HTTPException(status_code=400, detail="entity_id must be a tracked product entity belonging to this client")
+
+    from app.services.intelligence.benchmark_engine import BenchmarkEngine
+    from app.api.endpoints.documents import _build_document_responses
+
+    docs = BenchmarkEngine().get_entity_documents(db, str(client_id), entity_id)
+    return {"documents": _build_document_responses(db, str(client_id), docs)}
 
 @router.get("/{client_id}/share-of-voice", response_model=List[Dict[str, Any]])
 def get_client_sov(client_id: UUID, db: Session = Depends(get_db)):

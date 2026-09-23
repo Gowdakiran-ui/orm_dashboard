@@ -886,6 +886,8 @@ class BenchmarkEngine:
         self,
         db: Session,
         client_id: str,
+        entity_ids: Optional[List[Any]] = None,
+        primary_entity_id: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Topic/narrative ownership (Part O/R): per-entity topic-distribution
@@ -908,6 +910,17 @@ class BenchmarkEngine:
         back to "General", matching topicDistData's own `d.topic || "General"`
         convention on the frontend (useAnalytics.ts).
 
+        `entity_ids` (Product Compare, Part 4): when given, scopes the
+        comparison to exactly this caller-supplied entity set instead of
+        resolving "client brand + every gated tracked competitor" below --
+        e.g. a single [own product, competitor's product] pair. Tenant
+        isolation is still enforced (only entity_ids belonging to client_id
+        are used). `primary_entity_id` then marks which one of that set
+        counts as "is_client" in the response; it defaults to the first
+        resolved entity if omitted. Both params are optional and unused by
+        the existing brand-vs-competitors caller, whose behavior is
+        unchanged.
+
         Returns one entry per entity (client's own brand/product first, then
         every gated competitor): entity_id, name, is_client, total_documents
         (0 means no qualifying evidence -- caller must show an honest empty
@@ -921,19 +934,26 @@ class BenchmarkEngine:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         lookback_date = now_utc - datetime.timedelta(days=30)
 
-        client_entity = db.query(Entity).filter(
-            Entity.client_id == client_id,
-            Entity.entity_type == "brand"
-        ).first()
-        if not client_entity:
-            client_entity = db.query(Entity).filter(Entity.client_id == client_id).first()
+        if entity_ids is not None:
+            # Caller already resolved which entities to compare -- skip the
+            # brand+tracked-competitor roster resolution below entirely.
+            competitors = []
+            client_entity_id = primary_entity_id
+        else:
+            client_entity = db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.entity_type == "brand"
+            ).first()
             if not client_entity:
-                return {"entities": []}
+                client_entity = db.query(Entity).filter(Entity.client_id == client_id).first()
+                if not client_entity:
+                    return {"entities": []}
 
-        competitors = db.query(Entity).filter(
-            Entity.client_id == client_id,
-            Entity.entity_type == "competitor"
-        ).all()
+            competitors = db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.entity_type == "competitor"
+            ).all()
+            client_entity_id = client_entity.id
 
         # Identical brand co-occurrence gate to calculate_competitor_benchmarks
         # above -- same roster pre-filter, same brand_doc_ids per-event gate.
@@ -950,18 +970,29 @@ class BenchmarkEngine:
                     EntityMention.entity_id.in_(brand_or_product_ids)
                 ).all()
             )
-            gated_competitor_ids = set()
-            for e in competitors:
-                competitor_doc_ids = set(
-                    m.document_id for m in db.query(EntityMention).filter(
-                        EntityMention.entity_id == e.id
-                    ).all()
-                )
-                if competitor_doc_ids & brand_doc_ids:
-                    gated_competitor_ids.add(e.id)
-            competitors = [e for e in competitors if e.id in gated_competitor_ids]
+            if entity_ids is None:
+                gated_competitor_ids = set()
+                for e in competitors:
+                    competitor_doc_ids = set(
+                        m.document_id for m in db.query(EntityMention).filter(
+                            EntityMention.entity_id == e.id
+                        ).all()
+                    )
+                    if competitor_doc_ids & brand_doc_ids:
+                        gated_competitor_ids.add(e.id)
+                competitors = [e for e in competitors if e.id in gated_competitor_ids]
 
-        all_entities = [client_entity] + competitors
+        if entity_ids is not None:
+            all_entities = db.query(Entity).filter(
+                Entity.id.in_(entity_ids),
+                Entity.client_id == client_id,
+            ).all()
+            if not all_entities:
+                return {"entities": []}
+            if client_entity_id is None:
+                client_entity_id = all_entities[0].id
+        else:
+            all_entities = [client_entity] + competitors
         all_entity_ids = [e.id for e in all_entities]
 
         # Same filter shape as _preload_score_inputs' mentions_query above,
@@ -1004,12 +1035,83 @@ class BenchmarkEngine:
             results.append({
                 "entity_id": str(e.id),
                 "name": e.name,
-                "is_client": e.id == client_entity.id,
+                "is_client": e.id == client_entity_id,
                 "total_documents": len(doc_ids),
                 "topic_counts": topic_counts,
             })
 
         return {"entities": results}
+
+    def get_entity_documents(
+        self,
+        db: Session,
+        client_id: str,
+        entity_id: Any,
+        limit: int = 300,
+    ) -> List[Any]:
+        """
+        Product Compare (Parts 2/3): every document counted as evidence for
+        one tracked entity over the standard 30-day window -- feeds both the
+        sentiment trajectory chart (daily-bucketed client-side, same pattern
+        as useAnalytics.ts's sentimentTrendData) and Signature Stories
+        (top-N by |sentiment_score| client-side -- the only per-document
+        magnitude signal this platform has; documents.py's per-document
+        `reputation_impact` field is exactly `sentiment_score * 10`, shown
+        directly in the Details drawer elsewhere on this page. A strongly
+        negative story shaped perception just as much as a strongly
+        positive one, so that ranking is on magnitude, not signed value).
+        Returning the full window rather than a pre-ranked/pre-bucketed
+        subset lets one fetch serve both views without disagreeing about
+        which documents were evidence.
+
+        Same brand-co-occurrence gate as get_topic_distribution/
+        calculate_competitor_benchmarks above -- documents that never
+        co-occur with the client's own brand/product must not count as
+        evidence here either, for the same reason. Unlike Signature
+        Stories' predecessor draft of this method, there is no server-side
+        ranking or truncation beyond `limit` (a safety ceiling, not a
+        curation step -- 30 days of coverage for a single entity is not
+        expected to approach it; caller does its own ranking/bucketing).
+
+        Returns Document rows (caller builds the response shape -- reuses
+        documents.py's _build_document_responses so this list renders
+        through the exact same Details-drawer fields every other document
+        list on this page already uses).
+        """
+        from app.models.document import Document
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        lookback_date = now_utc - datetime.timedelta(days=30)
+
+        brand_or_product_ids = [
+            e.id for e in db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.entity_type.in_(("brand", "product"))
+            ).all()
+        ]
+        brand_doc_ids = None
+        if brand_or_product_ids:
+            brand_doc_ids = set(
+                m.document_id for m in db.query(EntityMention).filter(
+                    EntityMention.entity_id.in_(brand_or_product_ids)
+                ).all()
+            )
+
+        doc_ids_query = db.query(EntityMention.document_id).filter(
+            EntityMention.entity_id == entity_id,
+            EntityMention.created_at >= lookback_date
+        )
+        if brand_doc_ids is not None:
+            doc_ids_query = doc_ids_query.filter(EntityMention.document_id.in_(brand_doc_ids))
+        doc_ids = {row[0] for row in doc_ids_query.all()}
+        if not doc_ids:
+            return []
+
+        return db.query(Document).join(
+            DocumentSentiment, DocumentSentiment.document_id == Document.id
+        ).filter(
+            Document.id.in_(doc_ids)
+        ).order_by(Document.published_at.desc()).limit(limit).all()
 
     def process_client(
         self,

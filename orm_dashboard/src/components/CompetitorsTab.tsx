@@ -756,8 +756,9 @@ export function CompetitorsTab({
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="max-h-[420px] overflow-y-auto">
           <Table>
-            <TableHeader className={`${rowBorder} ${tableHeaderBg}`}>
+            <TableHeader className={`${rowBorder} ${tableHeaderBg} sticky top-0 z-10`}>
               <TableRow className={rowBorder}>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>COMPETITOR</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EVENT HEADLINE</TableHead>
@@ -800,6 +801,7 @@ export function CompetitorsTab({
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
       </>
