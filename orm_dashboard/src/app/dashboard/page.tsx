@@ -142,7 +142,6 @@ function DashboardShell() {
     reputation: data.reputation,
     risks: data.risks,
     executives: data.executives,
-    execHistory: data.execHistory,
     activeClientName,
     trendEvents: data.trendEvents,
     executiveCandidates: data.executiveCandidates,
@@ -355,9 +354,6 @@ function DashboardShell() {
               {activeTab === "executives" && (
                 <ErrorBoundary fallback={<TelemetryErrorWidget title="Executive Reputation Error" />}>
                   <ExecutivesTab
-                    execHistoryLoading={data.execHistoryLoading}
-                    execHistory={data.execHistory}
-                    execTrendChartData={analytics.execTrendChartData}
                     executivesLoading={data.executivesLoading}
                     executivesError={data.executivesError}
                     executives={data.executives}

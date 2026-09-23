@@ -3,7 +3,7 @@ import {
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
   fetchPlanAdvisory,
   fetchActiveAlerts, fetchCompetitorBenchmarks, fetchRisks,
-  fetchExecutives, fetchExecutiveHistory, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed,
+  fetchExecutives, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed,
   fetchCommandCenterStats,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
 } from "@/lib/api";
@@ -64,9 +64,6 @@ export function useDashboardData() {
   const [executives, setExecutives] = useState<any[]>([]);
   const [executivesLoading, setExecutivesLoading] = useState(true);
   const [executivesError, setExecutivesError] = useState<string | null>(null);
-
-  const [execHistory, setExecHistory] = useState<Record<string, any[]>>({});
-  const [execHistoryLoading, setExecHistoryLoading] = useState(false);
 
   const [systemStatus, setSystemStatus] = useState<any>({ status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 });
   const [systemStatusLoading, setSystemStatusLoading] = useState(true);
@@ -201,7 +198,6 @@ export function useDashboardData() {
       setBenchmarks([]);
       setRisks({ average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 });
       setExecutives([]);
-      setExecHistory({});
       setDocuments([]);
       setTrendEvents([]);
       setTelemetry(null);
@@ -218,7 +214,6 @@ export function useDashboardData() {
     setBenchmarksLoading(true);
     setRisksLoading(true);
     setExecutivesLoading(true);
-    setExecHistoryLoading(true);
     setSystemStatusLoading(true);
     setDocumentsLoading(true);
     setCommandStatsLoading(true);
@@ -422,18 +417,6 @@ export function useDashboardData() {
             .catch(() => { if (!signal.aborted) { setDocuments([]); setDocumentsError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setDocumentsLoading(false); }),
 
-          fetchExecutiveHistory(activeClientId, signal)
-            .then(data => {
-              if (!signal.aborted) {
-                const nextVal = data || {};
-                if (hasChanged(execHistory, nextVal)) {
-                  setExecHistory(nextVal);
-                }
-              }
-            })
-            .catch(() => { if (!signal.aborted) { setExecHistory({}); } })
-            .finally(() => { if (!signal.aborted) setExecHistoryLoading(false); }),
-
           fetchIntelligenceFeed(activeClientId, signal)
             .then(data => {
               if (!signal.aborted) {
@@ -567,7 +550,6 @@ export function useDashboardData() {
     setBenchmarks([]);
     setRisks(null);
     setExecutives([]);
-    setExecHistory({});
     setDocuments([]);
     setTrendEvents([]);
     setCommandStats(null);
@@ -587,7 +569,6 @@ export function useDashboardData() {
     setBenchmarksLoading(isLoading);
     setRisksLoading(isLoading);
     setExecutivesLoading(isLoading);
-    setExecHistoryLoading(isLoading);
     setDocumentsLoading(isLoading);
     setCommandStatsLoading(isLoading);
     setExecutiveCandidatesLoading(isLoading);
@@ -657,8 +638,6 @@ export function useDashboardData() {
     executives,
     executivesLoading,
     executivesError,
-    execHistory,
-    execHistoryLoading,
     systemStatus,
     systemStatusLoading,
     systemStatusError,
@@ -694,7 +673,6 @@ export function useDashboardData() {
     setBenchmarks,
     setRisks,
     setExecutives,
-    setExecHistory,
     setDocuments,
     setTrendEvents,
     setTelemetry,
@@ -706,7 +684,6 @@ export function useDashboardData() {
     setBenchmarksLoading,
     setRisksLoading,
     setExecutivesLoading,
-    setExecHistoryLoading,
     setSystemStatusLoading,
     setDocumentsLoading,
     setCommandStatsLoading,

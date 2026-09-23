@@ -11,7 +11,6 @@ interface AnalyticsProps {
   reputation: any;
   risks: any;
   executives: any[];
-  execHistory: Record<string, any[]>;
   activeClientName: string;
   trendEvents: any[];
   executiveCandidates: any[];
@@ -28,7 +27,6 @@ export function useAnalytics({
   reputation,
   risks,
   executives,
-  execHistory,
   activeClientName,
   trendEvents,
   executiveCandidates,
@@ -297,57 +295,6 @@ export function useAnalytics({
       { name: "Low", value: low, color: "#10B981" }
     ].filter(a => a.value > 0);
   }, [alerts]);
-
-  const execTrendChartData = useMemo(() => {
-    // Raw history has one point per triggering event, not one per day --
-    // on a data-rich client that's many points landing on the same
-    // calendar day, which previously became that many separate x-axis
-    // categories that all format to the same label ("Sep 4, Sep 4, Sep 4,
-    // ..."), duplicated and illegible (worst on the richest-data clients,
-    // since they generate the most same-day points -- Part H forensics
-    // §3.E). Bucketing to one row per calendar day first fixes this at the
-    // source, for every chart that consumes this data (both the "Notable
-    // People" trend and an individual executive's "Reputation Trend" chart
-    // render this same array). A score is averaged across same-day points,
-    // not summed -- this is a score-like metric (0-100), not a volume/count.
-    type Bucket = { sortKey: number; displayDate: string; scores: Record<string, { sum: number; count: number }> };
-    const buckets = new Map<string, Bucket>();
-
-    Object.entries(execHistory || {}).forEach(([name, hist]) => {
-      if (!Array.isArray(hist)) return;
-      hist.forEach(h => {
-        if (!h || !h.date || typeof h.score !== "number") return;
-        // Raw ISO-8601 timestamps (e.g. "2026-09-03T08:20:00.179606+00:00")
-        // must not reach the chart's x-axis/tooltip as-is
-        // (xoop_ui_clarity_review.md) -- bucket key is the calendar day
-        // derived from the same Date object used for the display label, so
-        // the two can't disagree.
-        const d = new Date(h.date);
-        const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-        if (!buckets.has(dayKey)) {
-          buckets.set(dayKey, {
-            sortKey: d.getTime(),
-            displayDate: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-            scores: {}
-          });
-        }
-        const bucket = buckets.get(dayKey)!;
-        if (!bucket.scores[name]) bucket.scores[name] = { sum: 0, count: 0 };
-        bucket.scores[name].sum += h.score;
-        bucket.scores[name].count += 1;
-      });
-    });
-
-    return Array.from(buckets.values())
-      .sort((a, b) => a.sortKey - b.sortKey)
-      .map(bucket => {
-        const row: Record<string, any> = { date: bucket.displayDate };
-        Object.entries(bucket.scores).forEach(([name, { sum, count }]) => {
-          row[name] = Number((sum / count).toFixed(1));
-        });
-        return row;
-      });
-  }, [execHistory]);
 
   // Tier 3 Part A: per-bucket driving narrative, reusing the same
   // narrative_engine.py RCA (evidence_metadata.rca.root_cause) the
@@ -734,7 +681,6 @@ export function useAnalytics({
     riskMatrixData,
     riskHeatmapData,
     alertSeverityData,
-    execTrendChartData,
     sentimentTrendData,
     alertTimelineData,
     engineDiagnosticsList

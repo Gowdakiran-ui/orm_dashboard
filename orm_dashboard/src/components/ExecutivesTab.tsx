@@ -3,12 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  LineChart as RechartsLineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar
 } from 'recharts';
 import {
   Users, Activity, Search, AlertTriangle, ShieldCheck, Trophy, Info,
-  TrendingUp, Calendar, AlertOctagon, X, ExternalLink
+  TrendingUp, AlertOctagon, X, ExternalLink
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -19,7 +18,7 @@ import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyT
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 import { ReputationScoreDefinition, ExecutiveSentimentBreakdownDefinition, ExecutiveScorecardMetricsDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
-import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
+import { formatScore } from "@/utils/formatScore";
 
 // Reinforces the letter grade with the same red/amber/green severity palette
 // already used for Risk severity elsewhere (e.g. RiskTab.tsx's CRITICAL/HIGH
@@ -80,9 +79,6 @@ function gradeDriverLine(executive: any): string | null {
 }
 
 export interface ExecutivesTabProps {
-  execHistoryLoading: boolean;
-  execHistory: Record<string, any[]>;
-  execTrendChartData: any[];
   executivesLoading: boolean;
   executivesError: string | null;
   executives: any[];
@@ -96,9 +92,6 @@ export interface ExecutivesTabProps {
 }
 
 export function ExecutivesTab({
-  execHistoryLoading,
-  execHistory,
-  execTrendChartData,
   executivesLoading,
   executivesError,
   executives,
@@ -329,29 +322,6 @@ export function ExecutivesTab({
     ];
   }, [execEvents]);
 
-  // 6. ACTIVITY TIMELINE DATA (Aggregated by day)
-  const timelineData = useMemo(() => {
-    const dates: Record<string, number> = {};
-    // Last 10 days structure
-    for (let i = 9; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const str = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      dates[str] = 0;
-    }
-
-    execEvents.forEach(e => {
-      if (e.timestamp) {
-        const str = new Date(e.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        if (dates[str] !== undefined) {
-          dates[str]++;
-        }
-      }
-    });
-
-    return Object.entries(dates).map(([date, count]) => ({ date, Mentions: count }));
-  }, [execEvents]);
-
   return (
     <div className="space-y-6">
 
@@ -531,125 +501,41 @@ export function ExecutivesTab({
         </CardContent>
       </Card>
 
-      {/* 2. Executive History Line Chart */}
-      <ErrorBoundary fallback={<TelemetryErrorWidget title="Exec History Chart Error" />}>
-        {execHistoryLoading ? (
-          <Card className={`${glassTokens[theme].card} rounded-3xl h-[340px] animate-pulse`} />
-        ) : (
-          <Card className={glassCard(theme)}>
-            <CardHeader>
-              <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-                Reputation Trend
-                <InfoTooltip label="About Reputation Trend"><ReputationScoreDefinition /></InfoTooltip>
-              </CardTitle>
-              <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>Reputation score over time for this executive</CardDescription>
-            </CardHeader>
-            <CardContent className="pl-2">
-              <div className="h-[280px]">
-                {Object.keys(execHistory).length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsLineChart data={execTrendChartData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                      {/* execTrendChartData is already bucketed to one point
-                          per calendar day (useAnalytics.ts) -- this interval
-                          is a second-layer guard using recharts' own
-                          built-in tick-skip for a date range still too wide
-                          at daily granularity. */}
-                      <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} interval="preserveStartEnd" />
-                      <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} domain={[0, 100]} />
-                      <Tooltip formatter={tooltipScoreFormatter} contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
-                      {Object.keys(execHistory).map((name, idx) => {
-                        const colors = ["#38BDF8", "#EF4444", "#EAB308", "#10B981"];
-                        const col = colors[idx % colors.length];
-                        return (
-                          <Line key={idx} type="monotone" dataKey={name} stroke={col} strokeWidth={2} dot={{ r: 3 }} />
-                        );
-                      })}
-                    </RechartsLineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full space-y-4">
-                    <div className="grid grid-cols-2 gap-4 w-full px-8">
-                      <div className={`border rounded p-4 flex flex-col items-center justify-center space-y-2 ${surfaceBorder} ${surfaceBg}`}>
-                        <Users className={`h-6 w-6 mb-1 ${mutedText(theme)}`} />
-                        <span className={`font-mono text-xs ${mutedText(theme)}`}>Executive In Focus</span>
-                        <span className={`font-mono text-xl font-bold ${bodyText(theme)}`}>{singleExecutiveList.length}</span>
-                      </div>
-                      <div className={`border rounded p-4 flex flex-col items-center justify-center space-y-2 ${surfaceBorder} ${surfaceBg}`}>
-                        <Activity className="h-6 w-6 text-[#D4AF37]/50 mb-1" />
-                        <span className={`font-mono text-xs ${mutedText(theme)}`}>Data Status</span>
-                        <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 text-xs font-mono">Collecting</Badge>
-                      </div>
-                    </div>
-                    <p className={`font-mono text-xs mt-4 uppercase ${mutedText(theme)}`}>Waiting for enough data points to plot a trend</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </ErrorBoundary>
+      {/* 2. Executive Sentiment Breakdown -- Reputation Distribution and
+          Influence Ranking removed per hyperfocus redesign (both were
+          rankings/histograms across every historically-tracked executive,
+          meaningless with exactly one executive in focus). Reputation Trend
+          and Activity Timeline removed 2026-09-23 (PART_N forensics): the
+          Reputation Trend chart was never actually scoped to the selected
+          executive -- it rendered every tracked executive's history at
+          once via the shared execHistory/execTrendChartData chain,
+          mislabeled as "this executive" -- and Activity Timeline had no
+          dependents once removed. Sentiment Breakdown now stands alone
+          instead of sharing a two-column grid with the removed Activity
+          Timeline card. */}
+      <Card className={glassCard(theme)}>
+        <CardHeader>
+          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+            <Activity className="h-4 w-4 text-emerald-500 mr-2" />
+            Sentiment Breakdown
+            <InfoTooltip label="About Sentiment Breakdown"><ExecutiveSentimentBreakdownDefinition /></InfoTooltip>
+          </CardTitle>
+          <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>How coverage of this executive splits by tone</CardDescription>
+        </CardHeader>
+        <CardContent className="h-[220px] pl-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={sentimentData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
+              <XAxis dataKey="name" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+              <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
+              <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
+              <Bar dataKey="value" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
-      {/* 3. DUAL VISUALIZATIONS -- Reputation Distribution and Influence
-          Ranking removed per hyperfocus redesign: both were rankings/
-          histograms across every historically-tracked executive, which are
-          meaningless with exactly one executive in focus. */}
-      <div className="grid gap-6 md:grid-cols-2">
-
-        {/* Executive Sentiment Breakdown */}
-        <Card className={glassCard(theme)}>
-          <CardHeader>
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-              <Activity className="h-4 w-4 text-emerald-500 mr-2" />
-              Sentiment Breakdown
-              <InfoTooltip label="About Sentiment Breakdown"><ExecutiveSentimentBreakdownDefinition /></InfoTooltip>
-            </CardTitle>
-            <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>How coverage of this executive splits by tone</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[220px] pl-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sentimentData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                <XAxis dataKey="name" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
-                <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
-                <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
-                <Bar dataKey="value" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Executive Activity Timeline */}
-        <Card className={glassCard(theme)}>
-          <CardHeader>
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-              <Calendar className="h-4 w-4 text-[#38BDF8] mr-2" />
-              Activity Timeline
-            </CardTitle>
-            <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>Coverage volume mentioning this executive, by day</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[220px] pl-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timelineData}>
-                <defs>
-                  <linearGradient id="colorMentions" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#38BDF8" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#38BDF8" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                <XAxis dataKey="date" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
-                <YAxis stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
-                <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b' }} />
-                <Area type="monotone" dataKey="Mentions" stroke="#38BDF8" fillOpacity={1} fill="url(#colorMentions)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-      </div>
-
-      {/* 4. EXECUTIVE SCORECARD */}
+      {/* 3. EXECUTIVE SCORECARD */}
       <ErrorBoundary fallback={<TelemetryErrorWidget title="Executives Error" />}>
         {executivesLoading ? (
           <Card className={`${glassTokens[theme].card} rounded-3xl h-48 animate-pulse`} />
@@ -736,7 +622,7 @@ export function ExecutivesTab({
         )}
       </ErrorBoundary>
 
-      {/* 5. EXECUTIVE ACTIVITY TABLE */}
+      {/* 4. EXECUTIVE ACTIVITY TABLE */}
       <Card className={glassCard(theme)}>
         <CardHeader>
           <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
