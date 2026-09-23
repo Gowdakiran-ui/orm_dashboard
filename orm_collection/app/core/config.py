@@ -73,6 +73,18 @@ class Settings(BaseSettings):
     ADVISOR_CACHE_MAX_SIZE: int = 500
     ADVISOR_CACHE_TTL_SECONDS: int = 600
 
+    # Counterfeit Detection page (on-demand deepfake + typosquat/counterfeit
+    # domain scan, not a pipeline stage). Keys live only in the repo-root
+    # .env (same place APIFY_API_TOKEN lives), delivered to backend/celery
+    # containers via docker-compose's env_file, not orm_collection/.env.
+    # Free tiers for the pilot: Reality Defender 50 scans/month, WhoisFreaks
+    # 500 credits total -- unset disables the corresponding tool (same
+    # "missing key -> reports itself unavailable" convention as
+    # YOUTUBE_API_KEY/APIFY_API_TOKEN).
+    REALITY_DEFENDER_API_KEY: Optional[str] = None
+    WHOISFREAKS_API_KEY: Optional[str] = None
+    BOLSTER_API_KEY: Optional[str] = None
+
     # Session auth (replaces the platform-wide shared-secret gate — see
     # auth.py / TASK_AUTH.md, API_FORENSICS.md Section 1). Sessions are
     # opaque tokens stored in Redis (core/security.py), handed to the

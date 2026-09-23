@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import {
   Shield, Search, Plus, Trash2, Loader2, Play, Radio, Award,
   ShieldAlert, Users, BarChart3, FileText, Server,
-  BarChart as BarChartIcon, LogOut, ShieldCheck, X
+  BarChart as BarChartIcon, LogOut, ShieldCheck, ScanSearch, X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { logout } from "@/lib/api";
@@ -207,6 +207,7 @@ export function Sidebar({
             { id: "executives", label: "Executive Reputation", icon: Users },
             { id: "analytics", label: "Executive Analytics", icon: BarChartIcon },
             { id: "feed", label: "Intelligence Stream", icon: FileText },
+            { id: "counterfeit", label: "Counterfeit Detection", icon: ScanSearch },
             ...(isSuperAdmin ? [{ id: "admin", label: "Access Control", icon: ShieldCheck }] : [])
           ].map(tab => {
             const Icon = tab.icon;

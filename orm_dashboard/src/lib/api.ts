@@ -426,6 +426,41 @@ export async function fetchRisks(clientId: string, signal?: AbortSignal) {
   return parseOrThrow(res);
 }
 
+// Deepfake scan takes a File (multipart/form-data) -- deliberately NOT using
+// fetchWithRetry here, since it always forces a "Content-Type: application/json"
+// header (see its own comment above), which would stop the browser from
+// setting the multipart boundary itself and break the upload.
+export async function submitDeepfakeScan(clientId: string, file: File, signal?: AbortSignal) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/client-intelligence/${clientId}/counterfeit/deepfake-scan`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+    signal,
+  });
+  return parseOrThrow(res);
+}
+
+export async function submitDomainScan(clientId: string, keyword: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/counterfeit/domain-scan`, {
+    method: "POST",
+    body: JSON.stringify({ keyword }),
+    signal,
+  });
+  return parseOrThrow(res);
+}
+
+export async function fetchCounterfeitScan(clientId: string, scanId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/counterfeit/scans/${scanId}`, { signal });
+  return parseOrThrow(res);
+}
+
+export async function fetchCounterfeitScans(clientId: string, scanType: "deepfake" | "domain", signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/counterfeit/scans?scan_type=${scanType}`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function fetchExecutives(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executives`, { signal });
   return parseOrThrow(res);

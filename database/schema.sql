@@ -191,6 +191,27 @@ CREATE TABLE public.collection_jobs (
 
 
 --
+-- Name: counterfeit_scans; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.counterfeit_scans (
+    id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    scan_type character varying(20) NOT NULL,
+    status character varying(20) DEFAULT 'QUEUED'::character varying NOT NULL,
+    input_summary character varying(255),
+    result json,
+    error_message text,
+    document_id uuid,
+    risk_event_id uuid,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT ck_counterfeit_scans_scan_type CHECK (((scan_type)::text = ANY (ARRAY[('deepfake'::character varying)::text, ('domain'::character varying)::text]))),
+    CONSTRAINT ck_counterfeit_scans_status CHECK (((status)::text = ANY (ARRAY[('QUEUED'::character varying)::text, ('PROCESSING'::character varying)::text, ('COMPLETE'::character varying)::text, ('FAILED'::character varying)::text])))
+);
+
+
+--
 -- Name: competitor_benchmarks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -895,6 +916,14 @@ ALTER TABLE ONLY public.collection_jobs
 
 
 --
+-- Name: counterfeit_scans counterfeit_scans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.counterfeit_scans
+    ADD CONSTRAINT counterfeit_scans_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: competitor_benchmarks competitor_benchmarks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1404,6 +1433,20 @@ CREATE INDEX ix_collection_jobs_source_id ON public.collection_jobs USING btree 
 
 
 --
+-- Name: ix_counterfeit_scans_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_counterfeit_scans_client_id ON public.counterfeit_scans USING btree (client_id);
+
+
+--
+-- Name: ix_counterfeit_scans_scan_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_counterfeit_scans_scan_type ON public.counterfeit_scans USING btree (scan_type);
+
+
+--
 -- Name: ix_competitor_benchmarks_client_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1813,6 +1856,30 @@ ALTER TABLE ONLY public.client_processing_summary
 
 ALTER TABLE ONLY public.collection_jobs
     ADD CONSTRAINT collection_jobs_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.rss_feeds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: counterfeit_scans counterfeit_scans_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.counterfeit_scans
+    ADD CONSTRAINT counterfeit_scans_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: counterfeit_scans counterfeit_scans_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.counterfeit_scans
+    ADD CONSTRAINT counterfeit_scans_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: counterfeit_scans counterfeit_scans_risk_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.counterfeit_scans
+    ADD CONSTRAINT counterfeit_scans_risk_event_id_fkey FOREIGN KEY (risk_event_id) REFERENCES public.risk_events(id) ON DELETE SET NULL;
 
 
 --

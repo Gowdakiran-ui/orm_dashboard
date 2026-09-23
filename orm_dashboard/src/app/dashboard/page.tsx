@@ -27,6 +27,7 @@ import { FeedTab } from "@/components/FeedTab";
 import { ExecutivesTab } from "@/components/ExecutivesTab";
 import { CompetitorsTab } from "@/components/CompetitorsTab";
 import { AdminUsersPanel } from "@/components/AdminUsersPanel";
+import { CounterfeitDetectionTab } from "@/components/CounterfeitDetectionTab";
 
 // Custom Hooks & Utilities
 import { useDashboardData } from "@/hooks/useDashboardData";
@@ -59,7 +60,7 @@ export default function Home() {
 // return. Anything outside this set (a stale/bookmarked link, e.g. the
 // removed `?tab=pipeline`) falls back to DEFAULT_FALLBACK_TAB instead of
 // rendering a blank content area under a mismatched header.
-const VALID_TABS = ["reputation", "analytics", "risk", "competitors", "executives", "feed", "admin"];
+const VALID_TABS = ["reputation", "analytics", "risk", "competitors", "executives", "feed", "counterfeit", "admin"];
 const DEFAULT_FALLBACK_TAB = "reputation"; // matches useTabNavigation's own DEFAULT_TAB
 
 function DashboardShell() {
@@ -375,6 +376,13 @@ function DashboardShell() {
                     systemStatus={data.systemStatus}
                     clientId={data.clientId}
                   />
+                </ErrorBoundary>
+              )}
+
+              {/* H. COUNTERFEIT DETECTION VIEW */}
+              {activeTab === "counterfeit" && (
+                <ErrorBoundary fallback={<TelemetryErrorWidget title="Counterfeit Detection Error" />}>
+                  <CounterfeitDetectionTab clientId={data.clientId} />
                 </ErrorBoundary>
               )}
 

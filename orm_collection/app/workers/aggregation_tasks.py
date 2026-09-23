@@ -2126,3 +2126,243 @@ def run_client_pipeline(self, run_id: str, client_id: str):
         finally:
             _release_lock(redis_client, client_id, owner_id, log)
             fail_db.close()
+
+
+# ---------------------------------------------------------------------------
+# Counterfeit Detection page — on-demand tasks (NOT part of the pipeline
+# chain above; dispatched directly by client_intelligence.py's
+# /counterfeit/* endpoints, one task per user-triggered scan). Reuses the
+# same "DB row is the source of truth, no AsyncResult" convention as
+# PipelineRun: the CounterfeitScan row created by the endpoint before
+# dispatch is what the status-poll endpoint reads.
+#
+# A real finding (deepfake-flagged image, live+malicious domain) becomes a
+# real RiskEvent -- via a synthetic Document row, NOT via risk_engine.py's
+# _upsert_risk_event. That upsert's ON CONFLICT WHERE clause gates updates
+# on explainability.role_classification_source, business logic specific to
+# document-based risk scoring that doesn't apply here, and its conflict key
+# collapses to one row per client when document_id AND entity_id are both
+# null (see uq_risk_events_daily) -- exactly what every RiskEvent from this
+# feature would be without a real document_id. Giving each finding its own
+# synthetic Document sidesteps both problems with a plain INSERT.
+# ---------------------------------------------------------------------------
+
+from app.models.counterfeit_scan import CounterfeitScan
+from app.models.document import Document
+from app.models.risk import RiskEvent
+from app.services.intelligence.counterfeit_detection import (
+    CounterfeitDetectionError,
+    CounterfeitDetectionUnavailable,
+    MAX_DOMAINS_TO_LIVE_CHECK,
+    check_domain_live_status,
+    find_typosquat_candidates,
+    lookup_registrar,
+    scan_image_for_deepfake,
+)
+
+
+def _create_counterfeit_risk_event(
+    db,
+    client_id: str,
+    url: str,
+    title: str,
+    normalized_content: str,
+    risk_score: float,
+    risk_level: str,
+    confidence_score: float,
+    explainability: Dict[str, Any],
+) -> Any:
+    """
+    Creates a synthetic Document (skipped from every real processing
+    stage -- see module note above) plus a real RiskEvent tied to it.
+    Returns the new RiskEvent. Caller commits.
+    """
+    doc = Document(
+        url=url,
+        title=title,
+        normalized_content=normalized_content,
+        document_type="counterfeit_scan",
+        source_id=None,
+        processing_status="SKIPPED",
+        topic_processing_status="SKIPPED",
+        sentiment_processing_status="SENTIMENT_SKIPPED",
+    )
+    db.add(doc)
+    db.flush()  # assigns doc.id without committing
+
+    risk_event = RiskEvent(
+        client_id=client_id,
+        document_id=doc.id,
+        entity_id=None,
+        risk_score=risk_score,
+        risk_level=risk_level,
+        confidence_score=confidence_score,
+        risk_factors=[{"type": "CounterfeitDetection", "factor": explainability.get("scan_type"), "weight": 100}],
+        explainability=explainability,
+        computed_at=datetime.now(timezone.utc),
+    )
+    db.add(risk_event)
+    db.flush()
+    return risk_event
+
+
+@shared_task(bind=True, queue="io_queue", max_retries=0)
+def run_deepfake_scan(self, scan_id: str, client_id: str, image_b64: str, filename: str, content_type: str) -> None:
+    import base64
+
+    log = logger.bind(scan_id=scan_id, client_id=client_id, task="run_deepfake_scan")
+    db = SessionLocal()
+    try:
+        scan = db.query(CounterfeitScan).filter(CounterfeitScan.id == scan_id).first()
+        if not scan:
+            log.error("counterfeit_scan_row_missing")
+            return
+        scan.status = "PROCESSING"
+        db.commit()
+
+        try:
+            image_bytes = base64.b64decode(image_b64)
+            result = scan_image_for_deepfake(image_bytes, filename, content_type)
+        except (CounterfeitDetectionUnavailable, CounterfeitDetectionError) as e:
+            scan.status = "FAILED"
+            scan.error_message = str(e)
+            db.commit()
+            log.warning("deepfake_scan_failed", error=str(e))
+            return
+        except Exception as e:
+            scan.status = "FAILED"
+            scan.error_message = "Unexpected error during deepfake scan."
+            db.commit()
+            log.error("deepfake_scan_unexpected_error", error=str(e), exc_info=True)
+            return
+
+        scan.result = result
+        scan.status = "COMPLETE"
+
+        verdict = result.get("verdict")
+        if verdict in ("FAKE", "SUSPICIOUS"):
+            confidence = result.get("confidence_score")
+            risk_score = confidence if confidence is not None else (90.0 if verdict == "FAKE" else 60.0)
+            risk_event = _create_counterfeit_risk_event(
+                db,
+                client_id=client_id,
+                url=f"internal://counterfeit-scan/deepfake/{scan_id}",
+                title=f"Deepfake scan — {filename}",
+                normalized_content=f"Deepfake image scan of '{filename}': verdict={verdict}, confidence_score={confidence}.",
+                risk_score=risk_score,
+                risk_level="CRITICAL" if verdict == "FAKE" else "HIGH",
+                confidence_score=(confidence / 100.0) if confidence is not None else 0.7,
+                explainability={"scan_type": "deepfake", "verdict": verdict, "request_id": result.get("request_id")},
+            )
+            scan.document_id = risk_event.document_id
+            scan.risk_event_id = risk_event.id
+
+        db.commit()
+        log.info("deepfake_scan_complete", verdict=verdict)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, queue="io_queue", max_retries=0)
+def run_domain_scan(self, scan_id: str, client_id: str, keyword: str) -> None:
+    log = logger.bind(scan_id=scan_id, client_id=client_id, task="run_domain_scan")
+    db = SessionLocal()
+    try:
+        scan = db.query(CounterfeitScan).filter(CounterfeitScan.id == scan_id).first()
+        if not scan:
+            log.error("counterfeit_scan_row_missing")
+            return
+        scan.status = "PROCESSING"
+        db.commit()
+
+        try:
+            candidates = find_typosquat_candidates(keyword)
+        except (CounterfeitDetectionUnavailable, CounterfeitDetectionError) as e:
+            scan.status = "FAILED"
+            scan.error_message = str(e)
+            db.commit()
+            log.warning("domain_scan_lookup_failed", error=str(e))
+            return
+        except Exception as e:
+            scan.status = "FAILED"
+            scan.error_message = "Unexpected error during typosquat lookup."
+            db.commit()
+            log.error("domain_scan_unexpected_error", error=str(e), exc_info=True)
+            return
+
+        # Most-recently-seen first, so the capped live-check spends Bolster's
+        # scarce daily quota on domains still active rather than long-dormant
+        # ones near the end of an alphabetical/registration-order response.
+        candidates_sorted = sorted(candidates, key=lambda c: c.get("last_seen") or "", reverse=True)
+        to_check = candidates_sorted[:MAX_DOMAINS_TO_LIVE_CHECK]
+
+        enriched = []
+        created_risk_event_ids = []
+        for candidate in to_check:
+            domain_name = candidate["domain_name"]
+            registrar_info = lookup_registrar(domain_name) or {}
+            row = {
+                **candidate,
+                "registrar": registrar_info.get("registrar"),
+                "live": None,
+                "malicious": None,
+                "disposition": None,
+            }
+            try:
+                live_status = check_domain_live_status(domain_name)
+                row["live"] = live_status["live"]
+                row["malicious"] = live_status["malicious"]
+                row["disposition"] = live_status["disposition"]
+            except (CounterfeitDetectionUnavailable, CounterfeitDetectionError) as e:
+                row["error"] = str(e)
+                log.warning("bolster_check_failed_for_candidate", domain=domain_name, error=str(e))
+            except Exception as e:
+                row["error"] = "Unexpected error checking this domain."
+                log.error("bolster_check_unexpected_error", domain=domain_name, error=str(e), exc_info=True)
+
+            if row["malicious"]:
+                risk_event = _create_counterfeit_risk_event(
+                    db,
+                    client_id=client_id,
+                    url=f"internal://counterfeit-scan/domain/{scan_id}/{domain_name}",
+                    title=f"Counterfeit domain — {domain_name}",
+                    normalized_content=(
+                        f"Typosquat domain '{domain_name}' (found searching '{keyword}') is live and "
+                        f"flagged {row['disposition']} by Bolster.ai. Registrar: {row['registrar'] or 'unknown'}."
+                    ),
+                    risk_score=85.0,
+                    risk_level="HIGH",
+                    confidence_score=0.85,
+                    explainability={
+                        "scan_type": "domain",
+                        "domain_name": domain_name,
+                        "keyword": keyword,
+                        "disposition": row["disposition"],
+                    },
+                )
+                created_risk_event_ids.append(str(risk_event.id))
+
+            enriched.append(row)
+
+        scan.result = {
+            "candidates": enriched,
+            "total_candidates_found": len(candidates),
+            "live_checked": len(to_check),
+        }
+        scan.status = "COMPLETE"
+        if created_risk_event_ids:
+            # Convenience pointer to the first finding; every created
+            # RiskEvent is independently queryable via risk_events itself
+            # (a scan can surface more than one malicious candidate).
+            scan.risk_event_id = created_risk_event_ids[0]
+
+        db.commit()
+        log.info("domain_scan_complete", candidates_found=len(candidates), malicious_found=len(created_risk_event_ids))
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

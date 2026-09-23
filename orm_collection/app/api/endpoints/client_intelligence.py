@@ -1,10 +1,11 @@
 import os
 import time
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.core.dashboard_cache import cached_by_client
 from app.core.db import get_db
 from app.models.client import Client
@@ -1724,3 +1725,136 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
             "last_run": benchmark_last_run
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# Counterfeit Detection — on-demand deepfake image scan (Reality Defender)
+# and counterfeit/typosquat domain scan (WhoisFreaks + Bolster.ai). Same
+# "create a DB row, dispatch a task, poll the row" pattern as
+# clients.py's /pipeline/run + /pipeline/status (source of truth is
+# Postgres, never AsyncResult/Redis).
+# ---------------------------------------------------------------------------
+
+_SUPPORTED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+_MAX_IMAGE_BYTES = 50 * 1024 * 1024  # Reality Defender's own image size ceiling
+
+
+class DomainScanRequest(BaseModel):
+    keyword: str = Field(..., min_length=3, max_length=63)
+
+
+def _counterfeit_scan_to_dict(scan) -> Dict[str, Any]:
+    return {
+        "scan_id": str(scan.id),
+        "scan_type": scan.scan_type,
+        "status": scan.status,
+        "input_summary": scan.input_summary,
+        "result": scan.result,
+        "error_message": scan.error_message,
+        "risk_event_id": str(scan.risk_event_id) if scan.risk_event_id else None,
+        "created_at": scan.created_at.isoformat() if scan.created_at else None,
+        "updated_at": scan.updated_at.isoformat() if scan.updated_at else None,
+    }
+
+
+@router.post("/{client_id}/counterfeit/deepfake-scan")
+async def submit_deepfake_scan(client_id: UUID, response: Response, db: Session = Depends(get_db), file: UploadFile = File(...)):
+    """
+    Queue a deepfake scan for an uploaded image. Returns 202 immediately;
+    poll GET /{client_id}/counterfeit/scans/{scan_id} for the result.
+    """
+    from app.models.counterfeit_scan import CounterfeitScan
+    from app.core.celery_app import celery_app
+    import base64
+
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    if file.content_type not in _SUPPORTED_IMAGE_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{file.content_type}'. Supported: JPEG, PNG, GIF, WEBP.")
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(image_bytes) > _MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Image exceeds the 50MB size limit.")
+
+    scan = CounterfeitScan(client_id=client_id, scan_type="deepfake", status="QUEUED", input_summary=file.filename)
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    try:
+        celery_app.send_task(
+            "app.workers.aggregation_tasks.run_deepfake_scan",
+            args=[str(scan.id), str(client_id), base64.b64encode(image_bytes).decode("ascii"), file.filename, file.content_type],
+        )
+    except Exception as exc:
+        scan.status = "FAILED"
+        scan.error_message = "Celery broker unreachable. Scan could not be queued."
+        db.commit()
+        logger.error("deepfake_scan_dispatch_failed", client_id=str(client_id), error=str(exc), exc_info=True)
+        raise HTTPException(status_code=503, detail="Celery broker unreachable. Scan could not be queued.")
+
+    response.status_code = 202
+    return {"scan_id": str(scan.id), "status": "QUEUED"}
+
+
+@router.post("/{client_id}/counterfeit/domain-scan")
+def submit_domain_scan(client_id: UUID, payload: DomainScanRequest, response: Response, db: Session = Depends(get_db)):
+    """
+    Queue a counterfeit/typosquat domain scan for a brand keyword. Returns
+    202 immediately; poll GET /{client_id}/counterfeit/scans/{scan_id}.
+    """
+    from app.models.counterfeit_scan import CounterfeitScan
+    from app.core.celery_app import celery_app
+
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    scan = CounterfeitScan(client_id=client_id, scan_type="domain", status="QUEUED", input_summary=payload.keyword)
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    try:
+        celery_app.send_task(
+            "app.workers.aggregation_tasks.run_domain_scan",
+            args=[str(scan.id), str(client_id), payload.keyword],
+        )
+    except Exception as exc:
+        scan.status = "FAILED"
+        scan.error_message = "Celery broker unreachable. Scan could not be queued."
+        db.commit()
+        logger.error("domain_scan_dispatch_failed", client_id=str(client_id), error=str(exc), exc_info=True)
+        raise HTTPException(status_code=503, detail="Celery broker unreachable. Scan could not be queued.")
+
+    response.status_code = 202
+    return {"scan_id": str(scan.id), "status": "QUEUED"}
+
+
+@router.get("/{client_id}/counterfeit/scans/{scan_id}", response_model=Dict[str, Any])
+def get_counterfeit_scan_status(client_id: UUID, scan_id: UUID, db: Session = Depends(get_db)):
+    from app.models.counterfeit_scan import CounterfeitScan
+    scan = db.query(CounterfeitScan).filter(
+        CounterfeitScan.id == scan_id, CounterfeitScan.client_id == client_id
+    ).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return _counterfeit_scan_to_dict(scan)
+
+
+@router.get("/{client_id}/counterfeit/scans", response_model=List[Dict[str, Any]])
+def list_counterfeit_scans(
+    client_id: UUID,
+    scan_type: Optional[str] = Query(None, pattern="^(deepfake|domain)$"),
+    db: Session = Depends(get_db),
+):
+    from app.models.counterfeit_scan import CounterfeitScan
+    q = db.query(CounterfeitScan).filter(CounterfeitScan.client_id == client_id)
+    if scan_type:
+        q = q.filter(CounterfeitScan.scan_type == scan_type)
+    scans = q.order_by(CounterfeitScan.created_at.desc()).limit(50).all()
+    return [_counterfeit_scan_to_dict(s) for s in scans]
