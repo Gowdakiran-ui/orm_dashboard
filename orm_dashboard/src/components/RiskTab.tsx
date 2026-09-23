@@ -7,7 +7,7 @@ import {
   TrendingUp, AlertOctagon, Info
 } from "lucide-react";
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
+  ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
@@ -18,8 +18,6 @@ import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyT
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 import {
-  RiskSeverityDefinition,
-  AverageRiskScoreTrackedDefinition,
   RiskMatrixAxesDefinition,
   RiskCategoriesDefinition,
   CriticalRisksVsActiveAlertsDefinition,
@@ -220,24 +218,6 @@ export function RiskTab({
     return { total, critical, high, medium, low, avg, highest };
   }, [riskDocs]);
 
-  // 2. Severity Distribution Chart Data
-  const severityChartData = useMemo(() => {
-    let lowCount = 0, medCount = 0, highCount = 0, critCount = 0;
-    riskDocs.forEach(d => {
-      const level = getRiskLevel(d.risk);
-      if (level === "CRITICAL") critCount++;
-      else if (level === "HIGH") highCount++;
-      else if (level === "MEDIUM") medCount++;
-      else lowCount++;
-    });
-    return [
-      { name: "Critical", value: critCount, color: "#EF4444" },
-      { name: "High", value: highCount, color: "#F97316" },
-      { name: "Medium", value: medCount, color: "#EAB308" },
-      { name: "Low", value: lowCount, color: "#10B981" }
-    ].filter(d => d.value > 0);
-  }, [riskDocs]);
-
   // 3. 3x3 Matrix Grid Buckets
   const matrixData = useMemo(() => {
     const grid: Record<string, Record<string, any[]>> = {
@@ -305,7 +285,6 @@ export function RiskTab({
             { label: "High Risks", value: stats.high, color: "text-orange-500" },
             { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
             { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
-            { label: "Avg Risk Score", value: stats.avg, color: bodyText(theme), def: <AverageRiskScoreTrackedDefinition /> },
             { label: "Highest Risk", value: stats.highest, color: "text-red-500 font-black" }
           ].map((card, idx) => (
             <div
@@ -476,60 +455,11 @@ export function RiskTab({
         </CardContent>
       </Card>
 
-      {/* Grid containing Severity pie & Likelihood Matrix */}
+      {/* Grid containing the Likelihood Matrix (Severity Profile removed) */}
       <div className="grid gap-6 md:grid-cols-12">
-        
-        {/* 2. Risk Severity Distribution (Donut Chart) */}
-        <Card className={`${glassCard(theme)} md:col-span-4`}>
-          <div className={SPECULAR_LINE} />
-          <CardHeader className="pb-2">
-            <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
-              Severity Profile
-              <InfoTooltip label="About Severity and Avg Rating">
-                <RiskSeverityDefinition />
-                <span className="mt-2 block" />
-                <AverageRiskScoreTrackedDefinition />
-              </InfoTooltip>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-[220px] flex justify-center items-center relative">
-            {severityChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={severityChartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={75}
-                    paddingAngle={3}
-                    dataKey="value"
-                    // Same Recharts 3.8.1 + React 19 blank-Pie bug as
-                    // OverviewAnalyticsPanel's "Sentiment Breakdown" card
-                    // (xoop_ui_clarity_review.md) -- found live here too
-                    // while diagnosing that one. Disabling the entrance
-                    // animation is the workaround.
-                    isAnimationActive={false}
-                  >
-                    {severityChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className={`font-mono text-xs flex items-center justify-center ${mutedText(theme)}`}>No risk profile details.</div>
-            )}
-            <div className="absolute flex flex-col items-center justify-center font-mono">
-              <span className={`text-xs uppercase ${mutedText(theme)}`}>Avg Rating</span>
-              <span className={`text-lg font-bold ${bodyText(theme)}`}>{stats.avg}</span>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* 3. 3x3 Risk Matrix */}
-        <Card className={`${glassCard(theme)} md:col-span-8`}>
+        <Card className={`${glassCard(theme)} md:col-span-12`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
@@ -883,48 +813,6 @@ export function RiskTab({
                   <div className={`p-4 rounded-2xl border text-xs leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                     {selectedDoc.original_content || "No original content available."}
                   </div>
-                </div>
-
-                {/* Detected Entities */}
-                <div className="space-y-2">
-                  <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Extracted Named Entities</span>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDoc.extracted_entities && selectedDoc.extracted_entities.length > 0 ? (
-                      selectedDoc.extracted_entities.map((ent: any, idx: number) => (
-                        <Badge key={idx} variant="outline" className="border-blue-500/30 text-blue-500 text-xs bg-blue-500/5">
-                          {ent.name} ({ent.entity_type})
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className={`text-xs ${mutedText(theme)}`}>No matching corporate entities identified.</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Related Narratives -- real cluster membership from the
-                    backend (documents.py joins against each narrative's
-                    evidence_metadata.supporting_documents), not a topic-name
-                    guess. No badge when this document isn't part of any
-                    narrative's cluster -- an expected state, not an error. */}
-                <div className="space-y-2">
-                  <span className={`text-xs uppercase font-bold ${mutedText(theme)}`}>Related Narrative Tracks</span>
-                  {selectedDoc.narrative ? (
-                    <button
-                      type="button"
-                      onClick={() => onViewNarrative?.(selectedDoc.narrative)}
-                      disabled={!onViewNarrative}
-                      className={`w-full text-left p-3 rounded-2xl border text-xs min-h-[44px] transition-colors ${bodyText(theme)} ${
-                        isDark ? "bg-black/30 border-white/[0.08] hover:border-[#00F5D4]/40" : "bg-black/[0.03] border-black/[0.06] hover:border-[#3B82F6]/40"
-                      } ${onViewNarrative ? "cursor-pointer" : "cursor-default"}`}
-                    >
-                      <span className={`font-bold ${isDark ? "text-[#00F5D4]" : "text-[#3B82F6]"}`}>Part of:</span>{" "}
-                      {selectedDoc.narrative}
-                    </button>
-                  ) : (
-                    <div className={`p-3 rounded-2xl border text-xs italic ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
-                      Not part of a tracked narrative.
-                    </div>
-                  )}
                 </div>
 
                 {/* AI Summary -- same What/When/How-to-solve pattern as the
