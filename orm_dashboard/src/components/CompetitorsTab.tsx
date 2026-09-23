@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { 
   Compass, Users, BarChart3, Search, ShieldCheck,
-  Trophy, Info, Activity, Calendar, AlertOctagon, X, ExternalLink
+  Trophy, Info, Calendar, AlertOctagon, X, ExternalLink
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -389,39 +389,6 @@ export function CompetitorsTab({
     if (!selectedDocId) return null;
     return competitorEvents.find(d => d.id === selectedDocId) || null;
   }, [selectedDocId, competitorEvents]);
-
-  // 5. ACTIVITY SUMMARY STATS -- scoped to the one selected competitor.
-  // "Highest impact competitor" / "most mentioned competitor" fields were
-  // dropped: with exactly one competitor in focus, both would always just
-  // echo its own name back, which is noise, not information.
-  const activitySummary = useMemo(() => {
-    const total = competitorEvents.length;
-    if (total === 0) {
-      return {
-        total: 0,
-        latestEvent: "Insufficient historical data",
-        activeTopic: "Insufficient historical data"
-      };
-    }
-
-    // Latest competitor event timestamp
-    const latestEvent = competitorEvents[0]?.timestamp
-      ? new Date(competitorEvents[0].timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-      : "N/A";
-
-    // Most active topic
-    const topicCounts = competitorEvents.map(d => d.topic).filter(Boolean).reduce((acc, t) => {
-      acc[t] = (acc[t] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const activeTopic = Object.entries(topicCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || "General";
-
-    return {
-      total,
-      latestEvent,
-      activeTopic
-    };
-  }, [competitorEvents]);
 
   const hasTrackedCompetitors = singleCompetitorBenchmarks.length > 0;
 
@@ -814,30 +781,6 @@ export function CompetitorsTab({
         </ErrorBoundary>
       )}
 
-      {/* ACTIVITY SUMMARY CARD */}
-      <Card className={`${glassCard(theme)} font-mono`}>
-        <CardHeader className={`pb-3 border-b ${cardBorder}`}>
-          <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-            <Activity className="h-4 w-4 text-[#D4AF37] mr-2" />
-            Competitive Activity
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4 grid gap-4 sm:grid-cols-3 text-xs">
-          <div>
-            <span className={`block ${mutedText(theme)}`}>Events Analysed:</span>
-            <span className={`font-bold ${bodyText(theme)}`}>{activitySummary.total}</span>
-          </div>
-          <div>
-            <span className={`block ${mutedText(theme)}`}>Latest Event:</span>
-            <span className={`font-bold ${bodyText(theme)}`}>{activitySummary.latestEvent}</span>
-          </div>
-          <div>
-            <span className={`block ${mutedText(theme)}`}>Most Active Topic:</span>
-            <span className={`font-bold ${bodyText(theme)}`}>{activitySummary.activeTopic}</span>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* COMPETITOR ACTIVITY TABLE -- events for the one selected
           competitor only (competitorEvents is already scoped above). */}
       <Card className={glassCard(theme)}>
@@ -950,20 +893,6 @@ export function CompetitorsTab({
                     <span className={`px-2 py-0.5 rounded ${chipClass}`}>Source: {selectedDoc.source}</span>
                     <span className={`px-2 py-0.5 rounded ${chipClass}`}>Topic: {selectedDoc.topic}</span>
                     <span className={`px-2 py-0.5 rounded ${chipClass}`}>Matched Brand: {selectedDoc.matchedCompetitor}</span>
-                  </div>
-                </div>
-
-                {/* Risk score calculation breakdown */}
-                <div className={`p-4 rounded border border-red-500/20 space-y-3 ${surfaceBg}`}>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className={mutedText(theme)}>Impact Score:</span>
-                      <span className={bodyText(theme)}>{selectedDoc.risk}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className={mutedText(theme)}>Sentiment:</span>
-                      <span className={bodyText(theme)}>{selectedDoc.sentiment?.toFixed(2) || "0.00"}</span>
-                    </div>
                   </div>
                 </div>
 
