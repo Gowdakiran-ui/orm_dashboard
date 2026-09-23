@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { 
   FileText, Globe, Users, ShieldAlert, Activity,
   ExternalLink, Cpu, Calendar, TrendingUp, CheckCircle2,
-  AlertTriangle, Info, Sparkles, Clock, BarChart2
+  AlertTriangle, Info, Sparkles, Clock, BarChart2, X
 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
@@ -51,21 +51,6 @@ export function FeedTab({
   // virtualization dependency.
   const FEED_PAGE_SIZE = 50;
   const [feedRenderCount, setFeedRenderCount] = useState(FEED_PAGE_SIZE);
-
-  // Phase 2 Item 2: the three lower feeds (ingest stream, document detail,
-  // activity log) used to render as three simultaneous columns -- all
-  // still fully functional, just consolidated behind a tab switcher so
-  // only one competes for attention by default. Ingest stream first since
-  // it's the one the other two depend on (selecting a doc there drives
-  // Document Intelligence Details).
-  const [feedView, setFeedView] = useState<"ingest" | "details" | "activity">("ingest");
-
-  // Automatically select the first document on load
-  useEffect(() => {
-    if (documents.length > 0 && !selectedDocId) {
-      setSelectedDocId(documents[0].id);
-    }
-  }, [documents, selectedDocId]);
 
   // Fetch document details when selected ID changes
   useEffect(() => {
@@ -196,36 +181,6 @@ export function FeedTab({
       { label: "Medium (26-50)", count: medium, percentage: Math.round((medium / total) * 100), color: "bg-amber-500", text: "text-amber-400" },
       { label: "Low (0-25)", count: low, percentage: Math.round((low / total) * 100), color: "bg-sky-500", text: "text-sky-400" }
     ];
-  }, [documents]);
-
-  // Section 8: Live Activity Log (computed from document streams)
-  const activityLogs = useMemo(() => {
-    return documents.slice(0, 7).map((d, index) => {
-      const timestamp = d.timestamp 
-        ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : `14:0${7 - index}`;
-      
-      let eventText = `New article added: "${d.title}"`;
-      let type: "info" | "success" | "warn" | "error" = "info";
-
-      if (d.risk >= 60) {
-        eventText = `Critical Risk Event Ingested: ${d.source}`;
-        type = "error";
-      } else if (d.sentiment < -0.3) {
-        eventText = `Negative Sentiment Flagged from ${d.source}`;
-        type = "warn";
-      } else if (d.sentiment > 0.3) {
-        eventText = `Positive Mention Mapped: ${d.source}`;
-        type = "success";
-      }
-
-      return {
-        id: d.id + index,
-        time: timestamp,
-        event: eventText,
-        type
-      };
-    });
   }, [documents]);
 
   return (
@@ -378,284 +333,241 @@ export function FeedTab({
 
           </div>
 
-          {/* LOWER SECTION: Ingested Feed List, Document Details Panel, Activity
-              Log -- consolidated behind a tab switcher (Phase 2 Item 2),
-              same underline-tab pattern as AnalyticsTabHeader.tsx. */}
-          <div>
-            <div className={`flex space-x-6 border-b pb-0 mb-4 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-              {[
-                { id: "ingest" as const, label: "Real-Time Brand Ingest Stream" },
-                { id: "details" as const, label: "Document Intelligence Details" },
-                { id: "activity" as const, label: "Live Activity Log" }
-              ].map(sub => {
-                const isActive = feedView === sub.id;
+          {/* Real-Time Ingested Feed List. Document Intelligence Details used
+              to be a separate tab; it's now a per-row Details button that
+              opens a slide-over drawer for that row's document, same
+              pattern as ExecutivesTab.tsx's per-row Details drawer. */}
+          <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
+            <div className={SPECULAR_LINE} />
+            <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
+              <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
+                <Activity className="h-3.5 w-3.5 text-emerald-400" /> Real-time Brand Ingest Stream
+              </CardTitle>
+              <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
+            </CardHeader>
+            <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+              {documents.slice(0, feedRenderCount).map((d, i) => {
+                const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
+
+                // Timestamp formatter
+                const formattedTime = d.timestamp
+                  ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : "Recent";
+                const isPlaceholder = isPlaceholderTitle(d.title, d.source);
+
                 return (
-                  <button
-                    key={sub.id}
-                    onClick={() => setFeedView(sub.id)}
-                    className={`pb-3 text-xs font-mono transition-all relative ${
-                      isActive
-                        ? "font-bold border-b-2"
-                        : `${mutedText(theme)} border-b-2 border-transparent ${isDark ? "hover:text-zinc-200" : "hover:text-zinc-800"}`
-                    }`}
-                    style={isActive ? { color: accent, borderColor: accent } : undefined}
+                  <div
+                    key={d.id ?? i}
+                    className={`border rounded-lg p-3 transition-all duration-200 font-mono text-[10px] space-y-2 ${
+                      isDark ? "bg-black/20 border-white/[0.08] hover:border-white/[0.2] hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-black/[0.15] hover:bg-black/[0.04]"
+                    } ${isPlaceholder ? PLACEHOLDER_ROW_CLASS : ""}`}
                   >
-                    {sub.label}
-                  </button>
+                    <div className="flex justify-between items-start gap-2">
+                      <span className={`font-bold text-xs line-clamp-2 leading-tight transition-colors duration-150 ${bodyText(theme)}`}>
+                        {isPlaceholder ? <PreviewUnavailableLabel /> : d.title}
+                      </span>
+                      <span className={`text-[9px] shrink-0 flex items-center gap-1 font-bold ${mutedText(theme)}`}>
+                        <Clock className="h-3 w-3" /> {formattedTime}
+                      </span>
+                    </div>
+
+                    <div className={`flex flex-wrap items-center gap-1.5 pt-1.5 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                      <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] text-[8px] py-0 px-1 font-bold" : "border-[#3B82F6]/30 text-[#3B82F6] text-[8px] py-0 px-1 font-bold"}>
+                        {d.source || "RSS"}
+                      </Badge>
+                      <Badge variant="outline" className={`text-[8px] py-0 px-1 ${mutedText(theme)} ${isDark ? "border-white/[0.12]" : "border-black/[0.08]"}`}>
+                        {d.topic || "General"}
+                      </Badge>
+                      <Badge variant="outline" className={`text-[8px] py-0 px-1 ${docRiskColor}`}>
+                        Risk: {d.risk}
+                      </Badge>
+                      <Badge variant="outline" className={`text-[8px] py-0 px-1 ${
+                        d.sentiment > 0.3 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                        d.sentiment < -0.3 ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                        `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`
+                      }`}>
+                        {d.sentiment > 0.3 ? "+" : ""}{d.sentiment !== undefined && d.sentiment !== null ? d.sentiment.toFixed(2) : "0.00"}
+                      </Badge>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDocId(d.id)}
+                        className={`ml-auto bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-[8px] font-bold rounded px-2 py-0.5`}
+                      >
+                        Details
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
-            </div>
+              {documents.length === 0 && (
+                <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
+                  <AlertTriangle className={`h-8 w-8 mb-2 ${mutedText(theme)}`} />
+                  No intelligence documents matches in database.
+                </div>
+              )}
+              {documents.length > feedRenderCount && (
+                <button
+                  type="button"
+                  onClick={() => setFeedRenderCount((c) => c + FEED_PAGE_SIZE)}
+                  className={`w-full text-center text-[10px] font-mono uppercase tracking-wider py-2.5 rounded-lg border ${isDark ? "border-white/[0.08] text-zinc-400 hover:bg-white/[0.03]" : "border-black/[0.06] text-zinc-600 hover:bg-black/[0.02]"}`}
+                >
+                  Load {Math.min(FEED_PAGE_SIZE, documents.length - feedRenderCount)} more ({feedRenderCount} of {documents.length})
+                </button>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Real-Time Ingested Feed List */}
-            {feedView === "ingest" && (
-            <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
-              <div className={SPECULAR_LINE} />
-              <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                  <Activity className="h-3.5 w-3.5 text-emerald-400" /> Real-time Brand Ingest Stream
-                </CardTitle>
-                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
-              </CardHeader>
-              <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-                {documents.slice(0, feedRenderCount).map((d, i) => {
-                  const isSelected = selectedDocId === d.id;
-                  const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
-                  
-                  // Timestamp formatter
-                  const formattedTime = d.timestamp
-                    ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : "Recent";
-                  const isPlaceholder = isPlaceholderTitle(d.title, d.source);
+          {/* Document Intelligence Details -- slide-over drawer for the
+              document whose row's Details button was clicked. */}
+          {selectedDocId && (
+            <div className="fixed inset-0 z-50 overflow-hidden font-mono">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedDocId(null)} />
+              <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+                <div className={`w-[600px] backdrop-blur-2xl border-l flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]"}`}>
 
-                  return (
-                    <div
-                      key={d.id ?? i}
-                      onClick={() => setSelectedDocId(d.id)}
-                      className={`border rounded-lg p-3 cursor-pointer transition-all duration-200 font-mono text-[10px] space-y-2 ${
-                        isSelected
-                          ? isDark ? "bg-white/[0.06] border-[#00F5D4]/60" : "bg-black/[0.03] border-[#3B82F6]/60"
-                          : isDark ? "bg-black/20 border-white/[0.08] hover:border-white/[0.2] hover:bg-black/30" : "bg-black/[0.02] border-black/[0.06] hover:border-black/[0.15] hover:bg-black/[0.04]"
-                      } ${isPlaceholder ? PLACEHOLDER_ROW_CLASS : ""}`}
+                  {/* Header */}
+                  <div className={`p-6 border-b flex items-center justify-between ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
+                    <div className="flex items-center space-x-3">
+                      <Sparkles className="h-5 w-5" style={{ color: accent }} />
+                      <span className="text-sm font-bold uppercase">Document Intelligence Details</span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedDocId(null)}
+                      className={`flex items-center gap-1.5 text-xs transition-colors ${mutedText(theme)} ${isDark ? "hover:text-zinc-100" : "hover:text-zinc-900"}`}
                     >
-                      <div className="flex justify-between items-start gap-2">
-                        <span className={`font-bold text-xs line-clamp-2 leading-tight transition-colors duration-150 ${bodyText(theme)}`}>
-                          {isPlaceholder ? <PreviewUnavailableLabel /> : d.title}
-                        </span>
-                        <span className={`text-[9px] shrink-0 flex items-center gap-1 font-bold ${mutedText(theme)}`}>
-                          <Clock className="h-3 w-3" /> {formattedTime}
-                        </span>
-                      </div>
-
-                      <div className={`flex flex-wrap gap-1.5 pt-1.5 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                        <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] text-[8px] py-0 px-1 font-bold" : "border-[#3B82F6]/30 text-[#3B82F6] text-[8px] py-0 px-1 font-bold"}>
-                          {d.source || "RSS"}
-                        </Badge>
-                        <Badge variant="outline" className={`text-[8px] py-0 px-1 ${mutedText(theme)} ${isDark ? "border-white/[0.12]" : "border-black/[0.08]"}`}>
-                          {d.topic || "General"}
-                        </Badge>
-                        <Badge variant="outline" className={`text-[8px] py-0 px-1 ${docRiskColor}`}>
-                          Risk: {d.risk}
-                        </Badge>
-                        <Badge variant="outline" className={`text-[8px] py-0 px-1 ${
-                          d.sentiment > 0.3 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                          d.sentiment < -0.3 ? "bg-red-500/10 text-red-500 border-red-500/20" :
-                          `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`
-                        }`}>
-                          {d.sentiment > 0.3 ? "+" : ""}{d.sentiment !== undefined && d.sentiment !== null ? d.sentiment.toFixed(2) : "0.00"}
-                        </Badge>
-                      </div>
-                    </div>
-                  );
-                })}
-                {documents.length === 0 && (
-                  <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
-                    <AlertTriangle className={`h-8 w-8 mb-2 ${mutedText(theme)}`} />
-                    No intelligence documents matches in database.
+                      <X className="h-5 w-5" />
+                      <span>Close</span>
+                    </button>
                   </div>
-                )}
-                {documents.length > feedRenderCount && (
-                  <button
-                    type="button"
-                    onClick={() => setFeedRenderCount((c) => c + FEED_PAGE_SIZE)}
-                    className={`w-full text-center text-[10px] font-mono uppercase tracking-wider py-2.5 rounded-lg border ${isDark ? "border-white/[0.08] text-zinc-400 hover:bg-white/[0.03]" : "border-black/[0.06] text-zinc-600 hover:bg-black/[0.02]"}`}
-                  >
-                    Load {Math.min(FEED_PAGE_SIZE, documents.length - feedRenderCount)} more ({feedRenderCount} of {documents.length})
-                  </button>
-                )}
-              </CardContent>
-            </Card>
-            )}
 
-            {/* Document Intelligence Detail Panel */}
-            {feedView === "details" && (
-            <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
-              <div className={SPECULAR_LINE} />
-              <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                  <Sparkles className="h-3.5 w-3.5" style={{ color: accent }} /> Document Intelligence Details
-                </CardTitle>
-                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Metadata extraction & audit trace</CardDescription>
-              </CardHeader>
-              <CardContent className={`p-4 overflow-y-auto flex-1 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent font-mono text-xs ${bodyText(theme)}`}>
-                {detailsLoading ? (
-                  <div className="flex flex-col items-center justify-center h-full dash-accent font-mono">
-                    <Cpu className="animate-spin h-8 w-8 mb-2" />
-                    Ingesting Trace Metadata...
-                  </div>
-                ) : selectedDocDetails ? (
-                  <>
-                    {/* Title and Date */}
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-sm dash-strong leading-snug">{selectedDocDetails.title}</h4>
-                      <div className="flex items-center gap-3 text-[9px] dash-muted pt-1">
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> Ingested at {selectedDocDetails.timestamp ? new Date(selectedDocDetails.timestamp).toLocaleString() : "Recent"}</span>
+                  {/* Content Panel */}
+                  <div className={`flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent font-mono text-xs ${bodyText(theme)}`}>
+                    {detailsLoading ? (
+                      <div className="flex flex-col items-center justify-center h-full dash-accent font-mono">
+                        <Cpu className="animate-spin h-8 w-8 mb-2" />
+                        Ingesting Trace Metadata...
                       </div>
-                    </div>
-
-                    {/* Metadata breakdown */}
-                    <div className="grid grid-cols-2 gap-3 border-t dash-border pt-3">
-                      <div>
-                        <span className="text-[8px] dash-muted uppercase block font-bold">Source Channel</span>
-                        <span className="dash-strong font-bold text-[11px]">{selectedDocDetails.source_id || "RSS Feed"}</span>
-                      </div>
-                      <div>
-                        <span className="text-[8px] dash-muted uppercase block font-bold">Topic Mapped</span>
-                        <Badge variant="outline" className="border-blue-500/30 text-blue-400 text-[8px] py-0 px-1 mt-0.5">
-                          {selectedDocDetails.topics?.[0]?.name || "General"}
-                        </Badge>
-                      </div>
-                      <div>
-                        <span className="text-[8px] dash-muted uppercase block font-bold">Sentiment Score</span>
-                        <span className={`font-bold text-[11px] ${
-                          selectedDocDetails.sentiment >= 0.2 ? "text-emerald-400" :
-                          selectedDocDetails.sentiment <= -0.2 ? "text-red-400" :
-                          "text-amber-400"
-                        }`}>
-                          {selectedDocDetails.sentiment >= 0 ? "+" : ""}{selectedDocDetails.sentiment?.toFixed(2) || "0.00"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[8px] dash-muted uppercase block font-bold">Risk Index</span>
-                        <span className={`font-bold text-[11px] ${
-                          selectedDocDetails.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" :
-                          selectedDocDetails.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" :
-                          "text-sky-400"
-                        }`}>
-                          {selectedDocDetails.risk} pts
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[8px] dash-muted uppercase block font-bold">Classification Strength</span>
-                        <span className="dash-strong text-[11px]">
-                          {selectedDocDetails.topics?.[0]?.confidence !== undefined 
-                            ? `${(selectedDocDetails.topics[0].confidence * 100).toFixed(0)}%` 
-                            : "100%"}
-                        </span>
-                      </div>
-                      {selectedDocDetails.narrative?.name && (
-                        <div>
-                          <span className="text-[8px] dash-muted uppercase block font-bold">Associated Narrative</span>
-                          <span className="dash-strong truncate block max-w-[150px]">{selectedDocDetails.narrative.name}</span>
+                    ) : selectedDocDetails ? (
+                      <>
+                        {/* Title and Date */}
+                        <div className="space-y-1">
+                          <h4 className="font-bold text-sm dash-strong leading-snug">{selectedDocDetails.title}</h4>
+                          <div className="flex items-center gap-3 text-[9px] dash-muted pt-1">
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> Ingested at {selectedDocDetails.timestamp ? new Date(selectedDocDetails.timestamp).toLocaleString() : "Recent"}</span>
+                          </div>
                         </div>
-                      )}
-                    </div>
 
-                    {/* Entities Mentioned */}
-                    <div className="space-y-1.5 border-t dash-border pt-3">
-                      <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">Mentioned Targets</span>
-                      {selectedDocDetails.entities && selectedDocDetails.entities.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {selectedDocDetails.entities.map((ent: any, idx: number) => (
-                            <Badge key={idx} variant="outline" className="dash-box border-sky-500/30 text-sky-400 text-[8.5px]">
-                              {ent.name}
+                        {/* Metadata breakdown */}
+                        <div className="grid grid-cols-2 gap-3 border-t dash-border pt-3">
+                          <div>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Source Channel</span>
+                            <span className="dash-strong font-bold text-[11px]">{selectedDocDetails.source_id || "RSS Feed"}</span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Topic Mapped</span>
+                            <Badge variant="outline" className="border-blue-500/30 text-blue-400 text-[8px] py-0 px-1 mt-0.5">
+                              {selectedDocDetails.topics?.[0]?.name || "General"}
                             </Badge>
-                          ))}
+                          </div>
+                          <div>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Sentiment Score</span>
+                            <span className={`font-bold text-[11px] ${
+                              selectedDocDetails.sentiment >= 0.2 ? "text-emerald-400" :
+                              selectedDocDetails.sentiment <= -0.2 ? "text-red-400" :
+                              "text-amber-400"
+                            }`}>
+                              {selectedDocDetails.sentiment >= 0 ? "+" : ""}{selectedDocDetails.sentiment?.toFixed(2) || "0.00"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Risk Index</span>
+                            <span className={`font-bold text-[11px] ${
+                              selectedDocDetails.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" :
+                              selectedDocDetails.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" :
+                              "text-sky-400"
+                            }`}>
+                              {selectedDocDetails.risk} pts
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Classification Strength</span>
+                            <span className="dash-strong text-[11px]">
+                              {selectedDocDetails.topics?.[0]?.confidence !== undefined
+                                ? `${(selectedDocDetails.topics[0].confidence * 100).toFixed(0)}%`
+                                : "100%"}
+                            </span>
+                          </div>
+                          {selectedDocDetails.narrative?.name && (
+                            <div>
+                              <span className="text-[8px] dash-muted uppercase block font-bold">Associated Narrative</span>
+                              <span className="dash-strong truncate block max-w-[150px]">{selectedDocDetails.narrative.name}</span>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <span className="dash-muted text-[10px]">No corporate leaders or brand entities explicitly extracted.</span>
-                      )}
-                    </div>
 
-                    {/* AI Classification Summary */}
-                    <div className="space-y-1.5 border-t dash-border pt-3">
-                      <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">AI Classification Summary</span>
-                      <p className="text-[10px] dash-strong leading-relaxed dash-box border dash-border rounded p-2.5">
-                        {selectedDocDetails.normalized_content || "Initial pipeline trace reveals standard media publication matching targeted brand profiles. Ingestion diagnostics show complete metadata structure and low volatile risk vectors."}
-                      </p>
-                    </div>
+                        {/* Entities Mentioned */}
+                        <div className="space-y-1.5 border-t dash-border pt-3">
+                          <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">Mentioned Targets</span>
+                          {selectedDocDetails.entities && selectedDocDetails.entities.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {selectedDocDetails.entities.map((ent: any, idx: number) => (
+                                <Badge key={idx} variant="outline" className="dash-box border-sky-500/30 text-sky-400 text-[8.5px]">
+                                  {ent.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="dash-muted text-[10px]">No corporate leaders or brand entities explicitly extracted.</span>
+                          )}
+                        </div>
 
-                    {/* Actions: Open Original URL */}
-                    <div className="pt-3 border-t border-dashed dash-border w-full flex items-center justify-between">
-                      {isValidOriginalArticleUrl(selectedDocDetails.url) ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (selectedDocDetails.url) {
-                              window.open(selectedDocDetails.url, "_blank", "noopener,noreferrer");
-                            }
-                          }}
-                          className="h-7 px-3 text-[9.5px] font-mono dash-box border dash-border hover:bg-slate-900 text-sky-400 hover:text-sky-350 flex items-center gap-1 w-full justify-center"
-                        >
-                          <ExternalLink className="h-3 w-3" /> Open Original Article
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled
-                          className="h-7 px-3 text-[9.5px] font-mono dash-box border dash-border dash-muted flex items-center gap-1 w-full justify-center cursor-not-allowed opacity-50"
-                        >
-                          Original article unavailable
-                        </Button>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full dash-muted font-mono text-center">
-                    <Info className="h-6 w-6 dash-muted mb-1" />
-                    Select a document from the real-time ingest stream to view telemetry logs.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            )}
+                        {/* AI Classification Summary */}
+                        <div className="space-y-1.5 border-t dash-border pt-3">
+                          <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">AI Classification Summary</span>
+                          <p className="text-[10px] dash-strong leading-relaxed dash-box border dash-border rounded p-2.5">
+                            {selectedDocDetails.normalized_content || "Initial pipeline trace reveals standard media publication matching targeted brand profiles. Ingestion diagnostics show complete metadata structure and low volatile risk vectors."}
+                          </p>
+                        </div>
 
-            {/* Live Telemetry activity log */}
-            {feedView === "activity" && (
-            <Card className={`${glassCard(theme)} overflow-hidden flex flex-col h-[780px]`}>
-              <div className={SPECULAR_LINE} />
-              <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
-                <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                  <Activity className="h-3.5 w-3.5" style={{ color: accent }} /> Live Activity Log
-                </CardTitle>
-                <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Live ingestion events</CardDescription>
-              </CardHeader>
-              <CardContent className="p-3 overflow-y-auto flex-1 space-y-2.5 font-mono text-[9px] scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-                {activityLogs.map((log) => {
-                  let alertColor = accent;
-                  if (log.type === "error") alertColor = "#EF4444";
-                  else if (log.type === "warn") alertColor = "#F59E0B";
-                  else if (log.type === "success") alertColor = "#10B981";
-
-                  return (
-                    <div key={log.id} className={`border-b pb-2 space-y-0.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                      <div className="flex justify-between font-bold">
-                        <span style={{ color: alertColor }}>{log.time}</span>
-                        <Badge variant="outline" className={`border-none p-0 text-[8px] lowercase ${mutedText(theme)}`}>
-                          {log.type}
-                        </Badge>
+                        {/* Actions: Open Original URL */}
+                        <div className="pt-3 border-t border-dashed dash-border w-full flex items-center justify-between">
+                          {isValidOriginalArticleUrl(selectedDocDetails.url) ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (selectedDocDetails.url) {
+                                  window.open(selectedDocDetails.url, "_blank", "noopener,noreferrer");
+                                }
+                              }}
+                              className="h-7 px-3 text-[9.5px] font-mono dash-box border dash-border hover:bg-slate-900 text-sky-400 hover:text-sky-350 flex items-center gap-1 w-full justify-center"
+                            >
+                              <ExternalLink className="h-3 w-3" /> Open Original Article
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled
+                              className="h-7 px-3 text-[9.5px] font-mono dash-box border dash-border dash-muted flex items-center gap-1 w-full justify-center cursor-not-allowed opacity-50"
+                            >
+                              Original article unavailable
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full dash-muted font-mono text-center">
+                        <Info className="h-6 w-6 dash-muted mb-1" />
+                        Failed to load document details.
                       </div>
-                      <p className={`leading-tight ${mutedText(theme)}`}>{log.event}</p>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-            )}
-
-          </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
