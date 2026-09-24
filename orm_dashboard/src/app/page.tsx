@@ -77,10 +77,10 @@ function Nav() {
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-5 sm:px-7">
-        <div className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-xl font-semibold">
+        <Link href="/" className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-xl font-semibold">
           <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555] shadow-[0_0_0_4px_rgba(47,217,196,0.16)]" />
           XOOP
-        </div>
+        </Link>
 
         <div className="hidden items-center gap-8 sm:flex">
           <a href="#reputation-intelligence" className={navLinkClass}>Why XOOP</a>
@@ -162,7 +162,7 @@ function Hero() {
     >
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
-          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.86rem] font-medium text-[#A57F37]">
+          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.9rem] font-medium text-[#A57F37]">
             <span className="relative flex h-[7px] w-[7px]">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#A57F37] opacity-60" />
               <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#A57F37]" />
@@ -171,14 +171,14 @@ function Hero() {
           </div>
 
           <h1
-            className="max-w-[16ch] text-balance font-[family-name:var(--font-landing-display)] font-medium leading-[1.08] text-[clamp(2.3rem,5vw,3.6rem)]"
+            className="max-w-[16ch] text-balance font-[family-name:var(--font-landing-display)] font-medium leading-[1.08] text-[clamp(2.45rem,5.2vw,3.8rem)]"
             style={{ color: INK }}
           >
             We don&apos;t just tell you what happened. We tell you{" "}
             <em className="not-italic italic text-[#A57F37]">why it matters</em> and what to do next.
           </h1>
 
-          <p className="mt-6 max-w-[58ch] text-[1.14rem] leading-relaxed" style={{ color: INK_MUTED }}>
+          <p className="mt-6 max-w-[58ch] text-[1.2rem] leading-relaxed" style={{ color: INK_MUTED }}>
             Listening and monitoring tools show you the noise. XOOP connects conversations,
             behaviour, search and stakeholder signals into one picture, so your team can act
             on a shift before it becomes a headline, not after.
@@ -234,16 +234,16 @@ function Hero() {
   );
 }
 
-function SectionHead({ title, copy, light = false }: { title: string; copy: string; light?: boolean }) {
+function SectionHead({ title, copy, light = false }: { title: string; copy: React.ReactNode; light?: boolean }) {
   return (
     <div className="mb-[52px] max-w-[62ch]">
       <h2
-        className="text-balance font-[family-name:var(--font-landing-display)] font-medium text-[clamp(1.7rem,3.4vw,2.4rem)]"
+        className="text-balance font-[family-name:var(--font-landing-display)] font-medium text-[clamp(1.8rem,3.6vw,2.55rem)]"
         style={{ color: light ? INK : "#fff" }}
       >
         {title}
       </h2>
-      <p className="mt-3.5 text-[1.03rem] leading-relaxed" style={{ color: light ? INK_MUTED : "#93A6C7" }}>
+      <p className="mt-3.5 text-[1.08rem] leading-relaxed" style={{ color: light ? INK_MUTED : "#93A6C7" }}>
         {copy}
       </p>
     </div>
@@ -280,13 +280,13 @@ function ReputationIntelligence() {
         <Reveal>
           <SectionHead
             title="This is reputation intelligence, not listening."
-            copy="Every product decision in XOOP traces back to the same three-part idea, not a slogan, an operating principle."
+            copy="Every product decision in XOOP traces back to the same three-part framework, not a slogan, an operating principle."
           />
         </Reveal>
 
         <Reveal>
           <div className="mb-14 rounded-2xl border border-[#CEA555]/25 bg-[#0B2D54] p-8 sm:p-10">
-            <p className="text-balance font-[family-name:var(--font-landing-display)] text-[1.3rem] font-medium leading-snug text-white sm:text-[1.5rem]">
+            <p className="text-balance font-[family-name:var(--font-landing-display)] text-[1.38rem] font-medium leading-snug text-white sm:text-[1.6rem]">
               XOOP is not a listening tool. Listening tools show you mentions.{" "}
               <span className="text-[#CEA555]">We show you what they mean.</span>
             </p>
@@ -300,8 +300,8 @@ function ReputationIntelligence() {
                 <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10 font-[family-name:var(--font-landing-display)] text-sm font-semibold text-[#CEA555]">
                   {p.numeral}
                 </span>
-                <h3 className="mb-2.5 text-[1.1rem] font-medium leading-snug text-white">{p.title}</h3>
-                <p className="text-[0.93rem] leading-relaxed text-[#93A6C7]">{p.copy}</p>
+                <h3 className="mb-2.5 text-[1.16rem] font-medium leading-snug text-white">{p.title}</h3>
+                <p className="text-[0.98rem] leading-relaxed text-[#93A6C7]">{p.copy}</p>
               </div>
             </RevealItem>
           ))}
@@ -346,8 +346,8 @@ function Framework() {
                     {f.word}
                   </span>
                 </div>
-                <h3 className="mb-2.5 text-[1.14rem] font-medium leading-tight" style={{ color: INK }}>{f.title}</h3>
-                <p className="text-[0.93rem] leading-relaxed" style={{ color: INK_MUTED }}>{f.copy}</p>
+                <h3 className="mb-2.5 text-[1.2rem] font-medium leading-tight" style={{ color: INK }}>{f.title}</h3>
+                <p className="text-[0.98rem] leading-relaxed" style={{ color: INK_MUTED }}>{f.copy}</p>
               </div>
             </RevealItem>
           ))}
@@ -396,8 +396,8 @@ function WhoItsFor() {
                 <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10">
                   <a.icon className="h-5 w-5 text-[#CEA555]" strokeWidth={1.75} />
                 </span>
-                <h3 className="mb-2.5 text-[1.14rem] font-medium leading-tight text-white">{a.title}</h3>
-                <p className="text-[0.93rem] leading-relaxed text-[#93A6C7]">{a.copy}</p>
+                <h3 className="mb-2.5 text-[1.2rem] font-medium leading-tight text-white">{a.title}</h3>
+                <p className="text-[0.98rem] leading-relaxed text-[#93A6C7]">{a.copy}</p>
               </div>
             </RevealItem>
           ))}
@@ -535,7 +535,10 @@ function Features() {
     <section id="features" className="border-t border-[#163F6E] bg-[#04213F] py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
-          <SectionHead title="What's under the hood" copy="Everything you need to move from &quot;we saw a mention&quot; to &quot;here's what we're doing about it.&quot;" />
+          <SectionHead
+            title="What's under the hood"
+            copy={<>Everything you need to move from <strong className="font-semibold">we saw a mention</strong> to <strong className="font-semibold">here&apos;s what we&apos;re doing about it.</strong></>}
+          />
         </Reveal>
 
         <RevealGroup className="flex flex-col">
@@ -546,9 +549,9 @@ function Features() {
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10">
                     <f.icon className="h-5 w-5 text-[#CEA555]" strokeWidth={1.75} />
                   </span>
-                  <h3 className="text-[1.28rem] font-medium text-white">{f.title}</h3>
+                  <h3 className="text-[1.34rem] font-medium text-white">{f.title}</h3>
                 </div>
-                <p className="max-w-[56ch] text-[0.98rem] leading-relaxed text-[#93A6C7]">{f.copy}</p>
+                <p className="max-w-[56ch] text-[1.03rem] leading-relaxed text-[#93A6C7]">{f.copy}</p>
               </div>
             </RevealItem>
           ))}
@@ -645,8 +648,8 @@ function Comparison() {
 
 const benefitCells = [
   { icon: Eye, title: "Spot a shift before it's a headline", copy: "Emerging issues, crisis signals, and stakeholder concerns surface while they're still manageable, not after a journalist has already called." },
-  { icon: MessageCircle, title: "Walk into every client call with an answer", copy: "No more \"let me get back to you.\" What changed, why, and what's next is already on the dashboard when the question comes." },
-  { icon: BadgeCheck, title: "Prove the value of your comms work", copy: "A real, defensible reputation score your team can point to, trending in a direction you can explain, not a vague sense that things are \"going fine.\"" },
+  { icon: MessageCircle, title: "Walk into every client call with an answer", copy: <>No more <strong className="font-semibold">let me get back to you.</strong> What changed, why, and what&apos;s next is already on the dashboard when the question comes.</> },
+  { icon: BadgeCheck, title: "Prove the value of your comms work", copy: <>A real, defensible reputation score your team can point to, trending in a direction you can explain, not a vague sense that things are <strong className="font-semibold">going fine.</strong></> },
   { icon: Target, title: "Act on signal, not on noise", copy: "Stop scrolling raw mentions to guess what matters. The platform tells you what's worth your attention today, and what isn't." },
 ];
 
@@ -670,8 +673,8 @@ function Benefits() {
                     0{idx + 1}
                   </span>
                 </div>
-                <h3 className="mb-2 text-[1.1rem] font-medium text-white">{b.title}</h3>
-                <p className="text-[0.94rem] leading-relaxed text-[#93A6C7]">{b.copy}</p>
+                <h3 className="mb-2 text-[1.16rem] font-medium text-white">{b.title}</h3>
+                <p className="text-[0.99rem] leading-relaxed text-[#93A6C7]">{b.copy}</p>
               </div>
             </RevealItem>
           ))}
@@ -689,13 +692,10 @@ function FinalCTA() {
     >
       <div className="mx-auto max-w-3xl px-5 sm:px-7">
         <Reveal>
-          <span className="inline-flex items-center rounded-full border border-[#0B2D54]/20 px-3 py-1 text-[11px] font-medium uppercase tracking-wider" style={{ color: INK_MUTED }}>
-            Now onboarding Q1 clients
-          </span>
-          <h2 className="mx-auto mt-5 max-w-[20ch] text-balance font-[family-name:var(--font-landing-display)] font-medium text-[clamp(1.8rem,4vw,2.6rem)]" style={{ color: INK }}>
+          <h2 className="mx-auto max-w-[20ch] text-balance font-[family-name:var(--font-landing-display)] font-medium text-[clamp(1.9rem,4.2vw,2.75rem)]" style={{ color: INK }}>
             See what your reputation data has been trying to tell you.
           </h2>
-          <p className="mt-4 text-[1.05rem]" style={{ color: INK_MUTED }}>Book a walkthrough with the team behind XOOP.</p>
+          <p className="mt-4 text-[1.1rem]" style={{ color: INK_MUTED }}>Book a walkthrough with the team behind XOOP.</p>
           <div className="mt-8 flex justify-center">
             <MagneticButton
               as={motion.a}
@@ -761,10 +761,10 @@ export default function WelcomePage() {
           style={{ paddingBottom: "calc(34px + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 sm:px-7">
-            <div className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-[1.05rem] font-semibold">
+            <Link href="/" className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-[1.05rem] font-semibold">
               <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555]" />
               XOOP
-            </div>
+            </Link>
             <p className="text-[0.82rem] text-[#5D719A]">
               A product of Onlyne Reputation ·{" "}
               <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#93A6C7] underline decoration-dotted">

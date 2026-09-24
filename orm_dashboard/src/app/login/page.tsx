@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { login } from "@/lib/api";
@@ -73,8 +74,10 @@ function LoginForm() {
       >
         <div className="space-y-1 text-center">
           <h1 className="flex items-center justify-center gap-2 font-[family-name:var(--font-login-mono)] text-lg font-extrabold uppercase tracking-wider text-white">
-            <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555] shadow-[0_0_0_4px_rgba(206,165,85,0.16)]" />
-            XOOP
+            <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+              <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555] shadow-[0_0_0_4px_rgba(206,165,85,0.16)]" />
+              XOOP
+            </Link>
           </h1>
           <p className="text-xs text-[#93A6C7]">Sign in to access the intelligence platform</p>
         </div>
