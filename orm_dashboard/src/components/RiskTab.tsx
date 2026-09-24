@@ -343,7 +343,7 @@ export function RiskTab({
           ) : alerts.length === 0 ? (
             <div className={`text-center py-6 ${mutedText(theme)} font-mono text-xs`}>No active alerts.</div>
           ) : (
-            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-[420px] overflow-y-auto overflow-x-hidden pr-1">
               {alerts.map((alert) => {
                 const isExpanded = expandedAlertId === alert.id;
                 const aiSummary = alert.ai_summary;
@@ -732,7 +732,7 @@ export function RiskTab({
               </div>
 
               {/* Content Panel */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6">
 
                 {/* Headline & Meta */}
                 <div className="space-y-2">
@@ -795,7 +795,7 @@ export function RiskTab({
                   <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
                     <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> Original Article Snippet
                   </span>
-                  <div className={`p-4 rounded-2xl border text-xs leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+                  <div className={`p-4 rounded-2xl border text-xs leading-relaxed max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap ${mutedText(theme)} ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                     {selectedDoc.original_content || "No original content available."}
                   </div>
                 </div>
@@ -895,7 +895,7 @@ export function RiskTab({
               </div>
 
               {/* Content List */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-4">
                 {(() => {
                   const cellDocs = matrixData[selectedCell.impact]?.[selectedCell.likelihood] || [];
                   if (cellDocs.length === 0) {

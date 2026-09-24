@@ -82,7 +82,7 @@ export function Sidebar({
           isOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0 lg:sticky lg:top-0`}
       >
-      <div className="flex flex-col h-full overflow-y-auto no-scrollbar">
+      <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden no-scrollbar">
 
         {/* Logo Section */}
         <div className={`p-6 border-b flex items-center space-x-3 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>

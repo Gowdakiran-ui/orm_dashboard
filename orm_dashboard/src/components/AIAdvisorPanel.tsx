@@ -47,7 +47,7 @@ export function AIAdvisorPanel({
         </div>
         <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30 font-mono text-[9px]">BRIEFING ENGINE</Badge>
       </div>
-      <CardContent className="p-6 space-y-6 text-sm h-[320px] overflow-y-auto">
+      <CardContent className="p-6 space-y-6 text-sm h-[320px] overflow-y-auto overflow-x-hidden">
         {reputationAdvice ? (
           <div className="space-y-6">
             <div className="space-y-2">

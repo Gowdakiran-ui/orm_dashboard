@@ -170,7 +170,7 @@ export function FeedTab({
                 })}
               </div>
             </CardHeader>
-            <CardContent key={selectedSourceGroup} className="p-3 overflow-y-auto flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent animate-in fade-in slide-in-from-right-4 duration-300">
+            <CardContent key={selectedSourceGroup} className="p-3 overflow-y-auto overflow-x-hidden flex-1 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent animate-in fade-in slide-in-from-right-4 duration-300">
               {filteredDocuments.slice(0, feedRenderCount).map((d, i) => {
                 const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
 
@@ -268,7 +268,7 @@ export function FeedTab({
                   </div>
 
                   {/* Content Panel */}
-                  <div className={`flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent font-mono text-xs ${bodyText(theme)}`}>
+                  <div className={`flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent font-mono text-xs ${bodyText(theme)}`}>
                     {detailsLoading ? (
                       <div className="flex flex-col items-center justify-center h-full dash-accent font-mono">
                         <Cpu className="animate-spin h-8 w-8 mb-2" />

@@ -60,6 +60,7 @@ git pull
 docker compose build backend frontend   # only rebuilds images that changed; harmless to include both every time
 docker compose up -d                    # NO service filter -- recreates every container on any rebuilt image
 docker ps --format 'table {{.Names}}\t{{.Status}}'   # confirm every container is (healthy), not just the ones you expected to touch
+./scripts/verify_deploy_services.sh     # fails loudly if any defined service has no running container
 ```
 
 If a change is backend-only (no frontend changes), `docker compose build`
@@ -69,6 +70,15 @@ the `build` step.
 
 ## Verifying after deploy
 
+- `./scripts/verify_deploy_services.sh` — confirms every service *defined*
+  in `docker-compose.yml` has a *running* container, not just that the ones
+  you expected are healthy. `docker ps`/`docker compose ps` only show what
+  exists, not what's missing entirely — a service that's absent (not even
+  stopped) is invisible to eyeballing that output. This is what would have
+  caught `celery-worker-nlp` going missing after the 2026-09-23
+  disk-exhaustion recovery (see CLAUDE.md's droplet section) instead of it
+  silently backing up `nlp_queue` until the next pipeline run happened to
+  need it, a day later.
 - `docker ps` — every container should show `healthy` (or no healthcheck
   defined, for services like `frontend` that don't have one) with a recent
   `Up` time matching the deploy, not a stale multi-hour uptime sitting next

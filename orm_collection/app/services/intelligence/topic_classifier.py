@@ -92,15 +92,42 @@ class TopicClassifier:
         so tokenization, truncation, device placement and no_grad handling
         are untouched -- only the last softmax step is duplicated (once each
         way) instead of a second full model forward pass.
+
+        2026-09-20: label dimension is now batched into a single padded
+        forward() call instead of one forward() call per label (previously
+        17 sequential CPU passes/doc -- see PART_F forensics report §1.2).
+        preprocess() still yields one unbatched (1, seq_len) example per
+        label; we pad them together ourselves via the tokenizer's own
+        public pad() API (the same padding tokenizer.pad_token_id /
+        padding_side the pipeline's internal batching would use, see
+        transformers.pipelines.base.pad_collate_fn) and run them through
+        the model in one shot. Verified numerically equivalent (max abs
+        diff ~1e-6, float32 noise) to the old per-label loop on real
+        documents against the real model -- see
+        scripts/verify_topic_batching_equivalence.py.
         """
-        model_outputs = [
-            self.classifier.forward(model_inputs)
-            for model_inputs in self.classifier.preprocess(
+        model_input_items = list(
+            self.classifier.preprocess(
                 text, candidate_labels=candidate_labels, hypothesis_template=HYPOTHESIS_TEMPLATE
             )
+        )
+        model_input_names = self.classifier.tokenizer.model_input_names
+        encodings = [
+            {name: item[name][0].tolist() for name in model_input_names}
+            for item in model_input_items
         ]
+        padded = self.classifier.tokenizer.pad(encodings, padding=True, return_tensors="pt")
 
-        logits = np.concatenate([o["logits"].float().numpy() for o in model_outputs])
+        # candidate_label/sequence/is_last are required keys of _forward's
+        # input contract but are only echoed back into its output, which we
+        # never read below -- placeholder values are fine.
+        batched_inputs = dict(padded)
+        batched_inputs["candidate_label"] = candidate_labels[0]
+        batched_inputs["sequence"] = text
+        batched_inputs["is_last"] = True
+
+        model_output = self.classifier.forward(batched_inputs)
+        logits = model_output["logits"].float().numpy()
         n = len(candidate_labels)
         reshaped = logits.reshape((1, n, -1))[0]  # (n_labels, n_nli_classes)
 

@@ -553,7 +553,7 @@ export function ExecutivesTab({
               </div>
 
               {/* Content Panel */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6">
 
                 {/* Headline & Meta */}
                 <div className="space-y-2">
@@ -596,7 +596,7 @@ export function ExecutivesTab({
                   <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
                     <Info className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Original Article Snippet
                   </span>
-                  <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
+                  <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
                     {selectedDoc.original_content || "No original content available."}
                   </div>
                 </div>

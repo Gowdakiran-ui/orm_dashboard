@@ -47,7 +47,7 @@ export function CrisisPlannerPanel({
         </div>
         <Badge className="bg-red-600 text-white font-mono text-[9px] font-bold">CRISIS PLANNER</Badge>
       </div>
-      <CardContent className="p-6 space-y-6 text-sm h-[320px] overflow-y-auto">
+      <CardContent className="p-6 space-y-6 text-sm h-[320px] overflow-y-auto overflow-x-hidden">
         {crisisPlan ? (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-[#030712] p-3 rounded border border-[#1F2937]/40">

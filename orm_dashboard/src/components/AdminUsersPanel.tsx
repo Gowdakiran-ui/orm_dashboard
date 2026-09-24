@@ -288,7 +288,7 @@ export function AdminUsersPanel() {
             {createRole === "client_user" && (
               <div className="space-y-2">
                 <label className={mutedText(theme)}>Assigned Clients</label>
-                <div className={`max-h-40 overflow-y-auto rounded p-2 space-y-1 border ${isDark ? "bg-zinc-950/60 border-white/[0.12]" : "bg-white/60 border-black/[0.08]"}`}>
+                <div className={`max-h-40 overflow-y-auto overflow-x-hidden rounded p-2 space-y-1 border ${isDark ? "bg-zinc-950/60 border-white/[0.12]" : "bg-white/60 border-black/[0.08]"}`}>
                   {clients.map((c: any) => (
                     <label key={c.id} className={`flex items-center space-x-2 cursor-pointer ${bodyText(theme)}`}>
                       <input
