@@ -2,27 +2,27 @@
 
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Sora, JetBrains_Mono } from "next/font/google";
 import { motion } from "framer-motion";
 import { login } from "@/lib/api";
 import { MagneticButton } from "@/components/landing/MagneticButton";
 
 /**
- * Fonts + palette match the marketing landing page (Solar Flare accent on a
- * near-black zinc theme) — scoped to this page only via the wrapper's
- * className, same pattern as src/app/page.tsx. Auth logic below is
- * untouched, this is a styling pass only.
+ * Palette + font match the marketing landing page (src/app/page.tsx) after
+ * its gold/navy/white color-theme pass and Rockwell font swap: navy
+ * background family (#04213F/#0B2D54/#163F6E), gold accent (#CEA555, dark
+ * navy #0B2D54 text on gold buttons), Rockwell throughout. Scoped to this
+ * page only via the wrapper's inline style, same pattern as the landing
+ * page -- layout.tsx and the authenticated app keep their own fonts and
+ * colors untouched. Auth logic below is unchanged, this is a styling pass
+ * only. Rockwell isn't a Google Font, so no next/font loader -- set as a
+ * literal CSS font stack instead (real Rockwell where the OS has it
+ * installed, a slab-serif fallback chain otherwise), same as the landing
+ * page.
  */
-const body = Sora({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-login-body",
-});
-const dataMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-login-mono",
-});
+const ROCKWELL_STACK = "'Rockwell', 'Rockwell Nova', 'Roboto Slab', Georgia, serif";
+
+const GRID_TEXTURE =
+  "linear-gradient(rgba(255,255,255,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.035) 1px,transparent 1px)";
 
 function LoginForm() {
   const router = useRouter();
@@ -51,27 +51,26 @@ function LoginForm() {
 
   return (
     <div
-      className={`${body.variable} ${dataMono.variable} relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-zinc-950 px-4 py-12 font-[family-name:var(--font-login-body)] text-zinc-50`}
+      className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-[#04213F] bg-[size:48px_48px] px-4 py-12 font-[family-name:var(--font-login-body)] text-white"
+      style={{
+        backgroundImage: GRID_TEXTURE,
+        ["--font-login-body" as string]: ROCKWELL_STACK,
+        ["--font-login-mono" as string]: ROCKWELL_STACK,
+      }}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_55%_55%_at_50%_40%,black_10%,transparent_75%)]"
-      >
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:64px_64px] opacity-40" />
-      </div>
-
       <motion.form
         onSubmit={handleSubmit}
         initial={{ opacity: 0, y: 24, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: "spring", stiffness: 140, damping: 18, mass: 0.7 }}
-        className="relative w-full max-w-sm space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8 shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+        className="relative w-full max-w-sm space-y-5 rounded-2xl border border-[#163F6E] bg-[#0B2D54]/80 p-8 shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl"
       >
         <div className="space-y-1 text-center">
-          <h1 className="font-[family-name:var(--font-login-mono)] text-lg font-extrabold uppercase tracking-wider text-[#FF5E00]">
+          <h1 className="flex items-center justify-center gap-2 font-[family-name:var(--font-login-mono)] text-lg font-extrabold uppercase tracking-wider text-white">
+            <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555] shadow-[0_0_0_4px_rgba(206,165,85,0.16)]" />
             XOOP
           </h1>
-          <p className="text-xs text-zinc-400">Sign in to access the intelligence platform</p>
+          <p className="text-xs text-[#93A6C7]">Sign in to access the intelligence platform</p>
         </div>
 
         {justActivated && (
@@ -81,7 +80,7 @@ function LoginForm() {
         )}
 
         <div className="space-y-2">
-          <label className="block font-[family-name:var(--font-login-mono)] text-[10px] uppercase tracking-wider text-zinc-400">
+          <label className="block font-[family-name:var(--font-login-mono)] text-[10px] uppercase tracking-wider text-[#93A6C7]">
             Email
           </label>
           <input
@@ -90,12 +89,12 @@ function LoginForm() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 transition-colors focus:border-[#FF5E00] focus:outline-none"
+            className="w-full rounded-lg border border-[#163F6E] bg-[#04213F] px-3 py-2.5 text-sm text-white transition-colors focus:border-[#CEA555] focus:outline-none"
           />
         </div>
 
         <div className="space-y-2">
-          <label className="block font-[family-name:var(--font-login-mono)] text-[10px] uppercase tracking-wider text-zinc-400">
+          <label className="block font-[family-name:var(--font-login-mono)] text-[10px] uppercase tracking-wider text-[#93A6C7]">
             Password
           </label>
           <input
@@ -104,7 +103,7 @@ function LoginForm() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 transition-colors focus:border-[#FF5E00] focus:outline-none"
+            className="w-full rounded-lg border border-[#163F6E] bg-[#04213F] px-3 py-2.5 text-sm text-white transition-colors focus:border-[#CEA555] focus:outline-none"
           />
         </div>
 
@@ -116,7 +115,7 @@ function LoginForm() {
           disabled={loading}
           strength={0.15}
           whileTap={{ scale: 0.97 }}
-          className="w-full rounded-lg bg-[#FF5E00] px-4 py-3 font-[family-name:var(--font-login-mono)] text-xs font-bold uppercase tracking-wider text-[#1A0900] transition-colors hover:bg-[#FFB703] disabled:opacity-50"
+          className="w-full rounded-lg bg-[#CEA555] px-4 py-3 font-[family-name:var(--font-login-mono)] text-xs font-bold uppercase tracking-wider text-[#0B2D54] transition-colors hover:bg-[#DFC172] disabled:opacity-50"
         >
           {loading ? "Signing in..." : "Sign In"}
         </MagneticButton>

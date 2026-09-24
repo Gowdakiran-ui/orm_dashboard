@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Fraunces, Inter } from "next/font/google";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight, Mail, Menu, X,
@@ -20,32 +19,27 @@ const CONTACT_EMAIL = "contact@onlynereputation.com";
 /**
  * Redesign (2026-09-23) + round 2 correction pass (CEO review): same stack
  * throughout (Next.js App Router, React, Tailwind, framer-motion), dark
- * navy/teal editorial look, Fraunces serif + Inter body. Font stacks are
- * scoped to this landing page only (via the wrapper div's className below)
- * -- layout.tsx and the authenticated app keep their own fonts untouched.
+ * navy/gold editorial look, Rockwell throughout. Font stacks are scoped to
+ * this landing page only (via the wrapper div's inline style below) --
+ * layout.tsx and the authenticated app keep their own fonts untouched.
  *
- * Colors are literal hex values in every Tailwind className below (never
- * interpolated via a JS template string into an arbitrary-value class,
- * e.g. `text-[${x}]`) -- Tailwind's compiler scans source statically for
- * class name strings, so an interpolated class is invisible to it and
- * silently produces no CSS. Dynamic per-row colors use inline `style`
- * instead, which has no such restriction.
+ * Color-theme + font pass (parent-company alignment): accent swapped from
+ * teal to the gold/navy/white palette measured live off onlynereputation.com
+ * (nav/hero navy ~#02162B-#03203E, heading gold ~#CEA555, button gold
+ * ~#A57F37) -- every former #2FD9C4 (teal accent) is now #CEA555 (gold) and
+ * every former #06211C (button text on the accent) is now #0B2D54 (dark
+ * navy), a mechanical token swap since the same hex was reused consistently
+ * as "the accent color" throughout. Display/body fonts (previously Fraunces
+ * + Inter, both next/font/google) replaced with Rockwell -- not a Google
+ * Font, so no next/font loader; set as a literal CSS font stack instead
+ * (real Rockwell where the OS has it installed, a slab-serif fallback chain
+ * otherwise). Text content and layout are unchanged, colors and font only.
  *
  * Round 2 note: every em dash in this file's copy was deliberately
  * rewritten (comma/colon/period/restructured sentence) per explicit CEO
  * feedback -- do not reintroduce "--" when editing copy here.
  */
-const display = Fraunces({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-landing-display",
-});
-const body = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-landing-body",
-});
+const ROCKWELL_STACK = "'Rockwell', 'Rockwell Nova', 'Roboto Slab', Georgia, serif";
 
 // Subtle grid texture for the deep-navy page background (round 2, item 2)
 // -- CSS gradient lines, not an image asset, so it stays crisp at any
@@ -66,7 +60,7 @@ function Nav() {
     >
       <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-5 sm:px-7">
         <div className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-xl font-semibold">
-          <span className="h-[9px] w-[9px] rounded-full bg-[#2FD9C4] shadow-[0_0_0_4px_rgba(47,217,196,0.16)]" />
+          <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555] shadow-[0_0_0_4px_rgba(47,217,196,0.16)]" />
           XOOP
         </div>
 
@@ -81,14 +75,14 @@ function Nav() {
         <div className="hidden items-center gap-2.5 sm:flex">
           <Link
             href="/login"
-            className="rounded-lg border border-[#1E4C84] px-[19px] py-2.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
+            className="rounded-lg border border-[#1E4C84] px-[19px] py-2.5 text-sm font-medium text-white transition-colors hover:border-[#CEA555] hover:text-[#CEA555]"
           >
             Sign in
           </Link>
           <MagneticButton
             as={motion.a}
             href={`mailto:${CONTACT_EMAIL}`}
-            className="rounded-lg bg-[#2FD9C4] px-5 py-2.5 text-sm font-semibold text-[#06211C] transition-transform"
+            className="rounded-lg bg-[#CEA555] px-5 py-2.5 text-sm font-semibold text-[#0B2D54] transition-transform"
           >
             Request access
           </MagneticButton>
@@ -129,7 +123,7 @@ function Nav() {
                 </Link>
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
-                  className="rounded-lg bg-[#2FD9C4] px-4 py-3 text-center text-sm font-semibold text-[#06211C]"
+                  className="rounded-lg bg-[#CEA555] px-4 py-3 text-center text-sm font-semibold text-[#0B2D54]"
                 >
                   Request access
                 </a>
@@ -147,17 +141,17 @@ function Hero() {
     <header className="pb-16 pt-[88px]">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
-          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.86rem] font-medium text-[#2FD9C4]">
+          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.86rem] font-medium text-[#CEA555]">
             <span className="relative flex h-[7px] w-[7px]">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#2FD9C4] opacity-60" />
-              <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#2FD9C4]" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#CEA555] opacity-60" />
+              <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#CEA555]" />
             </span>
             Reputation Intelligence, not just monitoring
           </div>
 
           <h1 className="max-w-[16ch] text-balance font-[family-name:var(--font-landing-display)] font-medium leading-[1.08] text-white text-[clamp(2.3rem,5vw,3.6rem)]">
             We don&apos;t just tell you what happened. We tell you{" "}
-            <em className="not-italic italic text-[#2FD9C4]">why it matters</em> and what to do next.
+            <em className="not-italic italic text-[#CEA555]">why it matters</em> and what to do next.
           </h1>
 
           <p className="mt-6 max-w-[58ch] text-[1.14rem] leading-relaxed text-[#93A6C7]">
@@ -171,14 +165,14 @@ function Hero() {
               as={motion.a}
               href={`mailto:${CONTACT_EMAIL}`}
               whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#2FD9C4] px-5 py-3.5 text-sm font-semibold text-[#06211C]"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#CEA555] px-5 py-3.5 text-sm font-semibold text-[#0B2D54]"
             >
               <Mail className="h-4 w-4" />
               Request access
             </MagneticButton>
             <a
               href="#preview"
-              className="inline-flex items-center gap-2 rounded-lg border border-[#1E4C84] px-5 py-3.5 text-sm font-medium text-white transition-colors hover:border-[#2FD9C4] hover:text-[#2FD9C4]"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#1E4C84] px-5 py-3.5 text-sm font-medium text-white transition-colors hover:border-[#CEA555] hover:text-[#CEA555]"
             >
               See the product ↓
             </a>
@@ -204,7 +198,7 @@ function Hero() {
             </div>
             <div className="bg-[#143D6E] p-8">
               <div className="text-[0.8rem] text-[#5D719A]">XOOP</div>
-              <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-[#2FD9C4]">
+              <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-[#CEA555]">
                 Tells you why it happened, what&apos;s likely next, and what to do about it.
               </div>
             </div>
@@ -261,10 +255,10 @@ function ReputationIntelligence() {
         </Reveal>
 
         <Reveal>
-          <div className="mb-14 rounded-2xl border border-[#2FD9C4]/25 bg-[#0B2D54] p-8 sm:p-10">
+          <div className="mb-14 rounded-2xl border border-[#CEA555]/25 bg-[#0B2D54] p-8 sm:p-10">
             <p className="text-balance font-[family-name:var(--font-landing-display)] text-[1.3rem] font-medium leading-snug text-white sm:text-[1.5rem]">
               XOOP is not a listening tool. Listening tools show you mentions.{" "}
-              <span className="text-[#2FD9C4]">We show you what they mean.</span>
+              <span className="text-[#CEA555]">We show you what they mean.</span>
             </p>
           </div>
         </Reveal>
@@ -273,7 +267,7 @@ function ReputationIntelligence() {
           {reputationPoints.map((p) => (
             <RevealItem key={p.numeral}>
               <div className="h-full rounded-2xl border border-[#163F6E] bg-[#0B2D54] p-7">
-                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-[#2FD9C4]/30 bg-[#2FD9C4]/10 font-[family-name:var(--font-landing-display)] text-sm font-semibold text-[#2FD9C4]">
+                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10 font-[family-name:var(--font-landing-display)] text-sm font-semibold text-[#CEA555]">
                   {p.numeral}
                 </span>
                 <h3 className="mb-2.5 text-[1.1rem] font-medium leading-snug text-white">{p.title}</h3>
@@ -312,8 +306,8 @@ function Framework() {
             <RevealItem key={f.word}>
               <div className="h-full min-h-[190px] bg-[#0B2D54] p-7 transition-colors hover:bg-[#0F3663]">
                 <div className="mb-3.5 flex items-center gap-2">
-                  <f.icon className="h-4 w-4 text-[#2FD9C4]" strokeWidth={2} />
-                  <span className="font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#2FD9C4]">
+                  <f.icon className="h-4 w-4 text-[#CEA555]" strokeWidth={2} />
+                  <span className="font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#CEA555]">
                     {f.word}
                   </span>
                 </div>
@@ -364,8 +358,8 @@ function WhoItsFor() {
           {audiences.map((a) => (
             <RevealItem key={a.title}>
               <div className="h-full rounded-2xl border border-[#163F6E] bg-[#0B2D54] p-7">
-                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-[#2FD9C4]/30 bg-[#2FD9C4]/10">
-                  <a.icon className="h-5 w-5 text-[#2FD9C4]" strokeWidth={1.75} />
+                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10">
+                  <a.icon className="h-5 w-5 text-[#CEA555]" strokeWidth={1.75} />
                 </span>
                 <h3 className="mb-2.5 text-[1.14rem] font-medium leading-tight text-white">{a.title}</h3>
                 <p className="text-[0.93rem] leading-relaxed text-[#93A6C7]">{a.copy}</p>
@@ -510,8 +504,8 @@ function Features() {
             <RevealItem key={f.title}>
               <div className={`grid grid-cols-1 items-start gap-4 py-8 sm:grid-cols-[2fr_3fr] sm:gap-10 ${idx > 0 ? "border-t border-[#163F6E]" : ""}`}>
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#2FD9C4]/30 bg-[#2FD9C4]/10">
-                    <f.icon className="h-5 w-5 text-[#2FD9C4]" strokeWidth={1.75} />
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10">
+                    <f.icon className="h-5 w-5 text-[#CEA555]" strokeWidth={1.75} />
                   </span>
                   <h3 className="text-[1.28rem] font-medium text-white">{f.title}</h3>
                 </div>
@@ -544,7 +538,7 @@ const comparisonRows = [
 function ComparisonCell({ value }: { value: string }) {
   if (value === "yes") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[#2FD9C4]">
+      <span className="inline-flex items-center gap-1.5 text-[#CEA555]">
         <Check className="h-4 w-4" strokeWidth={2.5} />
         <span className="hidden sm:inline">Yes</span>
       </span>
@@ -582,7 +576,7 @@ function Comparison() {
                 <tr className="bg-[#0F3663]">
                   <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-white">Capability</th>
                   <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-[#93A6C7]">Meltwater / Brandwatch / Sprinklr</th>
-                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-[#2FD9C4]">XOOP</th>
+                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-[#CEA555]">XOOP</th>
                 </tr>
               </thead>
               <tbody>
@@ -590,7 +584,7 @@ function Comparison() {
                   <tr key={row.capability} className={idx > 0 ? "border-t border-[#163F6E]" : ""}>
                     <td className="px-5 py-4 text-[#EEF3FB]">{row.capability}</td>
                     <td className="px-5 py-4"><ComparisonCell value={row.others} /></td>
-                    <td className="px-5 py-4 bg-[#2FD9C4]/5"><ComparisonCell value={row.xoop} /></td>
+                    <td className="px-5 py-4 bg-[#CEA555]/5"><ComparisonCell value={row.xoop} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -625,8 +619,8 @@ function Benefits() {
             <RevealItem key={b.title}>
               <div className="h-full bg-[#0B2D54] p-8">
                 <div className="mb-3.5 flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#2FD9C4]/30 bg-[#2FD9C4]/10">
-                    <b.icon className="h-4 w-4 text-[#2FD9C4]" strokeWidth={1.75} />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10">
+                    <b.icon className="h-4 w-4 text-[#CEA555]" strokeWidth={1.75} />
                   </span>
                   <span className="font-[family-name:var(--font-landing-display)] text-xs tracking-wider text-[#5D719A]">
                     0{idx + 1}
@@ -660,7 +654,7 @@ function FinalCTA() {
               as={motion.a}
               href={`mailto:${CONTACT_EMAIL}`}
               whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#2FD9C4] px-6 py-3.5 text-sm font-semibold text-[#06211C]"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#CEA555] px-6 py-3.5 text-sm font-semibold text-[#0B2D54]"
             >
               <Mail className="h-4 w-4" />
               Request access
@@ -680,7 +674,11 @@ export default function WelcomePage() {
       style={{ backgroundImage: GRID_TEXTURE }}
     >
       <div
-        className={`${display.variable} ${body.variable} font-[family-name:var(--font-landing-body)] text-white`}
+        className="font-[family-name:var(--font-landing-body)] text-white"
+        style={{
+          ["--font-landing-display" as string]: ROCKWELL_STACK,
+          ["--font-landing-body" as string]: ROCKWELL_STACK,
+        }}
       >
         <Nav />
         <Hero />
@@ -717,7 +715,7 @@ export default function WelcomePage() {
         >
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 sm:px-7">
             <div className="flex items-center gap-2.5 font-[family-name:var(--font-landing-display)] text-[1.05rem] font-semibold">
-              <span className="h-[9px] w-[9px] rounded-full bg-[#2FD9C4]" />
+              <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555]" />
               XOOP
             </div>
             <p className="text-[0.82rem] text-[#5D719A]">
