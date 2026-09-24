@@ -3,14 +3,13 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { UploadCloud, ScanSearch, Loader2, ShieldAlert, ShieldCheck, History } from "lucide-react";
+import { UploadCloud, ScanSearch, Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useTheme, type Theme } from "@/components/theme/ThemeProvider";
 import { glassCard, mutedText, bodyText, SPECULAR_LINE, glassPrimaryButton } from "@/components/theme/tokens";
 import {
   submitDeepfakeScan,
   submitDomainScan,
   fetchCounterfeitScan,
-  fetchCounterfeitScans,
 } from "@/lib/api";
 
 export interface CounterfeitDetectionTabProps {
@@ -107,17 +106,8 @@ function DeepfakePanel({ clientId, theme, isDark, accent }: { clientId?: string 
   const [dragOver, setDragOver] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { scan, polling, start } = usePollScan(clientId);
-
-  const loadHistory = useCallback(() => {
-    if (!clientId) return;
-    fetchCounterfeitScans(clientId, "deepfake").then(setHistory).catch(() => {});
-  }, [clientId]);
-
-  useEffect(() => { loadHistory(); }, [loadHistory]);
-  useEffect(() => { if (scan?.status === "COMPLETE" || scan?.status === "FAILED") loadHistory(); }, [scan?.status, loadHistory]);
 
   const pickFile = (f: File | undefined | null) => {
     setSubmitError(null);
@@ -160,7 +150,7 @@ function DeepfakePanel({ clientId, theme, isDark, accent }: { clientId?: string 
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
         <p className={`text-xs ${mutedText(theme)}`}>
-          Upload an image to check for AI manipulation via Reality Defender. Free tier: 50 scans/month.
+          Upload an image to check for AI manipulation.
         </p>
 
         <label
@@ -218,24 +208,6 @@ function DeepfakePanel({ clientId, theme, isDark, accent }: { clientId?: string 
             </div>
           </div>
         )}
-
-        {history.length > 0 && (
-          <div className="pt-2">
-            <div className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wider mb-2 ${mutedText(theme)}`}>
-              <History className="h-3 w-3" /> Recent scans
-            </div>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {history.map((h) => (
-                <div key={h.scan_id} className="flex items-center justify-between gap-2 text-xs font-mono">
-                  <span className={`truncate ${bodyText(theme)}`}>{h.input_summary}</span>
-                  <Badge className={`shrink-0 ${severityBadgeClass(isDark, h.status === "COMPLETE" ? deepfakeVerdictTier(h.result?.verdict) : h.status === "FAILED" ? "critical" : "neutral")}`}>
-                    {h.status === "COMPLETE" ? (h.result?.verdict || "?") : h.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
@@ -257,6 +229,10 @@ function DomainScanPanel({ clientId, theme, isDark, accent }: { clientId?: strin
     const trimmed = keyword.trim();
     if (trimmed.length < 3 || trimmed.length > 63) {
       setSubmitError("Keyword must be 3-63 characters.");
+      return;
+    }
+    if (trimmed.includes(" ") || trimmed.includes(".")) {
+      setSubmitError("Enter a brand keyword only (e.g. 'acmecorp'), not a full domain — no dots or spaces.");
       return;
     }
     setSubmitting(true);
@@ -285,7 +261,7 @@ function DomainScanPanel({ clientId, theme, isDark, accent }: { clientId?: strin
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
         <p className={`text-xs ${mutedText(theme)}`}>
-          Search a brand keyword for typosquat/lookalike domains via WhoisFreaks, then check each for live phishing activity via Bolster.ai.
+          Search a brand keyword for typosquat/lookalike domains.
         </p>
 
         <form onSubmit={handleScan} className="flex gap-2">
@@ -324,7 +300,7 @@ function DomainScanPanel({ clientId, theme, isDark, accent }: { clientId?: strin
             {candidates.length === 0 ? (
               <div className={`text-xs font-mono ${mutedText(theme)}`}>No lookalike domains found for this keyword.</div>
             ) : (
-              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+              <div className="space-y-1.5 max-h-72 overflow-y-auto overflow-x-hidden">
                 {candidates.map((c: any) => (
                   <div key={c.domain_name} className={`rounded-lg px-3 py-2 text-xs font-mono flex items-center justify-between gap-2 min-h-11 ${isDark ? "bg-zinc-950/40 border border-white/[0.08]" : "bg-white/60 border border-black/[0.06]"}`}>
                     <div className="min-w-0">
@@ -332,9 +308,17 @@ function DomainScanPanel({ clientId, theme, isDark, accent }: { clientId?: strin
                       <div className={mutedText(theme)}>
                         {c.registrar || "Registrar unknown"}{c.create_date ? ` · registered ${c.create_date}` : ""}
                       </div>
+                      <a
+                        href={`https://${c.domain_name}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`truncate block underline underline-offset-2 ${isDark ? "text-[#00F5D4]/80 hover:text-[#00F5D4]" : "text-[#3B82F6]/80 hover:text-[#3B82F6]"}`}
+                      >
+                        Visit site to check manually →
+                      </a>
                     </div>
                     <Badge className={`shrink-0 ${severityBadgeClass(isDark, c.malicious ? "critical" : c.live ? "low" : "neutral")}`}>
-                      {c.malicious ? "MALICIOUS" : c.live ? "LIVE" : c.error ? "CHECK FAILED" : "NOT LIVE"}
+                      {c.malicious ? "MALICIOUS" : c.live ? "LIVE" : c.error ? "FOUND" : "NOT LIVE"}
                     </Badge>
                   </div>
                 ))}

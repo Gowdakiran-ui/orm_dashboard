@@ -79,6 +79,15 @@ celery_app.conf.update(
         # Backups (Section 10) -- lightweight periodic I/O work, same
         # category as the watchdogs above, not worth a dedicated queue.
         'app.workers.backup_tasks.run_backup':            {'queue': 'io_queue'},
+        # Counterfeit detection scans (Reality Defender / WhoisFreaks /
+        # Bolster.ai external API calls) -- dispatched via celery_app.send_task
+        # by name from client_intelligence.py, which only consults task_routes
+        # (the @shared_task(queue="io_queue") kwarg on these tasks in
+        # aggregation_tasks.py has no effect on send_task-by-name dispatch).
+        # Missing here, they fell through to Celery's default "celery" queue,
+        # which no worker container consumes -- scans sat QUEUED forever.
+        'app.workers.aggregation_tasks.run_deepfake_scan': {'queue': 'io_queue'},
+        'app.workers.aggregation_tasks.run_domain_scan':   {'queue': 'io_queue'},
         # CPU-bound NLP tasks
         'app.workers.document_processor.process_document_task': {'queue': 'cpu_queue'},
         'app.workers.intelligence_tasks.process_document_intelligence': {'queue': 'nlp_queue'},

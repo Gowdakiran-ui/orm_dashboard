@@ -2,7 +2,7 @@ import os
 import time
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List, Dict, Any, Optional
@@ -1741,6 +1741,18 @@ _MAX_IMAGE_BYTES = 50 * 1024 * 1024  # Reality Defender's own image size ceiling
 
 class DomainScanRequest(BaseModel):
     keyword: str = Field(..., min_length=3, max_length=63)
+
+    @field_validator("keyword")
+    @classmethod
+    def keyword_must_be_bare(cls, v: str) -> str:
+        # WhoisFreaks' /v3.0/domain/typos rejects dots/spaces outright
+        # (HTTP 400 "Please provide valid domain keyword without spaces and
+        # dots") -- catch a full domain like "google.com" here, before it
+        # burns one of the 500 lifetime free-tier credits on a call that
+        # was always going to fail.
+        if " " in v or "." in v:
+            raise ValueError("Enter a brand keyword only (e.g. 'acmecorp'), not a full domain — no dots or spaces.")
+        return v
 
 
 def _counterfeit_scan_to_dict(scan) -> Dict[str, Any]:

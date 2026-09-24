@@ -54,6 +54,14 @@ BOLSTER_BASE = "https://developers.checkphish.ai/api"
 _RD_POLL_INTERVAL_S = 2
 _RD_MAX_ATTEMPTS = 30  # matches the SDK's own default (60s total)
 
+# Terminal verdicts per this function's own docstring/SDK contract. Reality
+# Defender's resultsSummary.status is truthy while still processing too
+# (e.g. "ANALYZING") -- treating any truthy status as done meant the poll
+# loop returned on the very first in-progress response, surfacing
+# "ANALYZING" as if it were the final verdict (confidence_score always null,
+# since metadata isn't populated yet either). Confirmed live 2026-09-24.
+_RD_TERMINAL_STATUSES = {"AUTHENTIC", "FAKE", "SUSPICIOUS", "NOT_APPLICABLE", "UNABLE_TO_EVALUATE"}
+
 
 class CounterfeitDetectionUnavailable(Exception):
     """Raised when a tool's API key isn't configured."""
@@ -130,7 +138,7 @@ def scan_image_for_deepfake(image_bytes: bytes, filename: str, content_type: str
 
         result_data = result_resp.json()
         results_summary = result_data.get("resultsSummary")
-        if results_summary and results_summary.get("status"):
+        if results_summary and results_summary.get("status") in _RD_TERMINAL_STATUSES:
             metadata = results_summary.get("metadata") or {}
             return {
                 "verdict": results_summary["status"],
