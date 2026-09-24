@@ -48,6 +48,24 @@ const ROCKWELL_STACK = "'Rockwell', 'Rockwell Nova', 'Roboto Slab', Georgia, ser
 const GRID_TEXTURE =
   "linear-gradient(rgba(255,255,255,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.035) 1px,transparent 1px)";
 
+/**
+ * Round 3 (white-balance pass, per-CEO note "add white in equal proportion
+ * to the blue"): the page was one uniform navy background top to bottom --
+ * only text/card shades varied. Sections now alternate an explicit white
+ * (ivory) background against the existing navy, so the page reads as two
+ * colors in real balance rather than one navy field with gold/white
+ * accents on top. Same gold accent and Rockwell font throughout; only
+ * section backgrounds and their local text/card contrast shift. Faint
+ * navy-line texture mirrors GRID_TEXTURE so white sections don't feel flat
+ * next to the textured navy ones.
+ */
+const IVORY_BG = "#FBFAF5";
+const INK = "#0B2D54";
+const INK_MUTED = "#4C5F82";
+const INK_FAINT = "#7A8CAD";
+const IVORY_GRID_TEXTURE =
+  "linear-gradient(rgba(11,45,84,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(11,45,84,0.05) 1px,transparent 1px)";
+
 const navLinkClass = "text-sm text-[#93A6C7] transition-colors hover:text-white";
 
 function Nav() {
@@ -138,23 +156,29 @@ function Nav() {
 
 function Hero() {
   return (
-    <header className="pb-16 pt-[88px]">
+    <header
+      className="relative overflow-hidden pb-16 pt-[88px]"
+      style={{ backgroundColor: IVORY_BG, backgroundImage: IVORY_GRID_TEXTURE, backgroundSize: "48px 48px" }}
+    >
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
-          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.86rem] font-medium text-[#CEA555]">
+          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.86rem] font-medium text-[#A57F37]">
             <span className="relative flex h-[7px] w-[7px]">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#CEA555] opacity-60" />
-              <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#CEA555]" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#A57F37] opacity-60" />
+              <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#A57F37]" />
             </span>
             Reputation Intelligence, not just monitoring
           </div>
 
-          <h1 className="max-w-[16ch] text-balance font-[family-name:var(--font-landing-display)] font-medium leading-[1.08] text-white text-[clamp(2.3rem,5vw,3.6rem)]">
+          <h1
+            className="max-w-[16ch] text-balance font-[family-name:var(--font-landing-display)] font-medium leading-[1.08] text-[clamp(2.3rem,5vw,3.6rem)]"
+            style={{ color: INK }}
+          >
             We don&apos;t just tell you what happened. We tell you{" "}
-            <em className="not-italic italic text-[#CEA555]">why it matters</em> and what to do next.
+            <em className="not-italic italic text-[#A57F37]">why it matters</em> and what to do next.
           </h1>
 
-          <p className="mt-6 max-w-[58ch] text-[1.14rem] leading-relaxed text-[#93A6C7]">
+          <p className="mt-6 max-w-[58ch] text-[1.14rem] leading-relaxed" style={{ color: INK_MUTED }}>
             Listening and monitoring tools show you the noise. XOOP connects conversations,
             behaviour, search and stakeholder signals into one picture, so your team can act
             on a shift before it becomes a headline, not after.
@@ -172,16 +196,17 @@ function Hero() {
             </MagneticButton>
             <a
               href="#preview"
-              className="inline-flex items-center gap-2 rounded-lg border border-[#1E4C84] px-5 py-3.5 text-sm font-medium text-white transition-colors hover:border-[#CEA555] hover:text-[#CEA555]"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#0B2D54]/20 px-5 py-3.5 text-sm font-medium transition-colors hover:border-[#A57F37] hover:text-[#A57F37]"
+              style={{ color: INK }}
             >
               See the product ↓
             </a>
           </div>
 
-          <p className="mt-6 text-xs text-[#5D719A]">
+          <p className="mt-6 text-xs" style={{ color: INK_FAINT }}>
             XOOP is a closed-loop platform for onboarded clients. New accounts are set up by our
             team: reach out at{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#93A6C7] underline decoration-dotted">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="underline decoration-dotted" style={{ color: INK_MUTED }}>
               {CONTACT_EMAIL}
             </a>
             .
@@ -189,15 +214,15 @@ function Hero() {
         </Reveal>
 
         <Reveal>
-          <div className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#163F6E] bg-[#163F6E] sm:grid-cols-2">
-            <div className="bg-[#0B2D54] p-8">
-              <div className="text-[0.8rem] text-[#5D719A]">Monitoring &amp; listening tools</div>
-              <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-white">
+          <div className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#0B2D54]/12 bg-[#0B2D54]/12 sm:grid-cols-2">
+            <div className="bg-white p-8">
+              <div className="text-[0.8rem]" style={{ color: INK_FAINT }}>Monitoring &amp; listening tools</div>
+              <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium" style={{ color: INK }}>
                 Tell you what happened.
               </div>
             </div>
-            <div className="bg-[#143D6E] p-8">
-              <div className="text-[0.8rem] text-[#5D719A]">XOOP</div>
+            <div className="bg-[#0B2D54] p-8">
+              <div className="text-[0.8rem] text-[#93A6C7]">XOOP</div>
               <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-[#CEA555]">
                 Tells you why it happened, what&apos;s likely next, and what to do about it.
               </div>
@@ -209,13 +234,18 @@ function Hero() {
   );
 }
 
-function SectionHead({ title, copy }: { title: string; copy: string }) {
+function SectionHead({ title, copy, light = false }: { title: string; copy: string; light?: boolean }) {
   return (
     <div className="mb-[52px] max-w-[62ch]">
-      <h2 className="text-balance font-[family-name:var(--font-landing-display)] font-medium text-white text-[clamp(1.7rem,3.4vw,2.4rem)]">
+      <h2
+        className="text-balance font-[family-name:var(--font-landing-display)] font-medium text-[clamp(1.7rem,3.4vw,2.4rem)]"
+        style={{ color: light ? INK : "#fff" }}
+      >
         {title}
       </h2>
-      <p className="mt-3.5 text-[1.03rem] leading-relaxed text-[#93A6C7]">{copy}</p>
+      <p className="mt-3.5 text-[1.03rem] leading-relaxed" style={{ color: light ? INK_MUTED : "#93A6C7" }}>
+        {copy}
+      </p>
     </div>
   );
 }
@@ -245,7 +275,7 @@ const reputationPoints = [
 
 function ReputationIntelligence() {
   return (
-    <section id="reputation-intelligence" className="relative overflow-hidden border-t border-[#163F6E] py-24">
+    <section id="reputation-intelligence" className="relative overflow-hidden border-t border-[#163F6E] bg-[#04213F] py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead
@@ -292,27 +322,32 @@ const framework = [
 
 function Framework() {
   return (
-    <section id="framework" className="border-t border-[#163F6E] py-24">
+    <section
+      id="framework"
+      className="border-t border-[#0B2D54]/10 py-24"
+      style={{ backgroundColor: IVORY_BG, backgroundImage: IVORY_GRID_TEXTURE, backgroundSize: "48px 48px" }}
+    >
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead
+            light
             title="Every reputation problem has six real questions. We answer all of them."
             copy="Not a feed of mentions. A straight answer to the six questions your comms team actually has to answer for leadership, every time something moves."
           />
         </Reveal>
 
-        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#163F6E] bg-[#163F6E] sm:grid-cols-2 lg:grid-cols-3">
+        <RevealGroup className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-[#0B2D54]/12 bg-[#0B2D54]/12 sm:grid-cols-2 lg:grid-cols-3">
           {framework.map((f) => (
             <RevealItem key={f.word}>
-              <div className="h-full min-h-[190px] bg-[#0B2D54] p-7 transition-colors hover:bg-[#0F3663]">
+              <div className="h-full min-h-[190px] bg-white p-7 transition-colors hover:bg-[#F3EFE3]">
                 <div className="mb-3.5 flex items-center gap-2">
-                  <f.icon className="h-4 w-4 text-[#CEA555]" strokeWidth={2} />
-                  <span className="font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#CEA555]">
+                  <f.icon className="h-4 w-4 text-[#A57F37]" strokeWidth={2} />
+                  <span className="font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#A57F37]">
                     {f.word}
                   </span>
                 </div>
-                <h3 className="mb-2.5 text-[1.14rem] font-medium leading-tight text-white">{f.title}</h3>
-                <p className="text-[0.93rem] leading-relaxed text-[#93A6C7]">{f.copy}</p>
+                <h3 className="mb-2.5 text-[1.14rem] font-medium leading-tight" style={{ color: INK }}>{f.title}</h3>
+                <p className="text-[0.93rem] leading-relaxed" style={{ color: INK_MUTED }}>{f.copy}</p>
               </div>
             </RevealItem>
           ))}
@@ -345,7 +380,7 @@ const audiences = [
 
 function WhoItsFor() {
   return (
-    <section id="who-its-for" className="border-t border-[#163F6E] py-24">
+    <section id="who-its-for" className="relative border-t border-[#163F6E] bg-[#04213F] py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead
@@ -374,12 +409,12 @@ function WhoItsFor() {
 
 function MockPanel({ title, children, noPadding = false }: { title: string; children: React.ReactNode; noPadding?: boolean }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#163F6E] bg-[#0B2D54]">
-      <div className="flex items-center gap-2 border-b border-[#163F6E] bg-[#0F3663] px-4 py-3">
-        <span className="h-2 w-2 rounded-full bg-[#1E4C84]" />
-        <span className="h-2 w-2 rounded-full bg-[#1E4C84]" />
-        <span className="h-2 w-2 rounded-full bg-[#1E4C84]" />
-        <span className="ml-1.5 text-[0.78rem] tracking-wide text-[#5D719A]">{title}</span>
+    <div className="overflow-hidden rounded-2xl border border-[#0B2D54]/12 bg-white shadow-[0_1px_3px_rgba(11,45,84,0.08)]">
+      <div className="flex items-center gap-2 border-b border-[#0B2D54]/10 bg-[#F3EFE3] px-4 py-3">
+        <span className="h-2 w-2 rounded-full bg-[#0B2D54]/25" />
+        <span className="h-2 w-2 rounded-full bg-[#0B2D54]/25" />
+        <span className="h-2 w-2 rounded-full bg-[#0B2D54]/25" />
+        <span className="ml-1.5 text-[0.78rem] tracking-wide" style={{ color: INK_FAINT }}>{title}</span>
       </div>
       <div className={noPadding ? "" : "p-5"}>{children}</div>
     </div>
@@ -421,10 +456,14 @@ function ScreenshotPanel({
 
 function ProductPreview() {
   return (
-    <section id="preview" className="py-24">
+    <section
+      id="preview"
+      className="border-t border-[#0B2D54]/10 py-24"
+      style={{ backgroundColor: IVORY_BG, backgroundImage: IVORY_GRID_TEXTURE, backgroundSize: "48px 48px" }}
+    >
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
-          <SectionHead title="Inside the platform" copy="A live look at how XOOP turns raw coverage into a decision." />
+          <SectionHead light title="Inside the platform" copy="A live look at how XOOP turns raw coverage into a decision." />
         </Reveal>
 
         <RevealGroup className="grid grid-cols-1 gap-[18px] lg:grid-cols-2">
@@ -469,7 +508,7 @@ function ProductPreview() {
           </RevealItem>
         </RevealGroup>
 
-        <p className="mt-[18px] text-center text-[0.86rem] text-[#5D719A]">
+        <p className="mt-[18px] text-center text-[0.86rem]" style={{ color: INK_FAINT }}>
           Real screenshots from the live platform, tracking Anthropic.
         </p>
       </div>
@@ -493,7 +532,7 @@ const featureRows = [
 
 function Features() {
   return (
-    <section id="features" className="border-t border-[#163F6E] py-24">
+    <section id="features" className="border-t border-[#163F6E] bg-[#04213F] py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead title="What's under the hood" copy="Everything you need to move from &quot;we saw a mention&quot; to &quot;here's what we're doing about it.&quot;" />
@@ -538,7 +577,7 @@ const comparisonRows = [
 function ComparisonCell({ value }: { value: string }) {
   if (value === "yes") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[#CEA555]">
+      <span className="inline-flex items-center gap-1.5 text-[#A57F37]">
         <Check className="h-4 w-4" strokeWidth={2.5} />
         <span className="hidden sm:inline">Yes</span>
       </span>
@@ -551,7 +590,7 @@ function ComparisonCell({ value }: { value: string }) {
     "marketing-first": "Marketing-first",
   };
   return (
-    <span className="inline-flex items-center gap-1.5 text-[#5D719A]">
+    <span className="inline-flex items-center gap-1.5" style={{ color: INK_FAINT }}>
       <Minus className="h-4 w-4" strokeWidth={2.5} />
       {labels[value] ?? value}
     </span>
@@ -560,38 +599,43 @@ function ComparisonCell({ value }: { value: string }) {
 
 function Comparison() {
   return (
-    <section id="comparison" className="border-t border-[#163F6E] py-24">
+    <section
+      id="comparison"
+      className="border-t border-[#0B2D54]/10 py-24"
+      style={{ backgroundColor: IVORY_BG, backgroundImage: IVORY_GRID_TEXTURE, backgroundSize: "48px 48px" }}
+    >
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
           <SectionHead
+            light
             title="Where XOOP actually differs"
             copy="General social-listening platforms like Meltwater, Brandwatch, and Sprinklr are built volume-first: track mentions, count engagement. XOOP is built reputation-first."
           />
         </Reveal>
 
         <Reveal>
-          <div className="overflow-x-auto rounded-2xl border border-[#163F6E]">
+          <div className="overflow-x-auto rounded-2xl border border-[#0B2D54]/12 bg-white shadow-[0_1px_3px_rgba(11,45,84,0.08)]">
             <table className="w-full min-w-[640px] border-collapse text-left text-sm">
               <thead>
-                <tr className="bg-[#0F3663]">
-                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-white">Capability</th>
-                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-[#93A6C7]">Meltwater / Brandwatch / Sprinklr</th>
-                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-[#CEA555]">XOOP</th>
+                <tr className="bg-[#F3EFE3]">
+                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium" style={{ color: INK }}>Capability</th>
+                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium" style={{ color: INK_MUTED }}>Meltwater / Brandwatch / Sprinklr</th>
+                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-[#A57F37]">XOOP</th>
                 </tr>
               </thead>
               <tbody>
                 {comparisonRows.map((row, idx) => (
-                  <tr key={row.capability} className={idx > 0 ? "border-t border-[#163F6E]" : ""}>
-                    <td className="px-5 py-4 text-[#EEF3FB]">{row.capability}</td>
+                  <tr key={row.capability} className={idx > 0 ? "border-t border-[#0B2D54]/10" : ""}>
+                    <td className="px-5 py-4" style={{ color: INK }}>{row.capability}</td>
                     <td className="px-5 py-4"><ComparisonCell value={row.others} /></td>
-                    <td className="px-5 py-4 bg-[#CEA555]/5"><ComparisonCell value={row.xoop} /></td>
+                    <td className="px-5 py-4 bg-[#CEA555]/8"><ComparisonCell value={row.xoop} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </Reveal>
-        <p className="mt-4 text-[0.8rem] text-[#5D719A]">
+        <p className="mt-4 text-[0.8rem]" style={{ color: INK_FAINT }}>
           Based on how general social-listening platforms are typically positioned and on XOOP&apos;s own built capabilities. Not a claim about any specific competitor&apos;s internal roadmap.
         </p>
       </div>
@@ -639,16 +683,19 @@ function Benefits() {
 
 function FinalCTA() {
   return (
-    <section className="py-[100px] text-center">
+    <section
+      className="border-t border-[#0B2D54]/10 py-[100px] text-center"
+      style={{ backgroundColor: IVORY_BG, backgroundImage: IVORY_GRID_TEXTURE, backgroundSize: "48px 48px" }}
+    >
       <div className="mx-auto max-w-3xl px-5 sm:px-7">
         <Reveal>
-          <span className="inline-flex items-center rounded-full border border-[#1E4C84] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-[#93A6C7]">
+          <span className="inline-flex items-center rounded-full border border-[#0B2D54]/20 px-3 py-1 text-[11px] font-medium uppercase tracking-wider" style={{ color: INK_MUTED }}>
             Now onboarding Q1 clients
           </span>
-          <h2 className="mx-auto mt-5 max-w-[20ch] text-balance font-[family-name:var(--font-landing-display)] font-medium text-white text-[clamp(1.8rem,4vw,2.6rem)]">
+          <h2 className="mx-auto mt-5 max-w-[20ch] text-balance font-[family-name:var(--font-landing-display)] font-medium text-[clamp(1.8rem,4vw,2.6rem)]" style={{ color: INK }}>
             See what your reputation data has been trying to tell you.
           </h2>
-          <p className="mt-4 text-[1.05rem] text-[#93A6C7]">Book a walkthrough with the team behind XOOP.</p>
+          <p className="mt-4 text-[1.05rem]" style={{ color: INK_MUTED }}>Book a walkthrough with the team behind XOOP.</p>
           <div className="mt-8 flex justify-center">
             <MagneticButton
               as={motion.a}
@@ -692,7 +739,7 @@ export default function WelcomePage() {
         <FinalCTA />
 
         {/* PARENT COMPANY */}
-        <section className="border-t border-[#163F6E] py-16">
+        <section className="border-t border-[#163F6E] bg-[#04213F] py-16">
           <div className="mx-auto max-w-3xl px-5 text-center sm:px-7">
             <Reveal>
               <p className="text-[10px] uppercase tracking-[0.2em] text-[#5D719A]">Built by</p>

@@ -8,21 +8,26 @@ import { MagneticButton } from "@/components/landing/MagneticButton";
 
 /**
  * Palette + font match the marketing landing page (src/app/page.tsx) after
- * its gold/navy/white color-theme pass and Rockwell font swap: navy
- * background family (#04213F/#0B2D54/#163F6E), gold accent (#CEA555, dark
- * navy #0B2D54 text on gold buttons), Rockwell throughout. Scoped to this
- * page only via the wrapper's inline style, same pattern as the landing
- * page -- layout.tsx and the authenticated app keep their own fonts and
- * colors untouched. Auth logic below is unchanged, this is a styling pass
- * only. Rockwell isn't a Google Font, so no next/font loader -- set as a
- * literal CSS font stack instead (real Rockwell where the OS has it
- * installed, a slab-serif fallback chain otherwise), same as the landing
- * page.
+ * its round-3 white-balance pass: the landing page now alternates true
+ * ivory sections against navy ones instead of one navy field throughout,
+ * so this page follows the same two-tone pattern rather than staying
+ * all-navy -- ivory page background (matching the landing Hero) with the
+ * sign-in card as the navy contrast panel, same relationship as the
+ * landing page's "Monitoring tools / XOOP" two-up block. Gold accent
+ * (#CEA555, dark navy #0B2D54 text on gold buttons) and Rockwell
+ * throughout, unchanged. Scoped to this page only via the wrapper's inline
+ * style, same pattern as the landing page -- layout.tsx and the
+ * authenticated app keep their own fonts and colors untouched. Auth logic
+ * below is unchanged, this is a styling pass only. Rockwell isn't a
+ * Google Font, so no next/font loader -- set as a literal CSS font stack
+ * instead (real Rockwell where the OS has it installed, a slab-serif
+ * fallback chain otherwise), same as the landing page.
  */
 const ROCKWELL_STACK = "'Rockwell', 'Rockwell Nova', 'Roboto Slab', Georgia, serif";
 
-const GRID_TEXTURE =
-  "linear-gradient(rgba(255,255,255,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.035) 1px,transparent 1px)";
+const IVORY_BG = "#FBFAF5";
+const IVORY_GRID_TEXTURE =
+  "linear-gradient(rgba(11,45,84,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(11,45,84,0.05) 1px,transparent 1px)";
 
 function LoginForm() {
   const router = useRouter();
@@ -51,9 +56,10 @@ function LoginForm() {
 
   return (
     <div
-      className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-[#04213F] bg-[size:48px_48px] px-4 py-12 font-[family-name:var(--font-login-body)] text-white"
+      className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-[size:48px_48px] px-4 py-12 font-[family-name:var(--font-login-body)]"
       style={{
-        backgroundImage: GRID_TEXTURE,
+        backgroundColor: IVORY_BG,
+        backgroundImage: IVORY_GRID_TEXTURE,
         ["--font-login-body" as string]: ROCKWELL_STACK,
         ["--font-login-mono" as string]: ROCKWELL_STACK,
       }}
@@ -63,7 +69,7 @@ function LoginForm() {
         initial={{ opacity: 0, y: 24, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: "spring", stiffness: 140, damping: 18, mass: 0.7 }}
-        className="relative w-full max-w-sm space-y-5 rounded-2xl border border-[#163F6E] bg-[#0B2D54]/80 p-8 shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+        className="relative w-full max-w-sm space-y-5 rounded-2xl border border-[#163F6E] bg-[#0B2D54] p-8 text-white shadow-[0_8px_30px_rgba(11,45,84,0.18)] backdrop-blur-xl"
       >
         <div className="space-y-1 text-center">
           <h1 className="flex items-center justify-center gap-2 font-[family-name:var(--font-login-mono)] text-lg font-extrabold uppercase tracking-wider text-white">
