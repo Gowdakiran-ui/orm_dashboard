@@ -1,4 +1,5 @@
 import json
+import time
 from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime, timezone
 import os
@@ -26,7 +27,30 @@ logger = structlog.get_logger()
 # 4 genuinely on-topic (Godrej Plots Coimbatore, a Godrej Finance mortgage
 # mention, Godrej Whitefield Bangalore) -- real keyword search, not a
 # fallback path.
-APIFY_ACTOR_ENDPOINT = "https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/run-sync-get-dataset-items"
+APIFY_ACTOR_ID = "trudax~reddit-scraper-lite"
+APIFY_RUNS_ENDPOINT = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs"
+APIFY_RUN_STATUS_ENDPOINT = "https://api.apify.com/v2/actor-runs/{run_id}"
+APIFY_DATASET_ITEMS_ENDPOINT = "https://api.apify.com/v2/datasets/{dataset_id}/items"
+
+# 2026-09-24: this used to POST straight to the actor's own
+# run-sync-get-dataset-items convenience endpoint, which blocks until the
+# run finishes and returns the dataset in one call. Confirmed live against
+# a real Adani Group pipeline run that this endpoint has its own
+# platform-side ~300s ceiling, independent of both this adapter's own
+# `requests` timeout (600s, see below) and the actor's configured run
+# timeout (3600s) -- it returned "HTTP 408: Actor run exceeded the timeout
+# of 300 seconds for this API endpoint" for a keyword with enough Reddit
+# volume to take longer than that, silently dropping Reddit collection for
+# that entire pipeline run (caught, logged, non-fatal -- but zero results).
+# Switched to Apify's own documented async pattern instead: start the run
+# (returns immediately), poll actor-runs/{id} for a terminal status, then
+# fetch the dataset separately once it's done. This removes the sync
+# endpoint's artificial 300s wall entirely -- the real ceiling is now
+# _MAX_POLL_SECONDS below, chosen to match the same 600s headroom this
+# adapter's prior client-side timeout was already tuned to.
+_POLL_INTERVAL_SECONDS = 5
+_MAX_POLL_SECONDS = 600
+_TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"}
 
 # Same discipline as Instagram (MAX_RESULTS_PER_CALL = 25 there) and
 # YouTube's 25-per-call pattern -- an explicit, low, hard ceiling
@@ -83,8 +107,8 @@ class RedditApifyAdapter(BaseSearchAdapter):
         capped_limit = min(limit, MAX_RESULTS_PER_CALL)
 
         try:
-            response = requests.post(
-                APIFY_ACTOR_ENDPOINT,
+            start_resp = requests.post(
+                APIFY_RUNS_ENDPOINT,
                 params={"token": self.api_token},
                 json={
                     "searches": [keyword],
@@ -104,30 +128,56 @@ class RedditApifyAdapter(BaseSearchAdapter):
                     "maxItems": capped_limit,
                     "maxPostCount": capped_limit,
                 },
-                # Actor run is synchronous end-to-end (scrape + dataset
-                # write), same shape as instagram.py's call. The original
-                # 170s here was copied from instagram.py's own timeout,
-                # tuned for its 4-result live test -- confirmed live
-                # 2026-09-12 that this actor takes materially longer at a
-                # real 25-result cap (the MAX_RESULTS_PER_CALL default):
-                # a real Godrej Properties pipeline run's Reddit call was
-                # killed client-side by the 170s timeout while the actual
-                # Apify run kept going and succeeded anyway 415s in
-                # (confirmed against the run's own startedAt/finishedAt via
-                # the Apify API) -- meaning the 170s figure was silently
-                # discarding real, already-paid-for, successful runs, not
-                # protecting against a hung one. 600s gives real headroom
-                # above the observed 415s without approaching the actor's
-                # own 3600s run timeout.
-                timeout=600,
+                timeout=30,
             )
         except requests.RequestException as e:
-            raise Exception(f"Reddit (Apify) Search Failed: {e}") from e
+            raise Exception(f"Reddit (Apify) Search Failed: could not start run: {e}") from e
 
-        if response.status_code >= 400:
-            raise Exception(f"Reddit (Apify) Search Failed: HTTP {response.status_code}: {response.text[:500]}")
+        if start_resp.status_code >= 400:
+            raise Exception(f"Reddit (Apify) Search Failed: HTTP {start_resp.status_code} starting run: {start_resp.text[:500]}")
 
-        results = response.json()
+        run_data = start_resp.json().get("data") or {}
+        run_id = run_data.get("id")
+        if not run_id:
+            raise Exception(f"Reddit (Apify) Search Failed: run start response had no run id: {start_resp.text[:500]}")
+
+        status_url = APIFY_RUN_STATUS_ENDPOINT.format(run_id=run_id)
+        deadline = time.monotonic() + _MAX_POLL_SECONDS
+        status = run_data.get("status")
+        dataset_id = run_data.get("defaultDatasetId")
+
+        while status not in _TERMINAL_STATUSES:
+            if time.monotonic() >= deadline:
+                raise Exception(f"Reddit (Apify) Search Failed: run {run_id} did not finish within {_MAX_POLL_SECONDS}s (last status: {status})")
+            time.sleep(_POLL_INTERVAL_SECONDS)
+            try:
+                poll_resp = requests.get(status_url, params={"token": self.api_token}, timeout=30)
+            except requests.RequestException as e:
+                raise Exception(f"Reddit (Apify) Search Failed: polling run {run_id}: {e}") from e
+            if poll_resp.status_code >= 400:
+                raise Exception(f"Reddit (Apify) Search Failed: HTTP {poll_resp.status_code} polling run {run_id}: {poll_resp.text[:500]}")
+            poll_data = poll_resp.json().get("data") or {}
+            status = poll_data.get("status")
+            dataset_id = poll_data.get("defaultDatasetId") or dataset_id
+
+        if status != "SUCCEEDED":
+            raise Exception(f"Reddit (Apify) Search Failed: run {run_id} finished with status {status}")
+        if not dataset_id:
+            raise Exception(f"Reddit (Apify) Search Failed: run {run_id} succeeded but had no dataset id")
+
+        try:
+            items_resp = requests.get(
+                APIFY_DATASET_ITEMS_ENDPOINT.format(dataset_id=dataset_id),
+                params={"token": self.api_token, "format": "json"},
+                timeout=60,
+            )
+        except requests.RequestException as e:
+            raise Exception(f"Reddit (Apify) Search Failed: fetching dataset {dataset_id}: {e}") from e
+
+        if items_resp.status_code >= 400:
+            raise Exception(f"Reddit (Apify) Search Failed: HTTP {items_resp.status_code} fetching dataset {dataset_id}: {items_resp.text[:500]}")
+
+        results = items_resp.json()
         return results, None
 
     def normalize(self, raw_data: Dict[str, Any], source_id: str, **kwargs) -> Dict[str, Any]:
