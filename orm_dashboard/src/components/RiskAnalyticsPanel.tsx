@@ -251,14 +251,16 @@ export function RiskAnalyticsPanel({
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            <div className="grid grid-cols-12 gap-2 font-mono text-[9px]">
-              {/* Y Axis Label */}
-              <div className="col-span-1 flex items-center justify-center">
+            <div className="grid grid-cols-[32px_1fr] gap-2 font-mono text-[9px]">
+              {/* Y Axis Label -- same fix as RiskTab.tsx's matrix: was
+                  col-span-1 of a 12-col grid (~18px on a real phone), too
+                  narrow even for this rotated single word's line-height. */}
+              <div className="flex items-center justify-center">
                 <span className={`transform -rotate-90 origin-center whitespace-nowrap uppercase tracking-widest font-bold font-mono ${mutedText(theme)}`}>IMPACT</span>
               </div>
 
               {/* Matrix Grid */}
-              <div className={`col-span-11 grid grid-rows-3 gap-1.5 p-2 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+              <div className={`grid grid-rows-3 gap-1.5 p-2 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                 {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
                   <div key={rowKey} className="grid grid-cols-3 gap-1.5 h-[65px]">
                     {["LOW", "MEDIUM", "HIGH"].map((colKey) => {
@@ -331,8 +333,8 @@ export function RiskAnalyticsPanel({
               {/* X Axis Labels -- same LOW/MED/HIGH LIKELIHOOD row already
                   present on Risk Center's matrix (RiskTab.tsx); this matrix
                   had no Likelihood axis label at all before, only IMPACT. */}
-              <div className="col-span-1" />
-              <div className={`col-span-11 grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-[9px] ${mutedText(theme)}`}>
+              <div />
+              <div className={`grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-[9px] ${mutedText(theme)}`}>
                 <span>LOW LIKELIHOOD</span>
                 <span>MED LIKELIHOOD</span>
                 <span>HIGH LIKELIHOOD</span>

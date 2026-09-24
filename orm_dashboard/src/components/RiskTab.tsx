@@ -453,13 +453,19 @@ export function RiskTab({
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            <div className="grid grid-cols-12 gap-2 font-mono text-xs">
+            <div className="grid grid-cols-[56px_1fr] gap-2 font-mono text-xs">
 
               {/* Y Axis Labels -- per-row IMPACT tier, matching the X axis's
                   per-column LIKELIHOOD tier labels below (xoop_ui_clarity_review.md:
                   only the X axis was labeled, so a viewer had no way to tell
-                  which row was HIGH/MEDIUM/LOW impact without hovering each cell). */}
-              <div className="col-span-1 grid grid-rows-3 gap-1">
+                  which row was HIGH/MEDIUM/LOW impact without hovering each cell).
+                  Fixed 56px label column (was col-span-1 of a 12-col grid, i.e.
+                  1/12 of the card width at every breakpoint -- ~18px on a real
+                  375px phone, forcing "HIGH IMPACT" etc to wrap across several
+                  cramped lines. A fixed minimum width keeps the label legible
+                  at any screen size instead of shrinking proportionally with
+                  the card.) */}
+              <div className="grid grid-rows-3 gap-1">
                 {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
                   <div key={rowKey} className="h-[55px] flex items-center justify-center text-center">
                     <span className={`uppercase tracking-widest font-bold text-[10px] leading-tight ${mutedText(theme)}`}>{rowKey} IMPACT</span>
@@ -468,7 +474,7 @@ export function RiskTab({
               </div>
 
               {/* 3x3 Matrix Grid */}
-              <div className={`col-span-11 grid grid-rows-3 gap-1 p-1.5 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
+              <div className={`grid grid-rows-3 gap-1 p-1.5 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                 {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
                   <div key={rowKey} className="grid grid-cols-3 gap-1 h-[55px]">
                     {["LOW", "MEDIUM", "HIGH"].map((colKey) => {
@@ -539,8 +545,8 @@ export function RiskTab({
               </div>
 
               {/* X Axis Labels */}
-              <div className="col-span-1" />
-              <div className={`col-span-11 grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-xs ${mutedText(theme)}`}>
+              <div />
+              <div className={`grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-xs ${mutedText(theme)}`}>
                 <span className="min-w-0 break-words">LOW LIKELIHOOD</span>
                 <span className="min-w-0 break-words">MED LIKELIHOOD</span>
                 <span className="min-w-0 break-words">HIGH LIKELIHOOD</span>

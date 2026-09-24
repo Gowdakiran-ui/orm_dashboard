@@ -106,6 +106,19 @@
   html {
     @apply font-sans;
   }
+  /* Real-mobile-only symptom: a whole-page horizontal shift (header logo,
+     card labels all missing their first few characters uniformly) that
+     never reproduced in any desktop-viewport emulation, including at the
+     exact same 375px width -- consistent with a touch-only overscroll/
+     rubber-band interaction nudging the page's horizontal scroll position
+     off zero and never resetting, on some narrow-viewport element with
+     an as-yet-unidentified sub-pixel overflow. Belt-and-suspenders fix:
+     this dashboard never needs horizontal page scroll by design, so
+     disallow it outright at the root instead of chasing the exact
+     triggering element -- removes the failure mode regardless of cause. */
+  html, body {
+    overflow-x: hidden;
+  }
 }
 
 /* Utility Classes for Premium Command Center Look */
