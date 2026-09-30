@@ -1,18 +1,38 @@
 # Configurable weights for the Weighted Risk Engine
 
+# Keys MUST be the exact `topics.name` strings seeded in database/seed_dev.sql
+# (the 17-label taxonomy). Until 2026-09-30 this dict was keyed on a different,
+# generic taxonomy (General News, Layoffs, Data Breach, Fraud, ...) written in
+# the initial commit, so only "Cybersecurity" ever matched and topic_weight was
+# 0 for every other label (TOPIC_WEIGHTS.get(name, 0) in risk_engine.py).
+#
+# A weight > 0 also makes a document "risk-relevant" regardless of sentiment
+# (risk_engine.py: is_risk_relevant = Negative OR topic_weight > 0), so weights
+# are assigned ONLY to labels that are inherently risky on their own. Labels
+# with ambiguous polarity or a neutral business subject are deliberately 0 --
+# their risk comes from sentiment/trend instead; weighting them re-creates the
+# LOW-severity noise from routine positive news that gate exists to prevent.
 TOPIC_WEIGHTS = {
-    "General News": 5,
-    "Partnership": 10,
-    "Funding": 15,
-    "Executive Changes": 20,
-    "Customer Complaints": 30,
-    "Employee Complaints": 35,
-    "Layoffs": 40,
+    # Inherently risky
+    "Regulatory Risk": 100,
+    "Legal Risk": 90,
     "Cybersecurity": 60,
-    "Data Breach": 80,
-    "Legal": 90,
-    "Fraud": 95,
-    "Regulatory Action": 100
+    "Safety Recall": 60,
+    "Labor Relations": 35,
+    # Deliberately 0: ambiguous polarity (sentiment decides)
+    "Customer Satisfaction": 0,
+    "Environmental": 0,
+    "Full Self-Driving / Autopilot": 0,
+    # Deliberately 0: neutral business subject
+    "Executive Leadership": 0,
+    "Mergers & Acquisitions": 0,
+    "Innovation": 0,
+    "Financial Results": 0,
+    "Competition": 0,
+    "Market Share": 0,
+    "Product Launch": 0,
+    "Electric Vehicles": 0,
+    "Energy Storage": 0,
 }
 
 SENTIMENT_WEIGHTS = {

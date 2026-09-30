@@ -83,10 +83,10 @@ def test_validation():
         db.add(client)
         
         # Scenarios
-        doc1 = create_scenario(db, client_id, "Partnership", "Positive", None)
-        doc2 = create_scenario(db, client_id, "Customer Complaints", "Negative", None)
-        doc3 = create_scenario(db, client_id, "Layoffs", "Negative", "HIGH")
-        doc4 = create_scenario(db, client_id, "Regulatory Action", "Negative", "CRITICAL")
+        doc1 = create_scenario(db, client_id, "Innovation", "Positive", None)
+        doc2 = create_scenario(db, client_id, "Labor Relations", "Negative", None)
+        doc3 = create_scenario(db, client_id, "Legal Risk", "Negative", "HIGH")
+        doc4 = create_scenario(db, client_id, "Regulatory Risk", "Negative", "CRITICAL")
         
         engine = RiskEngine()
         

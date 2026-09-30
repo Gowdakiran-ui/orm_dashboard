@@ -193,19 +193,20 @@ export function RiskCategoriesDefinition() {
       <span className="block font-bold">Risk Category</span>
       <span className="block">
         The topic detected in a document that most drives its risk score.
-        Categories are ranked by inherent severity: General News, Partnership
-        and Funding score lowest; Executive Changes, Customer/Employee
-        Complaints and Layoffs are mid-severity; Cybersecurity, Data Breach,
-        Legal, Fraud and Regulatory Action score highest.
+        Only inherently risky categories add their own weight: Regulatory Risk
+        and Legal Risk score highest, Cybersecurity and Safety Recall are
+        next, and Labor Relations is mid-severity.
       </span>
       <span className="block mt-1">
-        <b>Innovation</b> (product/competitive-positioning coverage, e.g.
-        pricing changes) carries no inherent topic weight of its own
-        (risk_config.py&apos;s TOPIC_WEIGHTS has no entry for it) -- its Risk
-        Score comes entirely from that document&apos;s sentiment, trend, and
-        source-reliability signals. That&apos;s why an Innovation-tagged
-        article can still register a non-trivial risk score even when the
-        underlying news is neutral or positive for the company.
+        Every other category (for example <b>Innovation</b>, product or
+        competitive-positioning coverage such as pricing changes) carries no
+        inherent topic weight of its own (risk_config.py&apos;s TOPIC_WEIGHTS
+        sets it to 0 on purpose) -- its Risk Score comes entirely from that
+        document&apos;s sentiment, trend, and source-reliability signals.
+        That&apos;s why an Innovation-tagged article can still register a
+        non-trivial risk score when the coverage is negative, and why neutral
+        or positive news in those categories does not by itself count as a
+        risk.
       </span>
     </>
   );
