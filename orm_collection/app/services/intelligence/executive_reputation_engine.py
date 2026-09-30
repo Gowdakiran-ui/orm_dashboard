@@ -21,6 +21,17 @@ from app.models.alert import Alert
 
 logger = structlog.get_logger()
 
+
+class ExecutiveReputationTotalFailure(RuntimeError):
+    """
+    Raised (opt-in, see calculate_executive_reputation's raise_on_total_failure)
+    when every executive evaluated in a run failed to score/write. Individual
+    failures stay isolated per-executive savepoints and only log; this exists
+    because a 100% failure rate used to be indistinguishable from success at
+    the pipeline-run level (executive_reputation_scores.narrative_component
+    NOT NULL violation, 2026-09-19 to 2026-09-30, silently stale for 15 days).
+    """
+
 # ─────────────────────────────────────────────────────────────
 # EXECUTIVE REPUTATION PROCESSING STATE MACHINE (R4)
 # ─────────────────────────────────────────────────────────────
@@ -149,7 +160,8 @@ class ExecutiveReputationEngine:
         run_id: Optional[str] = None,
         batch_id: Optional[str] = None,
         worker_id: Optional[str] = None,
-        attempt: int = 0
+        attempt: int = 0,
+        raise_on_total_failure: bool = False
     ):
         t0 = time.perf_counter()
         rid = run_id or uuid.uuid4().hex
@@ -317,7 +329,11 @@ class ExecutiveReputationEngine:
         ).all()
 
         # Loop over matching executives and calculate scores using preloaded maps
+        evaluated = 0
+        failed = 0
+        first_error = None
         for exec_entity in executives:
+            evaluated += 1
             savepoint = db.begin_nested()
             try:
                 # Extract preloaded lists
@@ -335,10 +351,29 @@ class ExecutiveReputationEngine:
                 savepoint.commit()
             except Exception as e:
                 savepoint.rollback()
+                failed += 1
+                if first_error is None:
+                    first_error = str(e)[:300]
                 log.error("exec_reputation_individual_failed", exec_name=exec_entity.name, error=str(e))
 
+        # Total failure (every evaluated executive failed) must not read as
+        # success. Partial failures stay log-only, as before.
+        if failed and failed == evaluated:
+            log.error(
+                "exec_reputation_total_failure",
+                evaluated=evaluated, failed=failed, first_error=first_error
+            )
+            if raise_on_total_failure:
+                raise ExecutiveReputationTotalFailure(
+                    f"Executive reputation: all {failed}/{evaluated} executives failed for client {client_id}; "
+                    f"first error: {first_error}"
+                )
+
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        log.info("exec_reputation_calculation_complete", total_latency_ms=round(elapsed_ms, 2))
+        log.info(
+            "exec_reputation_calculation_complete",
+            evaluated=evaluated, failed=failed, total_latency_ms=round(elapsed_ms, 2)
+        )
 
     def _evaluate_single_executive_optimized(
         self,
@@ -584,7 +619,8 @@ class ExecutiveReputationEngine:
         run_id: Optional[str] = None,
         batch_id: Optional[str] = None,
         worker_id: Optional[str] = None,
-        attempt: int = 0
+        attempt: int = 0,
+        raise_on_total_failure: bool = False
     ):
         self.calculate_executive_reputation(
             db,
@@ -592,5 +628,6 @@ class ExecutiveReputationEngine:
             run_id=run_id,
             batch_id=batch_id,
             worker_id=worker_id,
-            attempt=attempt
+            attempt=attempt,
+            raise_on_total_failure=raise_on_total_failure
         )

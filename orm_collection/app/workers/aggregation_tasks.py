@@ -1571,7 +1571,9 @@ def _stage_executive(ctx: PipelineContext, db) -> None:
         log.info("stage_skipped_fresh_enough", stage="EXECUTIVE", threshold_hours=2.0)
         return
     log.info("stage_started")
-    _ExecEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
+    # raise_on_total_failure: a 100% per-executive failure rate must fail the run
+    # loudly instead of finishing as SUCCESS (see ExecutiveReputationTotalFailure).
+    _ExecEngine().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12], raise_on_total_failure=True)
     log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
 
 
