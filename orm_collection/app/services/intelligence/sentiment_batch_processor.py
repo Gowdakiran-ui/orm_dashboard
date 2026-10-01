@@ -117,8 +117,14 @@ class SentimentRetryConfig:
                 "UnicodeDecodeError",
                 "document_not_found",
                 "ValueError",
-                "AttributeError",
-                "RuntimeError" # E.g. mock production guard violation is permanent
+                "AttributeError"
+                # RuntimeError is deliberately NOT here. Its only permanent
+                # sources (SentimentAnalyzer.__init__'s mock guard / model-load
+                # failure) are raised at construction, before any document
+                # reaches this state machine. In per-document processing a
+                # RuntimeError comes from torch/transformers and may be
+                # transient (e.g. OOM); a deterministic one just exhausts
+                # max_retries and ends in FAILED either way.
             ]
 
     def backoff_seconds(self, retry_count: int) -> float:
@@ -696,6 +702,21 @@ class HardenedSentimentProcessor:
                     document_id, run_id, batch_id, client_id, retry_logger
                 )
                 retried_result.retry_count = new_retry_count
+
+                # The retry's own failure path (rollback + return) persists
+                # nothing, which would leave the document in RETRYING forever,
+                # invisible to FAILED-based telemetry. Persist the terminal state.
+                if retried_result.state == SentimentProcessingState.FAILED:
+                    doc_logger.error("document_permanently_failed",
+                                     retry_count=new_retry_count,
+                                     is_permanent=False,
+                                     failure_reason=retried_result.failure_reason)
+                    SentimentDocumentStateMachine.transition_and_commit(
+                        document_id, SentimentProcessingState.FAILED,
+                        run_id=run_id, batch_id=batch_id,
+                        failure_reason=retried_result.failure_reason,
+                        retry_count=new_retry_count
+                    )
                 return retried_result
 
             else:
