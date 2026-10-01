@@ -14,7 +14,6 @@ from app.models.document import Document
 from app.models.entity import EntityMention, Entity
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
-from app.models.trends import TrendEvent
 from app.models.reputation import ReputationScore
 from app.models.client import Client
 from app.models.alert import Alert
@@ -88,7 +87,6 @@ class ReputationEngine:
         self.weights = {
             "sentiment": 0.30,
             "risk": 0.30,
-            "trend": 0.10,
             "source": 0.10,
             "visibility": 0.05
         }
@@ -263,64 +261,14 @@ class ReputationEngine:
         except Exception as e:
             log.warning("reputation_risk_calculation_failed", error=str(e))
 
-        # 4. Trend Component (R5 Isolated). Excludes entity_type='competitor'
-        # -- entity_id is nullable on TrendEvent (Topic-type trends have
-        # none; Mention-type trends carry the entity they're tracking
-        # volume for, which can be a competitor's) -- same reasoning as
-        # the Risk Component above.
-        #
-        # Brand co-occurrence containment, per-event not per-entity (same
-        # 2026-09-13 follow-up as the Risk Component above): TrendEvent has
-        # no single document_id column (it carries a `triggering_documents`
-        # JSON array instead), so unlike RiskEvent this can't be pushed into
-        # the SQL filter directly. Person-type rows are fetched broadly here
-        # and then checked in Python against this specific event's own
-        # triggering_documents, not against whether the entity has EVER
-        # co-occurred with the brand anywhere in its history.
+        # 4. Trend Component: removed 2026-10-01 along with the trend-detection
+        # stage (trend_events is no longer written). trend_component stays as an
+        # always-None placeholder only because reputation_scores.trend_component
+        # still exists as a column (schema cleanup is a separate, later step);
+        # None drops out of the dynamic weight normalization below, and
+        # self.weights no longer carries a "trend" entry.
         trend_component = None
         supporting_trends = []
-        try:
-            candidate_trends = db.query(TrendEvent).outerjoin(
-                Entity, Entity.id == TrendEvent.entity_id
-            ).filter(
-                TrendEvent.client_id == client_id,
-                TrendEvent.created_at >= lookback_date,
-                or_(
-                    TrendEvent.entity_id.is_(None),
-                    Entity.entity_type.is_(None),
-                    Entity.entity_type.in_(("brand", "product", "person")) if brand_doc_ids is not None else Entity.entity_type != "competitor",
-                ),
-            ).order_by(TrendEvent.created_at.desc()).limit(10).all()
-
-            if brand_doc_ids is not None:
-                brand_doc_ids_str = {str(d) for d in brand_doc_ids}
-                supporting_trends = []
-                for t in candidate_trends:
-                    etype = entity_type_by_id.get(t.entity_id) if t.entity_id else None
-                    if t.entity_id is None or etype in ("brand", "product"):
-                        supporting_trends.append(t)
-                    elif etype == "person":
-                        trigger_docs = {str(d) for d in (t.triggering_documents or [])}
-                        if trigger_docs & brand_doc_ids_str:
-                            supporting_trends.append(t)
-            else:
-                supporting_trends = candidate_trends
-
-            if supporting_trends:
-                trend_val = 50.0
-                for t in supporting_trends:
-                    if t.severity in ["HIGH", "CRITICAL"]:
-                        if t.trend_type == "Sentiment":
-                            trend_val -= 20
-                        else:
-                            # fallback to 0.0 if avg_sentiment is None
-                            if (avg_sentiment or 0.0) < 0:
-                                trend_val -= 15
-                            else:
-                                trend_val += 15
-                trend_component = max(0.0, min(100.0, trend_val))
-        except Exception as e:
-            log.warning("reputation_trend_calculation_failed", error=str(e))
 
         # 5. Source Quality Component (Dynamic Source Reliability)
         source_component = None
@@ -356,7 +304,6 @@ class ReputationEngine:
         active_weights = {
             "sentiment": sentiment_component,
             "risk": risk_component,
-            "trend": trend_component,
             "source": source_component,
             "visibility": visibility_component
         }
@@ -393,9 +340,12 @@ class ReputationEngine:
         one_day_ago = now_utc - datetime.timedelta(days=1)
 
         has_recent_risk = db.query(RiskEvent).filter(RiskEvent.client_id == client_id, RiskEvent.created_at >= one_day_ago).limit(1).first() is not None
-        has_recent_trend = db.query(TrendEvent).filter(TrendEvent.client_id == client_id, TrendEvent.created_at >= one_day_ago).limit(1).first() is not None
 
-        if not (has_recent_risk and has_recent_trend):
+        # Trend freshness removed from this check (trend detection removed,
+        # 2026-10-01) -- same reason the Narrative check above was removed:
+        # requiring a recent TrendEvent would pin health_status at PARTIAL
+        # forever now that nothing writes them.
+        if not has_recent_risk:
             health_status = "PARTIAL"
 
         # A8: Reputation Confidence Calculation
@@ -412,7 +362,6 @@ class ReputationEngine:
             "component_scores": {
                 "sentiment": round(sentiment_component, 2) if sentiment_component is not None else None,
                 "risk": round(risk_component, 2) if risk_component is not None else None,
-                "trend": round(trend_component, 2) if trend_component is not None else None,
                 "source": round(source_component, 2) if source_component is not None else None,
                 "visibility": round(visibility_component, 2) if visibility_component is not None else None
             },

@@ -16,7 +16,6 @@ from app.models.entity import Entity, EntityMention
 from app.models.document import Document
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
-from app.models.trends import TrendEvent
 from app.models.reputation import ReputationScore
 from app.services.intelligence.reputation_engine import ReputationEngine
 
@@ -36,7 +35,7 @@ engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-def setup_client(db, name, avg_sentiment, risk_score, mentions, trend_type):
+def setup_client(db, name, avg_sentiment, risk_score, mentions):
     client_id = uuid.uuid4()
     client = Client(id=client_id, name=name)
     db.add(client)
@@ -53,12 +52,6 @@ def setup_client(db, name, avg_sentiment, risk_score, mentions, trend_type):
         db.add(DocumentSentiment(document_id=doc_id, sentiment_score=avg_sentiment, confidence_score=1.0, weighted_sentiment_score=avg_sentiment, sentiment_label="Neutral"))
         db.add(RiskEvent(client_id=client_id, document_id=doc_id, risk_score=risk_score, risk_level="HIGH"))
 
-    # Trend
-    if trend_type == "GOOD":
-        db.add(TrendEvent(client_id=client_id, trend_type="Topic", percentage_change=50.0, severity="HIGH"))
-    elif trend_type == "BAD":
-        db.add(TrendEvent(client_id=client_id, trend_type="Sentiment", percentage_change=80.0, severity="CRITICAL"))
-        
     db.commit()
     return client_id
 
@@ -77,16 +70,16 @@ def test_validation():
     db = Session()
     try:
         # 1. Strong Positive Brand Scenario
-        # Sentiment=0.8, Risk=10, High Mentions=2000, Good Trend
-        client_pos = setup_client(db, "Positive Brand", 0.8, 10.0, 2000, "GOOD")
+        # Sentiment=0.8, Risk=10, High Mentions=2000
+        client_pos = setup_client(db, "Positive Brand", 0.8, 10.0, 2000)
 
         # 2. Neutral Brand Scenario
-        # Sentiment=0.0, Risk=40, Med Mentions=500, No Trend
-        client_neu = setup_client(db, "Neutral Brand", 0.0, 40.0, 500, "NONE")
+        # Sentiment=0.0, Risk=40, Med Mentions=500
+        client_neu = setup_client(db, "Neutral Brand", 0.0, 40.0, 500)
 
         # 3. High Risk Negative Brand Scenario
-        # Sentiment=-0.9, Risk=90, Mentions=1500, Bad Trend
-        client_neg = setup_client(db, "Negative Brand", -0.9, 90.0, 1500, "BAD")
+        # Sentiment=-0.9, Risk=90, Mentions=1500
+        client_neg = setup_client(db, "Negative Brand", -0.9, 90.0, 1500)
         
         engine_svc = ReputationEngine()
         

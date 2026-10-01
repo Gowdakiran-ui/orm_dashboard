@@ -41,12 +41,15 @@ SENTIMENT_WEIGHTS = {
     "Negative": 40
 }
 
-TREND_WEIGHTS = {
-    "LOW": 10,
-    "MEDIUM": 25,
-    "HIGH": 50,
-    "CRITICAL": 100
-}
+# Trend detection was removed from the risk formula (2026-10-01): the old
+# TREND_WEIGHTS table fed a client-wide, direction-less coverage-volume signal
+# into every RiskEvent. The risk score is now (topic + sentiment) / divisor.
+# The divisor is the maximum achievable topic + sentiment weight, derived from
+# the tables above so the 0-100 scale stays correct if either table changes
+# (140 today = 100 + 40). Keeping the old 240 (= 140 + max trend 100) would
+# compress every score by ~42% and push negative-only documents below
+# RISK_ROLE_CLASSIFICATION_MIN_SCORE (25), disabling the LLM bystander gate.
+RISK_SCORE_DIVISOR = float(max(TOPIC_WEIGHTS.values()) + max(SENTIMENT_WEIGHTS.values()))
 
 # Example mappings. If source not found, defaults to 50
 SOURCE_RELIABILITY_MAP = {

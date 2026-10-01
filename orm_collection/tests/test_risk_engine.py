@@ -16,7 +16,6 @@ from app.models.entity import Entity, EntityMention
 from app.models.document import Document
 from app.models.topic import Topic, DocumentTopic
 from app.models.sentiment import DocumentSentiment, EntitySentiment
-from app.models.trends import TrendEvent
 from app.models.risk import RiskEvent
 from app.services.intelligence.risk_engine import RiskEngine
 
@@ -36,7 +35,7 @@ engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-def create_scenario(db, client_id, topic_name, sentiment, trend_severity):
+def create_scenario(db, client_id, topic_name, sentiment):
     entity_id = uuid.uuid4()
     entity = Entity(id=entity_id, client_id=client_id, name=f"Test Entity {topic_name}")
     db.add(entity)
@@ -56,9 +55,6 @@ def create_scenario(db, client_id, topic_name, sentiment, trend_severity):
     db.add(DocumentSentiment(document_id=doc_id, sentiment_label=sentiment, sentiment_score=1.0, confidence_score=1.0, weighted_sentiment_score=1.0))
     db.add(EntitySentiment(document_id=doc_id, entity_id=entity_id, sentiment_label=sentiment, sentiment_score=1.0, confidence_score=1.0))
     
-    if trend_severity:
-        db.add(TrendEvent(client_id=client_id, entity_id=entity_id, trend_type="Mention", percentage_change=100.0, severity=trend_severity))
-        
     db.commit()
     return doc_id
 
@@ -83,10 +79,10 @@ def test_validation():
         db.add(client)
         
         # Scenarios
-        doc1 = create_scenario(db, client_id, "Innovation", "Positive", None)
-        doc2 = create_scenario(db, client_id, "Labor Relations", "Negative", None)
-        doc3 = create_scenario(db, client_id, "Legal Risk", "Negative", "HIGH")
-        doc4 = create_scenario(db, client_id, "Regulatory Risk", "Negative", "CRITICAL")
+        doc1 = create_scenario(db, client_id, "Innovation", "Positive")
+        doc2 = create_scenario(db, client_id, "Labor Relations", "Negative")
+        doc3 = create_scenario(db, client_id, "Legal Risk", "Negative")
+        doc4 = create_scenario(db, client_id, "Regulatory Risk", "Negative")
         
         engine = RiskEngine()
         
@@ -114,9 +110,15 @@ def test_validation():
         r4 = db.query(RiskEvent).filter(RiskEvent.document_id == doc4).first()
 
         assert r1 and r1.risk_level == "LOW", f"Positive Partnership: expected LOW, got {r1.risk_level if r1 else None}"
-        assert r2 and r2.risk_level == "MEDIUM", f"Negative Customer Complaint: expected MEDIUM, got {r2.risk_level if r2 else None}"
-        assert r3 and r3.risk_level == "HIGH", f"Negative Layoff + High Trend: expected HIGH, got {r3.risk_level if r3 else None}"
-        assert r4 and r4.risk_level == "CRITICAL", f"Negative Regulatory + Critical Trend: expected CRITICAL, got {r4.risk_level if r4 else None}"
+        # Expected levels recomputed for the trend-free formula
+        # (topic + sentiment) / RISK_SCORE_DIVISOR (140) * 100, before the
+        # source-reliability / reach-trust modifiers (both 1.0 for this
+        # synthetic document): Labor Relations 35+40 -> 53.6 HIGH,
+        # Legal Risk 90+40 -> 92.9 CRITICAL, Regulatory Risk 100+40 -> 100.0
+        # CRITICAL. (Previously /240 plus a per-entity trend weight.)
+        assert r2 and r2.risk_level == "HIGH", f"Negative Labor Relations: expected HIGH, got {r2.risk_level if r2 else None}"
+        assert r3 and r3.risk_level == "CRITICAL", f"Negative Legal Risk: expected CRITICAL, got {r3.risk_level if r3 else None}"
+        assert r4 and r4.risk_level == "CRITICAL", f"Negative Regulatory Risk: expected CRITICAL, got {r4.risk_level if r4 else None}"
 
     finally:
         db.close()

@@ -5,20 +5,19 @@ import os
 import traceback
 import structlog
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, text
+from sqlalchemy import text
 
 from app.models.document import Document, DocumentMatch
 from app.models.entity import EntityMention, Entity
 from app.models.topic import Topic, DocumentTopic
 from app.models.sentiment import DocumentSentiment, EntitySentiment
-from app.models.trends import TrendEvent
 from app.models.risk import RiskEvent
 from app.models.risk_state import RiskClientState
 from app.models.source import Source, SourceCategory
 from app.core.risk_config import (
     TOPIC_WEIGHTS,
     SENTIMENT_WEIGHTS,
-    TREND_WEIGHTS,
+    RISK_SCORE_DIVISOR,
     DYNAMIC_SOURCE_RELIABILITY_MAP,
     RISK_THRESHOLDS,
 )
@@ -775,27 +774,6 @@ class RiskEngine:
             if expl.get("role_classification_source") == "llm" and cached_label in ("SELF", "BYSTANDER", "EXONERATED"):
                 cached_role_by_client_entity[(re_row.client_id, re_row.entity_id)] = cached_label
 
-        # Optimization: Pre-fetch all TrendEvents for client batch to avoid N+1 queries in the loop
-        client_ids = list(client_to_entities.keys())
-        trends_by_client_entity = {}
-        if client_ids:
-            recent_trends_all = db.query(TrendEvent).filter(
-                TrendEvent.client_id.in_(client_ids)
-            ).order_by(desc(TrendEvent.created_at)).all()
-            
-            for t in recent_trends_all:
-                key = (t.client_id, t.entity_id)
-                if key not in trends_by_client_entity:
-                    trends_by_client_entity[key] = []
-                if len(trends_by_client_entity[key]) < 5:
-                    trends_by_client_entity[key].append(t)
-                
-                key_generic = (t.client_id, None)
-                if key_generic not in trends_by_client_entity:
-                    trends_by_client_entity[key_generic] = []
-                if len(trends_by_client_entity[key_generic]) < 5:
-                    trends_by_client_entity[key_generic].append(t)
-
         payloads = []
 
         for client_id, entities in client_to_entities.items():
@@ -811,48 +789,28 @@ class RiskEngine:
                     ent_sent_weight = SENTIMENT_WEIGHTS.get(ent_sentiment.sentiment_label, 10)
                     ent_sent_conf = ent_sentiment.confidence_score
 
-                # Get Trends for this entity/client (most severe recent trend from pre-fetched map)
-                recent_trends = (
-                    trends_by_client_entity.get((client_id, entity.id), []) +
-                    trends_by_client_entity.get((client_id, None), [])
-                )
-                seen_trend_ids = set()
-                unique_recent_trends = []
-                for t in sorted(recent_trends, key=lambda x: x.created_at, reverse=True):
-                    if t.id not in seen_trend_ids:
-                        seen_trend_ids.add(t.id)
-                        unique_recent_trends.append(t)
-                        if len(unique_recent_trends) == 5:
-                            break
-
-                trend_weight = 0
-                trend_severity = "NONE"
-                for t in unique_recent_trends:
-                    tw = TREND_WEIGHTS.get(t.severity, 0)
-                    if tw > trend_weight:
-                        trend_weight = tw
-                        trend_severity = t.severity
                 # Combine confidence
                 confidence_modifier = (topic_conf + ent_sent_conf) / 2.0
 
                 # Base Score
-                base_sum = topic_weight + ent_sent_weight + trend_weight
+                base_sum = topic_weight + ent_sent_weight
 
                 # Normalize sum
-                normalized_base = (base_sum / 240.0) * 100.0
+                normalized_base = (base_sum / RISK_SCORE_DIVISOR) * 100.0
 
                 # Apply Modifiers (Confidence no longer alters severity score)
                 final_score = normalized_base * source_reliability * reach_trust_modifier
                 final_score = min(100.0, max(0.0, final_score))
 
-                # Risk-relevance gate: trend_weight is pure coverage-volume
-                # velocity with no direction -- a 70%-profit-surge earnings
-                # beat and a fraud arrest both spike "trend" identically, and
-                # Neutral sentiment alone (weight 10) still isn't a risk
-                # signal. Without this gate, any well-covered brand's routine
-                # Positive/Neutral news (an award, a land acquisition, a
-                # dividend) generates a real RiskEvent purely from trend
-                # velocity, and platform-wide ~80-90% of every client's
+                # Risk-relevance gate: Neutral sentiment alone (weight 10)
+                # isn't a risk signal. This gate was originally added because
+                # a client-wide coverage-volume trend weight (since removed
+                # from the formula, 2026-10-01) had no direction -- a
+                # 70%-profit-surge earnings beat and a fraud arrest both
+                # spiked "trend" identically. The gate stays: without it, any
+                # well-covered brand's routine Positive/Neutral news (an
+                # award, a land acquisition, a dividend) would still score
+                # off Neutral sentiment alone, and platform-wide ~80-90% of every client's
                 # RiskEvents were exactly this (measured live: 76-92% LOW
                 # severity across Anthropic/Tesla/Godrej Properties/
                 # EaseMyTrip/Google, ~87% average of those on
@@ -910,23 +868,19 @@ class RiskEngine:
                 if top_topic:
                     risk_factors.append({"type": "Topic", "factor": top_topic, "weight": topic_weight})
                 risk_factors.append({"type": "Sentiment", "factor": ent_sent_label, "weight": ent_sent_weight})
-                if trend_weight > 0:
-                    risk_factors.append({"type": "Trend", "factor": trend_severity, "weight": trend_weight})
 
                 latency_ms = (time.perf_counter() - t0) * 1000
 
                 explainability_data = {
                     "engine_version": "5.2",
-                    "formula_version": "1.0",
-                    "final_equation": "final_score = min(100.0, max(0.0, (topic_weight + sentiment_weight + trend_weight) / 240.0 * 100.0 * source_reliability * reach_trust_modifier))",
+                    "formula_version": "2.0",
+                    "final_equation": f"final_score = min(100.0, max(0.0, (topic_weight + sentiment_weight) / {RISK_SCORE_DIVISOR:g} * 100.0 * source_reliability * reach_trust_modifier))",
                     "individual_weights": {
                         "topic_weight": topic_weight,
-                        "sentiment_weight": ent_sent_weight,
-                        "trend_weight": trend_weight
+                        "sentiment_weight": ent_sent_weight
                     },
                     "topic_contribution": topic_weight,
                     "sentiment_contribution": ent_sent_weight,
-                    "trend_contribution": trend_weight,
                     "source_reliability": source_reliability,
                     "reach_trust_modifier": reach_trust_modifier,
                     "reach_trust_basis": reach_trust_basis,
@@ -938,7 +892,7 @@ class RiskEngine:
                     "decision_reason": (
                         f"Risk level set to {self.get_risk_level(final_score)} based on topic '{top_topic}' "
                         f"(weight {topic_weight}), sentiment '{ent_sent_label}' (weight {ent_sent_weight}), "
-                        f"trend '{trend_severity}' (weight {trend_weight}), source reliability {source_reliability}, "
+                        f"source reliability {source_reliability}, "
                         f"and reach/trust modifier {reach_trust_modifier} ({reach_trust_basis or 'n/a'})."
                         if role_classification not in ("BYSTANDER", "EXONERATED")
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."

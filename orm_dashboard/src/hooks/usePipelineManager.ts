@@ -15,7 +15,7 @@
  * No Redis parsing. No Celery inspection. No special-case handling.
  *
  * Progress states:
- *   idle → QUEUED(0%) → COLLECTING(5%) → PROCESSING(20%) → TREND(40%)
+ *   idle → QUEUED(0%) → COLLECTING(5%) → PROCESSING(20%)
  *   → RISK(50%) → ALERT(60%) → NARRATIVE(70%) → REPUTATION(80%)
  *   → EXECUTIVE(85%) → BENCHMARK(90%) → FINALIZING(95%) → SUCCESS(100%)
  *   or → FAILED (at whatever % it was at)

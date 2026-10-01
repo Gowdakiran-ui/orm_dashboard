@@ -11,7 +11,6 @@ This module contains two categories of tasks:
    manually, but are no longer in beat_schedule and will not fire on
    their own. The equivalent per-client work now runs in-chain via the
    pipeline_stage_* tasks below, triggered by Run Pipeline.
-   - calculate_client_trends
    - calculate_client_risks
    - calculate_document_risk
    - evaluate_alerts
@@ -56,7 +55,6 @@ Pipeline Execution Model
     since no single process spans the whole run anymore):
         ↓ COLLECTING   (io_queue)           (5%  → 20%)
         ↓ PROCESSING   (nlp_queue)          (20% → 40%)
-        ↓ TREND        (aggregation_queue)  (40% → 50%)
         ↓ RISK         (aggregation_queue)  (50% → 60%)
         ↓ ALERT        (aggregation_queue)  (60% → 75%)
         ↓ AI_SUMMARY   (aggregation_queue)  (75% → 80%)
@@ -109,7 +107,6 @@ from celery import shared_task, chain, chord, group
 from app.core.db import SessionLocal
 from app.models.client import Client
 from app.models.pipeline_run import PipelineRun
-from app.models.trend_state import TrendClientState
 
 logger = structlog.get_logger()
 
@@ -122,15 +119,9 @@ logger = structlog.get_logger()
 # Supporting helpers for scheduler tasks
 # ---------------------------------------------------------------------------
 
-from app.services.intelligence.trend_detector import TrendDetector
 from app.services.intelligence.risk_engine import RiskEngine
 
-trend_detector = TrendDetector()
 risk_engine = RiskEngine()
-
-TREND_CLIENT_MAX_RETRIES = 3
-TREND_CLIENT_BASE_BACKOFF_S = 1.0
-TREND_CLIENT_MAX_BACKOFF_S = 10.0
 
 TRANSIENT_ERROR_PATTERNS = (
     "deadlock",
@@ -145,92 +136,6 @@ TRANSIENT_ERROR_PATTERNS = (
 def _is_transient_error(exc: Exception) -> bool:
     msg = str(exc).lower()
     return any(pattern in msg for pattern in TRANSIENT_ERROR_PATTERNS)
-
-
-def _exponential_backoff(attempt: int) -> float:
-    backoff = TREND_CLIENT_BASE_BACKOFF_S * math.pow(2, attempt - 1)
-    return min(backoff, TREND_CLIENT_MAX_BACKOFF_S)
-
-
-def _process_single_client_with_retry(client_id, run_id, batch_id, worker_id, log):
-    attempt = 0
-    last_exc = None
-    while attempt <= TREND_CLIENT_MAX_RETRIES:
-        if attempt > 0:
-            backoff = _exponential_backoff(attempt)
-            log.info("trend_client_retrying", client_id=client_id, attempt=attempt, backoff_s=backoff)
-            time.sleep(backoff)
-            state_db = SessionLocal()
-            try:
-                state = state_db.query(TrendClientState).filter(
-                    TrendClientState.client_id == client_id
-                ).first()
-                if state:
-                    state.processing_status = "TREND_RETRYING"
-                    state.retry_count = attempt
-                    state.last_retry_at = datetime.now(timezone.utc)
-                    state_db.commit()
-            except Exception:
-                state_db.rollback()
-            finally:
-                state_db.close()
-
-        client_db = SessionLocal()
-        t0 = time.perf_counter()
-        try:
-            trend_detector.detect_trends(client_db, client_id, run_id=run_id, batch_id=batch_id)
-            latency_ms = (time.perf_counter() - t0) * 1000
-            return {"client_id": client_id, "status": "success", "retry_count": attempt, "error": None, "latency_ms": round(latency_ms, 2)}
-        except Exception as exc:
-            client_db.rollback()
-            latency_ms = (time.perf_counter() - t0) * 1000
-            last_exc = exc
-            log.error("trend_client_attempt_failed", client_id=client_id, attempt=attempt, error=str(exc))
-            if not _is_transient_error(exc):
-                break
-            attempt += 1
-        finally:
-            client_db.close()
-
-    return {"client_id": client_id, "status": "failed", "retry_count": attempt, "error": str(last_exc) if last_exc else "unknown", "latency_ms": None}
-
-
-@shared_task(bind=True, queue="aggregation_queue")
-def calculate_client_trends(self):
-    """Trend Detection batch task — runs on schedule for ALL clients."""
-    run_id = uuid.uuid4().hex
-    batch_id = uuid.uuid4().hex[:12]
-    worker_id = os.getpid()
-    log = logger.bind(run_id=run_id, batch_id=batch_id, worker_id=worker_id, task="calculate_client_trends")
-    log.info("trend_batch_started")
-    t_batch_start = time.perf_counter()
-
-    try:
-        list_db = SessionLocal()
-        try:
-            clients = list_db.query(Client).all()
-            client_ids = [str(c.id) for c in clients]
-        finally:
-            list_db.close()
-    except Exception as exc:
-        log.error("trend_batch_client_list_failed", error=str(exc), exc_info=True)
-        raise self.retry(exc=exc, countdown=300)
-
-    if not client_ids:
-        log.info("trend_batch_no_clients")
-        return
-
-    results = []
-    for client_id in client_ids:
-        result = _process_single_client_with_retry(client_id, run_id, batch_id, worker_id, log.bind(client_id=client_id))
-        results.append(result)
-
-    failed = [r for r in results if r["status"] == "failed"]
-    log.info("trend_batch_complete",
-             total=len(client_ids),
-             success=len(results) - len(failed),
-             failed=len(failed),
-             latency_ms=round((time.perf_counter() - t_batch_start) * 1000, 2))
 
 
 # ---------------------------------------------------------------------------
@@ -890,7 +795,7 @@ _PIPELINE_RUN_TERMINAL = {"SUCCESS", "FAILED"}
 #   projected   = 267 * 0.79 ≈ 210 min of real NLP processing time
 #   margin      = 1.4x on top of the linear projection, for retry backoff,
 #                 DB/Redis latency variance, and the non-NLP stages
-#                 (COLLECTING/TREND/RISK/.../FINALIZING) riding on the same
+#                 (COLLECTING/RISK/.../FINALIZING) riding on the same
 #                 clock ≈ 294 min
 #   -> rounded up to 300 min (5h)
 #
@@ -1463,13 +1368,12 @@ def _stage_process(ctx: PipelineContext, db, doc_ids: List[str]) -> None:
     # live: 403s of a 431s run, 93.6% of total duration, ~4.6s/document of
     # transformer inference) but progress_pct sat pinned at 20 for the
     # entire stage, since nothing updated it between the COLLECTING->
-    # PROCESSING transition (which sets 20) and the PROCESSING->TREND
-    # transition (which sets 40). Update after every document: at ~4.6s/doc
+    # PROCESSING transition (which sets 20) and the PROCESSING->RISK
+    # transition (which sets 50; was PROCESSING->TREND at 40 before trend
+    # detection was removed). Update after every document: at ~4.6s/doc
     # the write is negligible overhead either way, so no batching interval
-    # is needed. Capped at 39 (not 40) so an in-progress PROCESSING stage is
-    # never visually indistinguishable from having already completed into
-    # TREND, which is what the real _update_run(..., "TREND", ...) call
-    # sets once this function returns.
+    # is needed. Capped at 39 so an in-progress PROCESSING stage is
+    # never visually indistinguishable from having already completed.
     total = len(doc_ids)
     processed = 0
     failed = 0
@@ -1487,14 +1391,6 @@ def _stage_process(ctx: PipelineContext, db, doc_ids: List[str]) -> None:
 
     duration_ms = (time.perf_counter() - t0) * 1000
     log.info("stage_complete", processed=processed, failed=failed, duration_ms=round(duration_ms, 2))
-
-
-def _stage_trend(ctx: PipelineContext, db) -> None:
-    log = logger.bind(stage="TREND", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
-    t0 = time.perf_counter()
-    log.info("stage_started")
-    TrendDetector().process_client(db, ctx.client_id, run_id=ctx.run_id, batch_id=ctx.run_id[:12])
-    log.info("stage_complete", duration_ms=round((time.perf_counter() - t0) * 1000, 2))
 
 
 def _stage_risk(ctx: PipelineContext, db) -> None:
@@ -1671,7 +1567,7 @@ def pipeline_stage_process(self, doc_ids: List[str], run_id: str, client_id: str
     previous chain link's return value), so the chord can't be built
     up-front in run_client_pipeline's static chain() call. self.replace()
     splices the chord into the outer chain in place of this task: the
-    chain's next link (pipeline_stage_trend) only fires once every
+    chain's next link (pipeline_stage_risk) only fires once every
     fan-out task has completed and pipeline_stage_process_gather (the
     chord callback) has run. See pipeline_process_one_document
     (intelligence_tasks.py) for the fan-out unit and
@@ -1732,7 +1628,7 @@ def pipeline_stage_process_gather(
     Never raises regardless of how many documents failed: matching the old
     serial loop's semantics exactly, a document's NLP failure was always
     logged-and-counted, never something that aborted the PROCESSING stage or
-    blocked the chain from continuing to TREND. pipeline_process_one_document
+    blocked the chain from continuing to RISK. pipeline_process_one_document
     already catches its own exceptions and always returns a result dict for
     exactly this reason -- a member task raising here would make Celery skip
     this callback (or error it, depending on chord error handling), which
@@ -1747,7 +1643,7 @@ def pipeline_stage_process_gather(
     try:
         # Matches the old loop's cap at 39 (not 40) so an in-progress
         # PROCESSING stage is never visually indistinguishable from having
-        # already completed into TREND (which sets progress_pct to 40 itself).
+        # already completed into RISK (which sets progress_pct to 50 itself).
         _update_progress(db, run_id, 39, f"Processed {processed}/{total} documents ({failed} failed)")
     finally:
         db.close()
@@ -1756,7 +1652,7 @@ def pipeline_stage_process_gather(
 
 def _make_aggregation_stage_task(stage_name: str, stage_fn, log_line: str, task_name: str):
     """
-    Factory for the six identically-shaped aggregation stages (TREND, RISK,
+    Factory for the five identically-shaped aggregation stages (RISK,
     ALERT, REPUTATION, EXECUTIVE, BENCHMARK all follow the same pattern:
     load ctx, transition FSM, call the stage function, done). Avoids six
     copy-pasted task bodies that all differ only in stage name/fn/log.
@@ -1785,9 +1681,18 @@ def _make_aggregation_stage_task(stage_name: str, stage_fn, log_line: str, task_
     return _task
 
 
-pipeline_stage_trend = _make_aggregation_stage_task(
-    "TREND", _stage_trend, "Running trend detection",
-    "app.workers.aggregation_tasks.pipeline_stage_trend")
+@shared_task(bind=True, queue="aggregation_queue", max_retries=0,
+             name="app.workers.aggregation_tasks.pipeline_stage_trend")
+def pipeline_stage_trend(self, run_id: str, client_id: str, owner_id: str) -> None:
+    """No-op shim. The TREND stage was removed 2026-10-01 (trend detection no
+    longer feeds risk/reputation/alerts) and run_client_pipeline's chain no
+    longer includes it. This stays registered ONLY so a chain already queued in
+    Redis by the previous release can still complete: it does no FSM
+    transition and no work, so the run falls through PROCESSING -> RISK
+    (a legal transition). Safe to delete one release after the removal deploy."""
+    logger.info("pipeline_stage_trend_noop_shim", run_id=run_id, client_id=client_id)
+
+
 pipeline_stage_risk = _make_aggregation_stage_task(
     "RISK", _stage_risk, "Running risk engine",
     "app.workers.aggregation_tasks.pipeline_stage_risk")
@@ -2093,7 +1998,6 @@ def run_client_pipeline(self, run_id: str, client_id: str):
     pipeline_chain = chain(
         pipeline_stage_collect.s(run_id, client_id, owner_id),
         pipeline_stage_process.s(run_id, client_id, owner_id),
-        pipeline_stage_trend.si(run_id, client_id, owner_id),
         pipeline_stage_risk.si(run_id, client_id, owner_id),
         pipeline_stage_alert.si(run_id, client_id, owner_id),
         # NARRATIVE stage removed entirely (Narrative Cluster feature removal

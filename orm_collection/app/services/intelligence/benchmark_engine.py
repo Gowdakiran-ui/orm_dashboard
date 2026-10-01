@@ -12,7 +12,6 @@ from app.models.client import Client
 from app.models.entity import Entity, EntityMention
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
-from app.models.trends import TrendEvent
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.reputation import ReputationScore
 from app.models.competitor_benchmark import CompetitorBenchmark
@@ -105,7 +104,7 @@ class BenchmarkEngine:
     # FEASIBILITY, verified against the live schema before committing:
     #   sentiment  — per-entity  ✓ (EntityMention -> DocumentSentiment)
     #   risk       — per-entity  ✓ (RiskEvent.entity_id)
-    #   trend      — per-entity  ✓ (TrendEvent.entity_id)
+    #   trend      — REMOVED 2026-10-01 along with trend detection
     #   source     — per-entity  ✓ (documents reachable via EntityMention)
     #   visibility — per-entity  ✓ (EntityMention.mention_count)
     #   narrative  — NOT per-entity  ✗  `narratives` has client_id only, no
@@ -122,7 +121,7 @@ class BenchmarkEngine:
     #
     # ReputationEngine.weights is imported rather than copied so there is one
     # source of truth for the weighting.
-    COMPARABLE_COMPONENTS = ("sentiment", "risk", "trend", "source", "visibility")
+    COMPARABLE_COMPONENTS = ("sentiment", "risk", "source", "visibility")
 
     # A2.11 — single consistent default for a missing executive reputation
     # score. Previously the stored value used `exec_score or 0.0` while the
@@ -227,30 +226,6 @@ class BenchmarkEngine:
             if er.entity_id not in exec_rep_map:
                 exec_rep_map[er.entity_id] = er.score
 
-        # 30-day trend events per entity (A2.9 — trend component).
-        # Same shape as ReputationEngine's trend rule, but scoped by entity_id
-        # instead of client-wide, which trend_events supports. TrendEvent has
-        # no single document_id column (it carries a `triggering_documents`
-        # JSON array instead), so this is checked in Python against each
-        # event's own triggering_documents -- same per-event fix as
-        # reputation_engine.py's Trend Component.
-        trend_rows = db.query(TrendEvent).filter(
-            TrendEvent.client_id == client_id,
-            TrendEvent.entity_id.in_(entity_ids),
-            TrendEvent.created_at >= lookback_date
-        ).order_by(TrendEvent.created_at.desc()).all()
-        if brand_doc_ids is not None:
-            brand_doc_ids_str = {str(d) for d in brand_doc_ids}
-            trend_rows = [
-                tev for tev in trend_rows
-                if {str(d) for d in (tev.triggering_documents or [])} & brand_doc_ids_str
-            ]
-        trends_by_entity: Dict[Any, List[Any]] = {}
-        for tev in trend_rows:
-            bucket = trends_by_entity.setdefault(tev.entity_id, [])
-            if len(bucket) < 10:  # ReputationEngine uses the 10 most recent
-                bucket.append(tev)
-
         # 30-day source reliability per entity (A2.9 — source component).
         # Reuses SourceCategory.base_reliability_score / SourceHealth.penalty,
         # the same inputs ReputationEngine uses, restricted to the documents
@@ -305,20 +280,6 @@ class BenchmarkEngine:
             sentiment_component = ((float(avg_sent) + 1.0) / 2.0) * 100.0 if avg_sent is not None else None
             risk_component = 100.0 - float(avg_rsk) if avg_rsk is not None else None
 
-            trend_component = None
-            entity_trends = trends_by_entity.get(entity_id)
-            if entity_trends:
-                trend_val = 50.0
-                for tev in entity_trends:
-                    if tev.severity in ("HIGH", "CRITICAL"):
-                        if tev.trend_type == "Sentiment":
-                            trend_val -= 20
-                        elif (float(avg_sent) if avg_sent is not None else 0.0) < 0:
-                            trend_val -= 15
-                        else:
-                            trend_val += 15
-                trend_component = max(0.0, min(100.0, trend_val))
-
             reliabilities = reliability_by_entity.get(entity_id)
             source_component = (sum(reliabilities) / len(reliabilities)) if reliabilities else None
 
@@ -329,7 +290,6 @@ class BenchmarkEngine:
             return {
                 "sentiment": sentiment_component,
                 "risk": risk_component,
-                "trend": trend_component,
                 "source": source_component,
                 "visibility": visibility_component,
             }

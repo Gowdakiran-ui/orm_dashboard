@@ -9,7 +9,6 @@ from typing import List, Dict, Any, Optional
 from app.core.dashboard_cache import cached_by_client
 from app.core.db import get_db
 from app.models.client import Client
-from app.models.trends import TrendEvent
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -20,22 +19,12 @@ def get_client_trend_events(client_id: UUID, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    events = db.query(TrendEvent).filter(TrendEvent.client_id == client_id).order_by(TrendEvent.created_at.desc(), TrendEvent.id.desc()).limit(100).all()
-    
-    results = []
-    for e in events:
-        results.append({
-            "id": str(e.id),
-            "trend_type": e.trend_type,
-            "entity_id": str(e.entity_id) if e.entity_id else None,
-            "topic_id": str(e.topic_id) if e.topic_id else None,
-            "baseline_value": e.baseline_value,
-            "current_value": e.current_value,
-            "percentage_change": e.percentage_change,
-            "severity": e.severity,
-            "created_at": e.created_at.isoformat() if e.created_at else None
-        })
-    return results
+    # Trend detection was removed from the pipeline (2026-10-01) and
+    # trend_events is no longer written. The table is kept (schema cleanup is
+    # a separate step) and still holds historical rows, which must not be
+    # served as if they were current -- always an empty list, same response
+    # shape so existing consumers (useDashboardData.ts) keep working.
+    return []
 
 from app.models.risk import RiskEvent
 from app.models.entity import Entity
@@ -1452,17 +1441,10 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 
     sentiment = {"positive": positive, "neutral": neutral, "negative": negative, "dominant": dominant}
 
-    # 5. Trends -- direction values differ by trend_type (RISING/FALLING for
-    # Mention/Topic, positive/negative for Sentiment), so both sets are handled.
-    trend_total = db.query(func.count(TrendEvent.id)).filter(TrendEvent.client_id == client_id).scalar() or 0
-    growing = db.query(func.count(TrendEvent.id)).filter(
-        TrendEvent.client_id == client_id, TrendEvent.trend_direction.in_(["RISING", "positive"])
-    ).scalar() or 0
-    declining = db.query(func.count(TrendEvent.id)).filter(
-        TrendEvent.client_id == client_id, TrendEvent.trend_direction.in_(["FALLING", "negative"])
-    ).scalar() or 0
-
-    trends = {"total": trend_total, "growing": growing, "declining": declining}
+    # 5. Trends
+    # Trend detection removed (2026-10-01); historical trend_events rows are
+    # deliberately not counted. Same keys as before, always zero.
+    trends = {"total": 0, "growing": 0, "declining": 0}
 
     # 6. Executive Risk alerts -- open (unacknowledged) alerts of type "Executive Risk"
     # (A12-F1: entity_type == "person" gate, commit 1ceca4f).
@@ -1598,7 +1580,6 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
     from app.models.entity import Entity, EntityMention
     from app.models.topic import DocumentTopic
     from app.models.sentiment import DocumentSentiment
-    from app.models.trends import TrendEvent
     from app.models.risk import RiskEvent
     from app.models.alert import Alert
     from app.models.reputation import ReputationScore
@@ -1640,9 +1621,9 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
     sentiment_last_run = format_dt(max((d.sentiment_failed_at or d.collected_at) for d in docs if (d.sentiment_failed_at or d.collected_at))) if docs else None
 
     # 4. Trend Detection
-    trends = db.query(TrendEvent).filter(TrendEvent.client_id == client_id).all()
-    trend_produced = len(trends)
-    trend_last_run = format_dt(max(t.created_at for t in trends)) if trends else None
+    # Removed from the pipeline 2026-10-01; historical rows are not reported.
+    trend_produced = 0
+    trend_last_run = None
 
     # 5. Risk Engine
     risks = db.query(RiskEvent).filter(RiskEvent.client_id == client_id).all()

@@ -540,7 +540,7 @@ export function useAnalytics({
           { label: "Growth Trends", value: growthTrendsCount },
           { label: "Declining Trends", value: decliningTrendsCount }
         ],
-        description: "Traces momentum and spikes in corporate topics and entity mentions.",
+        description: "Retired: trend detection no longer runs, so no new trend events are produced.",
         navigationId: "feed"
       },
       {

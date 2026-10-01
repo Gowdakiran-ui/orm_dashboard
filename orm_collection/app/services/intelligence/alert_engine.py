@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.risk import RiskEvent
-from app.models.trends import TrendEvent
 from app.models.alert import Alert
 from app.models.entity import Entity, EntityMention
 from app.models.client import Client
@@ -53,9 +52,13 @@ def _is_transient_error(exc: Exception) -> bool:
     return any(indicator in msg for indicator in transient_indicators)
 
 
+# 100 / 80: maps the trend-free maximum raw evidence (45 + 20 + 15) back onto the
+# 0-100 scale the alert thresholds were calibrated on. See process_client.
+EVIDENCE_SCORE_RESCALE = 100.0 / 80.0
+
+
 class AlertEngine:
     def __init__(self):
-        self.trend_threshold = 50.0
         self.sentiment_threshold = 50.0
         self._threshold_cache = {}  # P7: Cached dynamic thresholds to avoid re-querying count
 
@@ -115,9 +118,9 @@ class AlertEngine:
         if client_id in self._threshold_cache:
             return self._threshold_cache[client_id]
 
-        trend_count = db.query(TrendEvent).filter(TrendEvent.client_id == client_id).count()
-        risk_count = db.query(RiskEvent).filter(RiskEvent.client_id == client_id).count()
-        total_signals = trend_count + risk_count
+        # Trend events no longer count toward volatility/history (trend
+        # detection removed 2026-10-01); risk events alone drive the tier.
+        total_signals = db.query(RiskEvent).filter(RiskEvent.client_id == client_id).count()
 
         if total_signals > 50:
             threshold = 55.0
@@ -132,11 +135,11 @@ class AlertEngine:
     # ------------------------------------------------------------------
     # A4 — Alert Confidence Score Calculation
     # ------------------------------------------------------------------
-    def _calculate_confidence(self, agreement: float, doc_count: int, max_risk: float, max_trend: float) -> float:
+    def _calculate_confidence(self, agreement: float, doc_count: int, max_risk: float) -> float:
         """Calculate Alert Confidence based on multi-engine parameters."""
         agreement_factor = agreement * 40.0
         doc_factor = min(doc_count * 6.0, 30.0)
-        signal_strength = (max(max_risk, 0.0) * 0.15) + (min(max_trend, 1000.0) * 0.015)
+        signal_strength = max(max_risk, 0.0) * 0.15
         raw_score = agreement_factor + doc_factor + signal_strength
         return min(max(raw_score, 10.0), 100.0)
 
@@ -148,7 +151,6 @@ class AlertEngine:
         client_name: str,
         entity_name: str,
         risks_count: int,
-        trends_count: int,
         evidence_score: float,
         confidence_score: float,
         is_exec: bool,
@@ -162,7 +164,7 @@ class AlertEngine:
 
         summary = (
             f"Why did this happen?\n"
-            f"Multiple intelligence signals crossed safety limits. We detected {risks_count} risk events and {trends_count} trend events correlating to entity '{entity_name}'.\n\n"
+            f"Multiple intelligence signals crossed safety limits. We detected {risks_count} risk events correlating to entity '{entity_name}'.\n\n"
             f"What changed?\n"
             f"Combined evidence score is {evidence_score:.1f} (Confidence: {confidence_score:.1f}%).\n\n"
             f"How many documents support it?\n"
@@ -172,7 +174,7 @@ class AlertEngine:
             f"Why is this important?\n"
             f"Entity '{entity_name}' shows active risk indicators. {importance}\n\n"
             f"What should the analyst investigate?\n"
-            f"Review the associated {doc_count} document sources, check latest risk factors, and monitor media trends for '{entity_name}'."
+            f"Review the associated {doc_count} document sources, check latest risk factors, and monitor coverage of '{entity_name}'."
         )
         return summary
 
@@ -409,45 +411,6 @@ class AlertEngine:
                 ),
             ).order_by(RiskEvent.created_at.desc()).limit(15).all()
 
-            # Same competitor exclusion as recent_risks above -- entity_id is
-            # nullable on TrendEvent (Topic-type trends have none; Mention-
-            # type trends carry the entity being tracked, which can be a
-            # competitor's). A competitor's own trend spike must not feed
-            # an alert's evidence score for this client.
-            #
-            # TrendEvent has no single document_id column (it carries a
-            # `triggering_documents` JSON array instead), so unlike
-            # RiskEvent this can't be pushed into the SQL filter directly --
-            # person-type rows are fetched broadly here and checked in
-            # Python against this specific event's own triggering_documents
-            # below, same per-event fix as reputation_engine.py's Trend
-            # Component.
-            candidate_trends = db.query(TrendEvent).outerjoin(
-                Entity, Entity.id == TrendEvent.entity_id
-            ).filter(
-                TrendEvent.client_id == client_id,
-                TrendEvent.percentage_change > 30.0,
-                or_(
-                    TrendEvent.entity_id.is_(None),
-                    Entity.entity_type.is_(None),
-                    Entity.entity_type.in_(("brand", "product", "person")) if brand_doc_ids is not None else Entity.entity_type != "competitor",
-                ),
-            ).order_by(TrendEvent.created_at.desc()).limit(15).all()
-
-            if brand_doc_ids is not None:
-                brand_doc_ids_str = {str(d) for d in brand_doc_ids}
-                recent_trends = []
-                for t in candidate_trends:
-                    etype = entity_type_by_id.get(t.entity_id) if t.entity_id else None
-                    if t.entity_id is None or etype in ("brand", "product"):
-                        recent_trends.append(t)
-                    elif etype == "person":
-                        trigger_docs = {str(d) for d in (t.triggering_documents or [])}
-                        if trigger_docs & brand_doc_ids_str:
-                            recent_trends.append(t)
-            else:
-                recent_trends = candidate_trends
-
             exec_risks = db.query(RiskEvent, Entity).join(Entity, Entity.id == RiskEvent.entity_id).filter(
                 RiskEvent.client_id == client_id,
                 RiskEvent.risk_score > 50
@@ -462,17 +425,8 @@ class AlertEngine:
                 if not eid:
                     continue
                 if eid not in groups:
-                    groups[eid] = {"risks": [], "trends": [], "executives": []}
+                    groups[eid] = {"risks": [], "executives": []}
                 groups[eid]["risks"].append(risk)
-
-            # Map trend entities
-            for trend in recent_trends:
-                eid = trend.entity_id
-                if not eid:
-                    continue
-                if eid not in groups:
-                    groups[eid] = {"risks": [], "trends": [], "executives": []}
-                groups[eid]["trends"].append(trend)
 
             # Map executive risks. Same per-event (not per-entity-ever-
             # co-occurred) brand gate as recent_risks above: this specific
@@ -485,7 +439,7 @@ class AlertEngine:
                 if is_exec:
                     eid = r.entity_id
                     if eid not in groups:
-                        groups[eid] = {"risks": [], "trends": [], "executives": []}
+                        groups[eid] = {"risks": [], "executives": []}
                     groups[eid]["executives"].append((r, ent))
 
             # P3 Optimization: Pre-fetch all matching Entities to eliminate N+1 queries
@@ -513,7 +467,6 @@ class AlertEngine:
 
                     # Calculate max scores
                     max_risk = max([r.risk_score for r in data["risks"]], default=0.0)
-                    max_trend = max([t.percentage_change for t in data["trends"]], default=0.0)
                     is_exec = len(data["executives"]) > 0
 
                     # Documents collection
@@ -521,10 +474,6 @@ class AlertEngine:
                     for r in data["risks"]:
                         if r.document_id:
                             docs_set.add(str(r.document_id))
-                    for t in data["trends"]:
-                        t_docs = t.triggering_documents or []
-                        for td in t_docs:
-                            docs_set.add(str(td))
 
                     doc_list = list(docs_set)
                     doc_count = len(doc_list)
@@ -533,23 +482,29 @@ class AlertEngine:
                     evidence_score = 0.0
                     if max_risk > 0.0:
                         evidence_score += max_risk * 0.45
-                    if max_trend > 0.0:
-                        evidence_score += min(max_trend * 0.25, 20.0)
-                    if len(data["risks"]) > 0 and len(data["trends"]) > 0:
-                        evidence_score += 15.0  # Correlation bonus
                     evidence_score += min(doc_count * 4.0, 20.0)  # Document weight
                     if is_exec:
                         evidence_score += 15.0  # Executive weight
-                    # Components can sum above 100 (max risk 45 + trend 20 + correlation 15
-                    # + doc weight 20 + exec weight 15 = 115) -- clamp to match
-                    # ck_alerts_evidence_score's 0-100 bound (database/schema.sql). No floor
-                    # needed here (unlike confidence_score's 10.0 floor): every term above is
-                    # a non-negative additive contribution, so evidence_score can't go below 0.
-                    evidence_score = min(evidence_score, 100.0)
+                    # Components now max out at risk 45 + doc weight 20 + exec weight 15
+                    # = 80 (was 115 before the trend/correlation terms were removed
+                    # 2026-10-01). The dynamic evidence thresholds (15/40/55) and the
+                    # severity cutoffs (>45 HIGH, >70 CRITICAL) were calibrated on the
+                    # old 0-100 (clamped) scale, so rescale to keep alert sensitivity
+                    # where it was: without this, the two historical real alerts
+                    # (evidence 84.3 / 85.2, of which ~35 points were trend terms)
+                    # would score ~49-50 and silently stop clearing the 55 threshold.
+                    # Then clamp to ck_alerts_evidence_score's 0-100 bound
+                    # (database/schema.sql). No floor needed: every term above is a
+                    # non-negative additive contribution, so evidence_score can't go
+                    # below 0.
+                    evidence_score = min(evidence_score * EVIDENCE_SCORE_RESCALE, 100.0)
 
                     # A4: Calculate confidence score
-                    agreement = 1.0 if (len(data["risks"]) > 0 and len(data["trends"]) > 0) else 0.5
-                    confidence_score = self._calculate_confidence(agreement, doc_count, max_risk, max_trend)
+                    # No second engine left to agree with the risk signal, so this is
+                    # the former "risk-only" value (0.5): trend-free groups score
+                    # identically to before the trend removal.
+                    agreement = 0.5
+                    confidence_score = self._calculate_confidence(agreement, doc_count, max_risk)
 
                     # Filter: Only generate if evidence score and confidence pass thresholds
                     if evidence_score >= evidence_threshold and confidence_score >= 40.0:
@@ -567,22 +522,20 @@ class AlertEngine:
 
                         # A8: Generate analyst summary
                         human_summary = self._generate_human_summary(
-                            client_name, entity_name, len(data["risks"]), len(data["trends"]),
+                            client_name, entity_name, len(data["risks"]),
                             evidence_score, confidence_score, is_exec, doc_count
                         )
 
                         # A5: Explainability structure
                         explainability = {
                             "why_it_fired": f"Entity '{entity_name}' exceeded dynamic client evidence threshold of {evidence_threshold:.1f}.",
-                            "contributing_engines": ["Risk" if max_risk > 0.0 else None, "Trend" if max_trend > 0.0 else None],
+                            "contributing_engines": ["Risk" if max_risk > 0.0 else None],
                             "contributing_documents": doc_list,
                             "contributing_entities": [str(eid)],
                             "contributing_topics": [],
-                            "contributing_trends": [str(t.id) for t in data["trends"]],
                             "contributing_risks": [str(r.id) for r in data["risks"]],
                             "supporting_evidence": {
                                 "max_risk_score": max_risk,
-                                "max_trend_change": max_trend,
                                 "document_count": doc_count,
                                 "executive_involved": is_exec
                             },
@@ -590,7 +543,6 @@ class AlertEngine:
                                 "agreement_factor": agreement * 40.0,
                                 "document_factor": min(doc_count * 6.0, 30.0),
                                 "max_risk": max_risk,
-                                "max_trend": max_trend,
                                 "final_score": confidence_score
                             },
                             "decision_reason": f"Combined evidence score of {evidence_score:.1f} meets the dynamic client threshold."
@@ -615,8 +567,7 @@ class AlertEngine:
                             confidence_score=confidence_score,
                             evidence_score=evidence_score,
                             supporting_signals={
-                                "risks_count": len(data["risks"]),
-                                "trends_count": len(data["trends"])
+                                "risks_count": len(data["risks"])
                             },
                             explainability=explainability,
                             human_summary=human_summary,

@@ -37,7 +37,7 @@ const HIGH_MAX = RISK_THRESHOLDS.HIGH_TO_CRITICAL;
  * these can legitimately disagree (xoop_ui_clarity_review.md: "0 Critical
  * Risks" next to "1 Active -- CRITICAL" read as a contradiction). Traced
  * against alert_engine.py: an alert's severity comes from a separate
- * evidence_score (risk + trend + document-count + executive-mention
+ * evidence_score (risk + document-count + executive-mention
  * weighting combined, >70 or any executive involvement = CRITICAL), not
  * from any single document crossing this tile's per-document Risk Score
  * threshold. Two different signals, same word -- not a bug to reconcile.
@@ -49,8 +49,8 @@ export function CriticalRisksVsActiveAlertsDefinition() {
       <span className="block">
         This tile counts documents whose own Risk Score crosses the Critical
         threshold ({HIGH_MAX}+). An Active Alert&apos;s CRITICAL badge is a
-        separate signal -- it can fire from a combination of risk, trend
-        velocity, document volume, and executive involvement even when no
+        separate signal -- it can fire from a combination of risk,
+        document volume, and executive involvement even when no
         single document is itself Critical-risk.
       </span>
     </>
@@ -97,10 +97,9 @@ export function ReputationScoreDefinition() {
     <>
       <span className="block font-bold">Reputation Score</span>
       <span className="block">
-        A 0–100 score blending sentiment (30%), risk (30%), coverage trend
-        (10%), source reliability (10%) and media visibility (5%) over a
-        rolling window, weighted by how much signal is actually available
-        for each part.
+        A 0–100 score blending sentiment (30%), risk (30%), source
+        reliability (10%) and media visibility (5%) over a rolling window,
+        weighted by how much signal is actually available for each part.
       </span>
     </>
   );
@@ -131,8 +130,8 @@ export function RiskMatrixAxesDefinition() {
       <span className="block font-bold">Risk Matrix: Impact × Likelihood</span>
       <span className="block">
         <b>Impact</b> is the item&apos;s computed Risk Score (0–100) — the same
-        topic + sentiment + coverage-trend score, adjusted for source
-        reliability, that drives its severity band above.
+        topic + sentiment score, adjusted for source reliability, that
+        drives its severity band above.
       </span>
       <span className="mt-1 block">
         <b>Likelihood</b> is how confident the system is that this is a
@@ -202,7 +201,7 @@ export function RiskCategoriesDefinition() {
         competitive-positioning coverage such as pricing changes) carries no
         inherent topic weight of its own (risk_config.py&apos;s TOPIC_WEIGHTS
         sets it to 0 on purpose) -- its Risk Score comes entirely from that
-        document&apos;s sentiment, trend, and source-reliability signals.
+        document&apos;s sentiment and source-reliability signals.
         That&apos;s why an Innovation-tagged article can still register a
         non-trivial risk score when the coverage is negative, and why neutral
         or positive news in those categories does not by itself count as a
@@ -322,7 +321,7 @@ export function ShareOfVoiceDefinition() {
  * the client-level ReputationEngine (see ReputationGradeDefinition/
  * ReputationScoreDefinition above): same letter-grade cutoffs, but its own
  * weights (executive_reputation_engine.py __init__: sentiment 35%, risk 30%,
- * trend 10%, visibility 10%, each dropped and the rest re-normalized if that
+ * visibility 10%, each dropped and the rest re-normalized if that
  * signal has no data for this person). A low grade with very little tracked
  * coverage most often means too few mentions to carry much weight, not
  * necessarily sustained negative coverage.
@@ -332,9 +331,9 @@ export function ExecutiveReputationGradeDefinition() {
     <>
       <span className="block font-bold">Executive Reputation Grade</span>
       <span className="block">
-        This person&apos;s Score (0–100) blends sentiment (35%), risk (30%),
-        coverage trend (10%) and mention visibility (10%) from their own
-        tracked coverage, then maps to a letter grade:
+        This person&apos;s Score (0–100) blends sentiment (35%), risk (30%)
+        and mention visibility (10%) from their own tracked coverage, then
+        maps to a letter grade:
       </span>
       <span className="mt-1 block"><b>A+</b> 90–100 &nbsp; <b>A</b> 80–89.9</span>
       <span className="block"><b>B</b> 70–79.9 &nbsp; <b>C</b> 60–69.9</span>
@@ -376,8 +375,7 @@ export function ExecutiveSentimentBreakdownDefinition() {
  * Coverage and Trend columns. Traced directly against
  * executive_reputation_engine.py's calculate_executive_reputation:
  *   - doc_confidence = min(document_count / 10, 1.0)
- *   - signal_completeness = 0.5x(1.0 if recent risk data else 0.5) +
- *       0.5x(1.0 if recent trend data else 0.5)
+ *   - signal_completeness = 1.0 if recent risk data else 0.5
  *   - confidence_score = doc_confidence*0.6 + signal_completeness*0.4
  *     (0.0 whenever there's no qualifying evidence at all)
  *   - data_coverage is written from that same confidence_score value --
@@ -393,7 +391,7 @@ export function ExecutiveScorecardMetricsDefinition() {
       <span className="block">
         <b>Confidence</b> blends how much recent coverage exists (capped once
         10+ documents are seen in the last 30 days) with whether recent risk
-        and trend signal was available for this executive.
+        signal was available for this executive.
       </span>
       <span className="mt-1 block">
         <b>Evidence Coverage</b> reuses that same Confidence value — it is not
@@ -504,7 +502,7 @@ export function AverageSentimentTrendDefinition() {
 
 /**
  * RiskAnalyticsPanel.tsx's "Daily Alerts Trigger Volume Timeline" -- a count
- * of alert records (alert_engine.py's risk/trend/executive alert
+ * of alert records (alert_engine.py's risk/executive alert
  * evaluators) triggered each day for this client, across every severity.
  */
 export function DailyAlertsTimelineDefinition() {
@@ -512,7 +510,7 @@ export function DailyAlertsTimelineDefinition() {
     <>
       <span className="block font-bold">Daily Alerts Trigger Volume</span>
       <span className="block">
-        How many alerts — risk, trend, or executive-reputation alerts —
+        How many alerts — risk or executive-reputation alerts —
         fired for this client on each day, across every severity level.
       </span>
     </>

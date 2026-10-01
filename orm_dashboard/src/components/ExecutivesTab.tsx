@@ -32,7 +32,6 @@ import { formatScore } from "@/utils/formatScore";
 const COMPONENT_LABELS: Record<string, { label: string; weight: number }> = {
   sentiment: { label: "Sentiment", weight: 0.35 },
   risk: { label: "Risk", weight: 0.30 },
-  trend: { label: "Coverage trend", weight: 0.10 },
   visibility: { label: "Mention visibility", weight: 0.10 }
 };
 

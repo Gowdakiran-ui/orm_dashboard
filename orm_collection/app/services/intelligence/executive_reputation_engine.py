@@ -14,7 +14,6 @@ from app.models.document import Document
 from app.models.entity import Entity, EntityMention
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
-from app.models.trends import TrendEvent
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.client import Client
 from app.models.alert import Alert
@@ -108,7 +107,6 @@ class ExecutiveReputationEngine:
         self.weights = {
             "sentiment": 0.35,
             "risk": 0.30,
-            "trend": 0.10,
             "visibility": 0.10
         }
 
@@ -302,26 +300,6 @@ class ExecutiveReputationEngine:
         for r in risks:
             risk_map[r.entity_id].append(r)
 
-        # Batch preload trends. TrendEvent has no single document_id column
-        # (it carries a `triggering_documents` JSON array instead), so this
-        # is checked in Python against each event's own triggering_documents
-        # -- same per-event granularity fix as reputation_engine.py's Trend
-        # Component.
-        trends = db.query(TrendEvent).filter(
-            TrendEvent.client_id == client_id,
-            TrendEvent.entity_id.in_(exec_ids),
-            TrendEvent.created_at >= lookback_date
-        ).all()
-        if brand_doc_ids is not None:
-            brand_doc_ids_str = {str(d) for d in brand_doc_ids}
-            trends = [
-                t for t in trends
-                if {str(d) for d in (t.triggering_documents or [])} & brand_doc_ids_str
-            ]
-        trend_map = {eid: [] for eid in exec_ids}
-        for t in trends:
-            trend_map[t.entity_id].append(t)
-
         # Batch preload alerts (shared pool)
         alerts = db.query(Alert).filter(
             Alert.client_id == client_id,
@@ -341,11 +319,10 @@ class ExecutiveReputationEngine:
                 exec_doc_ids = list(set(m.document_id for m in exec_mentions))
                 exec_doc_urls = [doc_url_map[did] for did in exec_doc_ids if did in doc_url_map and doc_url_map[did]]
                 exec_risks = risk_map.get(exec_entity.id, [])
-                exec_trends = trend_map.get(exec_entity.id, [])
                 
                 self._evaluate_single_executive_optimized(
                     db, client_id, exec_entity,
-                    exec_doc_ids, exec_doc_urls, exec_risks, exec_trends, alerts, sentiment_map,
+                    exec_doc_ids, exec_doc_urls, exec_risks, alerts, sentiment_map,
                     run_id=rid, batch_id=bid, worker_id=wid, attempt=attempt
                 )
                 savepoint.commit()
@@ -383,7 +360,6 @@ class ExecutiveReputationEngine:
         doc_ids: List[str],
         doc_urls: List[str],
         supporting_risks: List[RiskEvent],
-        supporting_trends: List[TrendEvent],
         supporting_alerts: List[Alert],
         sentiment_map: Dict[str, float],
         run_id: str,
@@ -426,19 +402,10 @@ class ExecutiveReputationEngine:
             avg_risk = sum(r.risk_score for r in supporting_risks) / len(supporting_risks)
             risk_component = 100.0 - avg_risk
 
-        # 4. Executive Trend
-        trend_component = None
-        # Sort preloaded trends by date and limit to 10
-        sorted_trends = sorted(supporting_trends, key=lambda x: x.created_at, reverse=True)[:10]
-        if sorted_trends:
-            trend_val = 50.0
-            for t in sorted_trends:
-                if t.severity in ["HIGH", "CRITICAL"]:
-                    if (avg_sentiment or 0.0) < 0:
-                        trend_val -= 15
-                    else:
-                        trend_val += 15
-            trend_component = max(0.0, min(100.0, trend_val))
+        # 4. Executive Trend: removed 2026-10-01 with trend detection (nothing
+        # writes trend_events any more). trend_component_db below still writes
+        # 0.0 to the NOT NULL executive_reputation_scores.trend_component
+        # column, which is dropped in a later, separate schema step.
 
         # 5. Executive Visibility
         # Count mentions in-memory (E14-F3: no floor -- 0 mentions means the
@@ -456,7 +423,6 @@ class ExecutiveReputationEngine:
         components = {
             "sentiment": sentiment_component,
             "risk": risk_component,
-            "trend": trend_component,
             "visibility": visibility_component,
         }
         active_weight = sum(self.weights[k] for k, v in components.items() if v is not None)
@@ -492,21 +458,20 @@ class ExecutiveReputationEngine:
 
         # A7: Upstream Health Status Checking
         has_recent_risk = any(r.created_at >= one_day_ago for r in supporting_risks)
-        has_recent_trend = any(t.created_at >= one_day_ago for t in sorted_trends)
 
         if not has_evidence:
             health_status = "INSUFFICIENT_EVIDENCE"
-        elif not (has_recent_risk and has_recent_trend):
+        elif not has_recent_risk:
             health_status = "PARTIAL"
         else:
             health_status = "COMPLETE"
 
         # A6: Executive Confidence Score (E14-F2: already genuinely scoped to
-        # this executive's own doc_ids/supporting_risks/supporting_trends --
+        # this executive's own doc_ids/supporting_risks --
         # see data_coverage_val below, which now reuses this instead of an
         # unrelated client-wide constant)
         doc_confidence = min(len(doc_ids) / 10.0, 1.0)
-        signal_completeness = (1.0 if has_recent_risk else 0.5) * 0.5 + (1.0 if has_recent_trend else 0.5) * 0.5
+        signal_completeness = 1.0 if has_recent_risk else 0.5
         confidence_score = round(doc_confidence * 0.6 + signal_completeness * 0.4, 4) if has_evidence else 0.0
 
         # A4: Mathematical Lineage
@@ -515,7 +480,6 @@ class ExecutiveReputationEngine:
             "component_scores": {
                 "sentiment": round(sentiment_component, 2) if sentiment_component is not None else None,
                 "risk": round(risk_component, 2) if risk_component is not None else None,
-                "trend": round(trend_component, 2) if trend_component is not None else None,
                 "visibility": round(visibility_component, 2) if visibility_component is not None else None
             },
             "component_weights": self.weights,
@@ -542,7 +506,7 @@ class ExecutiveReputationEngine:
         evidence_metadata = {
             "supporting_documents": [str(did) for did in doc_ids],
             "supporting_risks": [str(r.id) for r in supporting_risks],
-            "supporting_trends": [str(t.id) for t in sorted_trends],
+            "supporting_trends": [],
             "supporting_alerts": [str(a.id) for a in supporting_alerts],
             "supporting_executive_entity": str(exec_entity.id)
         }
@@ -563,7 +527,7 @@ class ExecutiveReputationEngine:
         # active_weight/has_evidence above were computed from.
         sentiment_component_db = sentiment_component if sentiment_component is not None else 0.0
         risk_component_db = risk_component if risk_component is not None else 0.0
-        trend_component_db = trend_component if trend_component is not None else 0.0
+        trend_component_db = 0.0  # NOT NULL column kept until schema cleanup
         visibility_component_db = visibility_component if visibility_component is not None else 0.0
 
         # R7: Duplicate protection using ON CONFLICT DO UPDATE on uq_exec_reputation_run

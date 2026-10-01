@@ -19,7 +19,7 @@ unconditionally for every client/feed, regardless of activity):
     schedule_feeds, schedule_searches (collection -- schedule_searches was
         the literal mechanism that would poll YouTube once any
         SearchSourceConfiguration row for it is enabled),
-    calculate_client_trends, calculate_client_risks, evaluate_alerts,
+    calculate_client_risks, evaluate_alerts,
         calculate_reputation_score, calculate_executive_reputation,
         calculate_competitor_benchmarks
         (aggregation -- these only ever read data collection already
@@ -30,7 +30,7 @@ The underlying task functions for the aggregation jobs above still
 exist in aggregation_tasks.py (not deleted -- a separate cleanup
 decision, not part of this change) but are no longer registered on any
 schedule; they will not fire unless invoked manually. The equivalent
-per-client work now happens via pipeline_stage_trend/risk/alert/
+per-client work now happens via pipeline_stage_risk/alert/
 reputation/executive/benchmark inside run_client_pipeline's
 chain -- see that module's docstring for the full chain order.
 
@@ -92,7 +92,6 @@ celery_app.conf.update(
         'app.workers.document_processor.process_document_task': {'queue': 'cpu_queue'},
         'app.workers.intelligence_tasks.process_document_intelligence': {'queue': 'nlp_queue'},
         # Aggregation tasks (all on aggregation_queue)
-        'app.workers.aggregation_tasks.calculate_client_trends':      {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_client_risks':       {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.calculate_document_risk':      {'queue': 'aggregation_queue'},
         'app.workers.aggregation_tasks.evaluate_alerts':              {'queue': 'aggregation_queue'},

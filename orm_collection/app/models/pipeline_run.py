@@ -6,10 +6,16 @@ The status endpoint reads this table exclusively.
 No AsyncResult. No Redis parsing.
 
 FSM States (ordered):
-    QUEUED → COLLECTING → AWAITING_PROCESSING → PROCESSING → TREND → RISK →
+    QUEUED → COLLECTING → AWAITING_PROCESSING → PROCESSING → RISK →
     ALERT → AI_SUMMARY → REPUTATION → EXECUTIVE → BENCHMARK →
     FINALIZING → SUCCESS
                         ↘ FAILED (from any state)
+
+TREND removed from the FSM (trend-detection removal, 2026-10-01): PROCESSING
+now transitions directly to RISK (allowed transitions are generated from
+_STAGE_ORDER, so dropping "TREND" there is the whole structural change).
+Historical PipelineRun rows with stage="TREND" are unaffected -- stage is a
+plain string column, not constrained to this list.
 
 NARRATIVE removed from the FSM (Narrative Cluster feature removal, see
 PART_NARRATIVE_VOLUME_COST_FORENSICS_2026-09-19.md): ALERT now transitions
@@ -50,7 +56,6 @@ _STAGE_ORDER = [
     "COLLECTING",
     "AWAITING_PROCESSING",
     "PROCESSING",
-    "TREND",
     "RISK",
     "ALERT",
     "AI_SUMMARY",
@@ -84,7 +89,6 @@ STAGE_PROGRESS: dict[str, int] = {
     "COLLECTING":  5,
     "AWAITING_PROCESSING": 15,
     "PROCESSING":  20,
-    "TREND":       40,
     "RISK":        50,
     "ALERT":       60,
     "AI_SUMMARY":  75,

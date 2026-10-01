@@ -8,7 +8,11 @@ Changes from Phase 4.0 baseline:
   - Added baseline_established : flags whether this is a cold-start event (False)
                                  or a normal trend event with an established baseline
 
-The application-level upsert in TrendDetector ensures only one TrendEvent
+NOTE (2026-10-01): trend detection was removed; nothing writes this table any
+more and existing rows are historical only. The table is kept until a later,
+separate schema cleanup.
+
+The application-level upsert in the (removed) TrendDetector ensured only one TrendEvent
 exists per (client_id, trend_type, entity_id, topic_id, trend_date).
 The database-level unique index enforces this at storage level using
 COALESCE for nullable columns.
