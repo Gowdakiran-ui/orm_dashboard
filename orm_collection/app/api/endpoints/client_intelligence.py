@@ -1613,7 +1613,7 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
 
     # 3. Sentiment Analysis
     sentiment_processed = sum(1 for d in docs if d.sentiment_processing_status != "SENTIMENT_PENDING")
-    sentiment_failed = sum(1 for d in docs if d.sentiment_processing_status == "FAILED")
+    sentiment_failed = sum(1 for d in docs if d.sentiment_processing_status == "SENTIMENT_FAILED")
     sentiment_success = sentiment_processed - sentiment_failed
     sentiment_success_rate = f"{(sentiment_success / sentiment_processed * 100):.1f}%" if sentiment_processed > 0 else "N/A"
     sentiment_times = [d.sentiment_processing_time_ms for d in docs if d.sentiment_processing_time_ms]
