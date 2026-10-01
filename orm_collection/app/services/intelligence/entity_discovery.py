@@ -678,12 +678,21 @@ class EntityDiscoveryEngine:
             return "existing_matched"
         
         # Check if candidate already exists
-        existing_candidate = db.query(ExecutiveCandidate).filter(
-            ExecutiveCandidate.client_id == client_id,
-            ExecutiveCandidate.name.ilike(normalized_name)
-        ).first()
-        
-        if existing_candidate:
+        # The row is stored under the RAW person_name (see the insert below), while
+        # normalized_name has trailing punctuation/corporate suffixes stripped, so
+        # matching on normalized_name alone never finds a candidate stored as e.g.
+        # "Xpert Advise-" and the re-insert hits uq_exec_cand_client_name. Also
+        # match the raw form exactly.
+        def _find_existing_candidate():
+            return db.query(ExecutiveCandidate).filter(
+                ExecutiveCandidate.client_id == client_id,
+                or_(
+                    ExecutiveCandidate.name.ilike(normalized_name),
+                    ExecutiveCandidate.name == person_name,
+                )
+            ).first()
+
+        def _update_existing_candidate(existing_candidate) -> str:
             # Update existing candidate only if this document is new to prevent duplicate mention increments
             if document_id not in existing_candidate.source_documents:
                 existing_candidate.mention_count += 1
@@ -708,8 +717,13 @@ class EntityDiscoveryEngine:
                     confidence=existing_candidate.confidence,
                     document_ids=existing_candidate.source_documents
                 )
-            
+
             return "candidate_updated"
+
+        existing_candidate = _find_existing_candidate()
+
+        if existing_candidate:
+            return _update_existing_candidate(existing_candidate)
         
         # Layered validation of the candidate
         is_valid, reject_layer, reject_reason = self._is_valid_person_name_layered(person_name, db, client_id, source_text=source_text, self_reference_terms=self_reference_terms)
@@ -738,9 +752,27 @@ class EntityDiscoveryEngine:
             confidence=confidence,
             source_documents=[document_id]
         )
-        db.add(candidate)
-        db.flush()
-        
+        # SAVEPOINT-isolate the insert (same pattern as promote_competitor_candidates)
+        # so a uq_exec_cand_client_name collision only affects this one candidate
+        # instead of propagating up and rolling back the whole document's extraction.
+        savepoint = db.begin_nested()
+        try:
+            db.add(candidate)
+            db.flush()
+        except IntegrityError:
+            savepoint.rollback()
+            existing_candidate = _find_existing_candidate()
+            if existing_candidate is None:
+                raise
+            logger.warning(
+                "executive_candidate_insert_conflict_fell_back_to_update",
+                client_id=client_id,
+                candidate_name=person_name,
+                document_id=document_id,
+            )
+            return _update_existing_candidate(existing_candidate)
+        savepoint.commit()
+
         logger.info(
             "candidate_inserted",
             client_id=client_id,
