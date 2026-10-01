@@ -500,10 +500,15 @@ class AlertEngine:
                     evidence_score = min(evidence_score * EVIDENCE_SCORE_RESCALE, 100.0)
 
                     # A4: Calculate confidence score
-                    # No second engine left to agree with the risk signal, so this is
-                    # the former "risk-only" value (0.5): trend-free groups score
-                    # identically to before the trend removal.
-                    agreement = 0.5
+                    # Risk is the only signal engine left (trend detection removed
+                    # 2026-10-01), so there is no second engine to "agree" with it
+                    # and nothing to penalise: every group is risk-based by
+                    # definition. The old 0.5 "single signal" value would have capped
+                    # every alert's confidence at 65 and silently dropped the
+                    # historic Executive Risk alert (confidence 34.75 < the 40 gate),
+                    # so use the full agreement value, same intent as the
+                    # EVIDENCE_SCORE_RESCALE above.
+                    agreement = 1.0
                     confidence_score = self._calculate_confidence(agreement, doc_count, max_risk)
 
                     # Filter: Only generate if evidence score and confidence pass thresholds
