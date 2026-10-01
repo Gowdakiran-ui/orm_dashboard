@@ -521,7 +521,7 @@ def _process_single_client_exec_reputation_with_retry(client_id, run_id, batch_i
             if client:
                 ExecutiveReputationStateMachine.transition(client_db, client, ExecutiveReputationStateMachine.PROCESSING, run_id=run_id, batch_id=batch_id, retry_count=attempt - 1)
                 client_db.commit()
-            exec_reputation_engine.process_client(client_db, client_id, run_id=run_id, batch_id=batch_id, worker_id=worker_id, attempt=attempt - 1)
+            exec_reputation_engine.process_client(client_db, client_id, run_id=run_id, batch_id=batch_id, worker_id=worker_id, attempt=attempt - 1, raise_on_total_failure=True)
             client = client_db.query(Client).filter(Client.id == client_id).first()
             if client and client.exec_reputation_processing_status != ExecutiveReputationStateMachine.SKIPPED:
                 latency_ms = (time.perf_counter() - t0) * 1000
