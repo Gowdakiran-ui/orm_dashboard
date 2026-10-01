@@ -8,6 +8,15 @@ from app.models.sentiment import DocumentSentiment, EntitySentiment
 from app.models.system import ModelRun
 from transformers import pipeline
 
+# FinBERT (BERT-base) has 512 position embeddings. The text[:1500] character
+# cap below is NOT a token cap: token-dense text (numbers, URLs, symbols)
+# tokenizes at ~1.7-2.5 chars/token, so <=1500 chars can still be 600-900
+# tokens and the pipeline raised "The size of tensor a (N) must match the
+# size of tensor b (512)" (permanent RuntimeError, doc stuck SENTIMENT_FAILED).
+# Passed to the pipeline as tokenizer kwargs so the token limit is enforced
+# by the tokenizer itself; texts already under 512 tokens are unaffected.
+FINBERT_TOKENIZER_KWARGS = {"truncation": True, "max_length": 512}
+
 class SentimentAnalyzer:
     def __init__(self, use_mock=False):
         # FinBERT is specifically trained for financial/business text sentiment
@@ -69,7 +78,7 @@ class SentimentAnalyzer:
         if cached is not None:
             return cached
 
-        result = self.sentiment_pipeline(truncated_text)[0]
+        result = self.sentiment_pipeline(truncated_text, **FINBERT_TOKENIZER_KWARGS)[0]
         nlp_cache.set_cached(cache_key, result)
         return result
 
@@ -90,7 +99,7 @@ class SentimentAnalyzer:
         # Run pipeline batch inference
         import torch
         with torch.inference_mode():
-            results = self.sentiment_pipeline(truncated_texts, batch_size=batch_size)
+            results = self.sentiment_pipeline(truncated_texts, batch_size=batch_size, **FINBERT_TOKENIZER_KWARGS)
         if isinstance(results, dict):
             return [results]
         return results
