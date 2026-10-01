@@ -23,6 +23,13 @@ TASK.md
 reports/
 NLP_AUDIT_REPORT.md
 NLP_AUDIT_FIX_VERIFICATION.md
+PART_*.md
+ARCHITECTURE_FORENSICS_*.md
+XOOP_FEATURE_INVENTORY_*.md
+forensics_*.md
+*_forensics_review.md
+ui_redesign_plan*.md
+xoop_ui_clarity_review.md
 docker-compose.override.local.yml
 .build-*.log
 
