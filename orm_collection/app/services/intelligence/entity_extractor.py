@@ -105,9 +105,28 @@ class EntityExtractor:
                     db.add(mention)
         
         # Step 2: Run NER-based entity discovery to create candidates
-        clients_to_run = [client_id] if client_id else list(matched_client_ids)
-        
-        if not clients_to_run:
+        # Relevance gate: only run candidate discovery for a client whose own
+        # entities actually matched this document. Previously a passed-in
+        # client_id ran discovery unconditionally, so a document that matched
+        # NO client entity (e.g. a 39k-char adult-subreddit spam post, 0
+        # document_matches) still produced 259 executive + 141 competitor
+        # candidates and was marked MATCHED because candidates were created.
+        if client_id:
+            if str(client_id) in {str(c) for c in matched_client_ids}:
+                clients_to_run = [client_id]
+            else:
+                clients_to_run = []
+                logger.info(
+                    "entity_discovery_skipped_no_client_entity_match",
+                    document_id=document_id,
+                    client_id=str(client_id),
+                    matched_client_ids=[str(c) for c in matched_client_ids],
+                    reason="document matched no entity of this client; candidate discovery not run",
+                )
+        else:
+            clients_to_run = list(matched_client_ids)
+
+        if not clients_to_run and not client_id:
             logger.error(
                 "entity_discovery_skipped_no_client_id",
                 document_id=document_id,

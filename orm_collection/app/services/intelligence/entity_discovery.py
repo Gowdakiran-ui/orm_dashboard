@@ -1048,7 +1048,14 @@ class EntityDiscoveryEngine:
         # Check for URL fragments, URL encoded strings, HTML tags
         if re.search(r'^https?://', name_clean) or re.search(r'%[0-9A-F]{2}', name_clean) or re.search(r'<[^>]+>', name_clean):
             return False, "Layer 2 — Human Name Validation", "Contains URL, HTML or URL encoding"
-            
+
+        # Leading/trailing separator punctuation means the NER span was cut
+        # mid-phrase ("Xpert Advise- Grow With Us" -> "Xpert Advise-", "Live
+        # Chart, ..." -> "Live Chart,"). The hyphen handling below used to skip
+        # the empty sub-part this leaves, silently accepting such spans.
+        if re.search(r'^[\-,;:/]|[\-,;:/]$', name_clean):
+            return False, "Layer 2 — Human Name Validation", "Leading or trailing punctuation (truncated span)"
+
         # Split by whitespace/commas/periods/hyphens
         parts = [p.strip() for p in re.split(r'[\s,]+', name_clean) if p.strip()]
         if not (2 <= len(parts) <= 5):
@@ -1075,7 +1082,9 @@ class EntityDiscoveryEngine:
             subparts = part_clean.split("-")
             for sp in subparts:
                 if not sp:
-                    continue
+                    # Empty hyphen segment ("Advise-", "John - Smith"): not a
+                    # real hyphenated name.
+                    return False, "Layer 2 — Human Name Validation", f"Part '{part}' has an empty hyphen segment"
                 if sp.lower() in lowercase_particles and idx > 0 and idx < len(parts) - 1:
                     continue
                 if sp.lower() in valid_suffixes and idx == len(parts) - 1:
@@ -1240,12 +1249,29 @@ class EntityDiscoveryEngine:
         doc = db.query(Document).filter(Document.id == doc_ids[0]).first()
         return doc.normalized_content if doc else None
 
-    def _has_executive_context(self, db: Session, name: str, doc_ids: List[str]) -> bool:
+    # Wider role vocabulary used only by the promotion gate's positive-evidence
+    # check. The default pattern below (also feeding the +0.15 / +0.20 confidence
+    # boosts) misses common real titles -- "Executive Chairperson", "MD",
+    # "DGM" -- which would have held genuine executives (live-tested on
+    # Pirojsha Godrej, Karishma Rane). "MD" is case-sensitive so a medical
+    # "MD, MPH" degree on lowercase text doesn't count; no bare "chair"/"officer"/
+    # "partner" (furniture / police officer / business partner false hits).
+    _PROMOTION_ROLE_PATTERN = re.compile(
+        r'\b(ceo|cfo|coo|cto|cmo|cio|(?-i:MD)|dgm|agm|svp|evp|vp|president|chairman|chairperson|'
+        r'chairwoman|director|founder|co-founder|promoter|chief|executive|managing|head of)\b',
+        re.IGNORECASE,
+    )
+
+    def _has_executive_context(self, db: Session, name: str, doc_ids: List[str], title_pattern=None) -> bool:
         """Helper to scan documents for executive context near the mention"""
         if not doc_ids:
             return False
         docs = db.query(Document).filter(Document.id.in_(doc_ids)).all()
-        title_pattern = re.compile(r'\b(ceo|cfo|coo|executive|president|director|chairman|founder|vp|chief)\b', re.IGNORECASE)
+        # Only the promotion gate (custom pattern) excludes the name's own text;
+        # the default call keeps its exact previous behavior for the confidence boosts.
+        exclude_name_span = title_pattern is not None
+        if title_pattern is None:
+            title_pattern = re.compile(r'\b(ceo|cfo|coo|executive|president|director|chairman|founder|vp|chief)\b', re.IGNORECASE)
         for doc in docs:
             if not doc.normalized_content:
                 continue
@@ -1254,6 +1280,11 @@ class EntityDiscoveryEngine:
                 context_start = max(0, start - 100)
                 context_end = min(len(doc.normalized_content), end + 100)
                 context = doc.normalized_content[context_start:context_end]
+                if exclude_name_span:
+                    # Search around the name, not inside it: a candidate that
+                    # itself contains a role word ("Orris MD") must not
+                    # satisfy its own evidence check.
+                    context = doc.normalized_content[context_start:start] + " | " + doc.normalized_content[end:context_end]
                 if title_pattern.search(context):
                     return True
         return False
@@ -2096,9 +2127,14 @@ class EntityDiscoveryEngine:
         """
         Promote executive candidates to verified executives based on rules:
         - Passed all validation layers (NER, human name, verbs, publishers, products)
-        - Mentioned in at least 3 different documents
-        - Confidence >= 75%
+        - Mentioned at least EXECUTIVE_MENTION_THRESHOLD (2) times in at least
+          EXECUTIVE_MIN_DOCUMENTS (2) different documents
+        - Confidence >= EXECUTIVE_CONFIDENCE_THRESHOLD (0.65)
         - Not already present as an entity
+        - Positive person evidence: Wikidata confirms a human, OR an executive
+          title appears near the name (_has_executive_context with
+          _PROMOTION_ROLE_PATTERN). Confidence
+          alone is not enough -- 2 words + 2 docs scores 0.70 with no context.
         """
         candidates = db.query(ExecutiveCandidate).filter(
             ExecutiveCandidate.client_id == client_id,
@@ -2206,6 +2242,27 @@ class EntityDiscoveryEngine:
                         reason=kb_reason,
                         confidence=candidate.confidence,
                         mention_count=candidate.mention_count,
+                    )
+                    continue
+
+                # Positive-evidence requirement. KB "unresolved" means no
+                # evidence either way, and shape layers + thresholds are
+                # reachable by any 2-word Title-Case phrase seen in 2 docs
+                # (0.70 with zero context), so silence must not auto-promote.
+                # Obscure-but-real people still promote when an executive
+                # title appears near the name; they just aren't required to
+                # have a Wikidata page.
+                if kb_outcome != "confirmed" and not self._has_executive_context(
+                    db, candidate.name, candidate.source_documents, title_pattern=self._PROMOTION_ROLE_PATTERN
+                ):
+                    logger.info(
+                        "executive_candidate_held_no_positive_evidence",
+                        candidate=candidate.name,
+                        normalized_candidate=promoted_name,
+                        kb_outcome=kb_outcome,
+                        confidence=candidate.confidence,
+                        mention_count=candidate.mention_count,
+                        reason="no Wikidata confirmation and no executive title near the name",
                     )
                     continue
 
