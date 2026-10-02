@@ -30,6 +30,14 @@ class EntityDiscoveryConfig:
     # Lowered from 3→2: realistic article volumes rarely produce 3 distinct docs per executive
     EXECUTIVE_MENTION_THRESHOLD = 2
     EXECUTIVE_MIN_DOCUMENTS = 2
+    # Master switch for AUTOMATIC executive promotion (competitor promotion is already
+    # disabled the same way). False = promote_executive_candidates() returns at once and
+    # writes nothing; executives are then added by hand only.
+    EXECUTIVE_AUTO_PROMOTION_ENABLED = True
+    # A candidate is only about THIS client if at least this many of its source documents
+    # also mention the client's own brand/product entity. 2026-10-02: "Rachel Carson" (two
+    # Yale articles, zero mention of Godrej) was auto-promoted to a Godrej person entity.
+    EXECUTIVE_MIN_CLIENT_DOCUMENTS = 2
     # Lowered from 3→2, same real-article-volume reasoning as
     # EXECUTIVE_MENTION_THRESHOLD above -- now matches it instead of being a
     # stricter, unexplained outlier between the two entity types.
@@ -2131,11 +2139,18 @@ class EntityDiscoveryEngine:
           EXECUTIVE_MIN_DOCUMENTS (2) different documents
         - Confidence >= EXECUTIVE_CONFIDENCE_THRESHOLD (0.65)
         - Not already present as an entity
-        - Positive person evidence: Wikidata confirms a human, OR an executive
-          title appears near the name (_has_executive_context with
-          _PROMOTION_ROLE_PATTERN). Confidence
-          alone is not enough -- 2 words + 2 docs scores 0.70 with no context.
+        - Client relatedness: at least EXECUTIVE_MIN_CLIENT_DOCUMENTS (2) of the
+          candidate's source documents also mention the client's own brand/product.
+        - Positive person evidence: an executive title appears near the name
+          (_has_executive_context with _PROMOTION_ROLE_PATTERN). Wikidata
+          confirming a human is NOT enough on its own, and confidence alone is not
+          enough -- 2 words + 2 docs scores 0.70 with no context.
+        - EXECUTIVE_AUTO_PROMOTION_ENABLED = False turns the whole method off.
         """
+        if not EntityDiscoveryConfig.EXECUTIVE_AUTO_PROMOTION_ENABLED:
+            logger.info("executive_auto_promotion_disabled", client_id=str(client_id))
+            return {"promoted_count": 0, "promoted_executives": []}
+
         candidates = db.query(ExecutiveCandidate).filter(
             ExecutiveCandidate.client_id == client_id,
             ExecutiveCandidate.promoted_to_executive_id.is_(None)
@@ -2143,6 +2158,17 @@ class EntityDiscoveryEngine:
 
         promoted_count = 0
         promoted_executives = []
+
+        # Client brand/product entities, for the "is this candidate about this client" gate below.
+        # A client with none is an existing-data edge case: not gated (same convention as every
+        # other brand co-occurrence gate in this codebase), logged once per batch.
+        brand_product_ids = [
+            r[0] for r in db.query(Entity.id).filter(
+                Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+            ).all()
+        ]
+        if not brand_product_ids:
+            logger.warning("executive_promotion_no_brand_entity_found", client_id=str(client_id), action="client_relatedness_gate_skipped")
 
         # Built once per batch, not per candidate -- same reuse discipline
         # promote_competitor_candidates() already applies for its own
@@ -2191,6 +2217,34 @@ class EntityDiscoveryEngine:
                     documents=candidate.source_documents
                 )
                 continue
+
+            # 2b. Client-relatedness gate. Two articles can mention a famous human (or any
+            # Title-Case name) twice and still have nothing to do with this client -- candidates
+            # created before the discovery relevance gate existed came from documents that matched
+            # no entity of the client at all. Require the candidate's own source documents to also
+            # mention the client's brand/product entity.
+            if brand_product_ids:
+                try:
+                    source_ids = [uuid.UUID(str(d)) for d in (candidate.source_documents or [])]
+                except (ValueError, TypeError):
+                    source_ids = []
+                client_doc_count = len({
+                    r[0] for r in db.query(EntityMention.document_id).filter(
+                        EntityMention.entity_id.in_(brand_product_ids),
+                        EntityMention.document_id.in_(source_ids),
+                    ).all()
+                }) if source_ids else 0
+                if client_doc_count < EntityDiscoveryConfig.EXECUTIVE_MIN_CLIENT_DOCUMENTS:
+                    logger.info(
+                        "executive_candidate_held_not_client_related",
+                        candidate=candidate.name,
+                        client_documents=client_doc_count,
+                        required=EntityDiscoveryConfig.EXECUTIVE_MIN_CLIENT_DOCUMENTS,
+                        confidence=candidate.confidence,
+                        mention_count=candidate.mention_count,
+                        reason="fewer than the required number of the candidate's source documents mention the client's own brand/product",
+                    )
+                    continue
 
             # Check if entity already exists (strip any possessive suffix carried
             # over from a candidate created before the entry-point fix, so it
@@ -2252,7 +2306,12 @@ class EntityDiscoveryEngine:
                 # Obscure-but-real people still promote when an executive
                 # title appears near the name; they just aren't required to
                 # have a Wikidata page.
-                if kb_outcome != "confirmed" and not self._has_executive_context(
+                #
+                # Wikidata "confirmed human" only says the name belongs to SOME person; it says
+                # nothing about this client (and its answer is volatile: the same name flipped
+                # between "confirmed" and "ambiguous" within hours on 2026-10-02). It is necessary
+                # but never sufficient, so an executive title near the name is always required.
+                if not self._has_executive_context(
                     db, candidate.name, candidate.source_documents, title_pattern=self._PROMOTION_ROLE_PATTERN
                 ):
                     logger.info(
@@ -2262,7 +2321,7 @@ class EntityDiscoveryEngine:
                         kb_outcome=kb_outcome,
                         confidence=candidate.confidence,
                         mention_count=candidate.mention_count,
-                        reason="no Wikidata confirmation and no executive title near the name",
+                        reason="no executive title near the name (Wikidata confirmation alone is not enough)",
                     )
                     continue
 
