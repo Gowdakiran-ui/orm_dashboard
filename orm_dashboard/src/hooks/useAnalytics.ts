@@ -11,7 +11,6 @@ interface AnalyticsProps {
   risks: any;
   executives: any[];
   activeClientName: string;
-  trendEvents: any[];
   executiveCandidates: any[];
   competitorCandidates: any[];
   repHistory: any[];
@@ -26,7 +25,6 @@ export function useAnalytics({
   risks,
   executives,
   activeClientName,
-  trendEvents,
   executiveCandidates,
   competitorCandidates,
   repHistory,
@@ -49,14 +47,15 @@ export function useAnalytics({
     return cleanBenchmarks;
   }, [benchmarks]);
 
+  // The client's rank is the benchmark engine's own rank for the latest run
+  // (client_rank on every /benchmark row). It is ranked on the same comparable
+  // scale as the competitors; the client's overall reputation score is a
+  // different measurement and must not be compared against those scores.
+  // null = the engine could not rank the client (or there are no competitors).
   const clientRankValue = useMemo(() => {
-    if (!reputation || reputation.score === undefined || reputation.score === null || !normalizedBenchmarks || normalizedBenchmarks.length === 0) {
-      return null;
-    }
-    const clientScore = reputation.score;
-    const higherCount = normalizedBenchmarks.filter(b => (b.reputation ?? 0) > clientScore).length;
-    return higherCount + 1;
-  }, [reputation, normalizedBenchmarks]);
+    const engineRank = normalizedBenchmarks?.[0]?.client_rank;
+    return typeof engineRank === "number" ? engineRank : null;
+  }, [normalizedBenchmarks]);
 
   const clientRank = useMemo(() => {
     return clientRankValue !== null ? `#${clientRankValue}` : "Not Ranked";
@@ -301,7 +300,8 @@ export function useAnalytics({
   // never resolve, so the feature was dead code producing a permanently
   // empty result. Dropped along with it, not carried forward as unreachable
   // branches.
-  const sentimentTrendData = useMemo(() => {
+  // Raw daily averages only: no day-over-day comparison or interpretation.
+  const sentimentHistoryData = useMemo(() => {
     const buckets: Record<string, { sum: number, count: number }> = {};
     (documents || []).forEach(d => {
       if (d && d.timestamp) {
@@ -314,30 +314,12 @@ export function useAnalytics({
       }
     });
 
-    const rows = Object.entries(buckets)
+    return Object.entries(buckets)
       .map(([date, info]) => ({
         date,
         Sentiment: Number((info.sum / info.count).toFixed(2)),
       }))
       .reverse();
-
-    // Day-over-day delta decides whether a movement is even worth
-    // explaining. There is no existing "delta significance" constant
-    // anywhere in this codebase to borrow (narrative_engine.py's
-    // trend_strength thresholds are a %-coverage-change metric, a
-    // different unit than this -1..1 sentiment average). 0.25 instead
-    // reuses the codebase's own most-repeated real precedent for "a
-    // meaningful magnitude on this exact sentiment scale" -- the
-    // positive/negative color-coding cutoff this session's earlier work
-    // already applied elsewhere, rather than inventing a new number for
-    // this one chart.
-    const MEANINGFUL_DELTA = 0.25;
-    return rows.map((row, idx) => {
-      const prev = idx > 0 ? rows[idx - 1] : null;
-      const delta = prev ? Number((row.Sentiment - prev.Sentiment).toFixed(2)) : null;
-      const meaningful = delta !== null && Math.abs(delta) >= MEANINGFUL_DELTA;
-      return { ...row, delta, meaningful };
-    });
   }, [documents]);
 
   const alertTimelineData = useMemo(() => {
@@ -382,9 +364,6 @@ export function useAnalytics({
       }
     });
     const avgSentiment = sentimentCount > 0 ? (sentimentSum / sentimentCount).toFixed(2) : '0.00';
-    
-    const trendCount = (trendEvents || []).length;
-    const emergingTopics = (trendEvents || []).filter((t: any) => t?.severity === 'HIGH').length;
     
     let crit = 0, high = 0, med = 0, low = 0;
     let maxRisk = 0;
@@ -434,16 +413,11 @@ export function useAnalytics({
     const m_t = telemetry?.matching || {};
     const t_t = telemetry?.topic || {};
     const s_t = telemetry?.sentiment || {};
-    const tr_t = telemetry?.trend || {};
     const r_t = telemetry?.risk || {};
     const a_t = telemetry?.alert || {};
     const rep_t = telemetry?.reputation || {};
     const er_t = telemetry?.exec_reputation || {};
     const b_t = telemetry?.benchmark || {};
-
-    // Helper to calculate growing and declining trends
-    const growthTrendsCount = (trendEvents || []).filter((t: any) => t?.trend_direction === 'UP' || t?.trend_direction === 'GROWING').length;
-    const decliningTrendsCount = (trendEvents || []).filter((t: any) => t?.trend_direction === 'DOWN' || t?.trend_direction === 'DECLINING').length;
 
     // D4: these used to fall back to fixed 0.85/0.87 "plausible" numbers
     // whenever the source object had no real confidence/coverage field
@@ -522,26 +496,6 @@ export function useAnalytics({
         ],
         description: "Computes polarity scores (-1.0 to +1.0) and vectors for sentiment matching.",
         navigationId: "analytics"
-      },
-      {
-        name: "Trend Detection",
-        status: getEngineStatus(docCount > 0, (tr_t.produced || trendCount) > 0),
-        processed: docCount,
-        produced: tr_t.produced !== undefined ? tr_t.produced : trendCount,
-        // D4: the backend's /telemetry response has no success_rate/failed
-        // field for this engine at all (it only tracks a `produced` count,
-        // not a per-item pass/fail state) — "Not Available" reflects that
-        // honestly instead of a fabricated "100%"/0.
-        successRate: "Not Available",
-        success: "Not Available",
-        failed: null,
-        metrics: [
-          { label: "Trend Events", value: tr_t.produced !== undefined ? tr_t.produced : trendCount },
-          { label: "Growth Trends", value: growthTrendsCount },
-          { label: "Declining Trends", value: decliningTrendsCount }
-        ],
-        description: "Retired: trend detection no longer runs, so no new trend events are produced.",
-        navigationId: "feed"
       },
       {
         name: "Risk Engine",
@@ -632,7 +586,7 @@ export function useAnalytics({
         navigationId: "competitors"
       }
     ];
-  }, [documents, trendEvents, alerts, repHistory, executives, benchmarks, reputation, activeClientName, avgConfidence, clientRank, normalizedBenchmarks, telemetry]);
+  }, [documents, alerts, repHistory, executives, benchmarks, reputation, activeClientName, avgConfidence, clientRank, normalizedBenchmarks, telemetry]);
 
   return {
     normalizedBenchmarks,
@@ -649,7 +603,7 @@ export function useAnalytics({
     riskMatrixData,
     riskHeatmapData,
     alertSeverityData,
-    sentimentTrendData,
+    sentimentHistoryData,
     alertTimelineData,
     engineDiagnosticsList
   };

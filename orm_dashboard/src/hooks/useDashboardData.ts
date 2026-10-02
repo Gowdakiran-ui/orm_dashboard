@@ -3,17 +3,16 @@ import {
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
   fetchPlanAdvisory,
   fetchActiveAlerts, fetchCompetitorBenchmarks, fetchRisks,
-  fetchExecutives, fetchSystemStatus, fetchDocuments, fetchIntelligenceFeed,
+  fetchExecutives, fetchSystemStatus, fetchDocuments,
   fetchCommandCenterStats,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
 } from "@/lib/api";
 import { formatChartDate } from "@/utils/formatChartDate";
 
 const DEFAULT_REPUTATION_SUMMARY = {
-  reputation: { score: null, grade: null, trend: 'STABLE', status: 'no_data' },
-  risk: { total: 0, critical: 0, high: 0, medium: 0, low: 0, most_severe: null },
+  reputation: { score: null, grade: null, status: 'no_data' },
+  risk: { critical: 0, high: 0, medium: 0, low: 0, most_severe: null },
   sentiment: { positive: 0, neutral: 0, negative: 0, dominant: null },
-  trends: { total: 0, growing: 0, declining: 0 },
   executive_alert: { open: false, alert: null }
 };
 
@@ -26,7 +25,7 @@ export function useDashboardData() {
   const [clientsError, setClientsError] = useState<string | null>(null);
 
   // Data states & individual loading/error states
-  const [reputation, setReputation] = useState<any>({ score: 0, grade: 'N/A', trend: 'STABLE' });
+  const [reputation, setReputation] = useState<any>(null);
   const [reputationLoading, setReputationLoading] = useState(true);
   const [reputationError, setReputationError] = useState<string | null>(null);
 
@@ -42,7 +41,7 @@ export function useDashboardData() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  const [repBreakdown, setRepBreakdown] = useState<any>({ sentiment: 0, risk: 0, trend: 0, source: 0, visibility: 0 });
+  const [repBreakdown, setRepBreakdown] = useState<any>({ sentiment: 0, risk: 0, source: 0, visibility: 0 });
   const [breakdownLoading, setBreakdownLoading] = useState(true);
   const [breakdownError, setBreakdownError] = useState<string | null>(null);
 
@@ -69,7 +68,6 @@ export function useDashboardData() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
-  const [trendEvents, setTrendEvents] = useState<any[]>([]);
 
   const [commandStats, setCommandStats] = useState<any>({});
   const [commandStatsLoading, setCommandStatsLoading] = useState(true);
@@ -185,17 +183,16 @@ export function useDashboardData() {
       lastClientIdRef.current = activeClientId;
       
       // Clear stale data immediately when switching companies
-      setReputation({ score: 0, grade: 'N/A', trend: 'STABLE' });
+      setReputation(null);
       setReputationSummary(DEFAULT_REPUTATION_SUMMARY);
       setPlanAdvisory(DEFAULT_PLAN_ADVISORY);
       setRepHistory([]);
-      setRepBreakdown({ sentiment: 0, risk: 0, trend: 0, source: 0, visibility: 0 });
+      setRepBreakdown({ sentiment: 0, risk: 0, source: 0, visibility: 0 });
       setAlerts([]);
       setBenchmarks([]);
       setRisks({ average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 });
       setExecutives([]);
       setDocuments([]);
-      setTrendEvents([]);
       setTelemetry(null);
       setSystemStatus(null);
     }
@@ -278,13 +275,13 @@ export function useDashboardData() {
           fetchReputation(activeClientId, signal)
             .then(data => {
               if (!signal.aborted) {
-                const nextVal = data || { score: 0, grade: 'N/A', trend: 'STABLE' };
+                const nextVal = data ?? null;
                 if (hasChanged(reputation, nextVal)) {
                   setReputation(nextVal);
                 }
               }
             })
-            .catch(() => { if (!signal.aborted) { setReputation(null); setReputationError("Telemetry Offline"); } })
+            .catch((err) => { if (!signal.aborted) { console.error("dashboard fetch failed: Reputation", err); setReputation(null); setReputationError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setReputationLoading(false); }),
 
           fetchReputationSummary(activeClientId, signal)
@@ -296,7 +293,7 @@ export function useDashboardData() {
                 }
               }
             })
-            .catch(() => { if (!signal.aborted) { setReputationSummary(null); setReputationSummaryError("Telemetry Offline"); } })
+            .catch((err) => { if (!signal.aborted) { console.error("dashboard fetch failed: ReputationSummary", err); setReputationSummary(null); setReputationSummaryError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setReputationSummaryLoading(false); }),
 
           fetchPlanAdvisory(activeClientId, signal)
@@ -308,7 +305,7 @@ export function useDashboardData() {
                 }
               }
             })
-            .catch(() => { if (!signal.aborted) { setPlanAdvisory(null); setPlanAdvisoryError("Telemetry Offline"); } })
+            .catch((err) => { if (!signal.aborted) { console.error("dashboard fetch failed: PlanAdvisory", err); setPlanAdvisory(null); setPlanAdvisoryError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setPlanAdvisoryLoading(false); }),
 
           fetchCompetitorBenchmarks(activeClientId, signal)
@@ -328,7 +325,7 @@ export function useDashboardData() {
                 }
               }
             })
-            .catch(() => { if (!signal.aborted) { setBenchmarks([]); setBenchmarksError("Telemetry Offline"); } })
+            .catch((err) => { if (!signal.aborted) { console.error("dashboard fetch failed: Benchmarks", err); setBenchmarks([]); setBenchmarksError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setBenchmarksLoading(false); }),
 
           fetchExecutives(activeClientId, signal)
@@ -340,7 +337,7 @@ export function useDashboardData() {
                 }
               }
             })
-            .catch(() => { if (!signal.aborted) { setExecutives([]); setExecutivesError("Telemetry Offline"); } })
+            .catch((err) => { if (!signal.aborted) { console.error("dashboard fetch failed: Executives", err); setExecutives([]); setExecutivesError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setExecutivesLoading(false); }),
 
           fetchActiveAlerts(activeClientId, signal)
@@ -379,6 +376,7 @@ export function useDashboardData() {
               if (!signal.aborted) {
                 const formattedHist = (data || []).map((h: any) => ({
                   ...h,
+                  rawDate: h.date, // ISO timestamp, kept so charts can mark the 2026-10-01 scoring-method change
                   date: formatChartDate(h.date, true)
                 })).reverse();
                 if (hasChanged(repHistory, formattedHist)) {
@@ -392,7 +390,7 @@ export function useDashboardData() {
           fetchReputationBreakdown(activeClientId, signal)
             .then(data => {
               if (!signal.aborted) {
-                const nextVal = data || { sentiment: 0, risk: 0, trend: 0, source: 0, visibility: 0 };
+                const nextVal = data || { sentiment: 0, risk: 0, source: 0, visibility: 0 };
                 if (hasChanged(repBreakdown, nextVal)) {
                   setRepBreakdown(nextVal);
                 }
@@ -410,20 +408,8 @@ export function useDashboardData() {
                 }
               }
             })
-            .catch(() => { if (!signal.aborted) { setDocuments([]); setDocumentsError("Telemetry Offline"); } })
+            .catch((err) => { if (!signal.aborted) { console.error("dashboard fetch failed: Documents", err); setDocuments([]); setDocumentsError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setDocumentsLoading(false); }),
-
-          fetchIntelligenceFeed(activeClientId, signal)
-            .then(data => {
-              if (!signal.aborted) {
-                const nextVal = data || [];
-                if (hasChanged(trendEvents, nextVal)) {
-                  setTrendEvents(nextVal);
-                }
-              }
-            })
-            .catch(() => {})
-            .finally(() => {}),
 
           fetchExecutiveCandidates(activeClientId, signal)
             .then(data => {
@@ -492,7 +478,6 @@ export function useDashboardData() {
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
           fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
-          fetchIntelligenceFeed(clientId, signal).then(data => { if (!signal.aborted) setTrendEvents(data || []); }), // no matching error state -- see initial-load effect's own untracked .catch for this fetch
           fetchSystemStatus(clientId, signal).then(data => { if (!signal.aborted) { setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); setSystemStatusError(null); } })
         ]);
 
@@ -546,7 +531,6 @@ export function useDashboardData() {
     setRisks(null);
     setExecutives([]);
     setDocuments([]);
-    setTrendEvents([]);
     setCommandStats(null);
     setExecutiveCandidates([]);
     setCompetitorCandidates([]);
@@ -638,7 +622,6 @@ export function useDashboardData() {
     documents,
     documentsLoading,
     documentsError,
-    trendEvents,
     commandStats,
     commandStatsLoading,
     commandStatsError,
@@ -667,7 +650,6 @@ export function useDashboardData() {
     setRisks,
     setExecutives,
     setDocuments,
-    setTrendEvents,
     setTelemetry,
     setReputationLoading,
     setReputationSummaryLoading,

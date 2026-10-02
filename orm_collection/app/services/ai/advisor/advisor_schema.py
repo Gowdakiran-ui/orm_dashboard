@@ -15,7 +15,6 @@ class ReputationAdvisorResponse(BaseModel):
     negative_signals: List[SignalItem] = Field(default_factory=list)
     executive_analysis: List[ExecutiveAnalysisItem] = Field(default_factory=list)
     competitor_position: List[CompetitorPositionItem] = Field(default_factory=list)
-    trend_analysis: str
     priority_actions_24h: List[ActionItem] = Field(default_factory=list)
     priority_actions_7d: List[ActionItem] = Field(default_factory=list)
     priority_actions_30d: List[ActionItem] = Field(default_factory=list)

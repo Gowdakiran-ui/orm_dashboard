@@ -656,9 +656,6 @@ class AlertEngine:
     def evaluate_risk_alerts(self, db: Session, client_id: str, run_id: str, batch_id: str, worker_id: str, attempt: int) -> int:
         return 0
 
-    def evaluate_trend_alerts(self, db: Session, client_id: str, run_id: str, batch_id: str, worker_id: str, attempt: int) -> int:
-        return 0
-
     def evaluate_executive_alerts(self, db: Session, client_id: str, run_id: str, batch_id: str, worker_id: str, attempt: int) -> int:
         return 0
 

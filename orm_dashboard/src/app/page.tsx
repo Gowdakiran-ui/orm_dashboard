@@ -263,8 +263,8 @@ const reputationPoints = [
   },
   {
     numeral: "II",
-    title: "We explain what may happen next",
-    copy: "Every risk event carries its own written explanation of what's driving it and what to do about it. Trend Direction shows whether a client's reputation is improving, stable, or declining, so a shift arrives with context attached, not just a number that moved.",
+    title: "We explain what is driving each risk",
+    copy: "Every risk event carries its own written explanation of what's driving it and what to do about it, so each alert arrives with context attached, not just a number that moved.",
   },
   {
     numeral: "III",
@@ -315,7 +315,7 @@ const framework = [
   { word: "What", icon: Activity, title: "What's actually happening right now", copy: "Every signal across every channel resolved into one clear read: a rising risk, a sentiment shift, an emerging alert, not a wall of raw mentions to sort through yourself." },
   { word: "Where", icon: MapPin, title: "Where the conversation is happening", copy: "Press, social, forums, video: broken out by source, so you know immediately if it's one contained post or breaking across five channels at once." },
   { word: "Why", icon: HelpCircle, title: "Why it's happening", copy: "The real story, topic, or stakeholder driving the shift: root-cause context tied to actual coverage, not just a number that moved without explanation." },
-  { word: "When", icon: Clock, title: "When it started, and where it's heading", copy: "Trend direction over time, not a static score: improving, stable, or declining, and since when, so you can act before it compounds." },
+  { word: "When", icon: Clock, title: "When it was published", copy: "Every article, post and video is dated and tied to its source, so you can see when each piece of coverage appeared." },
   { word: "Whom", icon: Users, title: "Whom it affects", copy: "Reputation risk is rarely abstract. We name the executive, the stakeholder, or the specific story actually carrying the coverage." },
   { word: "How", icon: Compass, title: "How to respond", copy: "A clear read on what's driving the number and what needs attention first, so your team acts on signal, not on noise." },
 ];
@@ -572,7 +572,7 @@ const comparisonRows = [
   { capability: "Sentiment scoring", others: "yes", xoop: "yes" },
   { capability: "Root-cause explanation (why is this happening)", others: "not-typical", xoop: "yes" },
   { capability: "Executive-level reputation grading with explainability", others: "not-typical", xoop: "yes" },
-  { capability: "Predictive risk and trend direction", others: "limited", xoop: "yes" },
+  { capability: "Risk scoring and alerting", others: "limited", xoop: "yes" },
   { capability: "Competitor share of voice and sentiment benchmarking", others: "varies", xoop: "yes" },
   { capability: "Built for PR and reputation-risk teams, not general social marketing", others: "marketing-first", xoop: "yes" },
 ];
@@ -649,7 +649,7 @@ function Comparison() {
 const benefitCells = [
   { icon: Eye, title: "Spot a shift before it's a headline", copy: "Emerging issues, crisis signals, and stakeholder concerns surface while they're still manageable, not after a journalist has already called." },
   { icon: MessageCircle, title: "Walk into every client call with an answer", copy: <>No more <strong className="font-semibold">let me get back to you.</strong> What changed, why, and what&apos;s next is already on the dashboard when the question comes.</> },
-  { icon: BadgeCheck, title: "Prove the value of your comms work", copy: <>A real, defensible reputation score your team can point to, trending in a direction you can explain, not a vague sense that things are <strong className="font-semibold">going fine.</strong></> },
+  { icon: BadgeCheck, title: "Prove the value of your comms work", copy: <>A real, defensible reputation score your team can point to, with the evidence behind it, not a vague sense that things are <strong className="font-semibold">going fine.</strong></> },
   { icon: Target, title: "Act on signal, not on noise", copy: "Stop scrolling raw mentions to guess what matters. The platform tells you what's worth your attention today, and what isn't." },
 ];
 

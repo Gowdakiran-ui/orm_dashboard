@@ -1,3 +1,4 @@
+import { formatFractionAsPercent } from "@/utils/formatPercent";
 import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -202,7 +203,6 @@ export function ExecutivesTab({
       name: selectedExecutive.name,
       score: selectedExecutive.score,
       grade: selectedExecutive.grade,
-      trend: selectedExecutive.trend,
       top_positive: selectedExecutive.top_positive,
       top_negative: selectedExecutive.top_negative,
       confidence_score: selectedExecutive.confidence_score,
@@ -329,16 +329,12 @@ export function ExecutivesTab({
                   No qualifying coverage yet — tracked, but not enough evidence to score
                 </p>
               ) : (
-                <div className="grid grid-cols-3 gap-3 text-xs font-mono">
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                   <div>
                     <span className={`block ${mutedText(theme)}`}>Score</span>
                     <span className="text-[#D4AF37] font-bold text-sm">
                       {searchResult.executive.score !== null ? searchResult.executive.score.toFixed(2) : 'N/A'}
                     </span>
-                  </div>
-                  <div>
-                    <span className={`block ${mutedText(theme)}`}>Trend</span>
-                    <span className={bodyText(theme)}>{searchResult.executive.trend ?? 'STABLE'}</span>
                   </div>
                   <div>
                     <span className={`flex items-center gap-1 ${mutedText(theme)}`}>
@@ -581,11 +577,11 @@ export function ExecutivesTab({
                     </div>
                     <div className={`flex justify-between border-t pt-1.5 ${surfaceBorder}`}>
                       <span className={mutedText(theme)}>Confidence:</span>
-                      <span className={bodyText(theme)}>{(selectedDoc.matchedExecObj?.confidence_score * 100).toFixed(0)}%</span>
+                      <span className={bodyText(theme)}>{formatFractionAsPercent(selectedDoc.matchedExecObj?.confidence_score)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className={mutedText(theme)}>Evidence Coverage:</span>
-                      <span className={bodyText(theme)}>{(selectedDoc.matchedExecObj?.data_coverage * 100).toFixed(0)}%</span>
+                      <span className={bodyText(theme)}>{formatFractionAsPercent(selectedDoc.matchedExecObj?.data_coverage)}</span>
                     </div>
                   </div>
                 </div>

@@ -29,7 +29,7 @@ export function AnalyticsTabHeader({
     // there's enough room (85.6px-tall buttons, comfortable gaps).
     <div className={`grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 border-b pb-0 mb-4 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
       {[
-        { id: "overview", label: "Reputation & Sentiment Trends" },
+        { id: "overview", label: "Reputation & Sentiment History" },
         { id: "risk", label: "Risk & Alert Profile" }
       ].map(sub => {
         const isActive = analyticsSubTab === sub.id;

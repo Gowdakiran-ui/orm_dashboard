@@ -9,6 +9,20 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    # Throwaway Postgres (same major as production, 18) for the schema/write-path
+    # check below. Local to this job only; nothing here touches a real database.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +41,13 @@ jobs:
 
       - name: Run pytest
         run: pytest orm_collection/tests -v
+
+      # Builds the schema from database/schema.sql + database/migrations/*.sql in a
+      # real Postgres and runs the reputation / executive / benchmark engines
+      # (INSERT and ON CONFLICT upsert). The unit tests use SQLite built from the ORM
+      # models and cannot catch a NOT NULL / CHECK mismatch with the real schema.
+      - name: Verify engine write paths against a real Postgres
+        run: python scripts/verify_schema_write_paths.py --url postgresql://postgres:postgres@127.0.0.1:5432/postgres
 
   frontend:
     runs-on: ubuntu-latest
@@ -54,6 +75,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
 
       - name: Run tests
         run: npm test

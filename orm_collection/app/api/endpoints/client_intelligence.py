@@ -13,19 +13,6 @@ from app.models.client import Client
 router = APIRouter()
 logger = structlog.get_logger()
 
-@router.get("/{client_id}/trend-events", response_model=List[Dict[str, Any]])
-def get_client_trend_events(client_id: UUID, db: Session = Depends(get_db)):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    # Trend detection was removed from the pipeline (2026-10-01) and
-    # trend_events is no longer written. The table is kept (schema cleanup is
-    # a separate step) and still holds historical rows, which must not be
-    # served as if they were current -- always an empty list, same response
-    # shape so existing consumers (useDashboardData.ts) keep working.
-    return []
-
 from app.models.risk import RiskEvent
 from app.models.entity import Entity
 from sqlalchemy import func, or_
@@ -168,16 +155,15 @@ def get_client_reputation(client_id: UUID, db: Session = Depends(get_db)):
         return {
             "score": None,
             "grade": None,
-            "trend": "INSUFFICIENT_DATA",
-            "confidence_score": 0.0,
-            "data_coverage": 0.0
+            "confidence_score": None,
+            "data_coverage": None
         }
     return {
         "score": rep.score,
         "grade": rep.grade,
-        "trend": rep.reputation_trend,
         "confidence_score": rep.confidence_score,
-        "data_coverage": getattr(rep, "data_coverage", 0.40)
+        # Stored value as-is; None when unknown (no invented 0.40 default).
+        "data_coverage": rep.data_coverage
     }
 
 @router.get("/{client_id}/reputation-history", response_model=List[Dict[str, Any]])
@@ -201,14 +187,12 @@ def get_client_reputation_breakdown(client_id: UUID, db: Session = Depends(get_d
         return {
             "sentiment": None,
             "risk": None,
-            "trend": None,
             "source": None,
             "visibility": None
         }
     return {
         "sentiment": rep.sentiment_component,
         "risk": rep.risk_component,
-        "trend": rep.trend_component,
         "source": rep.source_component,
         "visibility": rep.visibility_component
     }
@@ -300,7 +284,6 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
         "name": s.executive_name,
         "score": s.score,
         "grade": s.grade,
-        "trend": s.reputation_trend,
         "confidence_score": s.confidence_score,
         "data_coverage": s.data_coverage,
         "health_status": s.health_status,
@@ -364,6 +347,79 @@ def get_client_executive_history(client_id: UUID, db: Session = Depends(get_db))
 
 from app.models.competitor_benchmark import CompetitorBenchmark
 
+def _build_benchmark_response(
+    rows: list,
+    client_comparable_score,
+    limit: int,
+    offset: int,
+    client_entity_id=None,
+) -> List[Dict[str, Any]]:
+    """
+    Pure assembly of the /benchmark payload from one benchmark run's rows
+    (list of (CompetitorBenchmark, Entity) pairs, already restricted to the
+    latest run and to entities that are currently competitors).
+
+    * Order is explicit: ranked rows by rank, then unranked rows by name.
+    * `reputation` is None (not the stored 0.0 placeholder) for rows with no
+      evidence -- BenchmarkEngine writes 0.0 there only because the column is
+      NOT NULL; it is never a real score.
+    * `client_rank` = 1 + the number of VALID competitors in this run (rank > 0
+      and not INSUFFICIENT_EVIDENCE) whose comparable score is higher than the
+      client's comparable score from the same run. It is computed from the
+      competitor set actually being served, so filtering a competitor out
+      (e.g. re-typed as a person) can never shift the client's rank. Tie rule
+      (same as the engine's own ordering, score desc then entity id): on an
+      exactly equal score a competitor counts as ahead only if its entity id
+      sorts before the client entity's id; if the client entity id is not
+      known, a tied competitor is NOT counted ahead. None when the engine
+      could not score the client (client_comparable_score is None).
+    * `client_share_of_voice` is 100 - sum(competitor SOV) over ALL rows of
+      the run (not just the page being returned), floored at 0; None when
+      the run has no competitor rows.
+    """
+    def sort_key(pair):
+        b, e = pair
+        ranked = bool(b.rank)
+        return (0 if ranked else 1, b.rank if ranked else 0, (e.name or "").lower())
+
+    ordered = sorted(rows, key=sort_key)
+
+    client_rank = None
+    if client_comparable_score is not None:
+        ahead = 0
+        for b, _ in ordered:
+            if not b.rank or b.health_status == "INSUFFICIENT_EVIDENCE" or b.reputation_score is None:
+                continue  # unranked / no evidence: never part of the ranking
+            if b.reputation_score > client_comparable_score:
+                ahead += 1
+            elif b.reputation_score == client_comparable_score and client_entity_id is not None                     and str(b.competitor_entity_id) < str(client_entity_id):
+                ahead += 1
+        client_rank = ahead + 1
+
+    client_sov = max(0.0, 100.0 - sum((b.share_of_voice or 0.0) for b, _ in ordered)) if ordered else None
+
+    return [{
+        "id": str(b.id),
+        "competitor_id": str(b.competitor_entity_id),
+        "competitor_name": e.name,
+        "rank": b.rank,
+        "sov": b.share_of_voice,
+        "reputation": None if b.health_status == "INSUFFICIENT_EVIDENCE" else b.reputation_score,
+        "sentiment": b.sentiment_score,
+        "risk": b.risk_score,
+        "visibility": b.visibility_score,
+        # B2: already computed and stored by BenchmarkEngine, same propagation
+        # gap the P2-A fix closed for get_client_executives above.
+        "health_status": b.health_status,
+        "confidence_score": b.confidence_score,
+        "data_coverage": b.data_coverage,
+        # Engine's own client figures for this run (additive fields).
+        "client_comparable_score": client_comparable_score,
+        "client_rank": client_rank,
+        "client_share_of_voice": client_sov,
+    } for b, e in ordered[offset:offset + limit]]
+
+
 @router.get("/{client_id}/benchmark", response_model=List[Dict[str, Any]])
 def get_client_benchmark(
     client_id: UUID,
@@ -377,36 +433,39 @@ def get_client_benchmark(
         raise HTTPException(status_code=404, detail="Client not found")
     from app.models.entity import Entity
 
-    # B1/B5: latest row per competitor is now selected at the SQL level (same
-    # pattern as get_client_executives above), instead of loading every
-    # historical row for the client and deduplicating in Python. Previously
-    # this loaded the client's full competitor_benchmarks history (e.g. 180
-    # rows for Tesla) to return 10.
-    latest_sub = db.query(
-        CompetitorBenchmark.competitor_entity_id,
-        func.max(CompetitorBenchmark.created_at).label("max_created")
-    ).filter(CompetitorBenchmark.client_id == client_id).group_by(
-        CompetitorBenchmark.competitor_entity_id
-    ).subquery()
+    # Only the LATEST benchmark run is served, and only for entities that are
+    # still competitors. Previously the latest row per competitor *ever
+    # written* was returned, so a row from an old run (e.g. an entity since
+    # re-typed to 'person', or one that no longer passes the brand gate)
+    # kept being counted in rank/share-of-voice indefinitely.
+    latest_run_id = db.query(CompetitorBenchmark.run_id).filter(
+        CompetitorBenchmark.client_id == client_id
+    ).order_by(CompetitorBenchmark.created_at.desc(), CompetitorBenchmark.id.desc()).limit(1).scalar()
 
-    base_query = db.query(CompetitorBenchmark, Entity).join(
-        Entity, Entity.id == CompetitorBenchmark.competitor_entity_id
-    ).join(
-        latest_sub,
-        (CompetitorBenchmark.competitor_entity_id == latest_sub.c.competitor_entity_id) &
-        (CompetitorBenchmark.created_at == latest_sub.c.max_created)
-    ).filter(CompetitorBenchmark.client_id == client_id)
+    rows = []
+    client_comparable_score = None
+    client_entity_id = None
+    if latest_run_id is not None:
+        rows = db.query(CompetitorBenchmark, Entity).join(
+            Entity, Entity.id == CompetitorBenchmark.competitor_entity_id
+        ).filter(
+            CompetitorBenchmark.client_id == client_id,
+            CompetitorBenchmark.run_id == latest_run_id,
+            Entity.entity_type == "competitor",
+        ).all()
+        if rows:
+            lineage = rows[0][0].calculation_lineage or {}
+            # Unrounded value when the engine stored it (newer runs); the
+            # 2-dp lineage value otherwise.
+            client_comparable_score = lineage.get("client_comparable_score_exact")
+            if client_comparable_score is None:
+                client_comparable_score = lineage.get("client_comparable_score")
+            client_entity_id = (rows[0][0].evidence_metadata or {}).get("client_entity_id")
 
-    # B1: the old cap of 10 silently dropped Tesla's 11th competitor with no
-    # signal to the caller. Total count is now exposed via a response header
-    # so a truncated page is visible rather than silent; `limit`/`offset`
-    # give a real pagination mechanism instead of a bigger magic number.
-    total_count = base_query.count()
-    response.headers["X-Total-Count"] = str(total_count)
+    # Total count of rows in the served run, so a truncated page is visible.
+    response.headers["X-Total-Count"] = str(len(rows))
 
-    benchmarks = base_query.order_by(CompetitorBenchmark.created_at.desc()).offset(offset).limit(limit).all()
-
-    if not benchmarks:
+    if not rows:
         # B3: the engine's own skip threshold (calculate_competitor_benchmarks)
         # is `len(competitors) < 1` — align the endpoint's sentinel to the same
         # threshold instead of a stricter local `< 2` that disagreed with it.
@@ -418,22 +477,7 @@ def get_client_benchmark(
         if competitor_count < 1:
             return [{"message": "No competitor intelligence available."}]
 
-    return [{
-        "id": str(b.CompetitorBenchmark.id),
-        "competitor_id": str(b.CompetitorBenchmark.competitor_entity_id),
-        "competitor_name": b.Entity.name,
-        "rank": b.CompetitorBenchmark.rank,
-        "sov": b.CompetitorBenchmark.share_of_voice,
-        "reputation": b.CompetitorBenchmark.reputation_score,
-        "sentiment": b.CompetitorBenchmark.sentiment_score,
-        "risk": b.CompetitorBenchmark.risk_score,
-        "visibility": b.CompetitorBenchmark.visibility_score,
-        # B2: already computed and stored by BenchmarkEngine, same propagation
-        # gap the P2-A fix closed for get_client_executives above.
-        "health_status": b.CompetitorBenchmark.health_status,
-        "confidence_score": b.CompetitorBenchmark.confidence_score,
-        "data_coverage": b.CompetitorBenchmark.data_coverage,
-    } for b in benchmarks]
+    return _build_benchmark_response(rows, client_comparable_score, limit, offset, client_entity_id)
 
 @router.get("/{client_id}/topic-distribution", response_model=Dict[str, Any])
 def get_client_topic_distribution(
@@ -686,7 +730,6 @@ def search_client_executive(client_id: UUID, name: str = Query(..., min_length=1
                 "name": score.executive_name if score else entity.name,
                 "score": score.score if score else None,
                 "grade": score.grade if score else None,
-                "trend": score.reputation_trend if score else None,
                 "confidence_score": score.confidence_score if score else None,
                 "data_coverage": score.data_coverage if score else None,
                 "health_status": score.health_status if score else "INSUFFICIENT_EVIDENCE",
@@ -1341,6 +1384,60 @@ def promote_executive_candidates(client_id: UUID, db: Session = Depends(get_db))
 
     return result
 
+def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
+    """
+    Per-DOCUMENT risk counts for the Brand Equity page, computed over every
+    visible document (no 500-document window): a document counts once, at its
+    highest risk across this client's non-competitor entities, rounded to a whole
+    number exactly like the documents endpoint, and only when above the LOW band
+    (same floor Risk Center uses). Documents with no RiskEvent at all are
+    reported as `unscored_documents`; they are not counted as zero-risk.
+    """
+    from app.core.risk_config import RISK_THRESHOLDS
+    from app.api.endpoints.documents import get_client_visible_document_ids
+    from app.models.document import Document
+    from app.models.entity import Entity
+
+    visible = get_client_visible_document_ids(db, client_id)
+    best: Dict[Any, float] = {}
+    if visible:
+        rows = db.query(RiskEvent.document_id, RiskEvent.risk_score).outerjoin(
+            Entity, Entity.id == RiskEvent.entity_id
+        ).filter(
+            RiskEvent.client_id == client_id,
+            RiskEvent.document_id.in_(visible),
+            or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
+        ).all()
+        for doc_id, score in rows:
+            if score is not None and (doc_id not in best or score > best[doc_id]):
+                best[doc_id] = score
+
+    rounded = {d: round(v) for d, v in best.items()}
+    risky = {d: v for d, v in rounded.items() if v > RISK_THRESHOLDS["LOW_TO_MEDIUM"]}
+    critical = sum(1 for v in risky.values() if v > RISK_THRESHOLDS["HIGH_TO_CRITICAL"])
+    high = sum(1 for v in risky.values() if RISK_THRESHOLDS["MEDIUM_TO_HIGH"] < v <= RISK_THRESHOLDS["HIGH_TO_CRITICAL"])
+    medium = len(risky) - critical - high
+
+    top: List[Dict[str, Any]] = []
+    if risky:
+        ordered_ids = sorted(risky, key=lambda d: (-risky[d], str(d)))[:20]
+        titles = {d.id: d.title for d in db.query(Document.id, Document.title).filter(Document.id.in_(ordered_ids)).all()}
+        ranked = sorted(ordered_ids, key=lambda d: (-risky[d], (titles.get(d) or ""), str(d)))
+        top = [{"title": titles.get(d) or "Untitled document", "risk": risky[d]} for d in ranked[:2]]
+
+    return {
+        "visible_documents": len(visible),
+        "scored_documents": len(best),
+        "unscored_documents": len(visible) - len(best),
+        "total": len(risky),
+        "critical": critical,
+        "high": high,
+        "medium": medium,
+        "average": (sum(risky.values()) / len(risky)) if risky else None,
+        "top": top,
+    }
+
+
 @router.get("/{client_id}/reputation-summary", response_model=Dict[str, Any])
 @cached_by_client("reputation_summary")
 def get_client_reputation_summary(client_id: UUID, response: Response, db: Session = Depends(get_db)):
@@ -1359,7 +1456,7 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    from app.models.entity import Entity
+    from app.models.entity import Entity, EntityMention
     from app.models.sentiment import EntitySentiment
 
     # 1. Reputation -- read latest stored ReputationScore row (same source as
@@ -1368,11 +1465,11 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         ReputationScore.created_at.desc(), ReputationScore.id.desc()
     ).first()
     if not rep:
-        reputation = {"score": None, "grade": None, "trend": "INSUFFICIENT_DATA", "status": "no_data", "computed_at": None}
+        reputation = {"score": None, "grade": None, "status": "no_data", "computed_at": None}
     elif rep.score is None:
-        reputation = {"score": None, "grade": None, "trend": rep.reputation_trend, "status": "insufficient_evidence", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
+        reputation = {"score": None, "grade": None, "status": "insufficient_evidence", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
     else:
-        reputation = {"score": rep.score, "grade": rep.grade, "trend": rep.reputation_trend, "status": "ok", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
+        reputation = {"score": rep.score, "grade": rep.grade, "status": "ok", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
 
     # 2. Risk -- full count by severity (not last-50-limited like get_client_risks),
     # plus the single most severe CRITICAL/HIGH event if one exists.
@@ -1387,7 +1484,6 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).group_by(RiskEvent.risk_level).all()
     risk_counts = {level: count for level, count in risk_counts_raw}
-    risk_total = sum(risk_counts.values())
 
     most_severe_risk = None
     top_risk = db.query(RiskEvent, Entity).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
@@ -1408,7 +1504,6 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         }
 
     risk = {
-        "total": risk_total,
         "critical": risk_counts.get("CRITICAL", 0),
         "high": risk_counts.get("HIGH", 0),
         "medium": risk_counts.get("MEDIUM", 0),
@@ -1424,27 +1519,46 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
     # neutral / 33 negative) matched exactly across all entity types, while
     # brand+person alone was 63/128/25 -- competitor sentiment was silently
     # blended into "this client's" dominant sentiment and Overview text.
-    sentiment_counts_raw = db.query(EntitySentiment.sentiment_label, func.count(EntitySentiment.id)).join(
+    #
+    # Brand co-occurrence gate (Brand Equity audit #8): like the reputation
+    # score, alerts, documents and executives, only entity sentiments from
+    # documents that ALSO mention this client's own brand/product entity
+    # count. Without it a tracked person's sentiment on an unrelated story
+    # (confirmed live: Adani Negative 78 ungated vs 48 gated) inflated this
+    # client's split. No brand/product entity at all -> don't gate (same
+    # convention as every other gate in this file).
+    sentiment_query = db.query(EntitySentiment.sentiment_label, func.count(EntitySentiment.id)).join(
         Entity, Entity.id == EntitySentiment.entity_id
     ).filter(
         Entity.client_id == client_id,
         or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None)),
-    ).group_by(EntitySentiment.sentiment_label).all()
+    )
+    brand_product_ids = [
+        r[0] for r in db.query(Entity.id).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+        ).all()
+    ]
+    if brand_product_ids:
+        sentiment_query = sentiment_query.filter(
+            EntitySentiment.document_id.in_(
+                db.query(EntityMention.document_id).filter(EntityMention.entity_id.in_(brand_product_ids))
+            )
+        )
+    sentiment_counts_raw = sentiment_query.group_by(EntitySentiment.sentiment_label).all()
     sentiment_counts = {label: count for label, count in sentiment_counts_raw}
     positive = sentiment_counts.get("Positive", 0)
     neutral = sentiment_counts.get("Neutral", 0)
     negative = sentiment_counts.get("Negative", 0)
-    dominant = max(
-        [("positive", positive), ("neutral", neutral), ("negative", negative)],
-        key=lambda x: x[1]
-    )[0] if (positive or neutral or negative) else None
+    # Dominant label: the single largest bucket. A tie for first place is
+    # reported as "mixed" rather than silently preferring one label.
+    top = max(positive, neutral, negative)
+    if top == 0:
+        dominant = None
+    else:
+        leaders = [name for name, n in (("positive", positive), ("neutral", neutral), ("negative", negative)) if n == top]
+        dominant = leaders[0] if len(leaders) == 1 else "mixed"
 
     sentiment = {"positive": positive, "neutral": neutral, "negative": negative, "dominant": dominant}
-
-    # 5. Trends
-    # Trend detection removed (2026-10-01); historical trend_events rows are
-    # deliberately not counted. Same keys as before, always zero.
-    trends = {"total": 0, "growing": 0, "declining": 0}
 
     # 6. Executive Risk alerts -- open (unacknowledged) alerts of type "Executive Risk"
     # (A12-F1: entity_type == "person" gate, commit 1ceca4f).
@@ -1502,8 +1616,8 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
     return {
         "reputation": reputation,
         "risk": risk,
+        "document_risk": _document_risk_summary(db, client_id),
         "sentiment": sentiment,
-        "trends": trends,
         "executive_alert": executive_alert
     }
 
@@ -1546,7 +1660,7 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
         bullets = [alert["title"]] if alert.get("title") else []
         if risk.get("critical") or risk.get("high"):
             bullets.append(f"{risk.get('critical', 0)} critical / {risk.get('high', 0)} high risk item(s) also currently tracked.")
-        return {"lead": lead, "bullets": bullets}
+        return {"lead": lead, "bullets": bullets, "flagged": True}
 
     most_severe = risk.get("most_severe")
     if most_severe:
@@ -1560,9 +1674,9 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
             + "."
         )
         bullets = [f"{risk.get('critical', 0)} critical, {risk.get('high', 0)} high risk item(s) currently tracked."]
-        return {"lead": lead, "bullets": bullets}
+        return {"lead": lead, "bullets": bullets, "flagged": True}
 
-    return {"lead": "Nothing significant to flag right now.", "bullets": []}
+    return {"lead": "Nothing significant to flag right now.", "bullets": [], "flagged": False}
 
 
 @router.get("/{client_id}/telemetry", response_model=Dict[str, Any])
@@ -1620,11 +1734,6 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
     sentiment_avg_time = sum(sentiment_times) / len(sentiment_times) if sentiment_times else 0.0
     sentiment_last_run = format_dt(max((d.sentiment_failed_at or d.collected_at) for d in docs if (d.sentiment_failed_at or d.collected_at))) if docs else None
 
-    # 4. Trend Detection
-    # Removed from the pipeline 2026-10-01; historical rows are not reported.
-    trend_produced = 0
-    trend_last_run = None
-
     # 5. Risk Engine
     risks = db.query(RiskEvent).filter(RiskEvent.client_id == client_id).all()
     risk_produced = len(risks)
@@ -1677,10 +1786,6 @@ def get_client_telemetry(client_id: UUID, response: Response, db: Session = Depe
             "success_rate": sentiment_success_rate,
             "avg_time_ms": sentiment_avg_time,
             "last_run": sentiment_last_run
-        },
-        "trend": {
-            "produced": trend_produced,
-            "last_run": trend_last_run
         },
         "risk": {
             "produced": risk_produced,

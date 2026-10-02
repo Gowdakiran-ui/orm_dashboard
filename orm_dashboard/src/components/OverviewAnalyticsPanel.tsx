@@ -3,21 +3,21 @@ import { BarChart3, LineChart, Activity, Smile, TrendingUp, HelpCircle } from "l
 import { 
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, CartesianGrid, XAxis, YAxis,
-  LineChart as RechartsLineChart, Line
+  LineChart as RechartsLineChart, Line, ReferenceLine
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition, SentimentScaleDefinition, CoverageByTopicDefinition, OverviewSentimentBreakdownDefinition, AverageSentimentTrendDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, SentimentScaleDefinition, CoverageByTopicDefinition, OverviewSentimentBreakdownDefinition, AverageSentimentHistoryDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
 
 export interface OverviewAnalyticsPanelProps {
   sentimentDistData: any[];
   topicDistData: any[];
   repHistory: any[];
-  sentimentTrendData: any[];
+  sentimentHistoryData: any[];
   loading?: boolean;
   error?: string | null;
 }
@@ -26,7 +26,7 @@ export function OverviewAnalyticsPanel({
   sentimentDistData = [],
   topicDistData = [],
   repHistory = [],
-  sentimentTrendData = [],
+  sentimentHistoryData = [],
   loading = false,
   error = null
 }: OverviewAnalyticsPanelProps) {
@@ -85,6 +85,19 @@ export function OverviewAnalyticsPanel({
     ];
   }, [repHistory, topicDistData, sentimentDistData, accentColor]);
 
+  // The trend component was removed from the score on 2026-10-01, so scores
+  // stored before that date were computed with a slightly different method
+  // (up to about 3 points). The history itself is left exactly as stored; this
+  // only marks where the method changed.
+  const SCORING_CHANGE_ISO = "2026-10-01T00:00:00Z";
+  const methodChange = useMemo(() => {
+    const cutoff = new Date(SCORING_CHANGE_ISO).getTime();
+    const dated = (repHistory || []).filter((h: any) => h && h.rawDate && !Number.isNaN(new Date(h.rawDate).getTime()));
+    const hasEarlier = dated.some((h: any) => new Date(h.rawDate).getTime() < cutoff);
+    const firstAfter = dated.find((h: any) => new Date(h.rawDate).getTime() >= cutoff);
+    return { hasEarlier, markerDate: hasEarlier && firstAfter ? (firstAfter.date as string) : null };
+  }, [repHistory]);
+
   const tooltipStyle = {
     backgroundColor: isDark ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
     borderColor: isDark ? '#3f3f46' : '#e4e4e7',
@@ -100,14 +113,7 @@ export function OverviewAnalyticsPanel({
   const gridStroke = isDark ? "#3f3f46" : "#d4d4d8";
   const axisStroke = isDark ? "#a1a1aa" : "#71717a";
 
-  // Hover explanation for the sentiment trend. Narrative clustering was
-  // removed from the pipeline (2026-09-19) -- this used to also surface a
-  // per-day "driving narrative" root-cause excerpt sourced from that
-  // feature, but with narratives never generating, that branch could never
-  // fire (its data source was permanently empty) and always fell through
-  // to a generic message anyway. Simplified to just the honest states this
-  // chart can actually support: a meaningful move with no note, or normal
-  // day-to-day fluctuation.
+  // Hover for the sentiment history: the raw daily value only, no interpretation.
   const SentimentTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
     const point = payload[0].payload;
@@ -115,15 +121,6 @@ export function OverviewAnalyticsPanel({
       <div style={tooltipStyle} className="space-y-1 max-w-[260px]">
         <div className="font-bold">{label}</div>
         <div>Sentiment: {point.Sentiment >= 0 ? "+" : ""}{formatScore(point.Sentiment, 2)}</div>
-        {point.meaningful ? (
-          <div className="pt-1 border-t border-current/10 text-[10px] italic opacity-70">
-            Sentiment moved but no specific narrative or risk event is linked to it in the data.
-          </div>
-        ) : (
-          <div className="pt-1 border-t border-current/10 text-[10px] italic opacity-70">
-            Normal day-to-day fluctuation — nothing significant to flag.
-          </div>
-        )}
       </div>
     );
   };
@@ -264,14 +261,19 @@ export function OverviewAnalyticsPanel({
           </CardContent>
         </Card>
 
-        {/* Reputation Trend Card */}
+        {/* Reputation score history card */}
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
-              Reputation Score Over Time
+              Reputation Score History
               <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
             </CardTitle>
+            {methodChange.hasEarlier && (
+              <p className={`font-mono text-[10px] mt-1 ${mutedText(theme)}`}>
+                Scoring method updated 1 Oct 2026: earlier scores include a component that has since been removed and can differ by up to about 3 points.
+              </p>
+            )}
           </CardHeader>
           <CardContent className="pl-2 h-[260px]">
             {repHistory.length > 0 ? (
@@ -281,6 +283,9 @@ export function OverviewAnalyticsPanel({
                   <XAxis dataKey="date" stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} />
                   <YAxis stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} tickFormatter={(v) => Number(v).toFixed(0)} />
                   <Tooltip contentStyle={tooltipStyle} formatter={tooltipScoreFormatter} />
+                  {methodChange.markerDate && (
+                    <ReferenceLine x={methodChange.markerDate} stroke={axisStroke} strokeDasharray="4 3" label={{ value: "Scoring method updated", position: "insideTopRight", fontSize: 9, fill: axisStroke }} />
+                  )}
                   <Line
                     type="monotone"
                     dataKey="score"
@@ -302,19 +307,19 @@ export function OverviewAnalyticsPanel({
           </CardContent>
         </Card>
 
-        {/* Sentiment Trend Card */}
+        {/* Sentiment history card */}
         <Card className={cardStyle}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center ${mutedText(theme)}`}>
-              Average Sentiment Over Time
-              <InfoTooltip label="About Average Sentiment Over Time"><AverageSentimentTrendDefinition /></InfoTooltip>
+              Average Sentiment History
+              <InfoTooltip label="About Average Sentiment History"><AverageSentimentHistoryDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>
           <CardContent className="pl-2 h-[260px]">
-            {sentimentTrendData.length > 0 ? (
+            {sentimentHistoryData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <RechartsLineChart data={sentimentTrendData} margin={{ top: 15, right: 30, bottom: 10, left: 10 }}>
+                <RechartsLineChart data={sentimentHistoryData} margin={{ top: 15, right: 30, bottom: 10, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
                   <XAxis dataKey="date" stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} />
                   <YAxis stroke={axisStroke} fontSize={9} tickLine={false} axisLine={false} domain={[-1, 1]} />

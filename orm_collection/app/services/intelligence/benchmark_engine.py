@@ -255,7 +255,11 @@ class BenchmarkEngine:
                 source_rows_query = source_rows_query.filter(EntityMention.document_id.in_(brand_doc_ids))
             source_rows = source_rows_query.all()
             for eid, base_score, penalty in source_rows:
-                score = float(base_score or 1.00)
+                # NULL category reliability is unknown, not 100% reliable:
+                # skip it. 0.0 is a real score and stays 0.0.
+                if base_score is None:
+                    continue
+                score = float(base_score)
                 pen = float(penalty or 0.0)
                 reliability_by_entity.setdefault(eid, []).append(
                     max(0.0, min(100.0, (score - pen) * 100))
@@ -553,6 +557,9 @@ class BenchmarkEngine:
                 # UI needs. Recorded here rather than in a new column: no
                 # migration, and this row is already the explainability record.
                 "client_comparable_score": round(client_score, 2) if client_score is not None else None,
+                # Unrounded twin, so a reader can rank the client against
+                # competitors' unrounded scores without a 2-dp rounding edge.
+                "client_comparable_score_exact": client_score,
                 "client_active_weight_sum": round(client_active_weight, 4),
                 "decision_reason": (
                     f"Insufficient evidence: active weight {res['active_weight']:.2f} < "

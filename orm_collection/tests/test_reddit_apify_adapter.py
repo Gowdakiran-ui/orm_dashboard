@@ -64,26 +64,68 @@ def test_reddit_apify_adapter_unavailable_without_api_token(monkeypatch):
     assert cursor is None
 
 
-def test_reddit_apify_adapter_search_caps_results_at_max_per_call(monkeypatch):
-    monkeypatch.setenv("APIFY_API_TOKEN", "dummy_token")
-    adapter = RedditApifyAdapter()
+class _FakeResponse:
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+        self.text = str(payload)
 
-    captured = {}
+    def json(self):
+        return self._payload
 
-    class FakeResponse:
-        status_code = 200
 
-        def json(self):
-            return []
+def _fake_apify(monkeypatch, dataset_items):
+    """Mock Apify's real async flow: POST /acts/{id}/runs -> {"data": {...}},
+    GET /actor-runs/{id} while running, GET /datasets/{id}/items -> JSON array."""
+    captured = {"posts": [], "gets": []}
 
     def fake_post(url, params=None, json=None, timeout=None):
-        captured["json"] = json
-        return FakeResponse()
+        captured["posts"].append(json)
+        return _FakeResponse({"data": {"id": "run1", "status": "READY", "defaultDatasetId": "ds1"}})
+
+    def fake_get(url, params=None, timeout=None):
+        captured["gets"].append(url)
+        if "/datasets/" in url:
+            return _FakeResponse(dataset_items)
+        return _FakeResponse({"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
 
     monkeypatch.setattr("app.adapters.reddit_apify.requests.post", fake_post)
+    monkeypatch.setattr("app.adapters.reddit_apify.requests.get", fake_get)
+    monkeypatch.setattr("app.adapters.reddit_apify.time.sleep", lambda s: None)
+    return captured
+
+
+def test_reddit_apify_adapter_search_caps_results_at_max_per_call(monkeypatch):
+    # Stale before: this mocked a single POST returning a bare list (an older
+    # one-call Apify endpoint). The adapter starts an async run, polls it, then
+    # reads the dataset, so the mock now follows that lifecycle.
+    monkeypatch.setenv("APIFY_API_TOKEN", "dummy_token")
+    adapter = RedditApifyAdapter()
+    captured = _fake_apify(monkeypatch, [])
 
     adapter.search("Godrej Properties", limit=9999)
 
-    assert captured["json"]["maxItems"] == MAX_RESULTS_PER_CALL
-    assert captured["json"]["maxPostCount"] == MAX_RESULTS_PER_CALL
-    assert captured["json"]["searches"] == ["Godrej Properties"]
+    assert captured["posts"][0]["maxItems"] == MAX_RESULTS_PER_CALL
+    assert captured["posts"][0]["maxPostCount"] == MAX_RESULTS_PER_CALL
+    assert captured["posts"][0]["searches"] == ["Godrej Properties"]
+
+
+def test_reddit_apify_adapter_search_returns_dataset_items_from_real_response_shape(monkeypatch):
+    monkeypatch.setenv("APIFY_API_TOKEN", "dummy_token")
+    adapter = RedditApifyAdapter()
+    items = [{"id": "t3_1", "title": "a post", "body": "text", "url": "https://www.reddit.com/r/x/comments/1/"}]
+    captured = _fake_apify(monkeypatch, items)
+
+    results, cursor = adapter.search("Godrej Properties", limit=5)
+
+    assert results == items and cursor is None
+    assert any("/datasets/ds1/items" in u for u in captured["gets"])
+
+
+def test_reddit_apify_adapter_search_fails_loudly_when_run_does_not_succeed(monkeypatch):
+    monkeypatch.setenv("APIFY_API_TOKEN", "dummy_token")
+    adapter = RedditApifyAdapter()
+    monkeypatch.setattr("app.adapters.reddit_apify.requests.post",
+                        lambda *a, **k: _FakeResponse({"data": {"id": "run1", "status": "FAILED", "defaultDatasetId": "ds1"}}))
+    with pytest.raises(Exception, match="finished with status FAILED"):
+        adapter.search("Godrej Properties", limit=5)

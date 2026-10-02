@@ -32,6 +32,6 @@ class CompetitorBenchmark(Base):
     evidence_metadata = Column(JSONB)
     health_status = Column(String(50))
     confidence_score = Column(Float)
-    data_coverage = Column(Float, default=0.40)
+    data_coverage = Column(Float, nullable=True)  # no invented default; engines always set it explicitly
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

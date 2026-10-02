@@ -58,6 +58,25 @@ def _brand_gated_document_ids(db: Session, client_id):
     return {r[0] for r in rows}
 
 
+def get_client_visible_document_ids(db: Session, client_id) -> list:
+    """
+    Ids of EVERY document get_client_visible_documents can show for a client
+    (same join and brand gate, no 500-row cap, no ordering). Lets aggregate
+    counts be computed over the full set instead of the latest-500 window.
+    """
+    from app.models.entity import Entity
+    query = (
+        db.query(Document.id)
+        .join(DocumentMatch)
+        .join(Entity)
+        .filter(Entity.client_id == client_id)
+    )
+    brand_doc_ids = _brand_gated_document_ids(db, client_id)
+    if brand_doc_ids is not None:
+        query = query.filter(Document.id.in_(brand_doc_ids))
+    return [r[0] for r in query.distinct().all()]
+
+
 def get_client_visible_documents(db: Session, client_id, skip: int = 0, limit: int = 100):
     """
     The exact document set Risk Center (and every other page that consumes
@@ -199,6 +218,7 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
         "entities": entities,
         "topics": topics,
         "sentiment": sentiment_val,
+        "scored": risk_rec is not None,
         "risk": round(risk_val),  # was int() -- truncated toward zero, which
         # can misclassify a score just above a severity threshold (e.g.
         # 75.4 -> 75 reads as HIGH under the <=75 rule instead of CRITICAL)
@@ -314,6 +334,10 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
             "status": doc.processing_status or "COMPLETED",
             "sentiment": sentiment_val,
             "risk": round(risk_val),  # was int() -- see read_document above
+            # False when no RiskEvent exists for this document: "risk" above is
+            # then the 0 placeholder, NOT a scored-zero. Additive field so
+            # consumers can tell the two apart (Brand Equity audit B9).
+            "scored": doc.id in risk_map,
             "risk_explainability": risk_explainability,
             "original_content": doc.normalized_content,
             "extracted_entities": extracted_entities,

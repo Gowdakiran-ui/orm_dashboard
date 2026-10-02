@@ -289,15 +289,12 @@ class AISummaryEngine:
         entity_name = entity_name or "this entity"
 
         risks_count = supporting_signals.get("risks_count")
-        trends_count = supporting_signals.get("trends_count")
         doc_count = supporting_evidence.get("document_count")
         exec_involved = supporting_evidence.get("executive_involved")
 
         signal_parts = []
         if risks_count:
             signal_parts.append(f"{risks_count} risk signal{'s' if risks_count != 1 else ''}")
-        if trends_count:
-            signal_parts.append(f"{trends_count} trend signal{'s' if trends_count != 1 else ''}")
         signals_desc = " and ".join(signal_parts) if signal_parts else "multiple intelligence signals"
 
         detail_parts = []

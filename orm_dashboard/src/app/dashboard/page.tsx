@@ -37,7 +37,6 @@ import { useCompanyManagement } from "@/hooks/useCompanyManagement";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
-import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
 import { bodyBg, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, mutedText, glassPrimaryButton } from "@/components/theme/tokens";
 
@@ -131,8 +130,12 @@ function DashboardShell() {
 
   const activeClientName = data.clients.find(c => c.id === data.clientId)?.name || "ORM";
   const highRiskDocs = [...data.documents].sort((a, b) => b.risk - a.risk).slice(0, 5);
-  const threatLevel = data.risks?.average_recent_risk_score > 70 ? "CRITICAL" : 
-                       data.risks?.average_recent_risk_score > 40 ? "ELEVATED" : "STABLE";
+  // Level of the current average risk score (last 50 risk events) -- a level, not a statement about change over time.
+  // "UNKNOWN" when the risk figures did not load, never a reassuring default.
+  const avgRisk = data.risks?.average_recent_risk_score;
+  const threatLevel = data.risksLoading || data.risksError || typeof avgRisk !== "number" ? "UNKNOWN" :
+                      avgRisk > 70 ? "CRITICAL" :
+                      avgRisk > 40 ? "ELEVATED" : "LOW";
 
   // 5. Analytics Transformations
   const analytics = useAnalytics({
@@ -143,7 +146,6 @@ function DashboardShell() {
     risks: data.risks,
     executives: data.executives,
     activeClientName,
-    trendEvents: data.trendEvents,
     executiveCandidates: data.executiveCandidates,
     competitorCandidates: data.competitorCandidates,
     repHistory: data.repHistory,
@@ -261,15 +263,13 @@ function DashboardShell() {
                         planAdvisory={data.planAdvisory}
                         planAdvisoryLoading={data.planAdvisoryLoading}
                         planAdvisoryError={data.planAdvisoryError}
-                        documents={data.documents}
-                        documentsLoading={data.documentsLoading}
                         executives={data.executives}
                         executivesLoading={data.executivesLoading}
-                        clientRank={analytics.clientRank}
-                        clientSOV={calculateClientSOV(analytics.normalizedBenchmarks)}
+                        executivesError={data.executivesError}
                         activeClientName={activeClientName}
                         normalizedBenchmarks={analytics.normalizedBenchmarks}
-                        repHistory={data.repHistory}
+                        benchmarksLoading={data.benchmarksLoading}
+                        benchmarksError={data.benchmarksError}
                       />
                     </ErrorBoundary>
                   </div>
@@ -293,7 +293,7 @@ function DashboardShell() {
                         sentimentDistData={analytics.sentimentDistData}
                         topicDistData={analytics.topicDistData}
                         repHistory={data.repHistory}
-                        sentimentTrendData={analytics.sentimentTrendData}
+                        sentimentHistoryData={analytics.sentimentHistoryData}
                         loading={data.documentsLoading || data.historyLoading}
                         error={data.documentsError || data.historyError}
                       />

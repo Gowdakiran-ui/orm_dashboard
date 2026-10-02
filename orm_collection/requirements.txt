@@ -26,3 +26,11 @@ transformers==5.12.1
 pytest==9.1.0
 psutil==7.2.2
 bcrypt==4.2.0
+
+# Directly imported by app/ code but previously only present transitively.
+# Versions = what the production backend image has installed (pip show, 2026-10-02).
+requests==2.34.2
+numpy==2.4.6
+botocore==1.34.162
+starlette==0.36.3
+prometheus_client==0.26.0

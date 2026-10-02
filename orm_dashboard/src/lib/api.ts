@@ -406,7 +406,7 @@ export async function fetchShareOfVoice(clientId: string, signal?: AbortSignal) 
 }
 
 export async function fetchCompetitorBenchmarks(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/benchmark`, { signal });
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/benchmark?limit=200`, { signal });
   return parseOrThrow(res);
 }
 
@@ -507,11 +507,6 @@ export async function fetchDocumentDetails(clientId: string, documentId: string,
 // silently unused and misleadingly implied client scoping that doesn't exist.
 export async function fetchSources(signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/sources/`, { signal });
-  return parseOrThrow(res);
-}
-
-export async function fetchIntelligenceFeed(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/trend-events`, { signal });
   return parseOrThrow(res);
 }
 

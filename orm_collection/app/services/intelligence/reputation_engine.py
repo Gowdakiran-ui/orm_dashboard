@@ -101,18 +101,6 @@ class ReputationEngine:
         return "F"
 
 
-    def _determine_trend(self, current_score: Optional[float], previous_score: Optional[float]) -> str:
-        if current_score is None:
-            return "INSUFFICIENT_DATA"
-        if previous_score is None:
-            return "STABLE"
-        diff = current_score - previous_score
-        if diff >= 2.0:
-            return "IMPROVING"
-        elif diff <= -2.0:
-            return "DECLINING"
-        return "STABLE"
-
     # Removed hardcoded _calculate_source_reliability
 
     def calculate_reputation_score(
@@ -184,7 +172,7 @@ class ReputationEngine:
             brand_doc_ids = None
             log.warning("reputation_no_brand_entity_found", action="brand_gate_skipped")
 
-        # Entity type lookup for the Risk/Trend per-event filtering below.
+        # Entity type lookup for the Risk per-event filtering below.
         entity_type_by_id = {e.id: e.entity_type for e in entities}
 
         doc_ids = []
@@ -261,15 +249,6 @@ class ReputationEngine:
         except Exception as e:
             log.warning("reputation_risk_calculation_failed", error=str(e))
 
-        # 4. Trend Component: removed 2026-10-01 along with the trend-detection
-        # stage (trend_events is no longer written). trend_component stays as an
-        # always-None placeholder only because reputation_scores.trend_component
-        # still exists as a column (schema cleanup is a separate, later step);
-        # None drops out of the dynamic weight normalization below, and
-        # self.weights no longer carries a "trend" entry.
-        trend_component = None
-        supporting_trends = []
-
         # 5. Source Quality Component (Dynamic Source Reliability)
         source_component = None
         if doc_ids:
@@ -286,7 +265,11 @@ class ReputationEngine:
                 if sources_data:
                     reliabilities = []
                     for base_score, penalty in sources_data:
-                        score = float(base_score or 1.00)
+                        # A NULL category reliability is unknown, not 100%
+                        # reliable: skip it. 0.0 is a real score and stays 0.0.
+                        if base_score is None:
+                            continue
+                        score = float(base_score)
                         p = float(penalty or 0.0)
                         rel_score = max(0.0, min(100.0, (score - p) * 100))
                         reliabilities.append(rel_score)
@@ -318,18 +301,6 @@ class ReputationEngine:
             final_score = weighted_sum / total_weight
             final_score = max(0.0, min(100.0, final_score))
 
-        # Get previous score for trend
-        prev_score = None
-        try:
-            prev_reputation = db.query(ReputationScore).filter(
-                ReputationScore.client_id == client_id
-            ).order_by(ReputationScore.created_at.desc()).first()
-            prev_score = prev_reputation.score if prev_reputation else None
-        except Exception as e:
-            log.warning("reputation_previous_score_fetch_failed", error=str(e))
-
-        rep_trend = self._determine_trend(final_score, prev_score)
-
         # A9: Upstream Health Status Checking
         # Narrative Cluster removed from this check (feature removal, see
         # PART_NARRATIVE_VOLUME_COST_FORENSICS_2026-09-19.md) -- the NARRATIVE
@@ -341,10 +312,6 @@ class ReputationEngine:
 
         has_recent_risk = db.query(RiskEvent).filter(RiskEvent.client_id == client_id, RiskEvent.created_at >= one_day_ago).limit(1).first() is not None
 
-        # Trend freshness removed from this check (trend detection removed,
-        # 2026-10-01) -- same reason the Narrative check above was removed:
-        # requiring a recent TrendEvent would pin health_status at PARTIAL
-        # forever now that nothing writes them.
         if not has_recent_risk:
             health_status = "PARTIAL"
 
@@ -388,7 +355,6 @@ class ReputationEngine:
         evidence_metadata = {
             "supporting_documents": [str(did) for did in doc_ids],
             "supporting_risks": [str(r.id) for r in supporting_risks],
-            "supporting_trends": [str(t.id) for t in supporting_trends],
             "supporting_alerts": [str(a.id) for a in supporting_alerts]
         }
 
@@ -406,11 +372,9 @@ class ReputationEngine:
                 grade=self._determine_grade(final_score),
                 sentiment_component=sentiment_component,
                 risk_component=risk_component,
-                trend_component=trend_component,
                 source_component=source_component,
                 visibility_component=visibility_component,
                 confidence_score=confidence_score,
-                reputation_trend=rep_trend,
                 run_id=rid,
                 batch_id=bid,
                 worker_id=wid,
@@ -427,11 +391,9 @@ class ReputationEngine:
                     "grade": self._determine_grade(final_score),
                     "sentiment_component": sentiment_component,
                     "risk_component": risk_component,
-                    "trend_component": trend_component,
                     "source_component": source_component,
                     "visibility_component": visibility_component,
                     "confidence_score": confidence_score,
-                    "reputation_trend": rep_trend,
                     "batch_id": bid,
                     "worker_id": wid,
                     "latency_ms": latency_ms,

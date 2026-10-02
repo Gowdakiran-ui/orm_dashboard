@@ -120,18 +120,6 @@ class ExecutiveReputationEngine:
         return "F"
 
 
-    def _determine_trend(self, current_score: Optional[float], previous_score: Optional[float]) -> str:
-        if current_score is None:
-            return "INSUFFICIENT_DATA"
-        if previous_score is None:
-            return "STABLE"
-        diff = current_score - previous_score
-        if diff >= 2.0:
-            return "IMPROVING"
-        elif diff <= -2.0:
-            return "DECLINING"
-        return "STABLE"
-
     def _calculate_source_reliability(self, url: Optional[str]) -> float:
         if not url:
             return 1.0
@@ -203,9 +191,9 @@ class ExecutiveReputationEngine:
         #
         # The original fix here gated per-ENTITY ("has this executive EVER
         # co-occurred with the brand in ANY document") -- confirmed live as
-        # a granularity bug (same class as reputation_engine.py's Risk/Trend
-        # components): an executive who legitimately co-occurs with the
-        # brand even once got their ENTIRE mention/risk/trend history
+        # a granularity bug (same class as reputation_engine.py's Risk
+        # component): an executive who legitimately co-occurs with the
+        # brand even once got their ENTIRE mention/risk history
         # included unfiltered. Confirmed live: Anthropic's "Elon Musk" had 19
         # total mentions, only 11 brand-co-occurring (42% contaminated
         # feeding his score). `gated_executive_ids` below is kept ONLY as a
@@ -254,7 +242,7 @@ class ExecutiveReputationEngine:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         lookback_date = now_utc - datetime.timedelta(days=30)
 
-        # P3: Batch preloading of all executive mentions, risks, trends, and alerts
+        # P3: Batch preloading of all executive mentions, risks, and alerts
         #
         # Brand co-occurrence containment, per-mention not per-entity
         # (2026-09-13 granularity fix): only a mention whose OWN document
@@ -402,11 +390,6 @@ class ExecutiveReputationEngine:
             avg_risk = sum(r.risk_score for r in supporting_risks) / len(supporting_risks)
             risk_component = 100.0 - avg_risk
 
-        # 4. Executive Trend: removed 2026-10-01 with trend detection (nothing
-        # writes trend_events any more). trend_component_db below still writes
-        # 0.0 to the NOT NULL executive_reputation_scores.trend_component
-        # column, which is dropped in a later, separate schema step.
-
         # 5. Executive Visibility
         # Count mentions in-memory (E14-F3: no floor -- 0 mentions means the
         # component is simply unavailable, same as every other component
@@ -447,14 +430,6 @@ class ExecutiveReputationEngine:
             # fabricated grade -- "NA" is not one of the real A+/A/B/C/D/F values.
             final_score = 0.0
             grade = "NA"
-
-        # Get previous score
-        prev_reputation = db.query(ExecutiveReputationScore).filter(
-            ExecutiveReputationScore.entity_id == exec_entity.id
-        ).order_by(ExecutiveReputationScore.created_at.desc()).first()
-
-        prev_score = prev_reputation.score if prev_reputation else None
-        rep_trend = self._determine_trend(final_score if has_evidence else None, prev_score)
 
         # A7: Upstream Health Status Checking
         has_recent_risk = any(r.created_at >= one_day_ago for r in supporting_risks)
@@ -506,7 +481,6 @@ class ExecutiveReputationEngine:
         evidence_metadata = {
             "supporting_documents": [str(did) for did in doc_ids],
             "supporting_risks": [str(r.id) for r in supporting_risks],
-            "supporting_trends": [],
             "supporting_alerts": [str(a.id) for a in supporting_alerts],
             "supporting_executive_entity": str(exec_entity.id)
         }
@@ -527,7 +501,6 @@ class ExecutiveReputationEngine:
         # active_weight/has_evidence above were computed from.
         sentiment_component_db = sentiment_component if sentiment_component is not None else 0.0
         risk_component_db = risk_component if risk_component is not None else 0.0
-        trend_component_db = 0.0  # NOT NULL column kept until schema cleanup
         visibility_component_db = visibility_component if visibility_component is not None else 0.0
 
         # R7: Duplicate protection using ON CONFLICT DO UPDATE on uq_exec_reputation_run
@@ -540,10 +513,8 @@ class ExecutiveReputationEngine:
             grade=grade,
             sentiment_component=sentiment_component_db,
             risk_component=risk_component_db,
-            trend_component=trend_component_db,
             visibility_component=visibility_component_db,
             confidence_score=confidence_score,
-            reputation_trend=rep_trend,
             run_id=run_id,
             batch_id=batch_id,
             worker_id=worker_id,
@@ -560,10 +531,8 @@ class ExecutiveReputationEngine:
                 "grade": grade,
                 "sentiment_component": sentiment_component_db,
                 "risk_component": risk_component_db,
-                "trend_component": trend_component_db,
                 "visibility_component": visibility_component_db,
                 "confidence_score": confidence_score,
-                "reputation_trend": rep_trend,
                 "batch_id": batch_id,
                 "worker_id": worker_id,
                 "latency_ms": latency_ms,

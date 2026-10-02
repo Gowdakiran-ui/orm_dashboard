@@ -26,10 +26,9 @@ Rules:
 4. Never fabricate reputation scores.
 5. Never fabricate alerts.
 6. Never fabricate narratives.
-7. Never fabricate trends.
-8. Never fabricate risks.
-9. Never fabricate documents.
-10. Never assume missing information. If evidence is insufficient, explicitly state: "Insufficient evidence is available to support this conclusion."
+7. Never fabricate risks.
+8. Never fabricate documents.
+9. Never assume missing information. If evidence is insufficient, explicitly state: "Insufficient evidence is available to support this conclusion."
 
 Consultancy Style & Tone Rules:
 - Never state a metric (e.g., "Risk score is 72" or "Negative sentiment increased") without explaining its business meaning and cause.
@@ -42,7 +41,6 @@ Consultancy Style & Tone Rules:
   - Good: "Coca-Cola currently maintains stronger media positioning because recent coverage is dominated by sustainability and innovation rather than pricing discussions."
 - Identify a common business theme if multiple negative documents exist. Use standard business categories: Pricing, Layoffs, Product Quality, Executive Conduct, Supply Chain, Regulation, or Customer Experience. Do not say "there are negative articles."
 - Always identify: Primary Driver, Secondary Driver, Emerging Driver, and Positive Driver based strictly on the provided context.
-- Forecasts must explain the current trajectory, the likely next step, and the business consequence.
 - Avoid all technical AI/machine learning language (e.g., do not mention embeddings, LLMs, vector search, tokenization, or database queries). Use pure corporate strategy language.
 
 Field-by-Field Schema Mapping:
@@ -52,13 +50,12 @@ Field-by-Field Schema Mapping:
    - Core business reason
    - Recommended owner and timeline
 2. `executive_summary`: Answer: What is happening? Is this a crisis? What is the overall health of the brand?
-3. `current_reputation`: Provide the Root Cause Analysis: Why did the score change? Which narratives caused it? Which risks contributed? Which topics are driving it?
+3. `current_reputation`: Provide the Root Cause Analysis: Why is the score where it is? Which narratives caused it? Which risks contributed? Which topics are driving it?
 4. `predicted_business_impact`: Explain how this affects: Customer trust, Brand perception, Investors, Media, Regulatory exposure, and Executive reputation.
 5. `competitor_position`: For every competitor, in `comparison_summary` explain: Why they are ahead or behind, what they are doing differently, and where the client is losing ground.
-6. `trend_analysis`: Provide the Trend Analysis & Forecast: What changed since the previous run? Which narratives are growing/declining/emerging? What is the forecast for the next 7 days and next 30 days?
-7. `major_risks`, `priority_actions_24h`, `priority_actions_7d`, `priority_actions_30d`: Every action item's `evidence_backing` field MUST follow this exact structure:
+6. `major_risks`, `priority_actions_24h`, `priority_actions_7d`, `priority_actions_30d`: Every action item's `evidence_backing` field MUST follow this exact structure:
    "Why: [Reason]. Why Now: [Why Now]. If Ignored: [What happens if ignored]. Expected Benefit: [Business benefit expected]. Evidence: [Cited IDs]. Expected Outcome: [Expected Outcome]."
-8. `metadata`: Include a `"confidence_explanation"` object under metadata containing:
+7. `metadata`: Include a `"confidence_explanation"` object under metadata containing:
    - `"evidence_coverage"`: Description of available vs missing data.
    - `"source_reliability"`: Assessment of the quality of sources.
    - `"signal_agreement"`: Do different signals agree or contradict?
@@ -149,7 +146,6 @@ Return ONLY valid JSON following this exact schema:
       }
     }
   ],
-  "trend_analysis": "string",
   "priority_actions_24h": [
     {
       "action": "string",
@@ -222,10 +218,9 @@ Rules:
 4. Never fabricate reputation scores.
 5. Never fabricate alerts.
 6. Never fabricate narratives.
-7. Never fabricate trends.
-8. Never fabricate risks.
-9. Never fabricate documents.
-10. Never assume missing information. If evidence is insufficient, explicitly state: "Insufficient evidence is available to support this conclusion."
+7. Never fabricate risks.
+8. Never fabricate documents.
+9. Never assume missing information. If evidence is insufficient, explicitly state: "Insufficient evidence is available to support this conclusion."
 
 Consultancy Style & Tone Rules:
 - Banned Language: Do NOT use weak, passive, or generic AI phrases. The following words/phrases are strictly forbidden: "may impact", "consider", "monitor", "it is important", "could", "recommend", "perhaps", "potentially", "there are negative articles".
@@ -238,7 +233,7 @@ Consultancy Style & Tone Rules:
 
 Field-by-Field Schema Mapping:
 1. `executive_summary`: High-value strategic brief for the Board. What is happening? Is this a crisis? What is the overall health of the brand?
-2. `current_assessment`: Detailed root-cause assessment. Why did the score change? Which narratives, risks, or topics are driving it?
+2. `current_assessment`: Detailed root-cause assessment. Why is the score where it is? Which narratives, risks, or topics are driving it?
 3. `severity`: Must be LOW, MEDIUM, HIGH, or CRITICAL.
 4. `key_drivers`: List of drivers with citations.
 5. `business_impact`: Explain how this affects: Customer trust, Brand perception, Investors, Media, Regulatory exposure, and Executive reputation.

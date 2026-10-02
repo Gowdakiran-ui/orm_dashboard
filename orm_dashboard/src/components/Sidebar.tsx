@@ -190,6 +190,7 @@ export function Sidebar({
           <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
             threatLevel === "CRITICAL" ? "bg-red-950/20 border-red-500/30 text-red-400" :
             threatLevel === "ELEVATED" ? "bg-orange-950/20 border-orange-500/30 text-orange-400" :
+            threatLevel === "UNKNOWN" ? "bg-zinc-900/30 border-zinc-500/30 text-zinc-400" :
             "bg-emerald-950/20 border-emerald-500/30 text-emerald-400"
           }`}>
             <Radio className="h-4 w-4 animate-pulse" />

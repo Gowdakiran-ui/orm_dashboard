@@ -572,7 +572,7 @@ export function RiskTab({
             // reads as "positive news counts as risk" with no explanation
             // unless the reader thinks to hover the (i) icon.
             <p className={`text-xs font-mono mt-1 ${mutedText(theme)}`}>
-              Innovation coverage is tracked here because major announcements can carry reputational risk even when the news itself is positive (e.g. execution risk, investor reaction) — its score comes from sentiment/trend/source signals, not the topic itself.
+              Innovation coverage is tracked here because major announcements can carry reputational risk even when the news itself is positive (e.g. execution risk, investor reaction) — its score comes from sentiment and source signals, not the topic itself.
             </p>
           )}
         </CardHeader>

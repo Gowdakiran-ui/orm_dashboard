@@ -12,7 +12,7 @@ class Alert(Base):
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True, index=True)
     entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True)
     
-    alert_type = Column(String(50), nullable=False) # Risk, Trend, Sentiment, Executive
+    alert_type = Column(String(50), nullable=False) # Risk, Sentiment, Executive
     severity = Column(String(20), nullable=False) # INFO, WARNING, HIGH, CRITICAL
     
     title = Column(String(255), nullable=False)

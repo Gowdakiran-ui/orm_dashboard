@@ -21,7 +21,10 @@ class ExecutiveReputationScore(Base):
     visibility_component = Column(Float, nullable=False, default=0.0)
 
     confidence_score = Column(Float, nullable=False, default=1.0)
-    reputation_trend = Column(String(20), nullable=False) # IMPROVING, STABLE, DECLINING
+    # Trend detection was removed; nothing writes a direction or reads this.
+    # The column is still NOT NULL in schema.sql, so every insert carries this
+    # constant until a migration drops the column (pending approval).
+    reputation_trend = Column(String(20), nullable=False, default="NOT_COMPUTED")
 
     # Observability columns
     run_id = Column(String(100))
@@ -34,6 +37,6 @@ class ExecutiveReputationScore(Base):
     evidence_metadata = Column(JSONB)
     calculation_lineage = Column(JSONB)
     health_status = Column(String(50))
-    data_coverage = Column(Float, default=0.40)
+    data_coverage = Column(Float, nullable=True)  # no invented default; engines always set it explicitly
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

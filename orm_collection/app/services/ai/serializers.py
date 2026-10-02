@@ -30,11 +30,9 @@ def serialize_reputation(rep) -> Dict[str, Any]:
         "sentiment_component": rep.sentiment_component,
         "risk_component": rep.risk_component,
         "narrative_component": rep.narrative_component,
-        "trend_component": rep.trend_component,
         "source_component": rep.source_component,
         "visibility_component": rep.visibility_component,
         "confidence_score": rep.confidence_score,
-        "reputation_trend": rep.reputation_trend,
         "health_status": rep.health_status,
         "calculation_lineage": rep.calculation_lineage or {}
     }
@@ -47,7 +45,6 @@ def serialize_executive_reputation(score) -> Dict[str, Any]:
         "executive_name": score.executive_name,
         "score": score.score,
         "grade": score.grade,
-        "reputation_trend": score.reputation_trend,
         "health_status": score.health_status
     }
 
@@ -94,18 +91,7 @@ def serialize_narrative(narrative) -> Dict[str, Any]:
         "mention_count": narrative.mention_count,
         "sentiment_score": narrative.sentiment_score,
         "risk_score": narrative.risk_score,
-        "trend_strength": narrative.trend_strength,
         "status": narrative.status
-    }
-
-def serialize_trend_event(trend) -> Dict[str, Any]:
-    if not trend:
-        return {}
-    return {
-        "id": str(trend.id),
-        "trend_type": trend.trend_type,
-        "percentage_change": trend.percentage_change,
-        "severity": trend.severity
     }
 
 def serialize_document(doc, sentiment_score: Optional[float] = None, topic_name: Optional[str] = None) -> Dict[str, Any]:

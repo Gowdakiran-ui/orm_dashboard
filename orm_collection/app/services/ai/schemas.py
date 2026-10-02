@@ -23,11 +23,9 @@ class ReputationContext(BaseModel):
     sentiment_component: Optional[float] = None
     risk_component: Optional[float] = None
     narrative_component: Optional[float] = None
-    trend_component: Optional[float] = None
     source_component: Optional[float] = None
     visibility_component: Optional[float] = None
     confidence_score: Optional[float] = None
-    reputation_trend: Optional[str] = None
     health_status: Optional[str] = None
     calculation_lineage: Optional[Dict[str, Any]] = None
 
@@ -36,7 +34,6 @@ class ExecutiveReputationContext(BaseModel):
     executive_name: str
     score: Optional[float] = None
     grade: Optional[str] = None
-    reputation_trend: Optional[str] = None
     health_status: Optional[str] = None
 
 
@@ -68,14 +65,7 @@ class NarrativeContext(BaseModel):
     mention_count: int
     sentiment_score: float
     risk_score: float
-    trend_strength: float
     status: str
-
-class TrendEventContext(BaseModel):
-    id: str
-    trend_type: str
-    percentage_change: float
-    severity: str
 
 class DocumentContext(BaseModel):
     id: str
@@ -90,7 +80,6 @@ class ContextStats(BaseModel):
     risks_loaded: int
     alerts_loaded: int
     narratives_loaded: int
-    trends_loaded: int
     executives_loaded: int
     benchmarks_loaded: int
     payload_size_kb: float
@@ -126,7 +115,6 @@ class AIContextPayload(BaseModel):
     risks: List[RiskEventContext] = Field(default_factory=list)
     alerts: List[AlertContext] = Field(default_factory=list)
     narratives: List[NarrativeContext] = Field(default_factory=list)
-    trends: List[TrendEventContext] = Field(default_factory=list)
     documents: List[DocumentContext] = Field(default_factory=list)
     history: Optional[Dict[str, Any]] = None
     metadata: ContextMetadata

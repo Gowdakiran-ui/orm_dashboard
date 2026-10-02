@@ -39,3 +39,6 @@ start_run*.log
 orm_collection/backend_test.log
 orm_collection/scratch_*.db
 orm_collection/scratch_timing_test*.py
+
+# Internal audit reports (Brand Equity data-accuracy audit etc.)
+audit/

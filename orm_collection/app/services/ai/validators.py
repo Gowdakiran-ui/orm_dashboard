@@ -23,7 +23,6 @@ def validate_context_payload(payload_dict: Dict[str, Any]) -> AIContextPayload:
             risks_loaded=0,
             alerts_loaded=0,
             narratives_loaded=0,
-            trends_loaded=0,
             executives_loaded=0,
             benchmarks_loaded=0,
             payload_size_kb=0.0,
@@ -60,7 +59,6 @@ def validate_context_payload(payload_dict: Dict[str, Any]) -> AIContextPayload:
         "risks": payload_dict.get("risks") or [],
         "alerts": payload_dict.get("alerts") or [],
         "narratives": payload_dict.get("narratives") or [],
-        "trends": payload_dict.get("trends") or [],
         "documents": payload_dict.get("documents") or [],
         "history": payload_dict.get("history"),
         "metadata": payload_dict["metadata"]

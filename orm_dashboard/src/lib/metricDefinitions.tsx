@@ -371,8 +371,8 @@ export function ExecutiveSentimentBreakdownDefinition() {
 }
 
 /**
- * ExecutivesTab.tsx's Executive Scorecard table -- Confidence, Evidence
- * Coverage and Trend columns. Traced directly against
+ * ExecutivesTab.tsx's Executive Scorecard table -- Confidence and Evidence
+ * Coverage columns. Traced directly against
  * executive_reputation_engine.py's calculate_executive_reputation:
  *   - doc_confidence = min(document_count / 10, 1.0)
  *   - signal_completeness = 1.0 if recent risk data else 0.5
@@ -380,14 +380,11 @@ export function ExecutiveSentimentBreakdownDefinition() {
  *     (0.0 whenever there's no qualifying evidence at all)
  *   - data_coverage is written from that same confidence_score value --
  *     the engine reuses it rather than computing a second, separate number.
- *   - Trend compares this run's score to the previous one: +2.0 or more is
- *     IMPROVING, -2.0 or more is DECLINING, otherwise STABLE (and there's no
- *     prior score to compare, it reports STABLE).
  */
 export function ExecutiveScorecardMetricsDefinition() {
   return (
     <>
-      <span className="block font-bold">Confidence, Evidence Coverage &amp; Trend</span>
+      <span className="block font-bold">Confidence &amp; Evidence Coverage</span>
       <span className="block">
         <b>Confidence</b> blends how much recent coverage exists (capped once
         10+ documents are seen in the last 30 days) with whether recent risk
@@ -396,11 +393,6 @@ export function ExecutiveScorecardMetricsDefinition() {
       <span className="mt-1 block">
         <b>Evidence Coverage</b> reuses that same Confidence value — it is not
         a separate calculation.
-      </span>
-      <span className="mt-1 block">
-        <b>Trend</b> compares this run&apos;s Reputation Score to the previous
-        one: IMPROVING (+2.0 or more), DECLINING (-2.0 or more), otherwise
-        STABLE.
       </span>
     </>
   );
@@ -453,48 +445,48 @@ export function OverviewSentimentBreakdownDefinition() {
  * tiles and Overview paragraph -- a THIRD, differently-scoped sentiment split from the two
  * document-threshold-based ones above. This one comes straight from the
  * backend (client_intelligence.py get_reputation_summary): a count of
- * EntitySentiment rows (one per entity mention, not one per document) whose
+ * EntitySentiment rows (one per entity x document pair) whose
  * categorical sentiment_label was set by sentiment_analyzer.py, scoped to
  * this client's own brand/product/person entities only (competitor entities
- * excluded). Because it counts entity mentions with a pre-assigned label,
+ * excluded) and to documents that also mention the client's brand/product.
+ * Because it counts entity-document readings with a pre-assigned label,
  * not documents bucketed by a numeric cutoff, its totals will not match
  * either Sentiment Breakdown chart's positive/neutral/negative counts.
  */
 export function EntitySentimentSplitDefinition() {
   return (
     <>
-      <span className="block font-bold">Positive Signals &amp; Dominant Sentiment</span>
+      <span className="block font-bold">Mentions &amp; overall tone</span>
       <span className="block">
-        Counts this client&apos;s own entity mentions (brand, product, and
-        person entities only — tracked competitors excluded) by the
-        sentiment label already assigned to each mention, not by a numeric
-        cutoff on document scores.
+        A mention is one appearance of the client&apos;s brand, one of its
+        products, or a tracked person in one piece of coverage, labelled
+        Positive, Neutral or Negative by the sentiment model. Only coverage
+        that also mentions the client&apos;s own brand or product counts, and
+        tracked competitors are left out.
       </span>
       <span className="mt-1 block">
-        This counts entity mentions, not documents, so it will not match the
-        Sentiment Breakdown charts on Executive Analytics — those bucket
-        whole documents by a +/-0.25 or +/-0.3 sentiment-score cutoff (see
-        their own tooltips).
+        One article can hold several mentions (one for the brand, one for each
+        person), so this is not an article count and will not match the
+        Sentiment Breakdown charts on Executive Analytics. If the two most
+        common tones tie, the overall tone is shown as &quot;mixed&quot;.
       </span>
     </>
   );
 }
 
 /**
- * OverviewAnalyticsPanel.tsx's "Average Sentiment Over Time" line chart --
- * useAnalytics.ts sentimentTrendData averages each document's sentiment
+ * OverviewAnalyticsPanel.tsx's "Average Sentiment History" line chart --
+ * useAnalytics.ts sentimentHistoryData averages each document's sentiment
  * score (-1.0/0.0/+1.0 per SentimentScaleDefinition) within each calendar
- * day. Hovering a point that moved by 0.25 or more from the prior day is
- * flagged as a meaningful shift on hover.
+ * day. Raw daily values only; nothing is interpreted.
  */
-export function AverageSentimentTrendDefinition() {
+export function AverageSentimentHistoryDefinition() {
   return (
     <>
-      <span className="block font-bold">Average Sentiment Over Time</span>
+      <span className="block font-bold">Average Sentiment History</span>
       <span className="block">
         Each point is the average sentiment score (-1.0 to +1.0) across every
-        document published that day. A day-over-day move of 0.25 or more is
-        flagged as meaningful on hover.
+        document published that day.
       </span>
     </>
   );
