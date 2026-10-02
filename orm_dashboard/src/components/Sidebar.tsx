@@ -186,11 +186,12 @@ export function Sidebar({
 
         {/* Threat Indicator */}
         <div className={`p-6 border-b space-y-2 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block">Current Risk Level</span>
+          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block">Highest severity flagged (all time)</span>
           <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
             threatLevel === "CRITICAL" ? "bg-red-950/20 border-red-500/30 text-red-400" :
-            threatLevel === "ELEVATED" ? "bg-orange-950/20 border-orange-500/30 text-orange-400" :
-            threatLevel === "UNKNOWN" ? "bg-zinc-900/30 border-zinc-500/30 text-zinc-400" :
+            threatLevel === "HIGH" ? "bg-orange-950/20 border-orange-500/30 text-orange-400" :
+            threatLevel === "MEDIUM" ? "bg-yellow-950/20 border-yellow-500/30 text-yellow-400" :
+            threatLevel === "UNAVAILABLE" ? "bg-zinc-900/30 border-zinc-500/30 text-zinc-400" :
             "bg-emerald-950/20 border-emerald-500/30 text-emerald-400"
           }`}>
             <Radio className="h-4 w-4 animate-pulse" />

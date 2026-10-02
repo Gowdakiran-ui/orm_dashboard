@@ -187,30 +187,16 @@ class AISummaryEngine:
             _record(success=False)
             return None
 
-    def _build_risk_event_what(self, re: RiskEvent) -> str:
-        """
-        Real description of what specifically triggered this risk event --
-        not the old risk_level/title/category restatement, which told the
-        reader nothing beyond what the Badge/title already show on the same
-        card. Built from the event's own real trigger signals -- already
-        computed and stored on it by risk_engine.py (explainability.
-        decision_reason, a deterministic sentence built from real topic/
-        sentiment/trend/source values, and risk_factors), not a new data
-        path.
-        """
-        explainability = re.explainability or {}
-        decision_reason = explainability.get("decision_reason")
-        if decision_reason:
-            return decision_reason
-
-        risk_factors = re.risk_factors or []
-        factor_parts = [
-            f"{f.get('type')} '{f.get('factor')}'" for f in risk_factors if f.get("factor")
-        ]
-        if factor_parts:
-            return f"{re.risk_level} risk driven by {', '.join(factor_parts)}."
-
-        return f"{re.risk_level} risk flagged with no further trigger detail available."
+    @staticmethod
+    def _describe_article(db: Session, document) -> str:
+        """Headline + source of the document a risk event was scored on."""
+        if not document:
+            return "Source article unavailable."
+        from app.models.source import Source
+        source = db.query(Source.name).filter(Source.id == document.source_id).first() if document.source_id else None
+        title = (document.title or "").strip() or "an untitled item"
+        source_name = source[0] if source and source[0] else None
+        return f"\"{title}\" ({source_name})." if source_name else f"\"{title}\"."
 
     def _prepare_risk_event(
         self, db: Session, re: RiskEvent,
@@ -239,8 +225,12 @@ class AISummaryEngine:
         # be able to bust the cache either.
         snippet = (document.normalized_content if document else "") [:1500]
 
-        what = self._build_risk_event_what(re)
-        when = self._format_when(re.computed_at or re.created_at)
+        # `what` describes the article itself (headline + source). No `when` is
+        # stored for a risk event: the old one was the scoring run's timestamp
+        # (re.computed_at), which read as the incident date and was identical for
+        # every item scored in the same run, and the Risk Center drawer shows the
+        # document's own published/collected date instead (documents.py).
+        what = self._describe_article(db, document)
 
         # Cache key: a hash of exactly the fields that feed how_to_solve
         # (risk_level, topic, title, source excerpt) plus `what` itself, so
@@ -262,7 +252,6 @@ class AISummaryEngine:
             "run_id": run_id,
         }, "partial": {
             "what": what,
-            "when": when,
             "source": "generated",
             "_cache_key": cache_key,
         }}

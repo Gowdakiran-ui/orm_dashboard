@@ -545,7 +545,7 @@ def test_document_risk_summary_empty_client_has_no_average(db):
     cid = _client(db)
     r = ci._document_risk_summary(db, cid)
     assert r == {"visible_documents": 0, "scored_documents": 0, "unscored_documents": 0, "total": 0,
-                 "critical": 0, "high": 0, "medium": 0, "average": None, "top": []}
+                 "critical": 0, "high": 0, "medium": 0, "average": None, "highest": None, "as_of": None, "top": []}
 
 
 def test_reputation_summary_exposes_document_risk_block(db):

@@ -37,6 +37,8 @@ import { useCompanyManagement } from "@/hooks/useCompanyManagement";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
+import { riskStatsFromSummary } from "@/utils/brandEquity";
+import { sidebarRiskLevel } from "@/utils/riskCenter";
 import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
 import { bodyBg, bodyText, GRADIENT_HEADING_CLASS, gradientHeadingStyle, mutedText, glassPrimaryButton } from "@/components/theme/tokens";
 
@@ -129,13 +131,14 @@ function DashboardShell() {
   );
 
   const activeClientName = data.clients.find(c => c.id === data.clientId)?.name || "ORM";
-  const highRiskDocs = [...data.documents].sort((a, b) => b.risk - a.risk).slice(0, 5);
-  // Level of the current average risk score (last 50 risk events) -- a level, not a statement about change over time.
-  // "UNKNOWN" when the risk figures did not load, never a reassuring default.
-  const avgRisk = data.risks?.average_recent_risk_score;
-  const threatLevel = data.risksLoading || data.risksError || typeof avgRisk !== "number" ? "UNKNOWN" :
-                      avgRisk > 70 ? "CRITICAL" :
-                      avgRisk > 40 ? "ELEVATED" : "LOW";
+  // Highest severity band among the client's current flagged articles (same
+  // data and bands as the Risk Center). "UNAVAILABLE" while loading or on error,
+  // never a reassuring default.
+  const threatLevel = sidebarRiskLevel(
+    data.reputationSummaryLoading,
+    data.reputationSummaryError,
+    riskStatsFromSummary(data.reputationSummary?.document_risk)
+  );
 
   // 5. Analytics Transformations
   const analytics = useAnalytics({
@@ -326,6 +329,9 @@ function DashboardShell() {
                     documentsLoading={data.documentsLoading}
                     documentsError={data.documentsError}
                     documents={data.documents}
+                    reputationSummary={data.reputationSummary}
+                    reputationSummaryLoading={data.reputationSummaryLoading}
+                    reputationSummaryError={data.reputationSummaryError}
                     clientId={data.clientId}
                   />
                 </ErrorBoundary>

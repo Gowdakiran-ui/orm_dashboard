@@ -18,6 +18,10 @@ export interface RiskStats {
   high: number;
   medium: number;
   avg: number | null;
+  // Highest whole-number score among flagged documents; null when none.
+  highest: number | null;
+  // When the newest of these scores was computed (ISO), if known.
+  asOf: string | null;
   dangerCount: number;
   dominantLevel: "CRITICAL" | "HIGH" | "MEDIUM" | "NONE";
   topRiskDocs: { title: string; risk: number }[];
@@ -40,6 +44,8 @@ export function riskStatsFromSummary(block: any): RiskStats | null {
   return {
     total, critical, high, medium,
     avg: n(block.average),
+    highest: n(block.highest),
+    asOf: typeof block.as_of === "string" ? block.as_of : null,
     dangerCount: critical + high,
     dominantLevel: critical > 0 ? "CRITICAL" : high > 0 ? "HIGH" : medium > 0 ? "MEDIUM" : "NONE",
     topRiskDocs: top,

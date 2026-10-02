@@ -45,13 +45,13 @@ const HIGH_MAX = RISK_THRESHOLDS.HIGH_TO_CRITICAL;
 export function CriticalRisksVsActiveAlertsDefinition() {
   return (
     <>
-      <span className="block font-bold">Critical Risks vs. Active Alerts</span>
+      <span className="block font-bold">Critical articles vs. Active Alerts</span>
       <span className="block">
-        This tile counts documents whose own Risk Score crosses the Critical
-        threshold ({HIGH_MAX}+). An Active Alert&apos;s CRITICAL badge is a
+        The Critical count is the number of flagged articles whose own risk
+        score is above {HIGH_MAX}. An Active Alert&apos;s CRITICAL badge is a
         separate signal -- it can fire from a combination of risk,
-        document volume, and executive involvement even when no
-        single document is itself Critical-risk.
+        article volume, and executive involvement even when no
+        single article is itself Critical.
       </span>
     </>
   );
@@ -144,6 +144,45 @@ export function RiskMatrixAxesDefinition() {
   );
 }
 
+/**
+ * Risk Center's "Flagged articles" tile (RiskTab.tsx). The unit is ARTICLES:
+ * one story reported by several outlets counts once per outlet. Counted over
+ * every article collected for the client (server-side, utils/riskCenter.ts
+ * tilesFromSummary), not only the newest 500 the table lists.
+ */
+export function FlaggedArticlesDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Flagged articles</span>
+      <span className="block">
+        {"The number of collected articles whose risk score is above "}{LOW_MAX}{" (Medium severity or higher). Each article counts once, even when several outlets report the same story, and articles of any age are included."}
+      </span>
+    </>
+  );
+}
+
+/**
+ * Risk Center's own matrix (RiskTab.tsx): rows are the platform severity
+ * bands, so a flagged article is in the same band here as in the table and
+ * the tiles. Columns are the engine's confidence value
+ * (risk_engine.py explainability.confidence = (topic_conf + sentiment_conf)
+ * / 2), shown in thirds. The Executive Analytics matrix keeps its own
+ * definition above.
+ */
+export function RiskMatrixSeverityConfidenceDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Risk Matrix: Severity × Confidence</span>
+      <span className="block">
+        {"Rows are the severity band of each flagged article: Medium ("}{LOW_MAX}{"–"}{MED_MAX}{"), High ("}{MED_MAX}{"–"}{HIGH_MAX}{") or Critical (above "}{HIGH_MAX}{"). The same bands are used in the table and the tiles."}
+      </span>
+      <span className="mt-1 block">
+        {"Confidence is how sure the system is about the signals it scored the article on (its tone and subject), from 0 to 100, shown as Low (under 33), Medium (33–66) or High (67+). It is not a prediction that the risk will happen or recur."}
+      </span>
+    </>
+  );
+}
+
 export function DocumentsAnalyzedDefinition() {
   return (
     <>
@@ -152,7 +191,7 @@ export function DocumentsAnalyzedDefinition() {
         Every document collected and processed for this client, whether or
         not it turned out to carry any risk — this is a coverage-volume
         count, not a count of confirmed risk incidents. For the count of
-        actual tracked risks, see Risk Center&apos;s &quot;Total Risks&quot;.
+        flagged articles, see Risk Center&apos;s &quot;Flagged articles&quot;.
       </span>
     </>
   );
@@ -181,31 +220,6 @@ export function AverageRiskScoreTrackedDefinition() {
         higher). Routine, near-zero-risk coverage is excluded so this
         doesn&apos;t get diluted by noise. This is a feed-wide average across
         this client&apos;s tracked risks, not tied to any single narrative.
-      </span>
-    </>
-  );
-}
-
-export function RiskCategoriesDefinition() {
-  return (
-    <>
-      <span className="block font-bold">Risk Category</span>
-      <span className="block">
-        The topic detected in a document that most drives its risk score.
-        Only inherently risky categories add their own weight: Regulatory Risk
-        and Legal Risk score highest, Cybersecurity and Safety Recall are
-        next, and Labor Relations is mid-severity.
-      </span>
-      <span className="block mt-1">
-        Every other category (for example <b>Innovation</b>, product or
-        competitive-positioning coverage such as pricing changes) carries no
-        inherent topic weight of its own (risk_config.py&apos;s TOPIC_WEIGHTS
-        sets it to 0 on purpose) -- its Risk Score comes entirely from that
-        document&apos;s sentiment and source-reliability signals.
-        That&apos;s why an Innovation-tagged article can still register a
-        non-trivial risk score when the coverage is negative, and why neutral
-        or positive news in those categories does not by itself count as a
-        risk.
       </span>
     </>
   );

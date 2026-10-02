@@ -10,6 +10,22 @@ from app.models.document import Document, DocumentMatch
 
 router = APIRouter()
 
+from app.core.risk_config import RISK_THRESHOLDS
+
+
+def _risk_level_of(score: float) -> str:
+    """Severity band of an UNROUNDED stored score -- identical to
+    RiskEngine.get_risk_level, so a document's band here can never disagree
+    with the `risk_level` stored on its RiskEvent (the rounded `risk` field
+    above can sit on the wrong side of a threshold by up to 0.5)."""
+    if score <= RISK_THRESHOLDS["LOW_TO_MEDIUM"]:
+        return "LOW"
+    if score <= RISK_THRESHOLDS["MEDIUM_TO_HIGH"]:
+        return "MEDIUM"
+    if score <= RISK_THRESHOLDS["HIGH_TO_CRITICAL"]:
+        return "HIGH"
+    return "CRITICAL"
+
 
 def _brand_gated_document_ids(db: Session, client_id):
     """
@@ -244,7 +260,7 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
     from sqlalchemy.orm import joinedload
     from app.models.entity import Entity, EntityMention
     from app.models.source import Source
-    from app.models.sentiment import DocumentSentiment
+    from app.models.sentiment import DocumentSentiment, EntitySentiment
     from app.models.risk import RiskEvent
     from app.models.topic import DocumentTopic
     from app.models.document import DocumentMatch
@@ -256,6 +272,16 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
     
     sentiments = db.query(DocumentSentiment).filter(DocumentSentiment.document_id.in_(doc_ids)).all()
     sentiment_map = {getattr(s, "document_id", None): getattr(s, "sentiment_score", 0.0) for s in sentiments if s}
+    # Real stored labels (never inferred from a weight): the document-level
+    # label, and the per-entity label for the entity a document's risk was
+    # scored on. risk_engine.py scores on the entity label when one exists and
+    # falls back to the document label otherwise; the same order is used here.
+    doc_label_map = {s.document_id: s.sentiment_label for s in sentiments if s and s.sentiment_label}
+    entity_label_map = {
+        (es.document_id, es.entity_id): es.sentiment_label
+        for es in db.query(EntitySentiment).filter(EntitySentiment.document_id.in_(doc_ids)).all()
+        if es.sentiment_label
+    }
     
     # Scoped by client_id, keeping the highest-scoring row per document --
     # same cross-client/cross-entity bug as read_document above: an
@@ -273,10 +299,12 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
     ).all()
     risk_map = {}
     risk_explain_map = {}
+    risk_entity_map = {}
     for r in risks:
         if r.document_id not in risk_map or r.risk_score > risk_map[r.document_id]:
             risk_map[r.document_id] = r.risk_score
             risk_explain_map[r.document_id] = r.explainability
+            risk_entity_map[r.document_id] = r.entity_id
     
     # Ordered by confidence_score desc so the first-seen-per-document_id loop
     # below keeps the highest-confidence topic, not an arbitrary DB-order row
@@ -338,6 +366,17 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
             # then the 0 placeholder, NOT a scored-zero. Additive field so
             # consumers can tell the two apart (Brand Equity audit B9).
             "scored": doc.id in risk_map,
+            # Additive: band of the unrounded score (None when unscored), the
+            # unrounded score itself, the stored Positive/Neutral/Negative label
+            # the score was based on (None when no label is stored), and
+            # whether `timestamp` is the article's own published date or the
+            # date we collected it.
+            "risk_level": _risk_level_of(risk_val) if doc.id in risk_map else None,
+            "risk_exact": risk_val if doc.id in risk_map else None,
+            "risk_sentiment": (
+                entity_label_map.get((doc.id, risk_entity_map.get(doc.id))) or doc_label_map.get(doc.id)
+            ) if doc.id in risk_map else None,
+            "date_basis": "published" if doc.published_at else ("collected" if doc.collected_at else None),
             "risk_explainability": risk_explainability,
             "original_content": doc.normalized_content,
             "extracted_entities": extracted_entities,

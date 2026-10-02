@@ -1,27 +1,28 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  AlertTriangle, Shield, ShieldAlert, X, ExternalLink,
-  TrendingUp, AlertOctagon, Info
+  AlertTriangle, ShieldAlert, X, ExternalLink,
+  AlertOctagon, Info
 } from "lucide-react";
-import {
-  ResponsiveContainer, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid
-} from "recharts";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
-import { getRiskLevel, RISK_THRESHOLDS } from "@/utils/riskLevel";
 import { fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 import {
-  RiskMatrixAxesDefinition,
-  RiskCategoriesDefinition,
+  RiskMatrixSeverityConfidenceDefinition,
   CriticalRisksVsActiveAlertsDefinition,
+  FlaggedArticlesDefinition,
 } from "@/lib/metricDefinitions";
+import { riskStatsFromSummary, sourceState, formatAsOf } from "@/utils/brandEquity";
+import {
+  flaggedDocs, buildMatrix, legacyCellDocs, tilesFromSummary, reasonSentence, dateLabel,
+  localDateKey, windowNote, unscoredNote, confidencePercent, formatScore, levelWord,
+  MATRIX_BANDS, MATRIX_CONFIDENCE,
+} from "@/utils/riskCenter";
 
 // Entity-type prefix for an alert's "Multi-Signal Incident: X" title, so a
 // person, a product, and the client's own brand don't all read as
@@ -35,6 +36,19 @@ const ALERT_ENTITY_TYPE_LABEL: Record<string, string> = {
   competitor: "Competitor",
 };
 
+const UNAVAILABLE = "—";
+
+const SEVERITY_BADGE: Record<string, string> = {
+  CRITICAL: "bg-red-500/10 text-red-500 border border-red-500/20",
+  HIGH: "bg-orange-500/10 text-orange-500 border border-orange-500/20",
+  MEDIUM: "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20",
+};
+const SEVERITY_TEXT: Record<string, string> = {
+  CRITICAL: "text-red-500",
+  HIGH: "text-orange-500",
+  MEDIUM: "text-yellow-600",
+};
+
 export interface RiskTabProps {
   alertsLoading: boolean;
   alertsError: string | null;
@@ -42,6 +56,11 @@ export interface RiskTabProps {
   documentsLoading: boolean;
   documentsError: string | null;
   documents: any[];
+  // Server-computed counts over every visible article (reputation-summary's
+  // `document_risk` block); the tiles read these, not the 500-article table.
+  reputationSummary?: any;
+  reputationSummaryLoading?: boolean;
+  reputationSummaryError?: string | null;
   clientId?: string | null;
 }
 
@@ -52,6 +71,9 @@ export function RiskTab({
   documentsLoading,
   documentsError,
   documents,
+  reputationSummary,
+  reputationSummaryLoading,
+  reputationSummaryError,
   clientId
 }: RiskTabProps) {
   const { theme } = useTheme();
@@ -61,23 +83,23 @@ export function RiskTab({
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
 
-  // Matrix-cell drill-down (Part B/C: filter-carrying navigation) --
-  // sourced from the URL (?tab=risk&impact=..&likelihood=..) instead of
-  // local state, so a cell click from this tab's own matrix and from the
-  // SOC Risk Matrix in Executive Analytics land on the exact same,
-  // shareable/back-navigable filtered view. Same shape the old local
-  // useState carried, so the drawer JSX below is unchanged.
+  // Matrix-cell drill-down -- sourced from the URL (?tab=risk&band=..&confidence=..)
+  // so a cell click lands on a shareable, back-navigable filtered view.
+  // The older ?impact=..&likelihood=.. form is still read because Executive
+  // Analytics' own matrix links to it with its own score tiers.
+  const bandParam = searchParams.get("band");
+  const confidenceParam = searchParams.get("confidence");
   const impactParam = searchParams.get("impact");
   const likelihoodParam = searchParams.get("likelihood");
-  const selectedCell = impactParam && likelihoodParam ? { impact: impactParam, likelihood: likelihoodParam } : null;
+  const selectedCell = bandParam && confidenceParam
+    ? { kind: "severity" as const, row: bandParam, col: confidenceParam }
+    : impactParam && likelihoodParam
+      ? { kind: "scoreTier" as const, row: impactParam, col: likelihoodParam }
+      : null;
   const clearCellFilter = () => navigateTo("risk", { severity: searchParams.get("severity") ?? undefined, date: searchParams.get("date") ?? undefined });
 
-  // Severity/date filters (Part C drill-throughs): narrow only the Risk
-  // Events table below, not the summary charts above it -- those are
-  // meant to show the whole picture, the table is the drill-through
-  // target. Only one of these is normally set at a time (a fresh
-  // navigateTo() call replaces the whole query string), but both are
-  // read independently so either can filter on its own.
+  // Severity/date filters (drill-throughs): narrow only the table below, not
+  // the tiles or matrix above it.
   const severityParam = searchParams.get("severity");
   const dateParam = searchParams.get("date");
   const hasListFilter = Boolean(severityParam || dateParam);
@@ -100,53 +122,16 @@ export function RiskTab({
     return () => { cancelled = true; };
   }, [selectedDocId, clientId]);
 
-  // Filter out documents with valid risk scores. Also requires risk above
-  // the LOW band: `risk` defaults to 0 for any matched document with no
-  // RiskEvent row at all, and 0 is a number -- an unfiltered `typeof
-  // d.risk === "number"` check let every matched document into the
-  // Incident Command Register, LOW-severity or not. Combined with
-  // trend velocity being direction-agnostic (risk_engine.py), that meant
-  // routine Positive/Neutral news (a profit surge, a land acquisition)
-  // sat in the register at equal visual weight to genuine incidents --
-  // confirmed live at ~80-90% of every client's risk events. Only
-  // MEDIUM+ is an actual incident; LOW-severity items still exist in the
-  // data (e.g. for Executive Reputation's own per-entity view) but don't
-  // belong in a register titled "incidents".
-  const riskDocs = useMemo(() => {
-    return (documents || [])
-      .filter(d => d && typeof d.risk === "number" && d.risk > RISK_THRESHOLDS.LOW_TO_MEDIUM)
-      .map(d => {
-        // D3/A4: previously derived from sentiment via an invented
-        // ((1 - sentiment) / 2) * 100 formula that risk_engine.py never
-        // computes -- a separately-fabricated number, not the real
-        // likelihood/confidence the backend actually calculated. Use the
-        // real confidence_modifier the engine stores in explainability.confidence
-        // (topic_conf + entity_sentiment_conf) / 2, falling back to 0 --
-        // same "no fabricated signal" convention risk_engine.py itself uses
-        // when an input is missing.
-        const likelihood = Math.round((d.risk_explainability?.confidence ?? 0) * 100);
-        return {
-          ...d,
-          likelihood,
-          severity: getRiskLevel(d.risk)
-        };
-      })
-      .sort((a, b) => b.risk - a.risk);
-  }, [documents]);
+  // Flagged = risk-scored and above the LOW band, banded on the backend's
+  // own unrounded `risk_level`. An article with no RiskEvent is "not scored",
+  // never a score of 0 (utils/riskCenter.ts). LOW-severity items exist in
+  // the data but are not incidents.
+  const riskDocs = useMemo(() => flaggedDocs(documents), [documents]);
 
-  // Risk Events table filter (severity=.. / date=.. from the URL) -- narrows
-  // only the table, matching exactly how the pie chart's severity bands are
-  // already computed above, so a filtered list here is always the same set
-  // of items the CEO clicked from.
   const filteredRiskDocs = useMemo(() => {
     return riskDocs.filter(d => {
       if (severityParam && d.severity.toLowerCase() !== severityParam) return false;
-      if (dateParam) {
-        const docDate = d.timestamp
-          ? new Date(d.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-          : null;
-        if (docDate !== dateParam) return false;
-      }
+      if (dateParam && localDateKey(d.timestamp) !== dateParam) return false;
       return true;
     });
   }, [riskDocs, severityParam, dateParam]);
@@ -185,71 +170,20 @@ export function RiskTab({
     return riskDocs.find(d => d.id === selectedDocId) || null;
   }, [selectedDocId, riskDocs]);
 
-  // 1. Risk Summary Statistics
-  // D3: previously only tracked critical/medium/low with thresholds that
-  // didn't match risk_engine.py, and had no "high" bucket at all — any
-  // document scoring 50-79 matched none of the three conditions and
-  // silently vanished from critical+medium+low while still counting toward
-  // `total`. Now uses the canonical 4-band classification.
-  const stats = useMemo(() => {
-    const total = riskDocs.length;
-    let critical = 0;
-    let high = 0;
-    let medium = 0;
-    let low = 0;
-    let sumScore = 0;
-    let highest = 0;
+  // Tiles: server counts over every visible article. null = unavailable.
+  const summaryState = sourceState(reputationSummaryLoading, reputationSummaryError);
+  const tiles = useMemo(
+    () => (summaryState === "ready" ? tilesFromSummary(riskStatsFromSummary(reputationSummary?.document_risk)) : null),
+    [summaryState, reputationSummary]
+  );
 
-    riskDocs.forEach(d => {
-      const level = getRiskLevel(d.risk);
-      if (level === "CRITICAL") critical++;
-      else if (level === "HIGH") high++;
-      else if (level === "MEDIUM") medium++;
-      else low++;
-
-      sumScore += d.risk;
-      if (d.risk > highest) highest = d.risk;
-    });
-
-    const avg = total > 0 ? (sumScore / total).toFixed(1) : "0.0";
-
-    return { total, critical, high, medium, low, avg, highest };
-  }, [riskDocs]);
-
-  // 3. 3x3 Matrix Grid Buckets
-  const matrixData = useMemo(() => {
-    const grid: Record<string, Record<string, any[]>> = {
-      HIGH: { LOW: [], MEDIUM: [], HIGH: [] },
-      MEDIUM: { LOW: [], MEDIUM: [], HIGH: [] },
-      LOW: { LOW: [], MEDIUM: [], HIGH: [] }
-    };
-
-    riskDocs.forEach(d => {
-      const impBucket = d.risk >= 67 ? "HIGH" : d.risk >= 33 ? "MEDIUM" : "LOW";
-      const likBucket = d.likelihood >= 67 ? "HIGH" : d.likelihood >= 33 ? "MEDIUM" : "LOW";
-      grid[impBucket][likBucket].push(d);
-    });
-
-    return grid;
-  }, [riskDocs]);
-
-  // 5. Category Distribution
-  const categoryData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    riskDocs.forEach(d => {
-      const t = d.topic || "General";
-      counts[t] = (counts[t] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [riskDocs]);
+  const matrix = useMemo(() => buildMatrix(riskDocs), [riskDocs]);
 
   if (documentsLoading) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="grid gap-6 md:grid-cols-6">
-          {[1, 2, 3, 4, 5, 6].map(x => (
+        <div className="grid gap-6 md:grid-cols-5">
+          {[1, 2, 3, 4, 5].map(x => (
             <div key={x} className={`h-20 rounded-3xl ${glassTokens[theme].card}`} />
           ))}
         </div>
@@ -269,21 +203,37 @@ export function RiskTab({
     );
   }
 
+  const tileValue = (v: number | null | undefined) => (tiles && v !== null && v !== undefined ? v : UNAVAILABLE);
+  const tileScore = (v: number | null | undefined) => (tiles && v !== null && v !== undefined ? formatScore(v) : UNAVAILABLE);
+  const asOfText = tiles?.asOf ? formatAsOf(tiles.asOf) : null;
+  const tableWindowNote = windowNote(riskDocs.length, tiles ? tiles.flagged : null);
+  const notChecked = unscoredNote(tiles?.unscored);
+
+  const selectedCellDocs = (() => {
+    if (!selectedCell) return [];
+    if (selectedCell.kind === "severity") {
+      return (matrix.grid as any)[selectedCell.row]?.[selectedCell.col] || [];
+    }
+    return legacyCellDocs(riskDocs, selectedCell.row, selectedCell.col);
+  })();
+
   return (
     <div className="space-y-8 relative">
-      
-      {/* 1. Risk Summary Cards -- Total/Critical get slightly larger type so
-          the two numbers an exec most needs land first, at a glance. */}
+
+      {/* 1. Summary tiles -- server counts over every article. Flagged and
+          Critical get slightly larger type so the two numbers an exec most
+          needs land first, at a glance. */}
       <div className="space-y-3">
-        <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>At a Glance</span>
-        <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 font-mono">
+        <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>
+          At a Glance · all-time counts{asOfText ? ` · scores as of ${asOfText}` : ""}
+        </span>
+        <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 font-mono">
           {[
-            { label: "Total Risks", value: stats.total, color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true },
-            { label: "Critical Risks", value: stats.critical, color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
-            { label: "High Risks", value: stats.high, color: "text-orange-500" },
-            { label: "Medium Risks", value: stats.medium, color: "text-yellow-500" },
-            { label: "Low Risks", value: stats.low, color: "text-emerald-500" },
-            { label: "Highest Risk", value: stats.highest, color: "text-red-500 font-black" }
+            { label: "Flagged Articles", value: tileValue(tiles?.flagged), color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true, def: <FlaggedArticlesDefinition /> },
+            { label: "Critical", value: tileValue(tiles?.critical), color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
+            { label: "High", value: tileValue(tiles?.high), color: "text-orange-500" },
+            { label: "Medium", value: tileValue(tiles?.medium), color: "text-yellow-500" },
+            { label: "Highest Score", value: tileScore(tiles?.highest), color: tiles && tiles.highest !== null ? "text-red-500 font-black" : mutedText(theme) }
           ].map((card, idx) => (
             <div
               key={idx}
@@ -292,10 +242,10 @@ export function RiskTab({
               <div className={SPECULAR_LINE} />
               {/* Label stays plain, single-line text -- the (i) trigger is
                   pinned to the card's corner instead of sharing the flex row
-                  with it. Inline placement (fine on wide headers like
-                  Severity Profile/Risk Matrix) forced a wrap here: these
-                  tiles are only 1/7 of the row's width, too narrow for
-                  label text + the tooltip's 44px touch target on one line. */}
+                  with it. Inline placement (fine on wide headers like the
+                  Risk Matrix) forced a wrap here: these tiles are narrow,
+                  too narrow for label text + the tooltip's 44px touch target
+                  on one line. */}
               {'def' in card && card.def && (
                 // Wrapper div carries the absolute positioning -- passing
                 // "absolute" straight into InfoTooltip's own className prop
@@ -314,6 +264,13 @@ export function RiskTab({
             </div>
           ))}
         </div>
+        {summaryState === "loading" && (
+          <p className={`text-xs font-mono ${mutedText(theme)}`}>Loading counts…</p>
+        )}
+        {summaryState !== "loading" && !tiles && (
+          <p className={`text-xs font-mono ${mutedText(theme)}`}>Counts are unavailable right now.</p>
+        )}
+        {notChecked && <p className={`text-xs font-mono ${mutedText(theme)}`}>{notChecked}</p>}
       </div>
 
       {/* 1b. Active Alerts */}
@@ -341,7 +298,7 @@ export function RiskTab({
           ) : alertsError ? (
             <TelemetryErrorWidget title="Alert Feed Offline" message={alertsError} />
           ) : alerts.length === 0 ? (
-            <div className={`text-center py-6 ${mutedText(theme)} font-mono text-xs`}>No active alerts.</div>
+            <div className={`text-center py-6 ${mutedText(theme)} font-mono text-xs`}>No unacknowledged alerts.</div>
           ) : (
             <div className="space-y-2 max-h-[420px] overflow-y-auto overflow-x-hidden pr-1">
               {alerts.map((alert) => {
@@ -383,12 +340,10 @@ export function RiskTab({
                       </span>
                     </button>
 
-                    {/* AI Summary -- same What/When/How-to-solve pattern as
-                        the Risk Event drawer above and the narrative
-                        drawer's Root Cause Analysis section, generated
-                        per-alert by ai_summary_engine.py. Alerts have no
-                        existing full drill-through drawer, so this expands
-                        inline instead of opening a second drawer type. */}
+                    {/* Expanded alert: the deterministic "why" (what/when,
+                        built from the alert's own stored evidence) and the
+                        one AI-generated field (how_to_solve) are labelled
+                        separately -- only the latter is LLM text. */}
                     {isExpanded && (
                       <div className={`px-3 pb-3 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                         {aiSummary ? (
@@ -398,21 +353,9 @@ export function RiskTab({
                           // translucent background let that row's text
                           // bleed through and become unreadable.
                           <div className={`mt-2.5 space-y-2.5 p-3 rounded-xl border ${isDark ? "bg-zinc-900 border-white/[0.08]" : "bg-white border-black/[0.08]"}`}>
-                            <div className="flex items-center justify-between">
-                              <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
-                                <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> AI Summary
-                              </span>
-                              {aiSummary.source === "narrative" && (
-                                <InfoTooltip label="About this AI Summary">
-                                  Reused from this alert&apos;s linked narrative&apos;s own
-                                  root-cause analysis, not freshly generated for this
-                                  alert alone.
-                                </InfoTooltip>
-                              )}
-                            </div>
                             <div className="space-y-2">
                               <div className="space-y-0.5">
-                                <span className={`block uppercase text-xs ${mutedText(theme)}`}>What</span>
+                                <span className={`block uppercase text-xs ${mutedText(theme)}`}>Why this was flagged</span>
                                 <p className={`leading-relaxed ${bodyText(theme)}`}>{aiSummary.what}</p>
                               </div>
                               <div className="space-y-0.5">
@@ -420,14 +363,23 @@ export function RiskTab({
                                 <p className={`leading-relaxed ${bodyText(theme)}`}>{aiSummary.when || "Unknown"}</p>
                               </div>
                               <div className="space-y-0.5">
-                                <span className={`block uppercase text-xs ${mutedText(theme)}`}>How to solve</span>
+                                <span className={`uppercase text-xs flex items-center ${mutedText(theme)}`}>
+                                  <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> Suggested next step (AI-generated)
+                                  {aiSummary.source === "narrative" && (
+                                    <InfoTooltip label="About this suggestion">
+                                      Reused from this alert&apos;s linked narrative&apos;s own
+                                      root-cause analysis, not freshly generated for this
+                                      alert alone.
+                                    </InfoTooltip>
+                                  )}
+                                </span>
                                 <p className={`leading-relaxed ${bodyText(theme)}`}>{aiSummary.how_to_solve}</p>
                               </div>
                             </div>
                           </div>
                         ) : (
                           <div className={`pt-2.5 text-xs italic ${mutedText(theme)}`}>
-                            AI summary not yet generated for this alert.
+                            Suggested next step not yet generated for this alert.
                           </div>
                         )}
                       </div>
@@ -440,53 +392,44 @@ export function RiskTab({
         </CardContent>
       </Card>
 
-      {/* Grid containing the Likelihood Matrix (Severity Profile removed) */}
+      {/* 3. Risk Matrix: severity band (platform bands) x confidence */}
       <div className="grid gap-6 md:grid-cols-12">
-
-        {/* 3. 3x3 Risk Matrix */}
         <Card className={`${glassCard(theme)} md:col-span-12`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
-              Risk Matrix (Likelihood × Impact)
-              <InfoTooltip label="About Impact and Likelihood"><RiskMatrixAxesDefinition /></InfoTooltip>
+              Risk Matrix (Severity × Confidence)
+              <InfoTooltip label="About Severity and Confidence"><RiskMatrixSeverityConfidenceDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
             <div className="grid grid-cols-[56px_1fr] gap-2 font-mono text-xs">
 
-              {/* Y Axis Labels -- per-row IMPACT tier, matching the X axis's
-                  per-column LIKELIHOOD tier labels below (xoop_ui_clarity_review.md:
-                  only the X axis was labeled, so a viewer had no way to tell
-                  which row was HIGH/MEDIUM/LOW impact without hovering each cell).
-                  Fixed 56px label column (was col-span-1 of a 12-col grid, i.e.
-                  1/12 of the card width at every breakpoint -- ~18px on a real
-                  375px phone, forcing "HIGH IMPACT" etc to wrap across several
-                  cramped lines. A fixed minimum width keeps the label legible
-                  at any screen size instead of shrinking proportionally with
-                  the card.) */}
+              {/* Y axis: the severity band of each row (same bands as the
+                  table and tiles). Fixed 56px label column so the labels
+                  stay legible at any screen width. */}
               <div className="grid grid-rows-3 gap-1">
-                {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
+                {MATRIX_BANDS.map((rowKey) => (
                   <div key={rowKey} className="h-[55px] flex items-center justify-center text-center">
-                    <span className={`uppercase tracking-widest font-bold text-[10px] leading-tight ${mutedText(theme)}`}>{rowKey} IMPACT</span>
+                    <span className={`uppercase tracking-widest font-bold text-[10px] leading-tight ${mutedText(theme)}`}>{rowKey}</span>
                   </div>
                 ))}
               </div>
 
               {/* 3x3 Matrix Grid */}
               <div className={`grid grid-rows-3 gap-1 p-1.5 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
-                {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
+                {MATRIX_BANDS.map((rowKey) => (
                   <div key={rowKey} className="grid grid-cols-3 gap-1 h-[55px]">
-                    {["LOW", "MEDIUM", "HIGH"].map((colKey) => {
-                      const cellDocs = matrixData[rowKey]?.[colKey] || [];
+                    {MATRIX_CONFIDENCE.map((colKey) => {
+                      const cellDocs = matrix.grid[rowKey][colKey];
                       const count = cellDocs.length;
-                      
-                      let avgRisk = "0.0";
-                      let maxRisk = "0.0";
+
+                      let avgRisk = "";
+                      let maxRisk = "";
                       if (count > 0) {
-                        const sum = cellDocs.reduce((acc, val) => acc + val.risk, 0);
-                        avgRisk = (sum / count).toFixed(1);
-                        maxRisk = Math.max(...cellDocs.map(d => d.risk)).toFixed(0);
+                        const scores = cellDocs.map(d => (typeof d.risk_exact === "number" ? d.risk_exact : d.risk));
+                        avgRisk = (Math.round((scores.reduce((a, b) => a + b, 0) / count) * 10) / 10).toString();
+                        maxRisk = formatScore(Math.max(...scores));
                       }
 
                       let bgClass = "bg-[#030712]/40 border-[#1F2937]/35 text-slate-600";
@@ -501,39 +444,39 @@ export function RiskTab({
                       }
 
                       return (
-                        <div 
-                          key={colKey} 
-                          onClick={() => count > 0 && navigateTo("risk", { impact: rowKey, likelihood: colKey })}
+                        <div
+                          key={colKey}
+                          onClick={() => count > 0 && navigateTo("risk", { band: rowKey, confidence: colKey })}
                           className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center ${bgClass}`}
                         >
                           {count > 0 ? (
-                            <span className="text-xs font-bold block">🔴 {count} {count === 1 ? "Incident" : "Incidents"}</span>
+                            <span className="text-xs font-bold block">{count} {count === 1 ? "article" : "articles"}</span>
                           ) : (
-                            <span className={`text-xs block ${mutedText(theme)}`}>No incidents</span>
+                            <span className={`text-xs block ${mutedText(theme)}`}>No articles</span>
                           )}
 
                           {/* Hover diagnostics tooltip -- kept solid (not glass-translucent) so
                               it stays unambiguous over an already-colored matrix cell */}
                           <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-xs w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
-                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell Diagnostics</div>
+                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell details</div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Impact:</span>
-                              <span className={bodyText(theme)}>{rowKey}</span>
+                              <span className={mutedText(theme)}>Severity:</span>
+                              <span className={bodyText(theme)}>{levelWord(rowKey)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Likelihood:</span>
-                              <span className={bodyText(theme)}>{colKey}</span>
+                              <span className={mutedText(theme)}>Confidence:</span>
+                              <span className={bodyText(theme)}>{levelWord(colKey)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Incidents:</span>
+                              <span className={mutedText(theme)}>Articles:</span>
                               <span className={`font-bold ${bodyText(theme)}`}>{count}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Avg Risk Score:</span>
+                              <span className={mutedText(theme)}>Average score:</span>
                               <span className={`font-bold ${bodyText(theme)}`}>{count > 0 ? avgRisk : "N/A"}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Highest Risk:</span>
+                              <span className={mutedText(theme)}>Highest score:</span>
                               <span className="text-red-500 font-bold">{count > 0 ? maxRisk : "N/A"}</span>
                             </div>
                           </div>
@@ -547,57 +490,25 @@ export function RiskTab({
               {/* X Axis Labels */}
               <div />
               <div className={`grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-xs ${mutedText(theme)}`}>
-                <span className="min-w-0 break-words">LOW LIKELIHOOD</span>
-                <span className="min-w-0 break-words">MED LIKELIHOOD</span>
-                <span className="min-w-0 break-words">HIGH LIKELIHOOD</span>
+                <span className="min-w-0 break-words">LOW CONFIDENCE</span>
+                <span className="min-w-0 break-words">MED CONFIDENCE</span>
+                <span className="min-w-0 break-words">HIGH CONFIDENCE</span>
               </div>
             </div>
+            {matrix.unplaced > 0 && (
+              <p className={`mt-3 text-xs font-mono ${mutedText(theme)}`}>
+                {matrix.unplaced} flagged {matrix.unplaced === 1 ? "article has" : "articles have"} no confidence value and {matrix.unplaced === 1 ? "is" : "are"} not shown in the grid.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* 5. Risk Categories */}
-      <Card className={glassCard(theme)}>
-        <div className={SPECULAR_LINE} />
-        <CardHeader className="pb-2">
-          <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center gap-1`}>
-            <TrendingUp className="h-4 w-4 mr-2" style={{ color: accent }} />
-            Incident Categories
-            <InfoTooltip label="About Incident Categories"><RiskCategoriesDefinition /></InfoTooltip>
-          </CardTitle>
-          {categoryData.some(c => c.name === "Innovation") && (
-            // Promoted from the hover-only tooltip above (same wording,
-            // condensed to one line) -- an Innovation-tagged bar showing a
-            // non-trivial count next to Cybersecurity/Legal Risk otherwise
-            // reads as "positive news counts as risk" with no explanation
-            // unless the reader thinks to hover the (i) icon.
-            <p className={`text-xs font-mono mt-1 ${mutedText(theme)}`}>
-              Innovation coverage is tracked here because major announcements can carry reputational risk even when the news itself is positive (e.g. execution risk, investor reaction) — its score comes from sentiment and source signals, not the topic itself.
-            </p>
-          )}
-        </CardHeader>
-        <CardContent className="h-[200px] pl-2">
-          {categoryData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
-                <XAxis type="number" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={12} tickLine={false} />
-                <YAxis dataKey="name" type="category" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={12} tickLine={false} width={80} />
-                <Tooltip contentStyle={{ backgroundColor: isDark ? '#18181b' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e4e4e7', color: isDark ? '#fff' : '#18181b', fontFamily: 'monospace', fontSize: 10 }} />
-                <Bar dataKey="count" name="Incidents" fill={accent} radius={[0, 4, 4, 0]} barSize={12} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className={`flex items-center justify-center h-full font-mono text-xs ${mutedText(theme)}`}>No category metrics loaded.</div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 6. High Risk Incidents Table -- the dense data view: risk score,
-          severity, and topic badges below intentionally use full-strength
-          semantic colors (red/orange/yellow, solid badge borders) rather
-          than the muted glass-pill treatment, since these are the actual
-          product signal and must stay unambiguous over the translucent
+      {/* 6. Flagged Articles table -- the dense data view: score and
+          severity badges below intentionally use full-strength semantic
+          colors (red/orange/yellow, solid badge borders) rather than the
+          muted glass-pill treatment, since these are the actual product
+          signal and must stay unambiguous over the translucent
           background, not just decorative tags. See redesign report. */}
       <Card className={glassCard(theme)}>
         <div className={SPECULAR_LINE} />
@@ -605,9 +516,11 @@ export function RiskTab({
           <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
             <span className="flex items-center">
               <ShieldAlert className="h-4 w-4 text-red-500 mr-2" />
-              Risk Events
+              Flagged Articles
             </span>
-            <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-xs">{filteredRiskDocs.length} Incidents</Badge>
+            <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-xs">
+              {filteredRiskDocs.length} {filteredRiskDocs.length === 1 ? "article" : "articles"}
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -621,73 +534,67 @@ export function RiskTab({
               </button>
             </div>
           )}
+          {tableWindowNote && (
+            <p className={`mb-3 text-xs font-mono ${mutedText(theme)}`}>{tableWindowNote}</p>
+          )}
           <div ref={riskTableWrapperRef} className="relative">
             <Table>
               <TableHeader className={isDark ? "border-white/[0.12] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}>
                 <TableRow className={isDark ? "border-white/[0.12]" : "border-black/[0.06]"}>
-                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>INCIDENT HEADLINE</TableHead>
+                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>HEADLINE</TableHead>
                   <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>RISK SCORE</TableHead>
                   {/* Reduced default column set at tablet widths (<lg, matching
-                      the sidebar's own breakpoint) -- SEVERITY/CORE TOPIC/SOURCE
-                      stay reachable via the existing row-level "Details" modal
-                      instead of squeezing all 7 columns into the scroll
+                      the sidebar's own breakpoint) -- SEVERITY/SOURCE stay
+                      reachable via the existing row-level "Details" modal
+                      instead of squeezing every column into the scroll
                       container (ui_redesign_plan_tablet.md Section 4/8). */}
                   <TableHead className={`hidden lg:table-cell font-mono text-xs text-center ${mutedText(theme)}`}>SEVERITY</TableHead>
-                  <TableHead className={`hidden lg:table-cell font-mono text-xs text-center ${mutedText(theme)}`}>CORE TOPIC</TableHead>
                   <TableHead className={`hidden lg:table-cell font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
-                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
+                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>DATE</TableHead>
                   <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRiskDocs.map((doc, idx) => (
-                  <TableRow
-                    key={doc.id}
-                    className={`transition-colors cursor-pointer ${isDark ? "border-white/[0.08] hover:bg-white/[0.04]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}
-                    onClick={() => setSelectedDocId(doc.id)}
-                  >
-                    <TableCell className={`font-mono text-xs font-bold max-w-[320px] truncate ${bodyText(theme)}`}>
-                      {doc.title}
-                    </TableCell>
-                    <TableCell className={`text-center font-mono text-xs font-black ${
-                      doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-500" : doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-orange-500" : "text-yellow-600"
-                    }`}>
-                      {Math.round(doc.risk || 0)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-center">
-                      <Badge className={`font-mono text-xs ${
-                        doc.severity === "CRITICAL" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
-                        doc.severity === "HIGH" ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
-                        "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
-                      }`}>
-                        {doc.severity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-center">
-                      <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] font-mono text-xs" : "border-[#3B82F6]/30 text-[#3B82F6] font-mono text-xs"}>
-                        {doc.topic}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={`hidden lg:table-cell font-mono text-xs truncate max-w-[120px] ${mutedText(theme)}`}>
-                      {doc.source || "Unknown Source"}
-                    </TableCell>
-                    <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
-                      {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSelectedDocId(doc.id); }}
-                        className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-xs rounded px-3 min-h-[44px] inline-flex items-center justify-center"
-                      >
-                        Details
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredRiskDocs.map((doc) => {
+                  const when = dateLabel(doc);
+                  return (
+                    <TableRow
+                      key={doc.id}
+                      className={`transition-colors cursor-pointer ${isDark ? "border-white/[0.08] hover:bg-white/[0.04]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}
+                      onClick={() => setSelectedDocId(doc.id)}
+                    >
+                      <TableCell className={`font-mono text-xs font-bold max-w-[320px] truncate ${bodyText(theme)}`}>
+                        {doc.title}
+                      </TableCell>
+                      <TableCell className={`text-center font-mono text-xs font-black ${SEVERITY_TEXT[doc.severity]}`}>
+                        {formatScore(doc.risk_exact ?? doc.risk)}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <Badge className={`font-mono text-xs ${SEVERITY_BADGE[doc.severity]}`}>
+                          {doc.severity}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className={`hidden lg:table-cell font-mono text-xs truncate max-w-[120px] ${mutedText(theme)}`}>
+                        {doc.source || "Unknown Source"}
+                      </TableCell>
+                      <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
+                        {when.text}{when.collected ? " (collected)" : ""}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedDocId(doc.id); }}
+                          className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white font-mono text-xs rounded px-3 min-h-[44px] inline-flex items-center justify-center"
+                        >
+                          Details
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {filteredRiskDocs.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
-                      {hasListFilter ? "No risk incidents match this filter." : "No risk incidents flagged."}
+                    <TableCell colSpan={6} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
+                      {hasListFilter ? "No flagged articles match this filter." : "No flagged articles."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -708,13 +615,20 @@ export function RiskTab({
         </CardContent>
       </Card>
 
-      {/* 7. Risk Details Drawer (Slide-Over Panel) -- kept high-opacity
+      {/* 7. Details Drawer (Slide-Over Panel) -- kept high-opacity
           (bg-zinc-950/95 dark, bg-white/95 light) rather than the standard
           glass alpha: at full page height over the dimmed backdrop, the
           spec's translucency read as illegible on long paragraph text
           (Original Article Snippet) in review, so this is the one place we
           backed off transparency for legibility per Part 3 of the brief. */}
-      {selectedDoc && (
+      {selectedDoc && (() => {
+        const when = dateLabel(selectedDoc);
+        const conf = confidencePercent(selectedDoc);
+        const exp = selectedDoc.risk_explainability;
+        const reason = reasonSentence(selectedDoc);
+        const topicContributed = typeof exp?.topic_contribution === "number" && exp.topic_contribution > 0;
+        const nextStep = exp?.ai_summary?.how_to_solve;
+        return (
         <div className="fixed inset-0 z-50 overflow-hidden font-mono">
           {/* Overlay backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedDocId(null)} />
@@ -745,55 +659,43 @@ export function RiskTab({
                   <h3 className={`text-sm font-bold leading-snug ${bodyText(theme)}`}>{selectedDoc.title}</h3>
                   <div className="flex flex-wrap gap-2 text-xs">
                     <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>Source: {selectedDoc.source}</span>
-                    <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>Topic: {selectedDoc.topic}</span>
+                    <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>
+                      {when.collected ? "Collected" : "Published"}: {when.text}
+                    </span>
+                    {topicContributed && selectedDoc.topic && (
+                      <span className={`${glassPill(theme)} px-2 py-0.5 ${mutedText(theme)}`}>Subject: {selectedDoc.topic}</span>
+                    )}
                   </div>
                 </div>
 
-                {/* Risk score calculation breakdown */}
+                {/* Why this was flagged -- plain sentence from stored
+                    explainability (no engine words, no raw floats). */}
                 <div className={`p-4 rounded-2xl border border-red-500/20 space-y-3 ${isDark ? "bg-black/30" : "bg-black/[0.03]"}`}>
                   <div className={`flex justify-between items-center border-b pb-2 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-                    <span className="text-xs font-bold text-red-500">Risk Rating</span>
-                    <span className="text-lg font-black text-red-500">{selectedDoc.risk} / 100</span>
+                    <span className={`text-xs font-bold ${SEVERITY_TEXT[selectedDoc.severity]}`}>Risk Rating · {levelWord(selectedDoc.severity)}</span>
+                    <span className={`text-lg font-black ${SEVERITY_TEXT[selectedDoc.severity]}`}>
+                      {formatScore(typeof selectedDoc.risk_exact === "number" ? selectedDoc.risk_exact : selectedDoc.risk)} / 100
+                    </span>
                   </div>
                   <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between">
-                      <span className={mutedText(theme)}>Impact Score:</span>
-                      {/* A4: previously re-displayed selectedDoc.risk (the
-                          overall score, already shown above) instead of the
-                          topic/heuristic component that actually feeds it --
-                          risk_engine.py's own explainability.topic_contribution. */}
-                      <span className={bodyText(theme)}>{selectedDoc.risk_explainability?.topic_contribution ?? 0}</span>
+                      <span className={mutedText(theme)}>Tone of the article:</span>
+                      <span className={bodyText(theme)}>{selectedDoc.risk_sentiment ?? "Unavailable"}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className={mutedText(theme)}>Sentiment:</span>
-                      {/* A4: previously the raw sentiment_score (-1..1), not
-                          the sentiment_contribution weight risk_engine.py
-                          actually used in the score. */}
-                      <span className={bodyText(theme)}>{(selectedDoc.risk_explainability?.sentiment_contribution ?? 0).toFixed(2)}</span>
+                      <span className={mutedText(theme)}>Confidence:</span>
+                      <span className={`font-bold ${bodyText(theme)}`}>{conf === null ? "Unavailable" : `${conf}%`}</span>
                     </div>
-                    <div className={`flex justify-between border-t pt-1.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                      <span className={mutedText(theme)}>Likelihood:</span>
-                      <span className={`font-bold ${bodyText(theme)}`}>{selectedDoc.likelihood}%</span>
-                    </div>
-                    {selectedDoc.risk_explainability?.role_classification_source && selectedDoc.risk_explainability.role_classification_source !== "not_evaluated" && (
+                    {exp?.role_classification_source === "llm" && exp.role_classification === "SELF" && (
                       <div className={`flex justify-between border-t pt-1.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                        <span className={mutedText(theme)}>Attribution:</span>
-                        <span className={
-                          selectedDoc.risk_explainability.role_classification === "BYSTANDER" || selectedDoc.risk_explainability.role_classification === "EXONERATED"
-                            ? "text-emerald-500 font-bold"
-                            : bodyText(theme)
-                        }>
-                          {selectedDoc.risk_explainability.role_classification ?? "SELF (unchanged)"}
-                          {selectedDoc.risk_explainability.role_classification_source === "fallback_unchanged" && " (fallback)"}
-                        </span>
+                        <span className={mutedText(theme)}>AI check:</span>
+                        <span className={bodyText(theme)}>Company is the subject of the article</span>
                       </div>
                     )}
                   </div>
-                  {selectedDoc.risk_explainability?.decision_reason && (
-                    <p className={`text-xs leading-relaxed border-t pt-2 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                      {selectedDoc.risk_explainability.decision_reason}
-                    </p>
-                  )}
+                  <p className={`text-xs leading-relaxed border-t pt-2 ${mutedText(theme)} ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
+                    {reason ?? "Details unavailable."}
+                  </p>
                 </div>
 
                 {/* Original Article Content */}
@@ -806,44 +708,28 @@ export function RiskTab({
                   </div>
                 </div>
 
-                {/* AI Summary -- same What/When/How-to-solve pattern as the
-                    narrative drawer's Root Cause Analysis section
-                    (NarrativesTab.tsx), generated per-item by
-                    ai_summary_engine.py and stored in this item's own
-                    risk_explainability.ai_summary. Absent (not rendered) for
-                    LOW-severity items, which never get one, and for any
-                    item whose first summary hasn't run yet. */}
-                {selectedDoc.risk_explainability?.ai_summary && (
+                {/* Suggested next step: the only LLM-generated text in this
+                    drawer (ai_summary_engine.py's how_to_solve), so it is the
+                    only part labelled AI. Absent until the first summary run
+                    has produced one for this item. */}
+                {nextStep && (
                   // Solid opaque panel (not the translucent glass
                   // convention used elsewhere in this drawer) -- reported
                   // unreadable against the drawer's own background.
                   <div className={`space-y-2.5 p-4 rounded-2xl border ${isDark ? "bg-zinc-900 border-white/[0.08]" : "bg-white border-black/[0.08]"}`}>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
-                        <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> AI Summary
+                        <Info className="h-3.5 w-3.5 mr-1" style={{ color: accent }} /> Suggested next step (AI-generated)
                       </span>
-                      {selectedDoc.risk_explainability.ai_summary.source === "narrative" && (
-                        <InfoTooltip label="About this AI Summary">
+                      {exp?.ai_summary?.source === "narrative" && (
+                        <InfoTooltip label="About this suggestion">
                           Reused from this item&apos;s linked narrative&apos;s own root-cause
                           analysis, not freshly generated for this item alone -- avoids a
                           second, potentially-conflicting explanation of the same story.
                         </InfoTooltip>
                       )}
                     </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="space-y-0.5">
-                        <span className={`block uppercase text-xs ${mutedText(theme)}`}>What</span>
-                        <p className={`leading-relaxed ${bodyText(theme)}`}>{selectedDoc.risk_explainability.ai_summary.what}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <span className={`block uppercase text-xs ${mutedText(theme)}`}>When</span>
-                        <p className={`leading-relaxed ${bodyText(theme)}`}>{selectedDoc.risk_explainability.ai_summary.when || "Unknown"}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <span className={`block uppercase text-xs ${mutedText(theme)}`}>How to solve</span>
-                        <p className={`leading-relaxed ${bodyText(theme)}`}>{selectedDoc.risk_explainability.ai_summary.how_to_solve}</p>
-                      </div>
-                    </div>
+                    <p className={`text-xs leading-relaxed ${bodyText(theme)}`}>{nextStep}</p>
                   </div>
                 )}
 
@@ -872,10 +758,11 @@ export function RiskTab({
 
             </div>
           </div>
-      </div>
-      )}
+        </div>
+        );
+      })()}
 
-      {/* 8. Risk Cell Incidents Drawer -- same high-opacity backing as the
+      {/* 8. Matrix Cell Drawer -- same high-opacity backing as the
           drawer above, for the same legibility reason. */}
       {selectedCell && (
         <div className="fixed inset-0 z-50 overflow-hidden font-mono">
@@ -888,7 +775,9 @@ export function RiskTab({
                 <div className="flex items-center space-x-3">
                   <ShieldAlert className="h-5 w-5 text-red-500" />
                   <span className="text-sm font-bold uppercase" style={{ color: accent }}>
-                    Incidents: {selectedCell.impact} Impact / {selectedCell.likelihood} Likelihood
+                    {selectedCell.kind === "severity"
+                      ? `Flagged articles: ${selectedCell.row} severity / ${selectedCell.col} confidence`
+                      : `Flagged articles: ${selectedCell.row} score tier / ${selectedCell.col} confidence`}
                   </span>
                 </div>
                 <button
@@ -902,28 +791,25 @@ export function RiskTab({
 
               {/* Content List */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-4">
-                {(() => {
-                  const cellDocs = matrixData[selectedCell.impact]?.[selectedCell.likelihood] || [];
-                  if (cellDocs.length === 0) {
-                    return <div className={`text-center py-10 text-xs ${mutedText(theme)}`}>No incidents in this cell.</div>;
-                  }
-                  return cellDocs.map((doc, idx) => (
+                {selectedCellDocs.length === 0 ? (
+                  <div className={`text-center py-10 text-xs ${mutedText(theme)}`}>No articles in this cell.</div>
+                ) : selectedCellDocs.map((doc: any, idx: number) => {
+                  const when = dateLabel(doc);
+                  return (
                     <div key={doc.id ?? idx} className={`p-4 rounded-2xl border space-y-3 transition-colors ${isDark ? "bg-black/30 border-white/[0.08] hover:border-[#00F5D4]/40" : "bg-black/[0.03] border-black/[0.06] hover:border-[#3B82F6]/40"}`}>
                       <div className="flex justify-between items-start">
                         <span className={`text-xs ${mutedText(theme)}`}>Source: {doc.source}</span>
-                        <Badge className={`font-mono text-xs ${
-                          doc.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "bg-red-500/10 text-red-500 border border-red-500/20" :
-                          doc.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" :
-                          "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
-                        }`}>
-                          Risk Score: {Math.round(doc.risk || 0)}
+                        <Badge className={`font-mono text-xs ${SEVERITY_BADGE[doc.severity]}`}>
+                          {levelWord(doc.severity)} · {formatScore(doc.risk_exact ?? doc.risk)}
                         </Badge>
                       </div>
                       <h4 className={`text-xs font-bold leading-snug ${bodyText(theme)}`}>{doc.title}</h4>
                       <div className={`flex justify-between items-center text-xs pt-1 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                        <span className={mutedText(theme)}>Topic: {doc.topic}</span>
                         <span className={mutedText(theme)}>
-                          {doc.timestamp ? new Date(doc.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
+                          Confidence: {confidencePercent(doc) === null ? "N/A" : `${confidencePercent(doc)}%`}
+                        </span>
+                        <span className={mutedText(theme)}>
+                          {when.text}{when.collected ? " (collected)" : ""}
                         </span>
                       </div>
                       <div className="flex justify-end pt-1">
@@ -935,8 +821,8 @@ export function RiskTab({
                         </button>
                       </div>
                     </div>
-                  ));
-                })()}
+                  );
+                })}
               </div>
 
               {/* Footer */}

@@ -1386,12 +1386,18 @@ def promote_executive_candidates(client_id: UUID, db: Session = Depends(get_db))
 
 def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
     """
-    Per-DOCUMENT risk counts for the Brand Equity page, computed over every
-    visible document (no 500-document window): a document counts once, at its
-    highest risk across this client's non-competitor entities, rounded to a whole
-    number exactly like the documents endpoint, and only when above the LOW band
-    (same floor Risk Center uses). Documents with no RiskEvent at all are
-    reported as `unscored_documents`; they are not counted as zero-risk.
+    Per-DOCUMENT risk counts for the Brand Equity and Risk Center pages,
+    computed over every visible document (no 500-document window): a document
+    counts once, at its highest risk across this client's non-competitor
+    entities, and only when above the LOW band (same floor Risk Center uses).
+    Severity bands are applied to the UNROUNDED stored score, exactly like
+    RiskEngine.get_risk_level and the `risk_level` column, so a count here can
+    never disagree with a stored band; `highest` is the unrounded score (the
+    page formats it so the number shown never contradicts its band), while
+    `average` and `top` stay whole numbers like the documents endpoint's `risk`. Documents with no
+    RiskEvent at all are reported as `unscored_documents`; they are not
+    counted as zero-risk. `as_of` is when the newest of these scores was
+    computed (None if there are none).
     """
     from app.core.risk_config import RISK_THRESHOLDS
     from app.api.endpoints.documents import get_client_visible_document_ids
@@ -1400,23 +1406,27 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
 
     visible = get_client_visible_document_ids(db, client_id)
     best: Dict[Any, float] = {}
+    as_of = None
     if visible:
-        rows = db.query(RiskEvent.document_id, RiskEvent.risk_score).outerjoin(
+        rows = db.query(RiskEvent.document_id, RiskEvent.risk_score, RiskEvent.computed_at, RiskEvent.created_at).outerjoin(
             Entity, Entity.id == RiskEvent.entity_id
         ).filter(
             RiskEvent.client_id == client_id,
             RiskEvent.document_id.in_(visible),
             or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
         ).all()
-        for doc_id, score in rows:
+        for doc_id, score, computed_at, created_at in rows:
             if score is not None and (doc_id not in best or score > best[doc_id]):
                 best[doc_id] = score
+            stamp = computed_at or created_at
+            if stamp is not None and (as_of is None or stamp > as_of):
+                as_of = stamp
 
-    rounded = {d: round(v) for d, v in best.items()}
-    risky = {d: v for d, v in rounded.items() if v > RISK_THRESHOLDS["LOW_TO_MEDIUM"]}
-    critical = sum(1 for v in risky.values() if v > RISK_THRESHOLDS["HIGH_TO_CRITICAL"])
-    high = sum(1 for v in risky.values() if RISK_THRESHOLDS["MEDIUM_TO_HIGH"] < v <= RISK_THRESHOLDS["HIGH_TO_CRITICAL"])
-    medium = len(risky) - critical - high
+    risky_raw = {d: v for d, v in best.items() if v > RISK_THRESHOLDS["LOW_TO_MEDIUM"]}
+    critical = sum(1 for v in risky_raw.values() if v > RISK_THRESHOLDS["HIGH_TO_CRITICAL"])
+    high = sum(1 for v in risky_raw.values() if RISK_THRESHOLDS["MEDIUM_TO_HIGH"] < v <= RISK_THRESHOLDS["HIGH_TO_CRITICAL"])
+    medium = len(risky_raw) - critical - high
+    risky = {d: round(v) for d, v in risky_raw.items()}
 
     top: List[Dict[str, Any]] = []
     if risky:
@@ -1434,6 +1444,8 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
         "high": high,
         "medium": medium,
         "average": (sum(risky.values()) / len(risky)) if risky else None,
+        "highest": max(risky_raw.values()) if risky_raw else None,
+        "as_of": as_of.isoformat() if as_of else None,
         "top": top,
     }
 
