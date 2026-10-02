@@ -112,9 +112,12 @@ COPY --from=builder /opt/venv /opt/venv
 # pulled both from the HuggingFace Hub on first use inside whichever
 # container happened to run first, measured live at ~300s for that first
 # document (forensic audit, Stage 5) versus ~11-13s once cached. HF_HOME is
-# set under /app so the final chown below (which already covers the rest of
-# /app) hands this cache to appuser too, and so it's a real directory this
-# non-root user can read at runtime instead of defaulting to root's own home.
+# set under /app so the cache is a real directory this non-root user can read
+# at runtime instead of defaulting to root's own home; the download RUN itself
+# chowns the cache to appuser, in the same layer that creates it. (A recursive
+# chown of /app in a LATER step rewrites every cached file into a second
+# multi-GB layer -- that duplicate is what made the full rebuild run out of
+# disk on 2026-10-02, so ownership of source files is set with COPY --chown.)
 # Same retry-on-flaky-connection reasoning as the pip install step above.
 # HF_HUB_OFFLINE is intentionally NOT set yet here -- this download step
 # needs real Hub access. It's set right after, once the cache below is
@@ -136,7 +139,8 @@ RUN success=0; \
       if python -c "from transformers import pipeline; pipeline('sentiment-analysis', model='ProsusAI/finbert'); pipeline('zero-shot-classification', model='valhalla/distilbart-mnli-12-3')"; then success=1; break; fi; \
       echo "HF model pre-download attempt $i failed, retrying..."; sleep 5; \
     done; \
-    if [ "$success" -ne 1 ]; then echo "HF model pre-download failed after 5 attempts"; exit 1; fi
+    if [ "$success" -ne 1 ]; then echo "HF model pre-download failed after 5 attempts"; exit 1; fi; \
+    chown -R appuser:appuser /app/.cache
 
 # Forces transformers.pipeline()/from_pretrained() to read only from the
 # cache just populated above and never attempt the Hub freshness HEAD-check
@@ -148,9 +152,12 @@ RUN success=0; \
 # never applies to that RUN itself.
 ENV HF_HUB_OFFLINE=1
 
-COPY . .
+COPY --chown=appuser:appuser . .
 
-RUN chmod +x entrypoint.sh && chown -R appuser:appuser /app
+# Non-recursive on purpose: /app itself (not its contents) must stay appuser-owned so
+# celery-beat can write /app/celerybeat-schedule* into its working directory. A recursive
+# chown here would rewrite the 2.8GB model cache into a second layer.
+RUN chmod +x entrypoint.sh && chown appuser:appuser /app
 
 USER appuser
 
