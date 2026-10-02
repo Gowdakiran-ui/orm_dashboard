@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 3
     DB_MAX_OVERFLOW: int = 2
 
+    # How many client pipeline runs may be active at once (any client). 1 = a new run for another client is refused with HTTP 409
+    # while one is active (services/pipeline_service.py). One run peaks at about 15 of the 22 usable DB connections.
+    MAX_CONCURRENT_PIPELINE_RUNS: int = 1
+
     # Opt-in per-service override for celery-beat (see db.py): beat only ever
     # enqueues task messages via Redis on its cron schedule -- every scheduled
     # task is routed to a worker queue and executed by a worker process, never

@@ -289,6 +289,12 @@ TRUSTED_OUTLETS = {
     "moneycontrol.com": "high",
     "moneycontrol": "high",
     "business standard": "high",
+    # Spellings of "business standard" / "the economic times" seen as the outlet suffix of real Google News titles (2026-10-03,
+    # audit/outlet-trust-proposal.md Part A): same publishers as the entries above, so no new trust decision.
+    "the business standard": "high",
+    "business-standard.com": "high",
+    "realty.economictimes.indiatimes.com": "high",
+    "economictimes.indiatimes.com": "high",
     "livemint": "high",
     "mint": "high",
     "reuters": "high",
@@ -298,6 +304,7 @@ TRUSTED_OUTLETS = {
 
     # -- medium: recognized general-interest national press --
     "the hindu": "medium",
+    "thehindu.com": "medium",   # spelling of "the hindu" (Part A)
     "hindustan times": "medium",
     "the times of india": "medium",
     "times of india": "medium",

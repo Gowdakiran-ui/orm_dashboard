@@ -150,10 +150,11 @@ export function DocumentsAnalyzedDefinition() {
     <>
       <span className="block font-bold">Documents Analyzed</span>
       <span className="block">
-        Every document collected and processed for this client, whether or
-        not it turned out to carry any risk — this is a coverage-volume
-        count, not a count of confirmed risk incidents. For the count of
-        flagged articles, see Risk Center&apos;s &quot;Flagged articles&quot;.
+        All articles collected for this client, whether or not they carry
+        any risk, including those not yet risk-checked. This is a volume
+        count over every article, not only the newest ones listed in the
+        charts, and not a count of confirmed risk incidents. For the count
+        of flagged articles, see Risk Center&apos;s &quot;Flagged articles&quot;.
       </span>
     </>
   );
@@ -164,9 +165,10 @@ export function AverageRiskScoreFeedDefinition() {
     <>
       <span className="block font-bold">Average Risk Score</span>
       <span className="block">
-        The mean Risk Score (0–100) across every document currently in this
-        client&apos;s monitored feed — including documents that scored 0 risk.
-        This is a feed-wide average, not tied to any single narrative.
+        The mean Risk Score (0–100) across the articles listed on this page
+        (the newest ones, up to 500), including articles that scored 0 risk.
+        It is not tied to any single story; Risk Center shows the average
+        of flagged articles only.
       </span>
     </>
   );

@@ -308,6 +308,9 @@ function DashboardShell() {
                     <ErrorBoundary fallback={<TelemetryErrorWidget title="Risk Analytics Error" />}>
                       <RiskAnalyticsPanel
                         riskMatrixData={analytics.riskMatrixData}
+                        reputationSummary={data.reputationSummary}
+                        reputationSummaryLoading={data.reputationSummaryLoading}
+                        reputationSummaryError={data.reputationSummaryError}
                         alertSeverityData={analytics.alertSeverityData}
                         riskHeatmapData={analytics.riskHeatmapData}
                         alertTimelineData={analytics.alertTimelineData}

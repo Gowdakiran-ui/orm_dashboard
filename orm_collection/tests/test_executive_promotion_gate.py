@@ -35,6 +35,10 @@ def _compile_jsonb(element, compiler, **kw):
     return "TEXT"
 
 
+# The shipped default, read before any test can change it.
+SHIPPED_DEFAULT_ENABLED = EntityDiscoveryConfig.EXECUTIVE_AUTO_PROMOTION_ENABLED
+
+
 class _Stub:
     def refresh_processor(self, db):
         return None
@@ -46,6 +50,8 @@ def env(monkeypatch):
     Base.metadata.create_all(engine)
     db = sessionmaker(bind=engine)()
     eng = EntityDiscoveryEngine()
+    # The gate rules are tested with the switch on; it ships OFF (see the default test below).
+    monkeypatch.setattr(EntityDiscoveryConfig, "EXECUTIVE_AUTO_PROMOTION_ENABLED", True)
     # isolate the gate under test from external/slow collaborators
     monkeypatch.setattr(ed, "engine_instance", _Stub())
     monkeypatch.setattr(eng, "_is_valid_person_name_layered", lambda *a, **k: (True, "", ""))
@@ -173,18 +179,32 @@ def test_numeric_thresholds_are_still_enforced(env):
     assert eng.promote_executive_candidates(db, cid)["promoted_count"] == 0
 
 
-def test_kill_switch_stops_everything_and_writes_nothing(env, monkeypatch):
+def test_auto_promotion_ships_off_and_a_pass_creates_no_person_entity_or_keyword(env, monkeypatch):
     db, eng = env
+    assert SHIPPED_DEFAULT_ENABLED is False                 # no env var or config can flip it: it is a class constant
     cid, brand = _client_with_brand(db)
     docs = [_doc(db, "Acme chairman Jane Roe said profits rose", brand), _doc(db, "Acme CEO Jane Roe on the launch", brand)]
-    cand = _cand(db, cid, "Jane Roe", docs)
-    monkeypatch.setattr(EntityDiscoveryConfig, "EXECUTIVE_AUTO_PROMOTION_ENABLED", False)
+    cand = _cand(db, cid, "Jane Roe", docs)                 # would pass every gate rule if the switch were on
+    monkeypatch.setattr(EntityDiscoveryConfig, "EXECUTIVE_AUTO_PROMOTION_ENABLED", SHIPPED_DEFAULT_ENABLED)
+    entities_before = db.query(Entity).count()
     out = eng.promote_executive_candidates(db, cid)
-    assert out == {"promoted_count": 0, "promoted_executives": []}
+    assert out == {"promoted_count": 0, "promoted_executives": [], "auto_promotion_disabled": True}
     db.refresh(cand)
     assert cand.promoted_to_executive_id is None and _promoted(db, cid, "Jane Roe") == 0
+    assert db.query(Entity).count() == entities_before and db.query(EntityKeyword).count() == 0
     monkeypatch.setattr(EntityDiscoveryConfig, "EXECUTIVE_AUTO_PROMOTION_ENABLED", True)
     assert eng.promote_executive_candidates(db, cid)["promoted_count"] == 1       # same data promotes once re-enabled
+
+
+def test_visitor_title_case_is_a_known_gap_the_switch_exists_for(env):
+    """Documents the 2026-10-02 Adani case: a head of state named beside the chairman, in client-related documents, with 'President' beside his
+    name, passes the gate rules. This is why the switch ships off; the test pins the behaviour so a future gate change is a visible decision."""
+    db, eng = env
+    cid, brand = _client_with_brand(db)
+    docs = [_doc(db, "Acme Chairman Jane Roe meets South African President Cyril Ramaphosa in Delhi", brand),
+            _doc(db, "BRICS: Acme Chairman Jane Roe welcomes South Africa President Cyril Ramaphosa", brand)]
+    _cand(db, cid, "Cyril Ramaphosa", docs, conf=0.85)
+    assert eng.promote_executive_candidates(db, cid)["promoted_count"] == 1
 
 
 def test_client_without_a_brand_entity_skips_only_the_relatedness_gate_title_still_required(env):

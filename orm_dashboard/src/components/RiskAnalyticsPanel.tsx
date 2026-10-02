@@ -12,7 +12,8 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
-import { buildMatrix, flaggedDocs, MATRIX_BANDS, MATRIX_CONFIDENCE } from "@/utils/riskCenter";
+import { buildMatrix, flaggedDocs, windowNote, MATRIX_BANDS, MATRIX_CONFIDENCE } from "@/utils/riskCenter";
+import { sourceState } from "@/utils/brandEquity";
 import {
   RiskSeverityDefinition,
   AverageRiskScoreFeedDefinition,
@@ -53,6 +54,10 @@ const HEATMAP_TOPIC_MOBILE_ABBREVIATIONS: Record<string, string> = {
 
 export interface RiskAnalyticsPanelProps {
   riskMatrixData: any[];
+  // The server-side counts Risk Center's tiles use (/reputation-summary), so totals here are true totals, not the newest-500 window.
+  reputationSummary?: any;
+  reputationSummaryLoading?: boolean;
+  reputationSummaryError?: string | null;
   alertSeverityData: any[];
   riskHeatmapData: any;
   alertTimelineData: any[];
@@ -62,6 +67,9 @@ export interface RiskAnalyticsPanelProps {
 
 export function RiskAnalyticsPanel({
   riskMatrixData = [],
+  reputationSummary,
+  reputationSummaryLoading,
+  reputationSummaryError,
   alertSeverityData = [],
   riskHeatmapData = { categories: [], severities: [], grid: {} },
   alertTimelineData = [],
@@ -74,37 +82,48 @@ export function RiskAnalyticsPanel({
   const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
   const { navigateTo } = useTabNavigation();
 
+  // True totals come from the server (same source as Risk Center's tiles); the charts and the matrix are built from the newest
+  // articles the page loads (at most 500), and the page says so whenever that is fewer than the total.
+  const summaryReady = sourceState(reputationSummaryLoading, reputationSummaryError) === "ready";
+  const docRisk = summaryReady ? reputationSummary?.document_risk : null;
+  const visibleTotal: number | null = typeof docRisk?.visible_documents === "number" ? docRisk.visible_documents : null;
+  const flaggedTotal: number | null = typeof docRisk?.total === "number" ? docRisk.total : null;
+  const criticalTotal: number | null = typeof docRisk?.critical === "number" ? docRisk.critical : null;
+  const loadedCount = riskMatrixData.length;
+  const loadedNote = visibleTotal !== null && loadedCount < visibleTotal
+    ? `Showing the newest ${loadedCount} of ${visibleTotal} articles in the charts and matrix below.`
+    : null;
+  const openAlerts = alertTimelineData.reduce((sum: number, d: any) => sum + (d?.count || 0), 0);
+
   // 1. KPI summary data
   const kpis = useMemo(() => {
-    const totalIncidents = riskMatrixData.length;
-    const avgRiskVal = totalIncidents > 0
-      ? (riskMatrixData.reduce((sum, d) => sum + (d.impact || 0), 0) / totalIncidents)
-      : 0.0;
-
-    const criticalCount = riskMatrixData.filter(d => (d.impact || 0) > RISK_THRESHOLDS.HIGH_TO_CRITICAL).length;
-    const alertsStatus = alertTimelineData.length === 0 ? "System Stable" : "Active Alerts";
+    // Only articles that have actually been risk-scored: an unscored article is not a zero-risk article.
+    const scoredList = riskMatrixData.filter(d => d.scored === true && typeof d.risk === "number");
+    const avgRiskVal = scoredList.length > 0
+      ? (scoredList.reduce((sum, d) => sum + d.risk, 0) / scoredList.length)
+      : null;
+    const alertsStatus = openAlerts === 0 ? "No open alerts" : `${openAlerts} open ${openAlerts === 1 ? "alert" : "alerts"}`;
 
     return [
-      { label: "Documents Analyzed", value: totalIncidents, desc: "Every document scanned, not just confirmed risk incidents", icon: Shield, color: accentColor, def: <DocumentsAnalyzedDefinition /> },
-      { label: "Avg Risk Score (Full Feed)", value: avgRiskVal.toFixed(2), desc: "Diluted by zero-risk documents — see Risk Center for confirmed-incidents-only average", icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
-      { label: "Critical-Risk Documents", value: criticalCount, desc: `Risk score ${RISK_THRESHOLDS.HIGH_TO_CRITICAL + 1}+`, icon: ShieldAlert, color: "text-red-500", def: <RiskSeverityDefinition /> },
+      { label: "Documents Analyzed", value: visibleTotal === null ? "Unavailable" : visibleTotal, desc: "All articles collected for this client, risky or not", icon: Shield, color: accentColor, def: <DocumentsAnalyzedDefinition /> },
+      { label: "Avg Risk Score (Listed Feed)", value: avgRiskVal === null ? "Unavailable" : avgRiskVal.toFixed(2), desc: `Average over the ${scoredList.length} scored articles listed here, zero-risk ones included — see Risk Center for the flagged-only average`, icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
+      { label: "Critical-Risk Documents", value: criticalTotal === null ? "Unavailable" : criticalTotal, desc: `Risk score ${RISK_THRESHOLDS.HIGH_TO_CRITICAL + 1}+, all articles`, icon: ShieldAlert, color: "text-red-500", def: <RiskSeverityDefinition /> },
       // Was titled "Ingestion Status" -- title and content described two
       // different things (a value of "System Stable"/"Active Alerts" is not
       // an ingestion-pipeline status). "Alert Status" rather than the
       // literal "Active Alerts": the card can show either state, and
       // "Active Alerts" as a title would itself be wrong on a client with
       // none.
-      { label: "Alert Status", value: alertsStatus, desc: alertTimelineData.length === 0 ? "0 Critical Alerts" : "Trigger thresholds crossed", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400", def: undefined as React.ReactNode }
+      { label: "Alert Status", value: alertsStatus, desc: openAlerts === 0 ? "Nothing unacknowledged" : "Unacknowledged alerts", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400", def: undefined as React.ReactNode }
     ];
-  }, [riskMatrixData, alertTimelineData, accentColor]);
+  }, [riskMatrixData, openAlerts, visibleTotal, criticalTotal, accentColor]);
 
   // 2. Severity x Confidence matrix: the same builder Risk Center uses (platform bands
   // 25/50/75 on the stored severity, confidence from the engine), so a cell here is the
   // same set of articles as the matching Risk Center cell and its drill-down list.
-  const { grid: matrixData, unplaced: matrixUnplaced } = useMemo(
-    () => buildMatrix(flaggedDocs(riskMatrixData)),
-    [riskMatrixData]
-  );
+  const flaggedInList = useMemo(() => flaggedDocs(riskMatrixData), [riskMatrixData]);
+  const { grid: matrixData, unplaced: matrixUnplaced } = useMemo(() => buildMatrix(flaggedInList), [flaggedInList]);
+  const matrixWindowNote = windowNote(flaggedInList.length, flaggedTotal);
 
   // 3. Threat Concentration Heatmap totals and percentages
   const { rowTotals, colTotals, grandTotal } = useMemo(() => {
@@ -231,6 +250,7 @@ export function RiskAnalyticsPanel({
           );
         })}
       </div>
+      {loadedNote && <p className={`text-[10px] font-mono ${mutedText(theme)}`}>{loadedNote}</p>}
 
       <div className="grid gap-6 md:grid-cols-12">
         {/* 1. Severity x Confidence matrix (same bands and counts as Risk Center) */}
@@ -254,7 +274,8 @@ export function RiskAnalyticsPanel({
               {/* Matrix Grid */}
               <div className={`grid grid-rows-3 gap-1.5 p-2 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
                 {MATRIX_BANDS.map((rowKey) => (
-                  <div key={rowKey} className="grid grid-cols-3 gap-1.5 h-[65px]">
+                  <div key={rowKey} className="grid grid-cols-[56px_1fr_1fr_1fr] gap-1.5 h-[65px]">
+                    <span className={`flex items-center justify-end pr-1 text-[9px] font-bold uppercase tracking-wider ${mutedText(theme)}`}>{rowKey}</span>
                     {MATRIX_CONFIDENCE.map((colKey) => {
                       const cellDocs = matrixData[rowKey]?.[colKey] || [];
                       const count = cellDocs.length;
@@ -325,11 +346,18 @@ export function RiskAnalyticsPanel({
 
               {/* X Axis Labels, same as Risk Center's matrix */}
               <div />
-              <div className={`grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-[9px] ${mutedText(theme)}`}>
+              <div className={`grid grid-cols-[56px_1fr_1fr_1fr] text-center uppercase tracking-wider font-bold mt-1 text-[9px] ${mutedText(theme)}`}>
+                <span />
                 <span>LOW CONFIDENCE</span>
                 <span>MED CONFIDENCE</span>
                 <span>HIGH CONFIDENCE</span>
               </div>
+              {matrixWindowNote && (
+                <>
+                  <div />
+                  <p className={`mt-1 text-[9px] ${mutedText(theme)}`}>{matrixWindowNote}</p>
+                </>
+              )}
               {matrixUnplaced > 0 && (
                 <>
                   <div />
@@ -353,7 +381,7 @@ export function RiskAnalyticsPanel({
               </CardTitle>
               {alertTimelineData.length === 0 && (
                 <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono text-[9px]">
-                  System Stable
+                  No open alerts
                 </Badge>
               )}
             </div>
@@ -405,9 +433,8 @@ export function RiskAnalyticsPanel({
 
             {alertTimelineData.length === 0 && (
               <div className="absolute inset-0 top-12 flex flex-col items-center justify-center pointer-events-none text-center bg-transparent space-y-1">
-                <span className="text-[11px] font-bold font-mono text-emerald-500">System Stable</span>
-                <span className={`text-[9px] font-mono ${mutedText(theme)}`}>0 Critical Alerts | Monitoring Active</span>
-                <span className={`text-[8px] font-mono ${mutedText(theme)}`}>Window: Last 7 Days</span>
+                <span className="text-[11px] font-bold font-mono text-emerald-500">No open alerts</span>
+                <span className={`text-[9px] font-mono ${mutedText(theme)}`}>Nothing unacknowledged for this client</span>
               </div>
             )}
           </CardContent>

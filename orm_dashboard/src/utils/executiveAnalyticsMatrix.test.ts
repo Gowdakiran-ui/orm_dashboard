@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import path from "path";
-import { buildMatrix, flaggedDocs } from "./riskCenter";
+import { buildMatrix, flaggedDocs, windowNote } from "./riskCenter";
 
 const SRC = path.resolve(__dirname, "..");
 const strip = (t: string) => t.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
@@ -44,7 +44,7 @@ describe("Executive Analytics matrix wording and links (static guard)", () => {
   const panel = read("components/RiskAnalyticsPanel.tsx");
   const hook = read("hooks/useAnalytics.ts");
   it("is built with Risk Center's builder and links with band/confidence", () => {
-    expect(panel).toContain("buildMatrix(flaggedDocs(riskMatrixData))");
+    expect(panel).toContain("flaggedDocs(riskMatrixData)"); expect(panel).toContain("buildMatrix(flaggedInList)");
     expect(panel).toContain('navigateTo("risk", { band: rowKey, confidence: colKey })');
   });
   it("calls the axes Severity and Confidence, never Impact or Likelihood", () => {
@@ -73,7 +73,47 @@ describe("Landing page makes no forward-looking or trend claims (static guard)",
     /rising risk/i, /sentiment shift/i, /emerging (alert|issue)/i, /spot reputation shifts early/i, /run-up to a listing/i,
     /trend direction/i, /improving, stable/i, /trending in a direction/i, /what(&apos;|')s next is already/i, /still time to respond/i,
     /before it has time to compound/i, /predictive/i,
+    /real-?time/i, /the moment it(&apos;|')s ingested/i, /before it spreads/i, /immediately/i, /continuously/i, /as it arrives/i, /live look/i, /likelihood-by-impact/i, /stable/i, /steady/i, /this week/i,
   ])("does not contain %s", (re) => {
     expect(page).not.toMatch(re);
+  });
+});
+
+describe("Executive Analytics uses true totals, labelled rows and plain alert wording (2026-10-03)", () => {
+  const panel = read("components/RiskAnalyticsPanel.tsx");
+  const defs = read("lib/metricDefinitions.tsx");
+  const docsDef = defs.slice(defs.indexOf("export function DocumentsAnalyzedDefinition"), defs.indexOf("export function AverageRiskScoreFeedDefinition"));
+  const page = read("app/dashboard/page.tsx");
+
+  it("Documents Analyzed and Critical-Risk Documents come from the server summary, never from the 500-article window", () => {
+    expect(panel).toContain("docRisk?.visible_documents");
+    expect(panel).toContain("docRisk?.critical");
+    expect(panel).toContain('"Unavailable"');
+    expect(page).toMatch(/RiskAnalyticsPanel[\s\S]{0,400}reputationSummary=\{data\.reputationSummary\}/);
+  });
+  it("says so when the charts show fewer articles than the total", () => {
+    expect(panel).toContain("in the charts and matrix below");
+    expect(panel).toContain("windowNote(flaggedInList.length, flaggedTotal)");
+    expect(windowNote(14, 20)).toBe("Showing the 14 most recent of 20 flagged articles.");
+    expect(windowNote(14, 14)).toBeNull();
+  });
+  it("no longer claims every document was scanned", () => {
+    for (const t of [panel, docsDef]) expect(t).not.toMatch(/every document (scanned|collected and processed)/i);
+  });
+  it("shows the Medium / High / Critical row labels like Risk Center", () => {
+    expect(panel).toContain("{rowKey}</span>");
+    expect(panel).toContain("MATRIX_BANDS.map");
+  });
+  it("has no 'stable' or 'steady' wording and no monitoring claim", () => {
+    expect(panel).not.toMatch(/stable|steady|monitoring active/i);
+    expect(panel).toContain("No open alerts");
+  });
+});
+
+describe("Executive Analytics average never treats an unscored article as zero risk", () => {
+  const panel = read("components/RiskAnalyticsPanel.tsx");
+  it("averages only scored articles", () => {
+    expect(panel).toContain("d.scored === true && typeof d.risk === \"number\"");
+    expect(panel).not.toMatch(/sum \+ \(d\.impact \|\| 0\)/);
   });
 });

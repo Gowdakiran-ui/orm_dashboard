@@ -313,7 +313,7 @@ function ReputationIntelligence() {
 
 const framework = [
   { word: "What", icon: Activity, title: "What's actually in the coverage", copy: "Every signal across every channel resolved into one clear read: each risk, its sentiment and any alert, not a wall of raw mentions to sort through yourself." },
-  { word: "Where", icon: MapPin, title: "Where the conversation is happening", copy: "Press, social, forums, video: broken out by source, so you know immediately if it's one contained post or breaking across five channels at once." },
+  { word: "Where", icon: MapPin, title: "Where the conversation is happening", copy: "Press, social, forums, video: broken out by source, so you can see whether it's one contained post or coverage across several channels." },
   { word: "Why", icon: HelpCircle, title: "Why it's happening", copy: "The real story, topic, or stakeholder driving the shift: root-cause context tied to actual coverage, not just a number that moved without explanation." },
   { word: "When", icon: Clock, title: "When it was published", copy: "Every article, post and video is dated and tied to its source, so you can see when each piece of coverage appeared." },
   { word: "Whom", icon: Users, title: "Whom it affects", copy: "Reputation risk is rarely abstract. We name the executive, the stakeholder, or the specific story actually carrying the coverage." },
@@ -463,7 +463,7 @@ function ProductPreview() {
     >
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
-          <SectionHead light title="Inside the platform" copy="A live look at how XOOP turns raw coverage into a decision." />
+          <SectionHead light title="Inside the platform" copy="A look at how XOOP turns raw coverage into a decision." />
         </Reveal>
 
         <RevealGroup className="grid grid-cols-1 gap-[18px] lg:grid-cols-2">
@@ -478,16 +478,16 @@ function ProductPreview() {
             <ScreenshotPanel
               title="RISK CENTER: ACTIVE ALERTS"
               src="/landing/active-alerts.png"
-              alt="XOOP Risk Center: total risk counts, active critical alerts, and the likelihood-by-impact risk matrix"
+              alt="XOOP Risk Center: total risk counts, active critical alerts, and the severity-by-confidence risk matrix"
             />
           </RevealItem>
         </RevealGroup>
         <RevealGroup className="mt-[18px] grid grid-cols-1 gap-[18px] sm:grid-cols-2">
           <RevealItem>
             <ScreenshotPanel
-              title="REAL-TIME INTELLIGENCE STREAM"
+              title="INTELLIGENCE STREAM"
               src="/landing/intelligence-stream.png"
-              alt="XOOP real-time brand ingest stream, showing matched coverage scored and tagged as it arrives across RSS, YouTube, Instagram, and Reddit"
+              alt="XOOP brand intelligence stream, showing matched coverage scored and tagged across RSS, YouTube, Instagram, and Reddit"
             />
           </RevealItem>
           <RevealItem>
@@ -521,12 +521,12 @@ function ProductPreview() {
 // capability per the CEO's explicit instruction rather than hedged as
 // "coming soon." Flagged in the deploy report.
 const featureRows = [
-  { icon: Radio, title: "Real-time, multi-channel monitoring", copy: "Press, RSS, social, video and forum coverage collected continuously across every client you manage, matched automatically to the right brand, executive, or competitor." },
-  { icon: Gauge, title: "AI-scored sentiment and risk on every mention", copy: "Every piece of coverage is scored for sentiment and risk the moment it's ingested, so a single alarming article is never buried in a feed of routine mentions." },
+  { icon: Radio, title: "Multi-channel coverage collection", copy: "Press, RSS, social, video and forum coverage collected each time you run a client's pipeline, matched automatically to the right brand, executive, or competitor." },
+  { icon: Gauge, title: "AI-scored sentiment and risk on every mention", copy: "Every piece of coverage collected in a run is scored for sentiment and risk in that same run, so a single alarming article is never buried in a feed of routine mentions." },
   { icon: UserCheck, title: "Executive reputation tracking", copy: "Individual leaders get their own reputation score, grade, and a plain-language explanation of what's actually driving it, not just a number with no context." },
   { icon: Swords, title: "Competitor benchmarking", copy: "Share of voice, sentiment comparison, and topic ownership against every competitor you track: a real head-to-head, not a guess based on gut feel." },
-  { icon: Bell, title: "Automated risk alerts", copy: "Critical shifts surface immediately, scored and prioritised, instead of waiting for someone to notice a bad headline in their inbox." },
-  { icon: ShieldAlert, title: "Brand impersonation and deepfake detection", copy: "Domain and typosquat monitoring catches counterfeit sites built to impersonate your brand, while deepfake detection flags manipulated media inside your own coverage before it spreads." },
+  { icon: Bell, title: "Risk alerts", copy: "Critical and high risks are raised as alerts at the end of each run, scored and prioritised, instead of waiting for someone to notice a bad headline in their inbox." },
+  { icon: ShieldAlert, title: "Brand impersonation and deepfake checks", copy: "Run a domain scan for a brand keyword to find look-alike and typosquat domains built to impersonate your brand, or upload an image to check it for manipulation." },
   { icon: LayoutDashboard, title: "One dashboard, every client", copy: "Switch between every brand your team manages from a single login, with the same rigour applied consistently, account to account." },
 ];
 
@@ -568,7 +568,7 @@ function Features() {
 // named competitor lacks internally, only how each category is generally
 // positioned in the market.
 const comparisonRows = [
-  { capability: "Real-time mention monitoring", others: "yes", xoop: "yes" },
+  { capability: "Mention monitoring", others: "yes", xoop: "yes" },
   { capability: "Sentiment scoring", others: "yes", xoop: "yes" },
   { capability: "Root-cause explanation (why is this happening)", others: "not-typical", xoop: "yes" },
   { capability: "Executive-level reputation grading with explainability", others: "not-typical", xoop: "yes" },

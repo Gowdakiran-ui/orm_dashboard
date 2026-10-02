@@ -26,8 +26,6 @@ Frontend polling contract:
     Poll GET /status → until status == "SUCCESS" or "FAILED"
     Nothing else.
 """
-import uuid as _uuid
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
@@ -36,9 +34,9 @@ from uuid import UUID
 
 from app.core.auth import get_current_user, require_client_access
 from app.core.db import get_db
-from app.core.celery_app import celery_app
 from app.core.rate_limit import limiter, STRICT_RATE_LIMIT
 from app.workers.aggregation_tasks import run_client_pipeline
+from app.services.pipeline_service import PipelineStartError, start_pipeline_run
 from app.schemas.client import ClientOnboarding, ClientResponse
 from app.services.client_service import onboard_client, get_clients, delete_client
 from app.models.client import Client
@@ -47,13 +45,6 @@ from app.models.user import ROLE_SUPER_ADMIN, User, UserClientAccess
 
 router = APIRouter()
 logger = structlog.get_logger()
-
-# Active pipeline statuses (non-terminal)
-_ACTIVE_STATUSES = {
-    "QUEUED", "COLLECTING", "PROCESSING", "RISK",
-    "ALERT", "AI_SUMMARY", "REPUTATION", "EXECUTIVE", "BENCHMARK", "FINALIZING",
-}
-
 
 # ---------------------------------------------------------------------------
 # Standard client endpoints (unchanged)
@@ -140,79 +131,15 @@ def trigger_client_pipeline(
 
     Errors:
         404  — Client not found
-        409  — Pipeline already active for this client
+        409  — Pipeline already active for this client, or another client's pipeline is running
         503  — Celery broker unreachable
     """
-    # 1. Validate client
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    # 2. Reject duplicate active runs (DB-only check — no Redis needed)
-    active_run = db.query(PipelineRun).filter(
-        PipelineRun.client_id == str(client_id),
-        PipelineRun.status.in_(_ACTIVE_STATUSES),
-    ).order_by(PipelineRun.started_at.desc()).first()
-
-    if active_run:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Pipeline already active for this client (run_id={active_run.run_id}, stage={active_run.stage}, progress={active_run.progress_pct}%)",
-        )
-
-    # 3. Create PipelineRun record — this IS the source of truth from now on
-    run_id = _uuid.uuid4().hex
-    pipeline_run = PipelineRun(
-        client_id=str(client_id),
-        run_id=run_id,
-        status="QUEUED",
-        stage="QUEUED",
-        progress_pct=0,
-        execution_mode="async",
-    )
-    db.add(pipeline_run)
-    db.commit()
-    db.refresh(pipeline_run)
-
-    log = logger.bind(run_id=run_id, client_id=str(client_id))
-
-    # 4. Dispatch Celery task
+    # The steps (validate client, reject a duplicate/concurrent run, create the QUEUED PipelineRun, dispatch run_client_pipeline)
+    # live in services/pipeline_service.py, shared with scripts/run_pipeline.py.
     try:
-        # Use send_task to explicitly use the configured celery_app (Redis)
-        # instead of relying on @shared_task thread-local bindings which may default to AMQP.
-        log.debug("celery_broker_url", broker_url=celery_app.conf.broker_url)
-        task = celery_app.send_task(
-            "app.workers.aggregation_tasks.run_client_pipeline",
-            args=[run_id, str(client_id)]
-        )
-        log.info("pipeline_queued", celery_task_id=task.id)
-    except Exception as exc:
-        # If dispatch fails, mark the run as failed immediately
-        # Use the transition method to ensure finished_at and duration_s are set
-        try:
-            pipeline_run.transition("FAILED", f"Failed to dispatch pipeline task: {exc}")
-        except ValueError:
-            pipeline_run.status = "FAILED"
-            pipeline_run.stage = "FAILED"
-
-        pipeline_run.error_detail = f"Failed to dispatch pipeline task: {exc}"
-        db.commit()
-        log.error("pipeline_dispatch_failed", error=str(exc), exc_info=True)
-        raise HTTPException(
-            status_code=503,
-            detail="Celery broker unreachable. Pipeline could not be queued.",
-        )
-
-    # 5. Return 202 immediately — worker executes independently
-    return {
-        "run_id": run_id,
-        "status": "QUEUED",
-        "stage": "QUEUED",
-        "progress_pct": 0,
-        "client_id": str(client_id),
-        "client_name": client.name,
-        "message": "Pipeline queued. Poll /pipeline/status for progress.",
-    }
+        return start_pipeline_run(db, client_id)
+    except PipelineStartError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 @router.get("/{client_id}/pipeline/status")

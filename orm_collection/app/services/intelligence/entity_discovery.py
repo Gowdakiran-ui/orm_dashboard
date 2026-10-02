@@ -32,8 +32,12 @@ class EntityDiscoveryConfig:
     EXECUTIVE_MIN_DOCUMENTS = 2
     # Master switch for AUTOMATIC executive promotion (competitor promotion is already
     # disabled the same way). False = promote_executive_candidates() returns at once and
-    # writes nothing; executives are then added by hand only.
-    EXECUTIVE_AUTO_PROMOTION_ENABLED = True
+    # writes nothing; executives are then added by hand only (the "track executive"
+    # endpoint), with scripts/list_promotion_candidates.py as the review list.
+    # OFF since 2026-10-03: the relatedness + title gate below still let a head of state
+    # through ("Cyril Ramaphosa", named beside the Adani chairman). Turn it back on only
+    # together with a review queue; the gate code is kept as is for that day.
+    EXECUTIVE_AUTO_PROMOTION_ENABLED = False
     # A candidate is only about THIS client if at least this many of its source documents
     # also mention the client's own brand/product entity. 2026-10-02: "Rachel Carson" (two
     # Yale articles, zero mention of Godrej) was auto-promoted to a Godrej person entity.
@@ -2148,8 +2152,9 @@ class EntityDiscoveryEngine:
         - EXECUTIVE_AUTO_PROMOTION_ENABLED = False turns the whole method off.
         """
         if not EntityDiscoveryConfig.EXECUTIVE_AUTO_PROMOTION_ENABLED:
-            logger.info("executive_auto_promotion_disabled", client_id=str(client_id))
-            return {"promoted_count": 0, "promoted_executives": []}
+            # Called once per processed document, so no info line here; the pipeline
+            # logs "executive_auto_promotion_disabled" once per run (aggregation_tasks.py).
+            return {"promoted_count": 0, "promoted_executives": [], "auto_promotion_disabled": True}
 
         candidates = db.query(ExecutiveCandidate).filter(
             ExecutiveCandidate.client_id == client_id,

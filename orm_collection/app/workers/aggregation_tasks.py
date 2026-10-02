@@ -1528,6 +1528,9 @@ def pipeline_stage_collect(self, run_id: str, client_id: str, owner_id: str) -> 
     db = SessionLocal()
     try:
         ctx = _load_context(db, run_id, client_id, worker_id)
+        from app.services.intelligence.entity_discovery import EntityDiscoveryConfig
+        if not EntityDiscoveryConfig.EXECUTIVE_AUTO_PROMOTION_ENABLED:
+            log.info("executive_auto_promotion_disabled", note="no person entity is created by this run; use scripts/list_promotion_candidates.py")
         if not _update_run(db, run_id, "COLLECTING", "Starting document collection"):
             log.warning("stage_skipped_stale_duplicate", stage="COLLECTING")
             db.commit()
