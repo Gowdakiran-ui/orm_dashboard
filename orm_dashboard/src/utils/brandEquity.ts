@@ -95,7 +95,6 @@ export interface Verdict {
 export interface VerdictInput {
   riskState: SourceState;
   advisoryState: SourceState;
-  summaryReady: boolean;
   execAlert: { open: boolean; alert?: { entity_name?: string | null; severity?: string | null } | null };
   dangerCount: number;
   totalRisks: number;
@@ -109,7 +108,7 @@ export function computeVerdict(i: VerdictInput): Verdict {
   if (i.riskState === "loading" || i.advisoryState === "loading") {
     return { kind: "loading", emoji: "⏳", text: "Checking current risk activity…", action: null, actionLabel: null };
   }
-  if (i.riskState === "error" || i.advisoryState === "error" || !i.summaryReady) {
+  if (i.riskState === "error" || i.advisoryState === "error") {
     return { kind: "unavailable", emoji: "⚪", text: "Risk status is unavailable right now.", action: null, actionLabel: null };
   }
   if (i.execAlert.open) {
@@ -165,11 +164,6 @@ export function computeExecStats(executives: any[] | null | undefined): ExecStat
   const highest = scored[0] ?? null;
   const lowest = scored.length > 0 ? scored[scored.length - 1] : null;
   return { total: execs.length, mostMentioned, highest, lowest };
-}
-
-export function dominantSentimentLabel(dominant: string | null | undefined): string {
-  if (!dominant) return "N/A";
-  return dominant;
 }
 
 export function formatAsOf(iso: string | null | undefined): string | null {

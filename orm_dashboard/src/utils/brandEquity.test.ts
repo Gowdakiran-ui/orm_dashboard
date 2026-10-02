@@ -110,7 +110,7 @@ describe("pickTopCompetitor", () => {
 
 describe("computeVerdict", () => {
   const base = {
-    riskState: "ready" as const, advisoryState: "ready" as const, summaryReady: true,
+    riskState: "ready" as const, advisoryState: "ready" as const,
     execAlert: { open: false }, dangerCount: 0, totalRisks: 5, advisory: { flagged: false, lead: "Nothing significant to flag right now." },
   };
 

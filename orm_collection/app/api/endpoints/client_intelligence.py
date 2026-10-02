@@ -1438,6 +1438,47 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
     }
 
 
+def _event_risk_summary(db: Session, client_id) -> Dict[str, Any]:
+    """
+    Event-level risk signal used ONLY by get_client_plan_advisory: how many
+    CRITICAL / HIGH risk events exist for this client, plus the single most
+    severe one (named with its entity and top factor). Excludes
+    entity_type='competitor' -- a tracked competitor's own incident is not this
+    client's risk and must not be named as the client's "most severe risk".
+    (The Brand Equity tiles use the per-document counts in
+    _document_risk_summary instead; this is deliberately not part of the
+    reputation-summary payload because nothing on the page reads it.)
+    """
+    from app.models.entity import Entity
+
+    level_counts = dict(db.query(RiskEvent.risk_level, func.count(RiskEvent.id)).outerjoin(
+        Entity, Entity.id == RiskEvent.entity_id
+    ).filter(
+        RiskEvent.client_id == client_id,
+        RiskEvent.risk_level.in_(["CRITICAL", "HIGH"]),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
+    ).group_by(RiskEvent.risk_level).all())
+
+    most_severe = None
+    top = db.query(RiskEvent, Entity).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
+        RiskEvent.client_id == client_id,
+        RiskEvent.risk_level.in_(["CRITICAL", "HIGH"]),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
+    ).order_by(RiskEvent.risk_score.desc(), RiskEvent.created_at.desc()).first()
+    if top:
+        event, entity = top
+        top_factor = None
+        if event.risk_factors:
+            top_factor = max(event.risk_factors, key=lambda f: f.get("weight", 0)).get("factor")
+        most_severe = {
+            "level": event.risk_level,
+            "score": event.risk_score,
+            "entity_name": entity.name if entity else None,
+            "factor": top_factor,
+        }
+    return {"critical": level_counts.get("CRITICAL", 0), "high": level_counts.get("HIGH", 0), "most_severe": most_severe}
+
+
 @router.get("/{client_id}/reputation-summary", response_model=Dict[str, Any])
 @cached_by_client("reputation_summary")
 def get_client_reputation_summary(client_id: UUID, response: Response, db: Session = Depends(get_db)):
@@ -1470,46 +1511,6 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
         reputation = {"score": None, "grade": None, "status": "insufficient_evidence", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
     else:
         reputation = {"score": rep.score, "grade": rep.grade, "status": "ok", "computed_at": rep.created_at.isoformat() if rep.created_at else None}
-
-    # 2. Risk -- full count by severity (not last-50-limited like get_client_risks),
-    # plus the single most severe CRITICAL/HIGH event if one exists.
-    # Excludes entity_type='competitor' -- same reasoning as documents.py/
-    # alert_engine.py/get_client_risks above: a tracked competitor's own risk
-    # (e.g. its own fraud/legal incident) is not this client's risk, and
-    # must not be named as the client's own "most severe risk".
-    risk_counts_raw = db.query(RiskEvent.risk_level, func.count(RiskEvent.id)).outerjoin(
-        Entity, Entity.id == RiskEvent.entity_id
-    ).filter(
-        RiskEvent.client_id == client_id,
-        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
-    ).group_by(RiskEvent.risk_level).all()
-    risk_counts = {level: count for level, count in risk_counts_raw}
-
-    most_severe_risk = None
-    top_risk = db.query(RiskEvent, Entity).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
-        RiskEvent.client_id == client_id,
-        RiskEvent.risk_level.in_(["CRITICAL", "HIGH"]),
-        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
-    ).order_by(RiskEvent.risk_score.desc(), RiskEvent.created_at.desc()).first()
-    if top_risk:
-        event, entity = top_risk
-        top_factor = None
-        if event.risk_factors:
-            top_factor = max(event.risk_factors, key=lambda f: f.get("weight", 0)).get("factor")
-        most_severe_risk = {
-            "level": event.risk_level,
-            "score": event.risk_score,
-            "entity_name": entity.name if entity else None,
-            "factor": top_factor
-        }
-
-    risk = {
-        "critical": risk_counts.get("CRITICAL", 0),
-        "high": risk_counts.get("HIGH", 0),
-        "medium": risk_counts.get("MEDIUM", 0),
-        "low": risk_counts.get("LOW", 0),
-        "most_severe": most_severe_risk
-    }
 
     # 3. Sentiment -- per-entity sentiment labels scoped to this client's entities.
     # Excludes entity_type='competitor' -- same reasoning as every other
@@ -1615,7 +1616,6 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 
     return {
         "reputation": reputation,
-        "risk": risk,
         "document_risk": _document_risk_summary(db, client_id),
         "sentiment": sentiment,
         "executive_alert": executive_alert
@@ -1635,8 +1635,8 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
     for every client, forever -- not wrong data, just permanently no real
     data.
 
-    Rebuilt (2026-09-23) off get_client_reputation_summary's own already-
-    computed executive_alert/risk/most_severe fields instead -- the same
+    Rebuilt (2026-09-23) off the open executive alert (reputation-summary) and the
+    event-level most-severe risk (_event_risk_summary) instead -- the same
     real, deterministic signals, not narratives or a second LLM call.
     Priority mirrors ReputationSummaryCard.tsx's own top-of-page verdict: an
     open executive alert first (most urgent), then the client's current
@@ -1648,19 +1648,15 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    summary = get_client_reputation_summary(client_id, Response(), db)
-    risk = summary["risk"]
-    exec_alert = summary["executive_alert"]
+    exec_alert = get_client_reputation_summary(client_id, Response(), db)["executive_alert"]
+    risk = _event_risk_summary(db, client_id)
 
     if exec_alert.get("open") and exec_alert.get("alert"):
         alert = exec_alert["alert"]
         severity = (alert.get("severity") or "critical").lower()
         entity_name = alert.get("entity_name") or "an executive"
         lead = f"An open {severity} executive-risk alert on {entity_name} needs review."
-        bullets = [alert["title"]] if alert.get("title") else []
-        if risk.get("critical") or risk.get("high"):
-            bullets.append(f"{risk.get('critical', 0)} critical / {risk.get('high', 0)} high risk item(s) also currently tracked.")
-        return {"lead": lead, "bullets": bullets, "flagged": True}
+        return {"lead": lead, "flagged": True}
 
     most_severe = risk.get("most_severe")
     if most_severe:
@@ -1673,10 +1669,9 @@ def get_client_plan_advisory(client_id: UUID, db: Session = Depends(get_db)):
             + (f", driven primarily by {factor}" if factor else "")
             + "."
         )
-        bullets = [f"{risk.get('critical', 0)} critical, {risk.get('high', 0)} high risk item(s) currently tracked."]
-        return {"lead": lead, "bullets": bullets, "flagged": True}
+        return {"lead": lead, "flagged": True}
 
-    return {"lead": "Nothing significant to flag right now.", "bullets": [], "flagged": False}
+    return {"lead": "Nothing significant to flag right now.", "flagged": False}
 
 
 @router.get("/{client_id}/telemetry", response_model=Dict[str, Any])

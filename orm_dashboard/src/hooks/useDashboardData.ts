@@ -11,12 +11,11 @@ import { formatChartDate } from "@/utils/formatChartDate";
 
 const DEFAULT_REPUTATION_SUMMARY = {
   reputation: { score: null, grade: null, status: 'no_data' },
-  risk: { critical: 0, high: 0, medium: 0, low: 0, most_severe: null },
   sentiment: { positive: 0, neutral: 0, negative: 0, dominant: null },
   executive_alert: { open: false, alert: null }
 };
 
-const DEFAULT_PLAN_ADVISORY = { lead: "", bullets: [] as string[] };
+const DEFAULT_PLAN_ADVISORY = { lead: "", flagged: false };
 
 export function useDashboardData() {
   const [clients, setClients] = useState<any[]>([]);

@@ -132,7 +132,6 @@ export function ReputationSummaryCard({
   const verdict = computeVerdict({
     riskState,
     advisoryState,
-    summaryReady: true,
     execAlert,
     dangerCount: riskStats?.dangerCount ?? 0,
     totalRisks: riskStats?.total ?? 0,

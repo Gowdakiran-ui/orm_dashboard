@@ -166,7 +166,8 @@ def test_reputation_summary_has_no_trend_fields(db):
     s = _summary(db, cid)
     assert "trend" not in s["reputation"]
     assert "trends" not in s
-    assert "total" not in s["risk"]
+    assert "risk" not in s            # event-level counts are no longer part of this payload (nothing on the page reads them)
+    assert "document_risk" in s
     assert s["reputation"]["score"] == 70.0 and s["reputation"]["status"] == "ok"
     # no-data branch too
     cid2 = _client(db, "Empty")
@@ -243,7 +244,7 @@ def test_ai_prompts_do_not_ask_for_trend_analysis_or_forecast():
 def test_plan_advisory_flagged_false_when_nothing_to_flag(db):
     cid = _client(db)
     out = ci.get_client_plan_advisory(cid, db)
-    assert out["flagged"] is False and out["bullets"] == []
+    assert out == {"lead": "Nothing significant to flag right now.", "flagged": False}   # no unused `bullets` field
 
 
 def test_plan_advisory_flagged_true_for_critical_risk(db):
