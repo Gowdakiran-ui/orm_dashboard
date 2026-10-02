@@ -11,6 +11,7 @@ from app.models.document import Document, DocumentMatch
 router = APIRouter()
 
 from app.core.risk_config import RISK_THRESHOLDS
+from app.utils.explainability import strip_trend_keys
 
 
 def _risk_level_of(score: float) -> str:
@@ -200,7 +201,9 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
         or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
     ).order_by(RiskEvent.risk_score.desc()).first()
     risk_val = getattr(risk_rec, "risk_score", 0.0) if risk_rec else 0.0
-    risk_explainability = getattr(risk_rec, "explainability", None) if risk_rec else None
+    # Stored explainability from the retired trend-based formula still has trend_* keys:
+    # never sent to clients (the stored row is not edited).
+    risk_explainability = strip_trend_keys(getattr(risk_rec, "explainability", None) if risk_rec else None)
     
     # Highest-confidence topic, not an arbitrary DB-order row -- a document
     # can have several DocumentTopic rows (2026-09-20 investigation), and an
@@ -335,7 +338,7 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
         source_name = source_map.get(doc.source_id, "RSS Feed")
         sentiment_val = sentiment_map.get(doc.id, 0.0)
         risk_val = risk_map.get(doc.id, 0.0)
-        risk_explainability = risk_explain_map.get(doc.id)
+        risk_explainability = strip_trend_keys(risk_explain_map.get(doc.id))  # see read_document: no trend_* keys leave the API
         confidence_val = confidence_map.get(doc.id, 1.0)
         
         dt = doc_topic_map.get(doc.id)

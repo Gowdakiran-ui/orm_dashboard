@@ -15,6 +15,7 @@ from app.models.entity import Entity
 from app.models.client import Client
 from app.core.risk_config import RISK_THRESHOLDS
 from app.utils.llm_call_logging import log_llm_call
+from app.utils.explainability import strip_trend_keys as scrub_legacy_keys
 
 logger = structlog.get_logger()
 
@@ -267,9 +268,12 @@ class AISummaryEngine:
         supporting_signals, evidence_score, confidence_score), not a new
         data path. Still real numbers, never a fabricated-sounding sentence.
         """
-        explainability = alert.explainability or {}
+        # Stored explainability / signals can still carry keys from the retired trend
+        # detection; strip them before anything derived from these blobs can reach the
+        # LLM prompt (this sentence becomes the prompt's "Summary:" line).
+        explainability = scrub_legacy_keys(alert.explainability or {})
         supporting_evidence = explainability.get("supporting_evidence") or {}
-        supporting_signals = alert.supporting_signals or {}
+        supporting_signals = scrub_legacy_keys(alert.supporting_signals or {})
 
         entity_name = None
         if alert.entity_id:
