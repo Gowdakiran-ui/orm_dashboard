@@ -395,12 +395,10 @@ def delete_client(db: Session, client_id: UUID) -> dict:
         db.delete(s)
 
     # Delete pipeline states
-    from app.models.trend_state import TrendClientState
     from app.models.risk_state import RiskClientState
     from app.models.alert_state import AlertClientState
     from app.models.client_processing_summary import ClientProcessingSummary
     
-    db.query(TrendClientState).filter(TrendClientState.client_id == client_id).delete(synchronize_session=False)
     db.query(RiskClientState).filter(RiskClientState.client_id == client_id).delete(synchronize_session=False)
     db.query(AlertClientState).filter(AlertClientState.client_id == client_id).delete(synchronize_session=False)
     db.query(ClientProcessingSummary).filter(ClientProcessingSummary.client_id == client_id).delete(synchronize_session=False)
@@ -415,8 +413,7 @@ def delete_client(db: Session, client_id: UUID) -> dict:
             (SELECT COUNT(*) FROM alerts WHERE client_id=:cid) AS alerts,
             (SELECT COUNT(*) FROM reputation_scores WHERE client_id=:cid) AS reputation_scores,
             (SELECT COUNT(*) FROM competitor_benchmarks WHERE client_id=:cid) AS competitor_benchmarks,
-            (SELECT COUNT(*) FROM executive_reputation_scores WHERE client_id=:cid) AS executive_reputation_scores,
-            (SELECT COUNT(*) FROM trend_events WHERE client_id=:cid) AS trend_events
+            (SELECT COUNT(*) FROM executive_reputation_scores WHERE client_id=:cid) AS executive_reputation_scores
     """), {"cid": str(client_id)}).one()
 
     pre_counts = {
@@ -426,7 +423,6 @@ def delete_client(db: Session, client_id: UUID) -> dict:
         "reputation_scores":         audit_counts.reputation_scores,
         "competitor_benchmarks":     audit_counts.competitor_benchmarks,
         "executive_reputation_scores": audit_counts.executive_reputation_scores,
-        "trend_events":              audit_counts.trend_events,
         "deleted_feeds":             deleted_feeds_count,
         "deleted_sources":           deleted_sources_count,
         "deleted_documents":         deleted_docs_count,

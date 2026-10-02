@@ -12,10 +12,11 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
+import { buildMatrix, flaggedDocs, MATRIX_BANDS, MATRIX_CONFIDENCE } from "@/utils/riskCenter";
 import {
   RiskSeverityDefinition,
   AverageRiskScoreFeedDefinition,
-  RiskMatrixAxesDefinition,
+  RiskMatrixSeverityConfidenceDefinition,
   DailyAlertsTimelineDefinition,
   ThreatConcentrationHeatmapDefinition,
   DocumentsAnalyzedDefinition,
@@ -26,7 +27,7 @@ import {
 // 100px (700px min-width table / 7 grid columns) below the sm breakpoint,
 // vs. ~121px+ once the table grows past 700px at sm and up -- so several
 // topic names truncate at mobile that already fit at desktop/tablet.
-// Same graceful-abbreviation approach as the Risk Matrix's Likelihood-axis
+// Same graceful-abbreviation approach as the Risk Matrix's Confidence-axis
 // labels (spelled-out standard short forms, not mid-word ellipsis), applied
 // only where a genuinely standard, unambiguous short form exists. Topics not
 // listed here either already fit in 100px (Legal Risk, Innovation,
@@ -97,22 +98,13 @@ export function RiskAnalyticsPanel({
     ];
   }, [riskMatrixData, alertTimelineData, accentColor]);
 
-  // 2. 3x3 SOC Heatmap grouping
-  const matrixData = useMemo(() => {
-    const grid: Record<string, Record<string, any[]>> = {
-      HIGH: { LOW: [], MEDIUM: [], HIGH: [] },
-      MEDIUM: { LOW: [], MEDIUM: [], HIGH: [] },
-      LOW: { LOW: [], MEDIUM: [], HIGH: [] }
-    };
-    (riskMatrixData || []).forEach(item => {
-      const imp = item.impact >= 67 ? "HIGH" : item.impact >= 33 ? "MEDIUM" : "LOW";
-      const lik = item.likelihood >= 67 ? "HIGH" : item.likelihood >= 33 ? "MEDIUM" : "LOW";
-      if (grid[imp] && grid[imp][lik]) {
-        grid[imp][lik].push(item);
-      }
-    });
-    return grid;
-  }, [riskMatrixData]);
+  // 2. Severity x Confidence matrix: the same builder Risk Center uses (platform bands
+  // 25/50/75 on the stored severity, confidence from the engine), so a cell here is the
+  // same set of articles as the matching Risk Center cell and its drill-down list.
+  const { grid: matrixData, unplaced: matrixUnplaced } = useMemo(
+    () => buildMatrix(flaggedDocs(riskMatrixData)),
+    [riskMatrixData]
+  );
 
   // 3. Threat Concentration Heatmap totals and percentages
   const { rowTotals, colTotals, grandTotal } = useMemo(() => {
@@ -241,13 +233,13 @@ export function RiskAnalyticsPanel({
       </div>
 
       <div className="grid gap-6 md:grid-cols-12">
-        {/* 1. Redesigned 3x3 SOC-style Risk Matrix */}
+        {/* 1. Severity x Confidence matrix (same bands and counts as Risk Center) */}
         <Card className={`${cardStyle} md:col-span-6`}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-2">
             <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1 ${mutedText(theme)}`}>
-              Risk by Impact & Likelihood
-              <InfoTooltip label="About Impact and Likelihood"><RiskMatrixAxesDefinition /></InfoTooltip>
+              Risk by Severity & Confidence
+              <InfoTooltip label="About Severity and Confidence"><RiskMatrixSeverityConfidenceDefinition /></InfoTooltip>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
@@ -256,23 +248,24 @@ export function RiskAnalyticsPanel({
                   col-span-1 of a 12-col grid (~18px on a real phone), too
                   narrow even for this rotated single word's line-height. */}
               <div className="flex items-center justify-center">
-                <span className={`transform -rotate-90 origin-center whitespace-nowrap uppercase tracking-widest font-bold font-mono ${mutedText(theme)}`}>IMPACT</span>
+                <span className={`transform -rotate-90 origin-center whitespace-nowrap uppercase tracking-widest font-bold font-mono ${mutedText(theme)}`}>SEVERITY</span>
               </div>
 
               {/* Matrix Grid */}
               <div className={`grid grid-rows-3 gap-1.5 p-2 rounded border ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`}>
-                {["HIGH", "MEDIUM", "LOW"].map((rowKey) => (
+                {MATRIX_BANDS.map((rowKey) => (
                   <div key={rowKey} className="grid grid-cols-3 gap-1.5 h-[65px]">
-                    {["LOW", "MEDIUM", "HIGH"].map((colKey) => {
+                    {MATRIX_CONFIDENCE.map((colKey) => {
                       const cellDocs = matrixData[rowKey]?.[colKey] || [];
                       const count = cellDocs.length;
                       
                       let avgRisk = "0.0";
                       let maxRisk = "0.0";
                       if (count > 0) {
-                        const sum = cellDocs.reduce((acc, val) => acc + val.impact, 0);
+                        const score = (d: any) => d.risk_exact ?? d.risk;
+                        const sum = cellDocs.reduce((acc, val) => acc + score(val), 0);
                         avgRisk = (sum / count).toFixed(1);
-                        maxRisk = Math.max(...cellDocs.map(d => d.impact)).toFixed(0);
+                        maxRisk = Math.max(...cellDocs.map(score)).toFixed(1);
                       }
 
                       let bgClass = "bg-[#030712]/40 border-[#1F2937]/35 text-slate-600";
@@ -289,7 +282,7 @@ export function RiskAnalyticsPanel({
                       return (
                         <div
                           key={colKey}
-                          onClick={() => count > 0 && navigateTo("risk", { impact: rowKey, likelihood: colKey })}
+                          onClick={() => count > 0 && navigateTo("risk", { band: rowKey, confidence: colKey })}
                           className={`rounded p-2 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative group text-center border ${bgClass}`}
                         >
                           {count > 0 ? (
@@ -303,11 +296,11 @@ export function RiskAnalyticsPanel({
                           <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-[9px] w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
                             <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell Diagnostics</div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Impact:</span>
+                              <span className={mutedText(theme)}>Severity:</span>
                               <span className={bodyText(theme)}>{rowKey}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className={mutedText(theme)}>Likelihood:</span>
+                              <span className={mutedText(theme)}>Confidence:</span>
                               <span className={bodyText(theme)}>{colKey}</span>
                             </div>
                             <div className="flex justify-between">
@@ -330,15 +323,21 @@ export function RiskAnalyticsPanel({
                 ))}
               </div>
 
-              {/* X Axis Labels -- same LOW/MED/HIGH LIKELIHOOD row already
-                  present on Risk Center's matrix (RiskTab.tsx); this matrix
-                  had no Likelihood axis label at all before, only IMPACT. */}
+              {/* X Axis Labels, same as Risk Center's matrix */}
               <div />
               <div className={`grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-[9px] ${mutedText(theme)}`}>
-                <span>LOW LIKELIHOOD</span>
-                <span>MED LIKELIHOOD</span>
-                <span>HIGH LIKELIHOOD</span>
+                <span>LOW CONFIDENCE</span>
+                <span>MED CONFIDENCE</span>
+                <span>HIGH CONFIDENCE</span>
               </div>
+              {matrixUnplaced > 0 && (
+                <>
+                  <div />
+                  <p className={`mt-1 text-[9px] ${mutedText(theme)}`}>
+                    {matrixUnplaced} flagged {matrixUnplaced === 1 ? "document carries" : "documents carry"} no confidence value and {matrixUnplaced === 1 ? "is" : "are"} not placed in the matrix.
+                  </p>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

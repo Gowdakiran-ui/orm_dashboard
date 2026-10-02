@@ -4,7 +4,6 @@ TRUNCATE TABLE
     reputation_scores, executive_reputation_scores, competitor_benchmarks,
     executive_candidates, competitor_candidates,
     risk_events, risk_client_states,
-    trend_events, trend_client_states,
     entity_mentions, entity_sentiments, document_sentiments,
     document_topics,
     matching_metrics, model_runs, document_matches, documents,

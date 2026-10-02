@@ -48,7 +48,6 @@ tables = [
     "documents",
     "entities",
     "entity_mentions",
-    "trend_events",
     "risk_events",
     "alerts",
     "reputation_scores",

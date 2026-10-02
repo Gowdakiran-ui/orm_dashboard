@@ -42,7 +42,7 @@ Run-Pipeline-gated redesign — see the update note above):
 - **Manual path** — `POST /clients/{client_id}/pipeline/run` dispatches
   `run_client_pipeline`, whose first stage (`_stage_collect`) collects only
   that client's own feeds synchronously, in-process, as part of a larger
-  on-demand intelligence pipeline run (collection → processing → trend →
+  on-demand intelligence pipeline run (collection → processing →
   risk → alert → narrative → reputation → executive → benchmark).
 
 A **scheduled path** existed previously — Celery Beat fired

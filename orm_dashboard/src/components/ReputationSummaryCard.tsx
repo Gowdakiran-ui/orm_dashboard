@@ -182,7 +182,7 @@ export function ReputationSummaryCard({
   }> = [
     { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}${asOf ? ` · as of ${asOf}` : ""}` : scoreStatusText, color: "text-[#D4AF37]", highlight: true, def: reputationScoreAndGradeDef },
     { label: "Risk Signals", value: riskValue(riskStats?.dangerCount), sub: "Critical + High", color: !riskStats ? "text-zinc-400" : riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
-    { label: "Total Risks Tracked", value: riskValue(riskStats?.total), sub: severityBreakdownSub, color: !riskStats ? "text-zinc-400" : RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
+    { label: "Total Risks Tracked (all time)", value: riskValue(riskStats?.total), sub: severityBreakdownSub, color: !riskStats ? "text-zinc-400" : RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Mentions", value: sentiment.positive, sub: "in coverage", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
     { label: "Overall Tone", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive} positive / ${sentiment.neutral} neutral / ${sentiment.negative} negative`, color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
   ];

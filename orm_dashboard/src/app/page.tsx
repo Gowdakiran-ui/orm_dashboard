@@ -180,8 +180,8 @@ function Hero() {
 
           <p className="mt-6 max-w-[58ch] text-[1.2rem] leading-relaxed" style={{ color: INK_MUTED }}>
             Listening and monitoring tools show you the noise. XOOP connects conversations,
-            behaviour, search and stakeholder signals into one picture, so your team can act
-            on a shift before it becomes a headline, not after.
+            behaviour, search and stakeholder signals into one picture, so your team can see each
+            risk with its evidence and the sources behind it.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-3.5">
@@ -224,7 +224,7 @@ function Hero() {
             <div className="bg-[#0B2D54] p-8">
               <div className="text-[0.8rem] text-[#93A6C7]">XOOP</div>
               <div className="mt-2.5 font-[family-name:var(--font-landing-display)] text-[1.2rem] font-medium text-[#CEA555]">
-                Tells you why it happened, what&apos;s likely next, and what to do about it.
+                Tells you why it happened and what to do about it.
               </div>
             </div>
           </div>
@@ -258,8 +258,8 @@ function SectionHead({ title, copy, light = false }: { title: string; copy: Reac
 const reputationPoints = [
   {
     numeral: "I",
-    title: "We help you spot reputation shifts early",
-    copy: "XOOP connects conversations, behaviour, search and stakeholder signals to show what's changing around your business. Risk Center flags a developing issue as a Critical or High alert the moment it clears a real evidence threshold, not after it's already a headline.",
+    title: "We flag reputation risks with their evidence",
+    copy: "XOOP connects conversations, behaviour, search and stakeholder signals into one view of your reputation. Risk Center raises a Critical or High alert once an issue clears a real evidence threshold, and shows the coverage behind it.",
   },
   {
     numeral: "II",
@@ -312,7 +312,7 @@ function ReputationIntelligence() {
 }
 
 const framework = [
-  { word: "What", icon: Activity, title: "What's actually happening right now", copy: "Every signal across every channel resolved into one clear read: a rising risk, a sentiment shift, an emerging alert, not a wall of raw mentions to sort through yourself." },
+  { word: "What", icon: Activity, title: "What's actually in the coverage", copy: "Every signal across every channel resolved into one clear read: each risk, its sentiment and any alert, not a wall of raw mentions to sort through yourself." },
   { word: "Where", icon: MapPin, title: "Where the conversation is happening", copy: "Press, social, forums, video: broken out by source, so you know immediately if it's one contained post or breaking across five channels at once." },
   { word: "Why", icon: HelpCircle, title: "Why it's happening", copy: "The real story, topic, or stakeholder driving the shift: root-cause context tied to actual coverage, not just a number that moved without explanation." },
   { word: "When", icon: Clock, title: "When it was published", copy: "Every article, post and video is dated and tied to its source, so you can see when each piece of coverage appeared." },
@@ -364,12 +364,12 @@ const audiences = [
   {
     icon: TrendingUp,
     title: "IPOs",
-    copy: "Going public puts your reputation under a magnifying glass overnight. XOOP tracks sentiment and narrative shifts across press and social in the run-up to a listing, so a story that could move investor perception gets flagged while there's still time to respond.",
+    copy: "Going public puts your reputation under a magnifying glass overnight. XOOP scores press and social coverage for sentiment and risk, so a story that could move investor perception is flagged for your team to review.",
   },
   {
     icon: Rocket,
     title: "Startups",
-    copy: "A small team can't absorb a reputation hit the way an enterprise can. XOOP gives early-stage companies the same Risk Center and executive tracking a much larger comms team uses, so a first bad news cycle gets caught and understood before it has time to compound.",
+    copy: "A small team can't absorb a reputation hit the way an enterprise can. XOOP gives early-stage companies the same Risk Center and executive tracking a much larger comms team uses, so a first bad news cycle is flagged and explained.",
   },
   {
     icon: Building2,
@@ -647,8 +647,8 @@ function Comparison() {
 }
 
 const benefitCells = [
-  { icon: Eye, title: "Spot a shift before it's a headline", copy: "Emerging issues, crisis signals, and stakeholder concerns surface while they're still manageable, not after a journalist has already called." },
-  { icon: MessageCircle, title: "Walk into every client call with an answer", copy: <>No more <strong className="font-semibold">let me get back to you.</strong> What changed, why, and what&apos;s next is already on the dashboard when the question comes.</> },
+  { icon: Eye, title: "See each risk with its evidence", copy: "Risk events, alerts and the articles behind them sit in one place, each with a written explanation of what is driving it." },
+  { icon: MessageCircle, title: "Walk into every client call with an answer", copy: <>No more <strong className="font-semibold">let me get back to you.</strong> The risk, the evidence behind it, and the recommended action are already on the dashboard when the question comes.</> },
   { icon: BadgeCheck, title: "Prove the value of your comms work", copy: <>A real, defensible reputation score your team can point to, with the evidence behind it, not a vague sense that things are <strong className="font-semibold">going fine.</strong></> },
   { icon: Target, title: "Act on signal, not on noise", copy: "Stop scrolling raw mentions to guess what matters. The platform tells you what's worth your attention today, and what isn't." },
 ];

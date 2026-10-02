@@ -67,9 +67,10 @@ export function buildMatrix(flagged: any[]): Matrix {
   return { grid, unplaced };
 }
 
-// Deep links from Executive Analytics' SOC matrix still use its own score
-// tiers (33/67) and confidence tiers; this keeps that drill-through landing on
-// the cell it was clicked from, with the same counts that matrix showed.
+// Older shared links (?impact=..&likelihood=..) came from Executive Analytics'
+// former score-tier matrix (33/67). Executive Analytics now links with
+// band/confidence like Risk Center; this keeps the old links landing on the
+// cell they were made from.
 function legacyScoreTier(score: number): "LOW" | "MEDIUM" | "HIGH" {
   return score >= 67 ? "HIGH" : score >= 33 ? "MEDIUM" : "LOW";
 }

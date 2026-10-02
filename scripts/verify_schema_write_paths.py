@@ -12,8 +12,9 @@ and checks what was stored.
 
 Usage (throwaway database only -- the script refuses non-local hosts):
     python scripts/verify_schema_write_paths.py --embedded         # needs `pip install pgserver` in a venv
-    python scripts/verify_schema_write_paths.py --embedded --with-pending   # also apply database/migrations_pending/*.sql
-                                                                          # (use with the step-4 code change set)
+    python scripts/verify_schema_write_paths.py --embedded --schema-file old_schema.sql --up-to 0012
+                                                                          # a DB as it is between schema step 1 and 2
+                                                                          # (trend columns still present and nullable)
     python scripts/verify_schema_write_paths.py --url postgresql://user:pw@127.0.0.1:5432/scratch
 
 --embedded starts a private Postgres in a temp dir and removes it afterwards.
@@ -48,18 +49,18 @@ def _apply_sql(conn, path: str, server_major: int) -> None:
     conn.commit()
 
 
-def build_schema(url: str, with_pending: bool = False) -> None:
+def build_schema(url: str, schema_file: str = None, up_to: str = None) -> None:
     import psycopg2
     conn = psycopg2.connect(url)
     try:
         with conn.cursor() as cur:
             cur.execute("show server_version_num")
             major = int(cur.fetchone()[0]) // 10000
-        _apply_sql(conn, os.path.join(ROOT, "database", "schema.sql"), major)
-        print(f"schema.sql applied (server major {major})")
+        _apply_sql(conn, schema_file or os.path.join(ROOT, "database", "schema.sql"), major)
+        print(f"{os.path.basename(schema_file or 'schema.sql')} applied (server major {major})")
         migs = sorted(glob.glob(os.path.join(ROOT, "database", "migrations", "*.sql")))
-        if with_pending:
-            migs += sorted(glob.glob(os.path.join(ROOT, "database", "migrations_pending", "*.sql")))
+        if up_to:
+            migs = [m for m in migs if os.path.basename(m)[:4] <= up_to]
         for mig in migs:
             try:
                 _apply_sql(conn, mig, major)
@@ -152,7 +153,7 @@ def seed_and_run(url: str) -> list:
     if trend_cols_present:
         rep = rows("select reputation_trend, trend_component, score, data_coverage from reputation_scores where client_id = :c")
         ex = rows("select reputation_trend, trend_component, score from executive_reputation_scores where client_id = :c")
-    else:  # after schema step 2: the columns are gone, nothing to check beyond the row existing
+    else:  # after schema step 2 (and in a fresh build from schema.sql): the columns are gone, nothing to check beyond the row existing
         rep = rows("select 'dropped', null, score, data_coverage from reputation_scores where client_id = :c")
         ex = rows("select 'dropped', null, score from executive_reputation_scores where client_id = :c")
     bm = rows("select health_status, rank, reputation_score, calculation_lineage->>'client_comparable_score_exact' from competitor_benchmarks where client_id = :c")
@@ -161,8 +162,8 @@ def seed_and_run(url: str) -> list:
     print("  competitor_benchmarks:", bm)
     if len(rep) != 1:
         problems.append(f"expected 1 reputation row after insert+upsert, found {len(rep)}")
-    if trend_cols_present and any(r[0] != "NOT_COMPUTED" for r in rep + ex):
-        problems.append("reputation_trend is not the NOT_COMPUTED placeholder")
+    if trend_cols_present and any(r[0] is not None or r[1] is not None for r in rep + ex):
+        problems.append("a trend column was written (the models no longer define it, so it must stay NULL)")
     if not ex:
         problems.append("no executive_reputation_scores row written")
     if not bm:
@@ -187,7 +188,8 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--embedded", action="store_true", help="start a private throwaway Postgres via pgserver")
     g.add_argument("--url", help="URL of a LOCAL throwaway Postgres")
-    ap.add_argument("--with-pending", action="store_true", help="also apply database/migrations_pending/*.sql (schema step 2)")
+    ap.add_argument("--schema-file", help="build from this schema dump instead of database/schema.sql (e.g. an older one)")
+    ap.add_argument("--up-to", help="apply migrations only up to this number, e.g. 0012")
     args = ap.parse_args()
 
     server = None
@@ -200,7 +202,7 @@ def main() -> int:
         url = args.url
     _guard_local(url)
     try:
-        build_schema(url, args.with_pending)
+        build_schema(url, args.schema_file, args.up_to)
         problems = seed_and_run(url)
     finally:
         if server is not None:

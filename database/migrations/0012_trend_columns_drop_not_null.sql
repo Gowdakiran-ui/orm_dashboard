@@ -9,14 +9,25 @@
 -- Safe for BOTH the currently deployed code (still writes the placeholder) and
 -- the next release, which is why it must run BEFORE that release is deployed.
 -- Nothing is dropped here and no data changes: ALTER ... DROP NOT NULL is
--- metadata-only. Run it before step 2 (database/migrations_pending/0013_*.sql).
+-- metadata-only. Run it before step 2 (database/migrations/0013_*.sql).
 BEGIN;
 
-ALTER TABLE public.reputation_scores
-    ALTER COLUMN reputation_trend DROP NOT NULL;
-
-ALTER TABLE public.executive_reputation_scores
-    ALTER COLUMN reputation_trend DROP NOT NULL,
-    ALTER COLUMN trend_component DROP NOT NULL;
+-- Guarded so a fresh database built from the current schema.sql (which no longer has
+-- these columns after schema step 2) can still apply every migration in order.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+               AND table_name = 'reputation_scores' AND column_name = 'reputation_trend') THEN
+        ALTER TABLE public.reputation_scores ALTER COLUMN reputation_trend DROP NOT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+               AND table_name = 'executive_reputation_scores' AND column_name = 'reputation_trend') THEN
+        ALTER TABLE public.executive_reputation_scores ALTER COLUMN reputation_trend DROP NOT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+               AND table_name = 'executive_reputation_scores' AND column_name = 'trend_component') THEN
+        ALTER TABLE public.executive_reputation_scores ALTER COLUMN trend_component DROP NOT NULL;
+    END IF;
+END $$;
 
 COMMIT;

@@ -474,18 +474,6 @@ def test_reputation_engine_source_component_null_skipped_zero_preserved(db, base
     assert got == expected if expected is None else got == pytest.approx(expected)
 
 
-def test_model_default_fills_the_not_null_trend_column_with_a_constant_placeholder(db):
-    """An insert shaped like the engine's (no trend value) must succeed and store
-    the constant, never a computed direction."""
-    from sqlalchemy import insert
-    cid = _client(db)
-    db.execute(insert(ReputationScore).values(id=uuid.uuid4(), client_id=cid, score=70.0, confidence_score=0.5))
-    db.commit()
-    row = db.query(ReputationScore).filter(ReputationScore.client_id == cid).one()
-    assert row.reputation_trend == "NOT_COMPUTED"
-    assert row.data_coverage is None            # no invented 0.40
-
-
 # ---------------------------------------------------------------------------
 # Phase 3: server-side document risk counts (no 500-document window)
 # ---------------------------------------------------------------------------

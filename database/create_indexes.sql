@@ -39,8 +39,3 @@ CREATE INDEX IF NOT EXISTS ix_risk_events_client_id ON public.risk_events USING 
 CREATE INDEX IF NOT EXISTS ix_risk_events_document_id ON public.risk_events USING btree (document_id);
 CREATE INDEX IF NOT EXISTS ix_risk_events_entity_id ON public.risk_events USING btree (entity_id);
 CREATE INDEX IF NOT EXISTS ix_search_cursors_keyword_id ON public.search_cursors USING btree (keyword_id);
-CREATE INDEX IF NOT EXISTS ix_trend_client_states_processing_status ON public.trend_client_states USING btree (processing_status);
-CREATE INDEX IF NOT EXISTS ix_trend_events_client_id ON public.trend_events USING btree (client_id);
-CREATE INDEX IF NOT EXISTS ix_trend_events_entity_id ON public.trend_events USING btree (entity_id);
-CREATE INDEX IF NOT EXISTS ix_trend_events_topic_id ON public.trend_events USING btree (topic_id);
-CREATE INDEX IF NOT EXISTS ix_trend_events_trend_date ON public.trend_events USING btree (trend_date);

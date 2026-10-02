@@ -17,14 +17,9 @@ class ExecutiveReputationScore(Base):
     
     sentiment_component = Column(Float, nullable=False, default=0.0)
     risk_component = Column(Float, nullable=False, default=0.0)
-    trend_component = Column(Float, nullable=False, default=0.0)
     visibility_component = Column(Float, nullable=False, default=0.0)
 
     confidence_score = Column(Float, nullable=False, default=1.0)
-    # Trend detection was removed; nothing writes a direction or reads this.
-    # The column is still NOT NULL in schema.sql, so every insert carries this
-    # constant until a migration drops the column (pending approval).
-    reputation_trend = Column(String(20), nullable=False, default="NOT_COMPUTED")
 
     # Observability columns
     run_id = Column(String(100))

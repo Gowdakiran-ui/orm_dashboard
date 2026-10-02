@@ -106,45 +106,6 @@ export function ReputationScoreDefinition() {
 }
 
 /**
- * Shared by both Risk Center matrices — RiskAnalyticsPanel.tsx's "SOC Risk
- * Matrix" and RiskTab.tsx's "Risk Matrix (Likelihood × Impact)" card. They
- * used to disagree (SOC Risk Matrix derived Likelihood from sentiment
- * negativity, an invented formula RiskTab.tsx's own code comment already
- * called "fabricated" and had moved away from); useAnalytics.ts's
- * riskMatrixData now computes Likelihood the same way RiskTab.tsx does, so
- * one definition covers both.
- *
- * Likelihood = risk_engine.py's explainability.confidence, i.e.
- * (topic_conf + entity_sentiment_conf) / 2 — verified directly against
- * risk_engine.py lines ~621-726. That is a measure of how strong the
- * underlying topic/sentiment signal was, not a probability of the risk
- * occurring or recurring: nothing in this system tracks risk-outcome or
- * recurrence data. (Note: this is a different signal from this platform's
- * SELF/BYSTANDER/EXONERATED role classification, which is a separate,
- * later gate on final_score and does not feed into this confidence value —
- * checked against source, the two are not the same mechanism.)
- */
-export function RiskMatrixAxesDefinition() {
-  return (
-    <>
-      <span className="block font-bold">Risk Matrix: Impact × Likelihood</span>
-      <span className="block">
-        <b>Impact</b> is the item&apos;s computed Risk Score (0–100) — the same
-        topic + sentiment score, adjusted for source reliability, that
-        drives its severity band above.
-      </span>
-      <span className="mt-1 block">
-        <b>Likelihood</b> is how confident the system is that this is a
-        genuine risk (0–100) — based on the strength of the underlying topic
-        and sentiment detection. It is not a prediction that the risk will
-        happen or recur; low Likelihood means the score rests on thinner
-        evidence, not that the risk is unlikely.
-      </span>
-    </>
-  );
-}
-
-/**
  * Risk Center's "Flagged articles" tile (RiskTab.tsx). The unit is ARTICLES:
  * one story reported by several outlets counts once per outlet. Counted over
  * every article collected for the client (server-side, utils/riskCenter.ts
@@ -162,12 +123,13 @@ export function FlaggedArticlesDefinition() {
 }
 
 /**
- * Risk Center's own matrix (RiskTab.tsx): rows are the platform severity
+ * The Severity x Confidence matrix, shown on Risk Center (RiskTab.tsx) and on
+ * Executive Analytics (RiskAnalyticsPanel.tsx): rows are the platform severity
  * bands, so a flagged article is in the same band here as in the table and
  * the tiles. Columns are the engine's confidence value
  * (risk_engine.py explainability.confidence = (topic_conf + sentiment_conf)
- * / 2), shown in thirds. The Executive Analytics matrix keeps its own
- * definition above.
+ * / 2), shown in thirds. Both pages build it with utils/riskCenter.ts
+ * buildMatrix, so a cell holds the same articles on both.
  */
 export function RiskMatrixSeverityConfidenceDefinition() {
   return (
@@ -554,7 +516,7 @@ export function RiskCountSummaryDefinition() {
     <>
       <span className="block font-bold">Risk Count Summary</span>
       <span className="block">
-        How many currently-tracked risks fall into each severity band —
+        How many tracked risks, counted over all collected documents (all time, not a recent window), fall into each severity band —
         Critical / High / Medium / Low, in that order — using the same
         {" "}{LOW_MAX}/{MED_MAX}/{HIGH_MAX} score cutoffs as the Risk Severity
         definition. Only documents scoring above {LOW_MAX} count as a

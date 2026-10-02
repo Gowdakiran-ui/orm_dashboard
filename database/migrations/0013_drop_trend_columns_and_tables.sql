@@ -1,8 +1,8 @@
--- Trend-detection removal, SCHEMA STEP 2 of 2.  *** DO NOT APPLY YET ***
+-- Trend-detection removal, SCHEMA STEP 2 of 2.  *** APPLY ONLY IN THE ORDER BELOW ***
 --
--- This file is deliberately NOT in database/migrations/ so nothing that applies
--- "every migration in order" can run it early. Move it there (git mv) only after:
---   1. the current code is deployed (engines write the placeholder),
+-- Run it ONLY after all of these are true (it lives here now because the release
+-- below ships in the same commit; do not auto-apply it as part of a deploy):
+--   1. the previous code was deployed (engines wrote the placeholder),
 --   2. 0012_trend_columns_drop_not_null.sql has been applied,
 --   3. the release whose models NO LONGER define these columns/tables is deployed
 --      and healthy (audit/pending-trend-drop-step4.patch),

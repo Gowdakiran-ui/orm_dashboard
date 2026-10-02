@@ -205,26 +205,18 @@ export function useAnalytics({
     return data;
   }, [normalizedBenchmarks, reputation, risks, documents, activeClientName]);
 
-  // D3/A4 (RiskTab.tsx riskDocs): Likelihood here used to be an invented
-  // ((1 - sentiment) / 2) * 100 formula risk_engine.py never computes --
-  // RiskTab.tsx's own Risk Matrix card was already fixed to read the real
-  // confidence_modifier the engine stores in explainability.confidence
-  // instead, and this chart (SOC Risk Matrix) is now brought in line with
-  // that same fix so the two Risk Center matrices agree on what
-  // "Likelihood" means for the same document.
+  // Executive Analytics' Severity x Confidence matrix reads these items. Each one is the
+  // document itself (so utils/riskCenter.ts flaggedDocs/buildMatrix can band it exactly as
+  // Risk Center does: platform bands 25/50/75, confidence = the engine's stored
+  // explainability.confidence) plus the display fields the KPI cards use. A document with
+  // no confidence value is never given a 0; the matrix reports it as "not placed".
   const riskMatrixData = useMemo(() => {
-    return (documents || []).map(d => {
-      if (!d) return { name: "Incident", impact: 0, likelihood: 0, z: 0, severity: "MEDIUM" };
-      const impact = d.risk || 0;
-      const likelihood = Math.round((d.risk_explainability?.confidence ?? 0) * 100);
-      return {
-        name: d.title || "Incident",
-        impact,
-        likelihood,
-        z: (d.risk || 0) * 2,
-        severity: getRiskLevel(d.risk || 0)
-      };
-    });
+    return (documents || []).filter(Boolean).map(d => ({
+      ...d,
+      name: d.title || "Incident",
+      impact: d.risk || 0,
+      z: (d.risk || 0) * 2,
+    }));
   }, [documents]);
 
   const riskHeatmapData = useMemo(() => {
@@ -516,7 +508,7 @@ export function useAnalytics({
           { label: "Medium", value: med },
           { label: "Low", value: low }
         ],
-        description: "Calculates impact and likelihood ratings to identify reputation crises.",
+        description: "Scores each article for severity and confidence to identify reputation risks.",
         navigationId: "risk"
       },
       {

@@ -10,8 +10,6 @@ from app.models.entity import EntityMention
 from app.models.topic import Topic, DocumentTopic
 from app.models.system import ModelRun
 from app.models.sentiment import DocumentSentiment, EntitySentiment
-from app.models.trends import TrendEvent
-from app.models.trend_state import TrendClientState
 from app.models.risk import RiskEvent
 from app.models.risk_state import RiskClientState
 from app.models.alert import Alert

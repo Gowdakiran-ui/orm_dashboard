@@ -473,10 +473,8 @@ CREATE TABLE public.executive_reputation_scores (
     grade character varying(2) NOT NULL,
     sentiment_component double precision NOT NULL,
     risk_component double precision NOT NULL,
-    trend_component double precision NOT NULL,
     visibility_component double precision NOT NULL,
     confidence_score double precision NOT NULL,
-    reputation_trend character varying(20) NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     run_id character varying(100),
     batch_id character varying(100),
@@ -601,11 +599,9 @@ CREATE TABLE public.reputation_scores (
     grade character varying(2),
     sentiment_component double precision,
     risk_component double precision,
-    trend_component double precision,
     source_component double precision,
     visibility_component double precision,
     confidence_score double precision NOT NULL,
-    reputation_trend character varying(20) NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     run_id character varying(100),
     batch_id character varying(100),
@@ -791,52 +787,6 @@ CREATE TABLE public.topics (
     is_active boolean,
     created_at timestamp with time zone DEFAULT now(),
     confidence_threshold double precision DEFAULT 0.5
-);
-
-
---
--- Name: trend_client_states; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.trend_client_states (
-    id uuid NOT NULL,
-    client_id uuid NOT NULL,
-    processing_status character varying(30) DEFAULT 'TREND_PENDING'::character varying NOT NULL,
-    run_id character varying(64),
-    batch_id character varying(64),
-    retry_count integer DEFAULT 0 NOT NULL,
-    last_retry_at timestamp with time zone,
-    last_run_at timestamp with time zone,
-    last_success_at timestamp with time zone,
-    last_error text,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
-);
-
-
---
--- Name: trend_events; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.trend_events (
-    id uuid NOT NULL,
-    client_id uuid NOT NULL,
-    trend_type character varying(50) NOT NULL,
-    entity_id uuid,
-    topic_id uuid,
-    baseline_value double precision NOT NULL,
-    current_value double precision NOT NULL,
-    percentage_change double precision NOT NULL,
-    severity character varying(20) NOT NULL,
-    created_at timestamp with time zone DEFAULT now(),
-    run_id character varying(64),
-    batch_id character varying(64),
-    trend_date date,
-    baseline_established boolean DEFAULT true NOT NULL,
-    trend_direction character varying(50),
-    decision_reason text,
-    triggering_documents json,
-    time_window character varying(50) DEFAULT '24h_vs_7d'::character varying
 );
 
 
@@ -1196,22 +1146,6 @@ ALTER TABLE ONLY public.topics
 
 
 --
--- Name: trend_client_states trend_client_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.trend_client_states
-    ADD CONSTRAINT trend_client_states_pkey PRIMARY KEY (id);
-
-
---
--- Name: trend_events trend_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.trend_events
-    ADD CONSTRAINT trend_events_pkey PRIMARY KEY (id);
-
-
---
 -- Name: document_topics unique_document_topic; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1313,14 +1247,6 @@ ALTER TABLE ONLY public.source_health
 
 ALTER TABLE ONLY public.sources
     ADD CONSTRAINT uq_sources_url UNIQUE (url);
-
-
---
--- Name: trend_client_states uq_trend_client_states_client_id; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.trend_client_states
-    ADD CONSTRAINT uq_trend_client_states_client_id UNIQUE (client_id);
 
 
 --
@@ -1727,48 +1653,6 @@ CREATE INDEX ix_search_cursors_keyword_id ON public.search_cursors USING btree (
 
 
 --
--- Name: ix_trend_client_states_client_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX ix_trend_client_states_client_id ON public.trend_client_states USING btree (client_id);
-
-
---
--- Name: ix_trend_client_states_processing_status; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_trend_client_states_processing_status ON public.trend_client_states USING btree (processing_status);
-
-
---
--- Name: ix_trend_events_client_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_trend_events_client_id ON public.trend_events USING btree (client_id);
-
-
---
--- Name: ix_trend_events_entity_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_trend_events_entity_id ON public.trend_events USING btree (entity_id);
-
-
---
--- Name: ix_trend_events_topic_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_trend_events_topic_id ON public.trend_events USING btree (topic_id);
-
-
---
--- Name: ix_trend_events_trend_date; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_trend_events_trend_date ON public.trend_events USING btree (trend_date);
-
-
---
 -- Name: ix_user_client_access_client_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1794,13 +1678,6 @@ CREATE UNIQUE INDEX uq_alerts_business ON public.alerts USING btree (client_id, 
 --
 
 CREATE UNIQUE INDEX uq_risk_events_daily ON public.risk_events USING btree (client_id, COALESCE((document_id)::text, ''::text), COALESCE((entity_id)::text, ''::text));
-
-
---
--- Name: uq_trend_events_daily; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uq_trend_events_daily ON public.trend_events USING btree (client_id, trend_type, COALESCE((entity_id)::text, ''::text), COALESCE((topic_id)::text, ''::text), trend_date) WHERE (trend_date IS NOT NULL);
 
 
 --
@@ -2177,38 +2054,6 @@ ALTER TABLE ONLY public.sources
 
 ALTER TABLE ONLY public.topics
     ADD CONSTRAINT topics_parent_topic_id_fkey FOREIGN KEY (parent_topic_id) REFERENCES public.topics(id);
-
-
---
--- Name: trend_client_states trend_client_states_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.trend_client_states
-    ADD CONSTRAINT trend_client_states_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
-
-
---
--- Name: trend_events trend_events_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.trend_events
-    ADD CONSTRAINT trend_events_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
-
-
---
--- Name: trend_events trend_events_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.trend_events
-    ADD CONSTRAINT trend_events_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
-
-
---
--- Name: trend_events trend_events_topic_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.trend_events
-    ADD CONSTRAINT trend_events_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE CASCADE;
 
 
 --
