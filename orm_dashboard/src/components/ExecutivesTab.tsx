@@ -5,8 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar
 } from 'recharts';
-import { Users, Activity, Search, UserPlus, AlertOctagon, X, Info, ExternalLink } from "lucide-react";
-import { fetchDocumentDetails, searchExecutive, fetchReviewedExecutiveCandidates, addExecutiveCandidate } from "@/lib/api";
+import { Users, Activity, Search, AlertTriangle, AlertOctagon, X, Info, ExternalLink } from "lucide-react";
+import { fetchDocumentDetails, searchExecutive, addExecutiveCandidate } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, mutedText, bodyText } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
@@ -15,13 +15,13 @@ import { ExecutiveSentimentBreakdownDefinition, ExecutiveReputationGradeDefiniti
 import { executiveView, basedOnLine, eventsLabel, appearsInLine } from "@/utils/executivesView";
 
 export interface ExecutivesTabProps {
-  // Tracked executives that already have a stored score (the shared /executives list).
-  executives: any[];
   clientId?: string | null;
   clientName?: string;
 }
 
-export function ExecutivesTab({ executives, clientId, clientName = "this client" }: ExecutivesTabProps) {
+// The page shows only the search box until a search is made. Nothing about tracked people or candidates is listed:
+// a name is looked up (read-only) and the result is shown. The only way onto the page's data is a search.
+export function ExecutivesTab({ clientId, clientName = "this client" }: ExecutivesTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const cardBorder = isDark ? "border-white/[0.12]" : "border-black/[0.06]";
@@ -42,6 +42,10 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
   const [searchResult, setSearchResult] = useState<any | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchErrorMsg, setSearchErrorMsg] = useState<string | null>(null);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<any | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [addMessage, setAddMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Switching client must not carry the previous client's text or result over.
   useEffect(() => {
@@ -49,6 +53,8 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
     setSearchResult(null);
     setSearchErrorMsg(null);
     setSelectedDocId(null);
+    setConfirming(null);
+    setAddMessage(null);
   }, [clientId]);
 
   const runSearch = useCallback(async (raw: string) => {
@@ -68,12 +74,8 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
 
   function handleExecutiveSearch(e: React.FormEvent) {
     e.preventDefault();
+    setAddMessage(null);
     runSearch(searchQuery);
-  }
-
-  function openByName(name: string) {
-    setSearchQuery(name);
-    runSearch(name);
   }
 
   const selectedExecutive = searchResult && searchResult.status === "tracked" ? searchResult.executive : null;
@@ -87,7 +89,6 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
   ];
 
   // ---- details drawer (fields of the selected document only) ----
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedDocUrl, setSelectedDocUrl] = useState<string | null>(null);
   const selectedDoc = useMemo(() => events.find(d => d.id === selectedDocId) || null, [events, selectedDocId]);
 
@@ -103,41 +104,16 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
     return () => { cancelled = true; };
   }, [selectedDocId, clientId]);
 
-  // ---- candidate list (read-only) and the one-candidate Add ----
-  const [candidates, setCandidates] = useState<any[]>([]);
-  const [hiddenCount, setHiddenCount] = useState(0);
-  const [candLoading, setCandLoading] = useState(false);
-  const [candError, setCandError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<any | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [addMessage, setAddMessage] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const loadCandidates = useCallback(async () => {
-    if (!clientId) return;
-    setCandLoading(true);
-    setCandError(null);
-    try {
-      const res = await fetchReviewedExecutiveCandidates(clientId);
-      setCandidates(Array.isArray(res?.candidates) ? res.candidates : []);
-      setHiddenCount(typeof res?.hidden_count === "number" ? res.hidden_count : 0);
-    } catch (err: any) {
-      setCandidates([]);
-      setCandError(err?.message || "Could not load candidates");
-    } finally {
-      setCandLoading(false);
-    }
-  }, [clientId]);
-
-  useEffect(() => { setAddMessage(null); setConfirming(null); loadCandidates(); }, [loadCandidates]);
-
+  // ---- Add This Executive: promotes exactly the one searched candidate, after a confirmation step ----
   async function confirmAdd() {
     if (!clientId || !confirming || adding) return;   // a second click while the first request runs does nothing
     setAdding(true);
+    const person = confirming;
     try {
-      const res = await addExecutiveCandidate(clientId, confirming.id);
+      const res = await addExecutiveCandidate(clientId, person.id);
       setAddMessage({ ok: res?.status === "added" || res?.status === "already_tracked", text: res?.message || "Done." });
       setConfirming(null);
-      loadCandidates();
+      runSearch(person.name);   // show the person's tracked state
     } catch (err: any) {
       setAddMessage({ ok: false, text: err?.message || "Could not add this candidate." });
       setConfirming(null);
@@ -146,21 +122,16 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
     }
   }
 
-  const trackedRows = (executives || []).filter(e => e && e.name);
-
   return (
     <div className="space-y-6">
 
-      {/* SEARCH: finds executives the system already tracks or has already found. It cannot add anyone. */}
+      {/* SEARCH: the only way onto this page's data. It finds a person the system already tracks or has already found. */}
       <Card className={glassCard(theme)}>
         <CardHeader className={`pb-3 border-b ${cardBorder}`}>
           <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
             <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
             Search Executives
           </CardTitle>
-          <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-            Finds people already tracked or already found in {clientName} coverage. Searching never adds anyone; use the candidate list below.
-          </CardDescription>
         </CardHeader>
         <CardContent className="pt-4 space-y-4">
           <form onSubmit={handleExecutiveSearch} className="flex gap-2">
@@ -181,6 +152,9 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
           </form>
 
           {searchErrorMsg && <p className="text-red-500 font-mono text-xs">{searchErrorMsg}</p>}
+          {addMessage && (
+            <p className={`text-xs font-mono ${addMessage.ok ? "text-emerald-500" : "text-amber-500"}`}>{addMessage.text}</p>
+          )}
 
           {searchResult && searchResult.status === "tracked" && view && selectedExecutive && (
             <div className={`border rounded p-4 space-y-2 ${surfaceBorder} ${surfaceBg}`}>
@@ -210,7 +184,7 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
                 </div>
               ) : (
                 <p className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>
-                  No score yet. A score appears after a pipeline run finds coverage that mentions them together with {clientName}.
+                  No score yet. A score appears once new coverage mentions them together with {clientName}.
                 </p>
               )}
               {view.hasScore && basedOnLine(selectedExecutive) && (
@@ -236,54 +210,74 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
           )}
 
           {searchResult && searchResult.status === "unpromoted_candidate" && (
-            <div className="border border-amber-500/30 rounded p-4 space-y-2">
+            <div className={`border border-amber-500/30 rounded p-4 space-y-2 ${surfaceBg}`}>
               <div className="flex items-center justify-between">
                 <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.candidate.name}</span>
                 <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-xs">NOT YET TRACKED</Badge>
               </div>
               <p className={`text-xs font-mono ${mutedText(theme)}`}>
-                Found in {clientName} coverage ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) but not tracked, so there is no reputation data. To track them, use the Add button in the candidate list below.
+                Discovered ({searchResult.candidate.mention_count} mentions, {(searchResult.candidate.confidence * 100).toFixed(0)}% confidence) but not yet tracked. No reputation data exists for this name yet.
               </p>
             </div>
           )}
 
           {searchResult && searchResult.status === "ambiguous" && (
-            <div className={`border rounded p-4 space-y-2 ${surfaceBorder} ${surfaceBg}`}>
-              <p className={`text-xs font-mono ${mutedText(theme)}`}>
-                {searchResult.total} people match {`"`}{searchQuery}{`"`}. Did you mean:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {(searchResult.names || []).map((n: any) => (
-                  <button
-                    key={`${n.kind}-${n.name}`}
-                    onClick={() => openByName(n.name)}
-                    className={`text-xs font-mono rounded px-3 border ${surfaceBorder} ${bodyText(theme)} ${rowHoverBg} ${touchTarget}`}
-                  >
-                    {n.name} <span className={`ml-2 ${mutedText(theme)}`}>{n.kind === "tracked" ? "tracked" : "candidate"}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <p className={`text-xs font-mono ${mutedText(theme)}`}>Several people match that text. Type the full name.</p>
           )}
 
           {searchResult && searchResult.status === "not_found" && (
             <p className={`text-xs font-mono ${mutedText(theme)}`}>
-              No tracked executive or candidate matches {`"`}{searchQuery}{`"`}. Searching does not add people; only the candidate list below can.
+              No tracked executive or candidate matches {`"`}{searchQuery}{`"`}.
             </p>
           )}
 
           {searchResult && searchResult.status === "invalid_name" && (
             <div className={`border rounded p-4 ${surfaceBorder} ${surfaceBg}`}>
-              <p className={`text-xs font-mono ${mutedText(theme)}`}>
-                This doesn{`'`}t look like a person{`'`}s name{searchResult.reason ? ` (${searchResult.reason})` : ""}.
+              <p className={`text-xs font-mono uppercase tracking-wider text-center ${mutedText(theme)}`}>
+                This doesn{`'`}t look like a valid person name{searchResult.reason ? ` — ${searchResult.reason}` : ""}
               </p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* DETAIL of the selected executive, or the list of everyone tracked */}
-      {selectedExecutive && view && view.hasScore ? (
+      {!selectedExecutive && (
+        <Card className={`${glassCard(theme)} h-40`}>
+          <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
+            <Users className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+            <p className={`font-mono text-xs ${mutedText(theme)}`}>No executive selected yet.</p>
+            <p className={`font-mono text-xs ${mutedText(theme)}`}>Search a name above to start tracking a real executive.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Add This Executive: only for a searched, not-yet-tracked candidate. Promotes that one person, after a confirmation. */}
+      {searchResult && searchResult.status === "unpromoted_candidate" && (
+        <Card className={glassCard(theme)}>
+          <CardHeader className={`pb-3 border-b ${cardBorder}`}>
+            <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
+              <span className="flex items-center">
+                <AlertTriangle className="h-4 w-4 text-[#D4AF37] mr-2" />
+                Promote {searchResult.candidate.name}
+              </span>
+            </CardTitle>
+            <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
+              Found in already-collected coverage but not yet added as a tracked executive. Adding tracks this one person only; a score appears once new coverage mentions them.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <button
+              onClick={() => { setAddMessage(null); setConfirming(searchResult.candidate); }}
+              disabled={adding}
+              className={`bg-[#D4AF37] hover:bg-[#bfa032] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold font-mono text-xs rounded px-4 ${touchTarget}`}
+            >
+              Add This Executive
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {selectedExecutive && view && view.hasScore && (
         <>
           <Card className={glassCard(theme)}>
             <CardHeader>
@@ -375,129 +369,9 @@ export function ExecutivesTab({ executives, clientId, clientName = "this client"
             </CardContent>
           </Card>
         </>
-      ) : (
-        <Card className={glassCard(theme)}>
-          <CardHeader className={`pb-3 border-b ${cardBorder}`}>
-            <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-              <Users className="h-4 w-4 mr-2 opacity-70" />
-              Tracked Executives
-            </CardTitle>
-            <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-              People who appear in {clientName} coverage and have a stored score. Select one to see the documents behind the score.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <Table>
-              <TableHeader className={`${rowBorder} ${tableHeaderBg}`}>
-                <TableRow className={rowBorder}>
-                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>NAME</TableHead>
-                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>SCORE</TableHead>
-                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>GRADE</TableHead>
-                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>DOCUMENTS</TableHead>
-                  <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>AS OF</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {trackedRows.map((e) => {
-                  const v = executiveView(e);
-                  return (
-                    <TableRow key={e.entity_id || e.name} className={`${rowBorder} ${rowHoverBg} cursor-pointer`} onClick={() => openByName(e.name)}>
-                      <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{e.name}</TableCell>
-                      <TableCell className={`font-mono text-xs ${bodyText(theme)}`}>{v.scoreText}</TableCell>
-                      <TableCell className={`font-mono text-xs ${bodyText(theme)}`}>
-                        {v.badge === "low_evidence" ? <span className="text-amber-500">Low evidence {"—"} grade withheld</span> : v.gradeText}
-                      </TableCell>
-                      <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>{typeof e.document_count === "number" ? e.document_count : "-"}</TableCell>
-                      <TableCell className={`font-mono text-xs ${v.staleNote ? "text-amber-500" : mutedText(theme)}`}>
-                        {v.staleNote ?? v.asOfText ?? "-"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {trackedRows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className={`text-center py-8 font-mono text-xs ${mutedText(theme)}`}>
-                      No tracked executive has a score yet.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
       )}
 
-      {/* CANDIDATES: the only way to add an executive. Read-only list; each Add promotes exactly that one person. */}
-      <Card className={glassCard(theme)}>
-        <CardHeader className={`pb-3 border-b ${cardBorder}`}>
-          <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-            <UserPlus className="h-4 w-4 text-[#D4AF37] mr-2" />
-            Candidates Found In {clientName} Coverage
-          </CardTitle>
-          <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-            Names the system found automatically. Those with a job title nearby and documents that also mention {clientName} come first. Adding one tracks that person only; a score appears once new coverage mentions them.
-            {hiddenCount > 0 ? ` ${hiddenCount} names were hidden because they are not people or duplicate another name.` : ""}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-2 space-y-3">
-          {addMessage && (
-            <p className={`text-xs font-mono ${addMessage.ok ? "text-emerald-500" : "text-amber-500"}`}>{addMessage.text}</p>
-          )}
-          {candError && <p className="text-red-500 font-mono text-xs">{candError}</p>}
-          <Table>
-            <TableHeader className={`${rowBorder} ${tableHeaderBg}`}>
-              <TableRow className={rowBorder}>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>NAME</TableHead>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>MENTIONS</TableHead>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>DOCUMENTS THAT ALSO MENTION {clientName.toUpperCase()}</TableHead>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>JOB TITLE NEARBY</TableHead>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>CONFIDENCE</TableHead>
-                <TableHead className={`font-mono text-xs text-right ${mutedText(theme)}`}>ACTION</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {candidates.map((c) => (
-                <TableRow key={c.id} className={`${rowBorder} ${rowHoverBg}`}>
-                  <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>
-                    {c.name}
-                    {Array.isArray(c.also_seen_as) && c.also_seen_as.length > 0 && (
-                      <span className={`block font-normal ${mutedText(theme)}`}>also seen as {c.also_seen_as.join(", ")}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>{c.mention_count}</TableCell>
-                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>{c.client_documents} of {c.source_document_count}</TableCell>
-                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>{c.title_nearby ? "Yes" : "No"}</TableCell>
-                  <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>{(c.confidence * 100).toFixed(0)}%</TableCell>
-                  <TableCell className="text-right">
-                    <button
-                      onClick={() => { setAddMessage(null); setConfirming(c); }}
-                      className={`bg-[#D4AF37] hover:bg-[#bfa032] text-black font-bold font-mono text-xs rounded px-4 ${touchTarget}`}
-                    >
-                      Add
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!candLoading && candidates.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className={`text-center py-8 font-mono text-xs ${mutedText(theme)}`}>
-                    No candidates to review.
-                  </TableCell>
-                </TableRow>
-              )}
-              {candLoading && (
-                <TableRow>
-                  <TableCell colSpan={6} className={`text-center py-8 font-mono text-xs ${mutedText(theme)}`}>
-                    Loading candidates...
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Confirmation for Add */}
+      {/* Confirmation for Add This Executive */}
       {confirming && (
         <div className="fixed inset-0 z-50 flex items-center justify-center font-mono" role="dialog" aria-modal="true" aria-label="Confirm add executive">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !adding && setConfirming(null)} />

@@ -444,79 +444,62 @@ def test_concurrent_insert_collision_answers_already_tracked_and_adds_nothing_mo
     assert db.query(EntityKeyword).count() == 0
 
 
-@pytest.fixture()
-def api(monkeypatch):
-    from fastapi import FastAPI, Depends
-    from fastapi.testclient import TestClient
-    from sqlalchemy.pool import StaticPool
-    from app.core.auth import get_current_user, require_client_access
-    from app.core.db import get_db
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine)()
-    eng = ed.entity_discovery_engine
-    monkeypatch.setattr(eng, "_is_valid_person_name_layered", lambda *a, **k: (True, "", ""))
-    import app.utils.redis_client as rc
-    import app.services.matching_engine as me
-    monkeypatch.setattr(rc.redis_client, "publish", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(me.engine_instance, "refresh_processor", lambda d_: None)
-    user = User(id=uuid.uuid4(), email="u@test.test", password_hash="x", role=ROLE_CLIENT_USER)
-    db.add(user)
-    db.commit()
-    app = FastAPI()
-    # same composition as app/main.py: login + require_client_access on the whole client-intelligence router
-    app.include_router(ci.router, prefix="/client-intelligence", dependencies=[Depends(get_current_user), Depends(require_client_access)])
-    app.dependency_overrides[get_current_user] = lambda: db.query(User).filter(User.id == user.id).one()
-    app.dependency_overrides[get_db] = lambda: db
-    yield TestClient(app), db, user
-    db.close()
-
-
 def test_main_mounts_the_router_behind_login_and_per_client_access():
     src = open(os.path.join(os.path.dirname(__file__), "..", "app", "main.py"), encoding="utf-8").read()
     assert "_auth_and_client = _auth + [Depends(require_client_access)]" in src
     assert 'client_intelligence.router, prefix="/client-intelligence", tags=["client_intelligence"], dependencies=_auth_and_client' in src
 
 
-def test_add_endpoint_enforces_per_client_access_and_candidate_ownership(api):
-    http, db, user = api
-    mine, mine_brand = _client(db, "Mine Co")
-    theirs, their_brand = _client(db, "Theirs Co")
+def test_every_executive_route_takes_the_client_id_path_parameter_so_the_access_check_applies():
+    paths = [r.path for r in ci.router.routes if "executive" in r.path]
+    assert paths, "no executive routes found"
+    assert any(p.endswith("/executive-candidates/{candidate_id}/add") for p in paths)
+    for p in paths:
+        assert p.startswith("/{client_id}/"), p     # require_client_access reads client_id from the path
+
+
+def test_access_dependency_blocks_a_client_the_user_may_not_see(env):
+    from fastapi import HTTPException
+    from app.core.auth import require_client_access
+    db, _eng = env
+    mine, _b1 = _client(db, "Mine Co")
+    theirs, _b2 = _client(db, "Theirs Co")
+    user = User(id=uuid.uuid4(), email="u@test.test", password_hash="x", role=ROLE_CLIENT_USER)
+    admin = User(id=uuid.uuid4(), email="a@test.test", password_hash="x", role=ROLE_SUPER_ADMIN)
+    db.add_all([user, admin])
     db.add(UserClientAccess(user_id=user.id, client_id=mine.id))
     db.commit()
+    assert require_client_access(mine.id, user, db) == mine.id
+    with pytest.raises(HTTPException) as denied:
+        require_client_access(theirs.id, user, db)
+    assert denied.value.status_code == 403
+    assert require_client_access(theirs.id, admin, db) == theirs.id          # super_admin sees every client
+
+
+def test_add_route_candidate_must_belong_to_the_client_in_the_path(env, monkeypatch):
+    from fastapi import HTTPException
+    import app.utils.redis_client as rc
+    import app.services.matching_engine as me
+    monkeypatch.setattr(rc.redis_client, "publish", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(me.engine_instance, "refresh_processor", lambda d_: None)
+    db, _eng = env
+    mine, mine_brand = _client(db, "Mine Co")
+    theirs, their_brand = _client(db, "Theirs Co")
     own = _cand(db, mine.id, "Jane Roe", [_doc(db, "x", mine_brand)], mentions=2, conf=0.7)
     foreign = _cand(db, theirs.id, "Other Person", [_doc(db, "y", their_brand)], mentions=2, conf=0.7)
     before = _writes(db)
-
-    # a client the user may not access: refused before anything runs, for every executive route
-    assert http.post(f"/client-intelligence/{theirs.id}/executive-candidates/{foreign.id}/add").status_code == 403
-    assert http.get(f"/client-intelligence/{theirs.id}/executive-candidates-reviewed").status_code == 403
-    assert http.get(f"/client-intelligence/{theirs.id}/executive-search", params={"name": "Other Person"}).status_code == 403
-    assert _writes(db) == before
-
-    # an accessible client but another client's candidate id: nothing happens
-    r = http.post(f"/client-intelligence/{mine.id}/executive-candidates/{foreign.id}/add")
-    assert r.status_code == 200 and r.json()["status"] == "not_found"
-    assert _writes(db) == before
+    out = ci.add_client_executive_candidate(mine.id, foreign.id, db)        # another client's candidate id on an accessible client
+    assert out["status"] == "not_found" and _writes(db) == before
     db.refresh(foreign)
     assert foreign.promoted_to_executive_id is None
-
-    # the happy path, and a double click over HTTP
-    ok = http.post(f"/client-intelligence/{mine.id}/executive-candidates/{own.id}/add")
-    again = http.post(f"/client-intelligence/{mine.id}/executive-candidates/{own.id}/add")
-    assert ok.json()["status"] == "added" and ok.json()["message"] == "Added. A score appears once new coverage mentions them."
-    assert again.json()["status"] == "already_tracked"
+    ok = ci.add_client_executive_candidate(mine.id, own.id, db)
+    again = ci.add_client_executive_candidate(mine.id, own.id, db)           # double click
+    assert ok["status"] == "added" and ok["message"] == "Added. A score appears once new coverage mentions them."
+    assert again["status"] == "already_tracked"
     assert db.query(Entity).filter(Entity.client_id == mine.id, Entity.entity_type == "person").count() == 1
-
-
-def test_super_admin_reaches_any_client_and_a_missing_client_is_404(api):
-    http, db, user = api
-    user.role = ROLE_SUPER_ADMIN
-    db.commit()
-    c, brand = _client(db)
-    cand = _cand(db, c.id, "Jane Roe", [_doc(db, "x", brand)], mentions=2, conf=0.7)
-    assert http.post(f"/client-intelligence/{c.id}/executive-candidates/{cand.id}/add").json()["status"] == "added"
-    assert http.post(f"/client-intelligence/{uuid.uuid4()}/executive-candidates/{cand.id}/add").status_code == 404
+    with pytest.raises(HTTPException) as missing:
+        ci.add_client_executive_candidate(uuid.uuid4(), own.id, db)          # unknown client
+    assert missing.value.status_code == 404
 
 
 # ---------------------------------------------------------------- reviewed list: constant number of queries

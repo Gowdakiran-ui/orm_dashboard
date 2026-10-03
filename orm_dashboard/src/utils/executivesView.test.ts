@@ -56,13 +56,14 @@ describe("sentences", () => {
 
 describe("Executives page source", () => {
   const src = readFileSync(path.join(__dirname, "..", "components", "ExecutivesTab.tsx"), "utf8");
-  it("has no free-text path that creates anything: no polling, no promote-all, no browser name matching", () => {
-    for (const w of ["MAX_SEARCH_POLLS", "pollExecutiveSearch", "setTimeout", "onPromoteExecutives", "promoteExecutiveCandidates", "Executive Figure", "extracted_entities", "start tracking a real executive"]) {
+  it("has no free-text path that creates anything and no list of people: no polling, no promote-all, no browser name matching, no tracked/candidate lists", () => {
+    for (const w of ["MAX_SEARCH_POLLS", "pollExecutiveSearch", "setTimeout", "onPromoteExecutives", "promoteExecutiveCandidates", "Executive Figure", "extracted_entities",
+                     "fetchReviewedExecutiveCandidates", "Tracked Executives", "Candidates Found", "were hidden", "trackedRows"]) {
       expect(src).not.toContain(w);
     }
   });
   it("adds only through the one-candidate endpoint, after a confirmation step", () => {
-    expect(src).toContain("addExecutiveCandidate(clientId, confirming.id)");
+    expect(src).toContain("addExecutiveCandidate(clientId, person.id)");
     expect(src).toContain("Confirm add");
   });
 });

@@ -168,3 +168,4 @@ Applies to any "audit this page" task. Standing rule, in this order:
 4. No verdict CORRECT without an independent read-only recompute from raw rows with plain SQL; otherwise UNVERIFIABLE.
 5. Keep a progress file with an end-of-phase check; the final report has "Deviations from task.md" and a self-audit table (rows with a screenshot must equal total rows).
 6. Stay in scope: no fixes during an audit; proposals go in the report.
+7. Fix tasks fix bugs only. Do not add, remove or reshape features or UI sections unless the task names them; if a task line reads like a new feature, ask first.
