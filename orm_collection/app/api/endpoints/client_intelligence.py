@@ -552,97 +552,6 @@ def get_client_product_documents(
     docs = BenchmarkEngine().get_entity_documents(db, str(client_id), entity_id)
     return {"documents": _build_document_responses(db, str(client_id), docs)}
 
-@router.get("/{client_id}/share-of-voice", response_model=List[Dict[str, Any]])
-def get_client_sov(client_id: UUID, db: Session = Depends(get_db)):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    from app.models.entity import Entity
-    benchmarks_raw = db.query(CompetitorBenchmark).filter(CompetitorBenchmark.client_id == client_id).order_by(CompetitorBenchmark.created_at.desc()).all()
-    
-    # Deduplicate in Python keeping the first one seen (which is the latest due to DESC order)
-    seen_competitors = set()
-    benchmarks = []
-    for b in benchmarks_raw:
-        comp_id = b.competitor_entity_id
-        if comp_id not in seen_competitors:
-            seen_competitors.add(comp_id)
-            benchmarks.append(b)
-            if len(benchmarks) >= 10:
-                break
-    
-    if not benchmarks:
-        # Check if there are any competitor entities at all
-        competitor_count = db.query(Entity).filter(
-            Entity.client_id == client_id,
-            Entity.entity_type == "competitor"
-        ).count()
-        
-        if competitor_count < 2:
-            return [{"message": "No competitor intelligence available."}]
-    
-    return [{"competitor_id": str(b.competitor_entity_id), "sov": b.share_of_voice} for b in benchmarks]
-
-@router.get("/{client_id}/competitive-summary", response_model=Dict[str, Any])
-def get_client_competitive_summary(client_id: UUID, db: Session = Depends(get_db)):
-    """
-    Compact competitive summary (count, average reputation, top competitor,
-    client's own rank), built from the same latest-per-competitor
-    CompetitorBenchmark query pattern as get_client_benchmark above.
-    """
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    from app.models.entity import Entity
-
-    latest_sub = db.query(
-        CompetitorBenchmark.competitor_entity_id,
-        func.max(CompetitorBenchmark.created_at).label("max_created")
-    ).filter(CompetitorBenchmark.client_id == client_id).group_by(
-        CompetitorBenchmark.competitor_entity_id
-    ).subquery()
-
-    benchmarks = db.query(CompetitorBenchmark, Entity).join(
-        Entity, Entity.id == CompetitorBenchmark.competitor_entity_id
-    ).join(
-        latest_sub,
-        (CompetitorBenchmark.competitor_entity_id == latest_sub.c.competitor_entity_id) &
-        (CompetitorBenchmark.created_at == latest_sub.c.max_created)
-    ).filter(CompetitorBenchmark.client_id == client_id).all()
-
-    if not benchmarks:
-        return {
-            "competitor_count": 0,
-            "avg_competitor_reputation": None,
-            "top_competitor": None,
-            "client_rank": None
-        }
-
-    reps = [b.CompetitorBenchmark.reputation_score for b in benchmarks if b.CompetitorBenchmark.reputation_score is not None]
-    top = max(benchmarks, key=lambda b: b.CompetitorBenchmark.reputation_score or 0)
-
-    # Client's own rank among these competitors -- 1 + count of competitors
-    # with a strictly higher reputation score, matching the frontend's own
-    # definition (useAnalytics.ts's clientRankValue) since CompetitorBenchmark.rank
-    # is a competitor-to-competitor ranking and doesn't include the client itself.
-    rep = db.query(ReputationScore).filter(ReputationScore.client_id == client_id).order_by(
-        ReputationScore.created_at.desc(), ReputationScore.id.desc()
-    ).first()
-    client_rank = None
-    if rep and rep.score is not None:
-        higher_count = sum(1 for r in reps if r > rep.score)
-        client_rank = higher_count + 1
-
-    return {
-        "competitor_count": len(benchmarks),
-        "avg_competitor_reputation": sum(reps) / len(reps) if reps else None,
-        "top_competitor": {
-            "name": top.Entity.name,
-            "reputation_score": top.CompetitorBenchmark.reputation_score
-        },
-        "client_rank": client_rank
-    }
-
 @router.get("/{client_id}/executive-candidates", response_model=List[Dict[str, Any]])
 def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()
@@ -1002,23 +911,37 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
     from app.models.collection_job import CollectionJob
     from app.services.client_service import competitor_search_feed_urls, provision_competitor_search_feeds
 
-    def _benchmark_payload(entity: "Entity", benchmark) -> Dict[str, Any]:
+    def _benchmark_payload(entity: "Entity", benchmark, reason: str = None) -> Dict[str, Any]:
+        # BenchmarkEngine stores 0.0 in these NOT NULL columns for a competitor
+        # with no evidence; that is a placeholder, never a measurement, so it is
+        # not served as one (same rule /benchmark already applies to reputation).
+        no_evidence = benchmark is None or benchmark.health_status == "INSUFFICIENT_EVIDENCE"
+
+        def measured(value):
+            return None if (no_evidence or value is None) else value
+
         return {
             "status": "tracked",
             "competitor": {
                 "id": str(benchmark.id) if benchmark else None,
                 "entity_id": str(entity.id),
                 "name": entity.name,
-                "reputation_score": benchmark.reputation_score if benchmark else None,
-                "sentiment_score": benchmark.sentiment_score if benchmark else None,
-                "risk_score": benchmark.risk_score if benchmark else None,
-                "share_of_voice": benchmark.share_of_voice if benchmark else None,
+                "reputation_score": measured(benchmark.reputation_score if benchmark else None),
+                "sentiment_score": measured(benchmark.sentiment_score if benchmark else None),
+                "risk_score": measured(benchmark.risk_score if benchmark else None),
+                "share_of_voice": measured(benchmark.share_of_voice if benchmark else None),
                 "rank": benchmark.rank if benchmark else 0,
-                "confidence_score": benchmark.confidence_score if benchmark else None,
-                "data_coverage": benchmark.data_coverage if benchmark else None,
+                "confidence_score": measured(benchmark.confidence_score if benchmark else None),
+                "data_coverage": measured(benchmark.data_coverage if benchmark else None),
                 # Same sentinel used everywhere else in this table when there
                 # is genuinely no scoreable evidence yet, not a fabricated 0.0.
                 "health_status": benchmark.health_status if benchmark else "INSUFFICIENT_EVIDENCE",
+                # Additive: how many mentions (last 30 days, in articles that also
+                # mention the client) the score rests on, and when this row was
+                # computed. Neither is a scoring input.
+                "mentions_30d": measured(benchmark.visibility_score if benchmark else None),
+                "as_of": benchmark.created_at.isoformat() if (benchmark and benchmark.created_at) else None,
+                "reason": reason,
             }
         }
 
@@ -1060,6 +983,18 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
             return {"status": "searching"}
 
         if search_feeds:
+            # Never dispatch, and never conclude "no coverage", while ANY pipeline run for this
+            # client is still active (every non-terminal status, e.g. QUEUED, COLLECTING,
+            # AWAITING_PROCESSING, PROCESSING, RISK, BENCHMARK): that run scores the client's
+            # competitors itself and a second concurrent risk+benchmark run would race it.
+            from app.models.pipeline_run import PipelineRun
+            active_run = db.query(PipelineRun.id).filter(
+                PipelineRun.client_id == str(client_id),
+                ~PipelineRun.status.in_(("SUCCESS", "FAILED")),
+            ).first()
+            if active_run:
+                return {"status": "searching"}
+
             # Collection just finished and nothing has scored this entity yet
             # -- kick off the same aggregation a Run Pipeline call would
             # eventually do for it, asynchronously, instead of leaving the
@@ -1084,10 +1019,25 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
             # redundant duplicate task; the TTL is the self-healing safety
             # net if a worker dies mid-task without clearing it, same
             # pattern this codebase's watchdogs already use elsewhere.
+            #
+            # At most ONE dispatch per tracked entity per day (`dispatched_key`).
+            # BenchmarkEngine only scores a competitor that co-occurs with the
+            # client's own brand/product in some article (benchmark_engine.py
+            # brand gate); an entity that never does (a typo duplicate, or a
+            # name with no coverage mentioning the client) gets no row from any
+            # run. Before this guard such an entity stayed "searching" forever
+            # and every poll re-queued a whole-client risk+benchmark run.
+            # Once that single run has finished (in-flight key gone) and the
+            # entity still has no row, it is reported as tracked with no
+            # evidence, a terminal state the page stops polling on.
             from app.utils.redis_client import redis_client
             from app.core.celery_app import celery_app
             processing_key = f"competitor_search_processing:{client_id}"
-            if redis_client.set(processing_key, "1", nx=True, ex=900):
+            dispatched_key = f"competitor_search_dispatched:{tracked_entity.id}"
+            if redis_client.get(dispatched_key) and not redis_client.get(processing_key):
+                return _benchmark_payload(tracked_entity, None, reason="no_coverage_mentioning_client")
+            if not redis_client.get(dispatched_key) and redis_client.set(processing_key, "1", nx=True, ex=900):
+                redis_client.set(dispatched_key, "1", ex=86400)
                 celery_app.send_task(
                     "app.workers.aggregation_tasks.process_client_risk_and_benchmark",
                     args=[str(client_id)],

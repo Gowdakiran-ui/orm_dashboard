@@ -203,47 +203,76 @@ export function SentimentScaleDefinition() {
 }
 
 /**
- * Competitor Compare radar chart (CompetitorsTab.tsx singleCompetitorRadarData)
- * and its Reputation Compare / Share of Voice bar charts below it. Each axis
- * value verified directly against the source that computes it:
- *   - Reputation Score: same 0-100 blended score as ReputationScoreDefinition
- *     above (client via ReputationEngine; competitor via BenchmarkEngine's
- *     reputation_score field).
- *   - Sentiment Score: the -1..+1 average from sentiment_analyzer.py,
- *     normalized to 0-100 for this chart -- client already 0-100 via
- *     ReputationEngine's ((avg+1)/2)*100, competitor via the same (x+1)*50
- *     mapping applied client-side (CompetitorsTab.tsx singleCompetitorRadarData).
- *   - Risk Containment: 100 minus the entity's average Risk Score (0-100,
- *     same risk_engine.py score as Risk Severity above) -- a frontend-only
- *     inversion so "higher is better" holds for every radar axis; it is not
- *     a distinct backend metric of its own.
- *   - Share of Voice: benchmark_engine.py's calculate_competitor_benchmarks --
- *     a competitor's SOV = its mention count / (client + every tracked
- *     competitor's mention count) x 100 over the same rolling window the
- *     rest of the benchmark run uses. The client's own SOV (no benchmark row
- *     of its own) is 100 minus the sum of every tracked competitor's SOV
- *     (utils/shareOfVoice.ts calculateClientSOV), floored at 0.
+ * Competitor Compare radar chart (CompetitorsTab.tsx, built by utils/competitorCompare.ts buildRadarData)
+ * and its Comparable Score / Share of Voice bar charts below it. Every axis is on ONE basis for the client
+ * and the competitor (audit/competitors-audit.md F-01, F-04):
+ *   - Comparable Score: BenchmarkEngine's score (weighted sentiment / risk / source / visibility, last 30 days,
+ *     only articles that also mention the client). The client gets the same calculation
+ *     (`client_comparable_score` on /benchmark), not its overall reputation score.
+ *   - Sentiment Score: average tone from -1..+1 shown as 0-100 (50 = neutral).
+ *   - Risk Containment: 100 minus the average risk score. The client's stored risk component already is
+ *     "100 minus average risk", so it is shown as it is.
+ *   - Share of Voice: a competitor's mentions / (client + compared competitors' mentions) x 100, counting
+ *     only articles that also mention the client; the client is the remainder (utils/shareOfVoice.ts).
  */
 export function CompetitorRadarAxesDefinition() {
   return (
     <>
       <span className="block font-bold">Competitor Comparison Metrics</span>
       <span className="block">
-        <b>Reputation Score</b> (0–100) — the same blended reputation score
-        used everywhere else in this dashboard.
+        <b>Comparable Score</b> (0–100) — one score calculated the same way for
+        the client and the competitor over the last 30 days, using only
+        articles that also mention the client. It is not the overall
+        reputation score shown on Brand Equity.
       </span>
       <span className="mt-1 block">
         <b>Sentiment Score</b> — average coverage tone, normalized from the
         -1.0..+1.0 scale to 0–100 for this chart (50 = neutral).
       </span>
       <span className="mt-1 block">
-        <b>Risk Containment</b> — 100 minus the entity&apos;s average Risk
-        Score, so a higher bar always means lower risk exposure.
+        <b>Risk Containment</b> — 100 minus the average Risk Score, so a
+        higher value always means lower risk exposure. Only articles that
+        also mention the client are included, so a competitor&apos;s other
+        stories do not count here.
       </span>
       <span className="mt-1 block">
-        <b>Share of Voice</b> — this entity&apos;s share of total tracked
-        mentions (itself vs. client + every tracked competitor), as a
-        percentage.
+        <b>Share of Voice</b> — the share of all mentions (the client plus the
+        compared competitors) that belong to this entity, counting only
+        articles that also mention the client.
+      </span>
+    </>
+  );
+}
+
+/** Competitors tab "Comparable Score Compare" card (page-only; Brand Equity keeps ReputationScoreDefinition). */
+export function CompetitorComparableScoreDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Comparable Score</span>
+      <span className="block">
+        A 0–100 score that blends sentiment (30%), risk (30%), source
+        reliability (10%) and media visibility (5%), re-weighted over the parts
+        that have data. It is calculated the same way for the client and for
+        the competitor, over the last 30 days, using only articles that also
+        mention the client, so the two bars can be compared. It is not the
+        overall reputation score shown on Brand Equity.
+      </span>
+    </>
+  );
+}
+
+/** Competitors tab Share of Voice text (page-only; Brand Equity keeps ShareOfVoiceDefinition). */
+export function CompetitorShareOfVoiceDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Share of Voice (SOV)</span>
+      <span className="block">
+        A competitor&apos;s share of all mentions in the last 30 days: its
+        mention count divided by (the client&apos;s + every compared
+        competitor&apos;s mention count). Only articles that also mention the
+        client are counted, so coverage of a competitor elsewhere does not
+        show up here. The client&apos;s own share is 100 minus the sum of the
+        compared competitors&apos; shares, never below 0.
       </span>
     </>
   );

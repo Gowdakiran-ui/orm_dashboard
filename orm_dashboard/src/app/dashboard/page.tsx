@@ -346,13 +346,9 @@ function DashboardShell() {
                   <CompetitorsTab
                     benchmarksLoading={data.benchmarksLoading}
                     benchmarksError={data.benchmarksError}
-                    benchmarks={data.benchmarks}
-                    competitorRadarData={analytics.competitorRadarData}
                     activeClientName={activeClientName}
                     normalizedBenchmarks={analytics.normalizedBenchmarks}
-                    reputation={data.reputation}
                     repBreakdown={data.repBreakdown}
-                    clientRank={analytics.clientRank}
                     documents={data.documents}
                     clientId={data.clientId}
                   />

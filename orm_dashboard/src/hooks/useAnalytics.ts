@@ -171,40 +171,6 @@ export function useAnalytics({
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [documents]);
 
-  const competitorRadarData = useMemo(() => {
-    const clientAvgSentiment = (documents || []).length > 0 ? ((documents || []).reduce((acc, curr) => acc + (curr.sentiment ?? 0), 0) / (documents || []).length) : 0;
-    const clientSentimentNormalized = (clientAvgSentiment + 1) * 50;
-    const clientAvgRisk = risks?.average_recent_risk_score ?? 0;
-    const clientRiskContainment = 100 - clientAvgRisk;
-    const clientSOV = calculateClientSOV(normalizedBenchmarks);
-
-    const data: any[] = [
-      { subject: "Reputation Score" },
-      { subject: "Sentiment Index" },
-      { subject: "Risk Containment" },
-      { subject: "Share of Voice" }
-    ];
-
-    data[0][activeClientName] = reputation?.score ?? 0;
-    data[1][activeClientName] = clientSentimentNormalized;
-    data[2][activeClientName] = clientRiskContainment;
-    data[3][activeClientName] = clientSOV;
-
-    (normalizedBenchmarks || []).forEach(b => {
-      if (b) {
-        const compSentimentNormalized = ((b.sentiment ?? 0) + 1) * 50;
-        const compRiskContainment = 100 - (b.risk ?? 0);
-        
-        data[0][b.competitor_name] = b.reputation ?? 0;
-        data[1][b.competitor_name] = compSentimentNormalized;
-        data[2][b.competitor_name] = compRiskContainment;
-        data[3][b.competitor_name] = b.sov;
-      }
-    });
-
-    return data;
-  }, [normalizedBenchmarks, reputation, risks, documents, activeClientName]);
-
   // Executive Analytics' Severity x Confidence matrix reads these items. Each one is the
   // document itself (so utils/riskCenter.ts flaggedDocs/buildMatrix can band it exactly as
   // Risk Center does: platform bands 25/50/75, confidence = the engine's stored
@@ -591,7 +557,6 @@ export function useAnalytics({
     riskSeverityData,
     pipelineTimelineData,
     sourceContData,
-    competitorRadarData,
     riskMatrixData,
     riskHeatmapData,
     alertSeverityData,

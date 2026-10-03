@@ -7,30 +7,30 @@ import {
   BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { 
-  Compass, Users, BarChart3, Search, ShieldCheck,
-  Info, Calendar, AlertOctagon, X, ExternalLink
+  Compass, Users, BarChart3, Search,
+  Info, AlertOctagon, X, ExternalLink
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { calculateClientSOV } from "@/utils/shareOfVoice";
-import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
+import { tooltipScoreFormatter } from "@/utils/formatScore";
 import { fetchDocumentDetails, searchCompetitor, fetchTopicDistribution } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { ProductCompareSection } from "@/components/ProductCompareSection";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { CompetitorRadarAxesDefinition, ReputationScoreDefinition, ShareOfVoiceDefinition, TopicOwnershipDefinition } from "@/lib/metricDefinitions";
+import { CompetitorRadarAxesDefinition, CompetitorComparableScoreDefinition, CompetitorShareOfVoiceDefinition, TopicOwnershipDefinition } from "@/lib/metricDefinitions";
+import {
+  MIN_TOPIC_COMPARISON_COUNT, ACTIVITY_ARTICLE_CAP, hasEvidence, clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice,
+  rankedEntityCount, rankLabel, emptyStateMessage, comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption,
+  asOfLabel, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, lowEvidenceTitle, riskTileLabel, fixed,
+} from "@/utils/competitorCompare";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
   benchmarksError: string | null;
-  benchmarks: any[];
-  competitorRadarData: any[];
   activeClientName: string;
   normalizedBenchmarks: any[];
-  reputation: any;
   repBreakdown: any;
-  clientRank: string;
   documents: any[]; // Pipe documents list for dynamic register calculations
   clientId?: string | null;
 }
@@ -38,13 +38,9 @@ export interface CompetitorsTabProps {
 export function CompetitorsTab({
   benchmarksLoading,
   benchmarksError,
-  benchmarks,
-  competitorRadarData,
   activeClientName,
   normalizedBenchmarks,
-  reputation,
   repBreakdown,
-  clientRank,
   documents,
   clientId,
 }: CompetitorsTabProps) {
@@ -221,50 +217,27 @@ export function CompetitorsTab({
       competitor_id: selectedCompetitor.entity_id,
       competitor_name: selectedCompetitor.name,
       rank: selectedCompetitor.rank ?? 0,
-      sov: selectedCompetitor.share_of_voice ?? 0,
-      reputation: selectedCompetitor.reputation_score ?? 0,
-      sentiment: selectedCompetitor.sentiment_score ?? 0,
-      risk: selectedCompetitor.risk_score ?? 0,
+      sov: selectedCompetitor.share_of_voice ?? null,
+      reputation: selectedCompetitor.reputation_score ?? null,
+      sentiment: selectedCompetitor.sentiment_score ?? null,
+      risk: selectedCompetitor.risk_score ?? null,
     }];
   }, [selectedCompetitor]);
 
-  // Radar data built locally from just [client, selectedCompetitor] --
-  // deliberately not the parent's `competitorRadarData` prop, which is
-  // computed in useAnalytics.ts across every historically-tracked
-  // competitor. Same subject/axis shape and normalization the old multi-
-  // competitor radar used (sentiment (x+1)*50, risk containment = 100-risk),
-  // just fed by one competitor instead of all of them.
-  const singleCompetitorRadarData = useMemo(() => {
-    const clientAvgRisk = repBreakdown?.risk !== undefined && repBreakdown?.risk !== null ? repBreakdown.risk : 0;
-    const data: any[] = [
-      { subject: "Reputation Score" },
-      { subject: "Sentiment Score" },
-      { subject: "Risk Containment" },
-      { subject: "Share of Voice" }
-    ];
-    data[0][activeClientName] = reputation?.score ?? 0;
-    data[1][activeClientName] = repBreakdown?.sentiment ?? 0;
-    data[2][activeClientName] = 100 - clientAvgRisk;
-    // C6: was calculateClientSOV(singleCompetitorBenchmarks) -- the
-    // hyperfocus redesign narrowed that array to just the one currently
-    // searched competitor, so "100 - this one competitor's SOV" silently
-    // overstated the client's share whenever other tracked competitors also
-    // held real share. normalizedBenchmarks (already fetched/computed
-    // upstream in useAnalytics.ts and threaded in as a prop, just unused
-    // here until now) holds every tracked competitor's row, which is what
-    // the client's own remaining share must be derived against (Part O/Part
-    // 1 fix). Identical result to before for a client with exactly one
-    // tracked competitor, since normalizedBenchmarks then has that one row.
-    data[3][activeClientName] = calculateClientSOV(normalizedBenchmarks);
-
-    if (selectedCompetitor) {
-      data[0][selectedCompetitor.name] = selectedCompetitor.reputation_score ?? 0;
-      data[1][selectedCompetitor.name] = ((selectedCompetitor.sentiment_score ?? 0) + 1) * 50;
-      data[2][selectedCompetitor.name] = 100 - (selectedCompetitor.risk_score ?? 0);
-      data[3][selectedCompetitor.name] = selectedCompetitor.share_of_voice ?? 0;
-    }
-    return data;
-  }, [activeClientName, reputation, repBreakdown, selectedCompetitor, normalizedBenchmarks]);
+  // Radar data built locally from just [client, selectedCompetitor], on ONE basis for both (audit F-01/F-04/F-10):
+  // the client's point is its comparable score (same formula as the competitors), its sentiment component, its
+  // risk component as stored (already "100 - average risk", so it is not inverted again) and its remaining
+  // share of voice. A value that does not exist is left out, never drawn as 0 (utils/competitorCompare.ts).
+  const clientSov = useMemo(() => clientShareOfVoice(normalizedBenchmarks), [normalizedBenchmarks]);
+  const clientComparableScore = normalizedBenchmarks?.[0]?.client_comparable_score ?? null;
+  const clientValues = useMemo(() => clientRadarValues(clientComparableScore, repBreakdown, clientSov), [clientComparableScore, repBreakdown, clientSov]);
+  const radar = useMemo(
+    () => buildRadarData(activeClientName, clientValues, selectedCompetitor?.name || "selected competitor", competitorRadarValues(selectedCompetitor)),
+    [activeClientName, clientValues, selectedCompetitor]
+  );
+  const competitorHasEvidence = hasEvidence(selectedCompetitor);
+  const comparedNames: string[] = useMemo(() => (normalizedBenchmarks || []).map((b: any) => b?.competitor_name).filter(Boolean), [normalizedBenchmarks]);
+  const rankTotal = useMemo(() => rankedEntityCount(normalizedBenchmarks), [normalizedBenchmarks]);
 
   // 4. VERIFIED COMPETITOR EVENTS FILTERING -- scoped to the one selected
   // competitor only (hyperfocus redesign). Previously this matched against
@@ -321,7 +294,6 @@ export function CompetitorsTab({
   // this comparison (total across only the entities with qualifying
   // evidence), not the whole platform-wide threshold, since this is a
   // narrower view than that chart.
-  const MIN_TOPIC_COMPARISON_COUNT = 5;
 
   // Scoped to exactly the same [client, selectedCompetitor] pair every
   // other comparison card on this page uses (Competitor Comparison radar,
@@ -426,30 +398,40 @@ export function CompetitorsTab({
                 <Badge className={glassPill(theme)} style={{ color: accent }}>TRACKED</Badge>
               </div>
               {searchResult.competitor.health_status === 'INSUFFICIENT_EVIDENCE' ? (
-                <p className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>
-                  No qualifying coverage found yet — tracked, but not enough evidence to score
+                <p className={`text-xs font-mono ${mutedText(theme)}`}>
+                  {noEvidenceMessage(searchResult.competitor.name, activeClientName)}
                 </p>
               ) : (
-                <div className="grid grid-cols-4 gap-3 text-xs font-mono">
-                  <div>
-                    <span className={`block ${mutedText(theme)}`}>Reputation</span>
-                    <span className="font-bold text-sm" style={{ color: accent }}>
-                      {searchResult.competitor.reputation_score !== null ? searchResult.competitor.reputation_score.toFixed(2) : 'N/A'}
-                    </span>
+                <>
+                  <div className="grid grid-cols-4 gap-3 text-xs font-mono">
+                    <div>
+                      <span className={`block ${mutedText(theme)}`}>Comparable score</span>
+                      <span className="font-bold text-sm" style={{ color: accent }}>
+                        {fixed(searchResult.competitor.reputation_score, 2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className={`block ${mutedText(theme)}`}>Rank</span>
+                      <span className={bodyText(theme)}>{rankLabel(searchResult.competitor.rank, rankTotal, activeClientName)}</span>
+                    </div>
+                    <div>
+                      <span className={`block ${mutedText(theme)}`}>{riskTileLabel(activeClientName)}</span>
+                      <span className={bodyText(theme)}>{fixed(searchResult.competitor.risk_score, 1)}</span>
+                    </div>
+                    <div>
+                      <span className={`block ${mutedText(theme)}`}>Share of Voice</span>
+                      <span className={bodyText(theme)}>{searchResult.competitor.share_of_voice !== null && searchResult.competitor.share_of_voice !== undefined ? `${fixed(searchResult.competitor.share_of_voice, 1)}%` : 'N/A'}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className={`block ${mutedText(theme)}`}>Rank</span>
-                    <span className={bodyText(theme)}>{searchResult.competitor.rank ? `#${searchResult.competitor.rank}` : 'Unranked'}</span>
-                  </div>
-                  <div>
-                    <span className={`block ${mutedText(theme)}`}>Risk</span>
-                    <span className={bodyText(theme)}>{searchResult.competitor.risk_score !== null ? searchResult.competitor.risk_score.toFixed(1) : 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className={`block ${mutedText(theme)}`}>Share of Voice</span>
-                    <span className={bodyText(theme)}>{searchResult.competitor.share_of_voice !== null ? `${searchResult.competitor.share_of_voice.toFixed(1)}%` : 'N/A'}</span>
-                  </div>
-                </div>
+                  <p className={`text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
+                    {isLowEvidence(searchResult.competitor.mentions_30d) && (
+                      <Badge className="mr-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-[10px]" title={lowEvidenceTitle()}>
+                        Low evidence
+                      </Badge>
+                    )}
+                    {[evidenceCaption(searchResult.competitor.mentions_30d, activeClientName), asOfLabel(searchResult.competitor.as_of)].filter(Boolean).join(" ")}
+                  </p>
+                </>
               )}
             </div>
           )}
@@ -468,16 +450,20 @@ export function CompetitorsTab({
         </CardContent>
       </Card>
 
-      {!hasTrackedCompetitors && (
-        <Card className={`${glassCard(theme)} h-40`}>
-          <div className={SPECULAR_LINE} />
-          <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
-            <Compass className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
-            <p className={`font-mono text-xs ${mutedText(theme)}`}>No tracked competitors yet.</p>
-            <p className={`font-mono text-xs ${mutedText(theme)}`}>Search a name above to start tracking a real competitor.</p>
-          </CardContent>
-        </Card>
-      )}
+      {!hasTrackedCompetitors && (() => {
+        const empty = emptyStateMessage({ comparedNames, searchStatus: searchResult?.status, clientName: activeClientName });
+        if (!empty) return null;
+        return (
+          <Card className={`${glassCard(theme)} min-h-40`}>
+            <div className={SPECULAR_LINE} />
+            <CardContent className="h-full flex flex-col items-center justify-center space-y-2 py-8 text-center">
+              <Compass className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
+              <p className={`font-mono text-xs ${mutedText(theme)}`}>{empty.title}</p>
+              <p className={`font-mono text-xs ${mutedText(theme)}`}>{empty.detail}</p>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {hasTrackedCompetitors && (
       <>
@@ -500,15 +486,17 @@ export function CompetitorsTab({
               <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>{activeClientName} vs. {selectedCompetitor?.name || "selected competitor"} — Reputation, Sentiment, Risk Containment, and Share of Voice</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center items-center h-[320px]">
-              {selectedCompetitor && selectedCompetitor.health_status !== "INSUFFICIENT_EVIDENCE" ? (
+              {selectedCompetitor && competitorHasEvidence ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={singleCompetitorRadarData}>
+                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radar.rows}>
                     <PolarGrid stroke={isDark ? "#3f3f46" : "#d4d4d8"} />
                     <PolarAngleAxis dataKey="subject" stroke={isDark ? "#a1a1aa" : "#71717a"} fontSize={11} />
                     <PolarRadiusAxis angle={30} domain={[0, 100]} stroke={isDark ? "#3f3f46" : "#d4d4d8"} tick={false} />
 
-                    {/* CLIENT RADAR STYLING */}
-                    <Radar name={activeClientName} dataKey={activeClientName} stroke="#D4AF37" fill="#D4AF37" fillOpacity={0.4} strokeWidth={3} />
+                    {/* CLIENT RADAR STYLING (only when all four client values exist) */}
+                    {radar.showClient && (
+                      <Radar name={activeClientName} dataKey={activeClientName} stroke="#D4AF37" fill="#D4AF37" fillOpacity={0.4} strokeWidth={3} />
+                    )}
 
                     {/* THE ONE SELECTED COMPETITOR */}
                     <Radar name={selectedCompetitor.name} dataKey={selectedCompetitor.name} stroke="#38BDF8" fill="#38BDF8" fillOpacity={0.15} strokeWidth={2} />
@@ -517,10 +505,15 @@ export function CompetitorsTab({
                 </ResponsiveContainer>
               ) : (
                 <div className={`font-mono text-xs text-center ${mutedText(theme)}`}>
-                  Waiting for verified competitor data.
+                  {selectedCompetitor ? noEvidenceMessage(selectedCompetitor.name, activeClientName) : "Waiting for verified competitor data."}
                 </div>
               )}
             </CardContent>
+            {selectedCompetitor && competitorHasEvidence && !radar.showClient && (
+              <p className={`px-6 pb-4 text-[11px] font-mono ${mutedText(theme)}`}>
+                {activeClientName}&apos;s own values are not available yet, so only {selectedCompetitor.name} is drawn.
+              </p>
+            )}
           </Card>
         )}
       </ErrorBoundary>
@@ -542,22 +535,19 @@ export function CompetitorsTab({
               <CardHeader>
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                   <BarChart3 className="h-4 w-4 text-[#D4AF37] mr-2" />
-                  Reputation Compare
-                  <InfoTooltip label="About Reputation Score"><ReputationScoreDefinition /></InfoTooltip>
+                  Comparable Score
+                  <InfoTooltip label="About Comparable Score"><CompetitorComparableScoreDefinition /></InfoTooltip>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pl-2">
                 <div className="h-[260px]">
-                  {singleCompetitorBenchmarks.length > 0 ? (
+                  {competitorHasEvidence ? (
                       <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                          data={[
-                          { name: activeClientName, Score: reputation?.score ?? 0 },
-                          ...singleCompetitorBenchmarks.map((b) => ({
-                              name: b.competitor_name,
-                              Score: b.reputation
-                          }))
-                          ]}
+                          data={bars([
+                            { name: activeClientName, value: clientValues.reputation },
+                            { name: selectedCompetitor.name, value: selectedCompetitor.reputation_score },
+                          ]).map(e => ({ name: e.name, Score: e.value }))}
                           margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
                       >
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
@@ -568,9 +558,9 @@ export function CompetitorsTab({
                       </BarChart>
                       </ResponsiveContainer>
                   ) : (
-                      <div className="flex flex-col items-center justify-center h-full space-y-2">
+                      <div className="flex flex-col items-center justify-center h-full space-y-2 text-center">
                         <BarChart3 className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
-                        <p className={`font-mono text-xs ${mutedText(theme)}`}>Waiting for verified competitor data.</p>
+                        <p className={`font-mono text-xs ${mutedText(theme)}`}>{selectedCompetitor ? noEvidenceMessage(selectedCompetitor.name, activeClientName) : "Waiting for verified competitor data."}</p>
                       </div>
                   )}
                 </div>
@@ -595,7 +585,7 @@ export function CompetitorsTab({
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
                   <Users className="h-4 w-4 text-blue-500 mr-2" />
                   Share of Voice (SOV)
-                  <InfoTooltip label="About Share of Voice"><ShareOfVoiceDefinition /></InfoTooltip>
+                  <InfoTooltip label="About Share of Voice"><CompetitorShareOfVoiceDefinition /></InfoTooltip>
                 </CardTitle>
                 {/* Part 2: disambiguates this pairwise chart from the
                     Overall Share of Voice tile below, which is the client's
@@ -605,19 +595,13 @@ export function CompetitorsTab({
               </CardHeader>
               <CardContent className="pl-2">
                 <div className="h-[260px]">
-                  {singleCompetitorBenchmarks.length > 0 ? (
+                  {competitorHasEvidence ? (
                       <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                          data={[
-                          {
-                              name: activeClientName,
-                              'Share of Voice': calculateClientSOV(normalizedBenchmarks)
-                          },
-                          ...singleCompetitorBenchmarks.map((b) => ({
-                              name: b.competitor_name,
-                              'Share of Voice': b.sov
-                          }))
-                          ]}
+                          data={bars([
+                            { name: activeClientName, value: clientSov },
+                            { name: selectedCompetitor.name, value: selectedCompetitor.share_of_voice },
+                          ]).map(e => ({ name: e.name, 'Share of Voice': e.value }))}
                           margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
                       >
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
@@ -628,9 +612,9 @@ export function CompetitorsTab({
                       </BarChart>
                       </ResponsiveContainer>
                   ) : (
-                      <div className="flex flex-col items-center justify-center h-full space-y-2">
+                      <div className="flex flex-col items-center justify-center h-full space-y-2 text-center">
                         <Users className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
-                        <p className={`font-mono text-xs ${mutedText(theme)}`}>Waiting for verified competitor data.</p>
+                        <p className={`font-mono text-xs ${mutedText(theme)}`}>{selectedCompetitor ? noEvidenceMessage(selectedCompetitor.name, activeClientName) : "Waiting for verified competitor data."}</p>
                       </div>
                   )}
                 </div>
@@ -653,20 +637,23 @@ export function CompetitorsTab({
             <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
               <Users className="h-4 w-4 text-blue-500 mr-2" />
               Overall Share of Voice
-              <InfoTooltip label="About Overall Share of Voice"><ShareOfVoiceDefinition /></InfoTooltip>
+              <InfoTooltip label="About Overall Share of Voice"><CompetitorShareOfVoiceDefinition /></InfoTooltip>
             </CardTitle>
             <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-              Across all {normalizedBenchmarks.length} tracked competitor{normalizedBenchmarks.length === 1 ? "" : "s"} -- not just {selectedCompetitor?.name || "the one selected above"}
+              {comparedCompetitorsLabel(normalizedBenchmarks.length, selectedCompetitor?.name)}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            {normalizedBenchmarks.length > 0 ? (
+            {normalizedBenchmarks.length > 0 && clientSov !== null ? (
               <span className="font-bold text-2xl" style={{ color: accent }}>
-                {calculateClientSOV(normalizedBenchmarks).toFixed(1)}%
+                {clientSov.toFixed(1)}%
               </span>
             ) : (
               <p className={`text-xs font-mono ${mutedText(theme)}`}>Waiting for verified competitor data.</p>
             )}
+            <p className={`mt-2 text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
+              Counts only articles that also mention {activeClientName}, over the last 30 days.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -711,7 +698,8 @@ export function CompetitorsTab({
             </CardHeader>
             <CardContent className="pt-4">
               {topicOwnershipData.chartData.length > 0 ? (
-                <div className="h-[360px]">
+                <div>
+                  <div className="h-[360px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={topicOwnershipData.chartData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#3f3f46" : "#d4d4d8"} strokeOpacity={0.4} />
@@ -727,6 +715,12 @@ export function CompetitorsTab({
                       ))}
                     </BarChart>
                   </ResponsiveContainer>
+                  </div>
+                  {hiddenTopicsNote(hiddenTopics(pairScopedTopicDistribution, topicOwnershipData.topicKeys)) && (
+                    <p className={`mt-2 text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
+                      {hiddenTopicsNote(hiddenTopics(pairScopedTopicDistribution, topicOwnershipData.topicKeys))}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[200px] space-y-2">
@@ -748,12 +742,15 @@ export function CompetitorsTab({
           <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
             <div className="flex items-center">
               <Search className="h-4 w-4 text-[#38BDF8] mr-2" />
-              Competitor Activity — {selectedCompetitor?.name}
+              Recent Articles — {selectedCompetitor?.name}
             </div>
             <Badge className="bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/30 font-mono text-xs">
-              {competitorEvents.length} Events
+              {articleCountLabel(competitorEvents.length)}
             </Badge>
           </CardTitle>
+          <CardDescription className={`text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
+            {activityScopeNote(activeClientName)}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="max-h-[420px] overflow-y-auto overflow-x-hidden">
@@ -761,7 +758,7 @@ export function CompetitorsTab({
             <TableHeader className={`${rowBorder} ${tableHeaderBg} sticky top-0 z-10`}>
               <TableRow className={rowBorder}>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>COMPETITOR</TableHead>
-                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>EVENT HEADLINE</TableHead>
+                <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>ARTICLE HEADLINE</TableHead>
                 <TableHead className={`font-mono text-xs text-center ${mutedText(theme)}`}>BUSINESS TOPIC</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>SOURCE</TableHead>
                 <TableHead className={`font-mono text-xs ${mutedText(theme)}`}>PUBLISHED DATE</TableHead>
@@ -771,14 +768,14 @@ export function CompetitorsTab({
             <TableBody>
               {competitorEvents.map((doc, idx) => (
                 <TableRow key={doc.id} className={`${rowBorder} ${rowHoverBg} transition-colors cursor-pointer`} onClick={() => setSelectedDocId(doc.id)}>
-                  <TableCell className={`font-mono text-xs font-bold ${bodyText(theme)}`}>{doc.matchedCompetitor}</TableCell>
-                  <TableCell className={`font-mono text-xs max-w-[280px] truncate ${bodyText(theme)}`}>{doc.title}</TableCell>
+                  <TableCell className={`font-mono text-xs font-bold max-w-[120px] truncate ${bodyText(theme)}`}>{doc.matchedCompetitor}</TableCell>
+                  <TableCell className={`font-mono text-xs max-w-[200px] truncate ${bodyText(theme)}`}>{doc.title}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-xs bg-[#D4AF37]/5">
                       {doc.topic}
                     </Badge>
                   </TableCell>
-                  <TableCell className={`font-mono text-xs truncate max-w-[100px] ${mutedText(theme)}`}>{doc.source}</TableCell>
+                  <TableCell className={`font-mono text-xs truncate max-w-[80px] ${mutedText(theme)}`}>{doc.source}</TableCell>
                   <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
                     {doc.timestamp ? new Date(doc.timestamp).toLocaleDateString(undefined, { dateStyle: 'short' }) : "N/A"}
                   </TableCell>
@@ -795,7 +792,7 @@ export function CompetitorsTab({
               {competitorEvents.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className={`text-center py-10 font-mono text-xs ${mutedText(theme)}`}>
-                    No competitor events recorded.
+                    No articles about {selectedCompetitor?.name} found among the newest {ACTIVITY_ARTICLE_CAP} about {activeClientName}.
                   </TableCell>
                 </TableRow>
               )}

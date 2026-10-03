@@ -27,7 +27,7 @@ WHY RECLASSIFY INSTEAD OF DELETE  (traced before choosing — CLAUDE.md)
     Reclassifying to `entity_type='rejected_competitor'` instead:
       * removes the entity from every competitor query in the codebase, all of
         which are equality tests on `== "competitor"` (benchmark_engine,
-        client_intelligence `/benchmark` + `/share-of-voice`, client_service,
+        client_intelligence `/benchmark`, client_service,
         narrative_engine, intelligence_tasks verification);
       * keeps `entity_type != "person"` true, which executive discovery's
         Layer 1 relies on;

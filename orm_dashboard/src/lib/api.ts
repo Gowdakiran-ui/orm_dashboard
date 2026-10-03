@@ -395,16 +395,6 @@ export async function fetchActiveAlerts(clientId: string, signal?: AbortSignal) 
   return parseOrThrow(res);
 }
 
-/**
- * @reserved
- * Reserved for future Share of Voice (SOV) analytics view.
- * Currently unused by the frontend but maintained for backwards compatibility.
- */
-export async function fetchShareOfVoice(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/share-of-voice`, { signal });
-  return parseOrThrow(res);
-}
-
 export async function fetchCompetitorBenchmarks(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/benchmark?limit=200`, { signal });
   return parseOrThrow(res);
