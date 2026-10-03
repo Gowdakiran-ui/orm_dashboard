@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, text
 from sqlalchemy.exc import IntegrityError
 import hashlib
+import unicodedata
 from datetime import datetime, timezone, timedelta
 
 from app.models.entity import Entity, EntityMention, EntityKeyword, EntityAlias
@@ -607,6 +608,25 @@ class EntityDiscoveryEngine:
         db.commit()
         return {"status": "completed", **results}
 
+    def surname_attach_allowed(self, db: Session, client_id: str, surname: str, tracked_people: List[Entity]) -> bool:
+        """Executives page fix X3 (D3): a one-word match may attach to a tracked executive only if the
+        word is not part of the client's own brand/product name AND exactly one tracked person has it
+        as their surname. "Godrej" is both the client brand and the family name, so company coverage
+        used to land on whichever Godrej came first (audit/executives-forensics-report.md F03)."""
+        surname = (surname or "").strip().lower()
+        if not surname:
+            return False
+        brand_words: Set[str] = set()
+        for ent in db.query(Entity).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+        ).all():
+            brand_words.update(w for w in re.split(r"\W+", (ent.name or "").lower()) if w)
+        brand_words.update(self._client_self_reference_terms(db, client_id))
+        if surname in brand_words:
+            return False
+        holders = [p for p in tracked_people if p.name.split() and p.name.split()[-1].lower() == surname]
+        return len(holders) == 1
+
     def _process_person_entity(
         self,
         db: Session,
@@ -664,7 +684,10 @@ class EntityDiscoveryEngine:
             # names.
             exec_parts = [p.lower() for p in exec_entity.name.split()]
             cand_parts = [p.lower() for p in person_name.split()]
-            if len(cand_parts) == 1 and len(exec_parts) > 1 and cand_parts[0] == exec_parts[-1]:
+            if (
+                len(cand_parts) == 1 and len(exec_parts) > 1 and cand_parts[0] == exec_parts[-1]
+                and self.surname_attach_allowed(db, client_id, cand_parts[0], verified_executives)
+            ):
                 matched_executive = exec_entity
                 break
                 
@@ -1045,7 +1068,7 @@ class EntityDiscoveryEngine:
                 return tok.text
         return None
 
-    def _is_valid_person_name_layered(self, name: str, db: Session, client_id: str, source_text: Optional[str] = None, self_reference_terms: Optional[set] = None) -> tuple[bool, str, str]:
+    def _is_valid_person_name_layered(self, name: str, db: Session, client_id: str, source_text: Optional[str] = None, self_reference_terms: Optional[set] = None, non_person_lookup: Optional[Dict[str, str]] = None) -> tuple[bool, str, str]:
         """
         Validate candidate name across 5 layers.
         Returns: (is_valid, validation_layer, reason)
@@ -1074,13 +1097,20 @@ class EntityDiscoveryEngine:
             return False, "Layer 2 — Human Name Validation", f"Invalid name parts count: {len(parts)} (expected 2 to 5)"
             
         # Layer 1 — NER Validation: Cross-check against existing non-person entities or labels
-        existing_non_person = db.query(Entity).filter(
-            Entity.client_id == client_id,
-            Entity.name.ilike(name_clean),
-            Entity.entity_type != "person"
-        ).first()
-        if existing_non_person:
-            return False, "Layer 1 — NER Validation", f"Matches existing non-person entity of type: {existing_non_person.entity_type}"
+        if non_person_lookup is not None:
+            # Pre-loaded {lower-case name: entity_type} of this client's non-person entities (one query for a whole
+            # batch, used by review_executive_candidates); same rule as the query below.
+            hit_type = non_person_lookup.get(name_clean.lower())
+            if hit_type:
+                return False, "Layer 1 — NER Validation", f"Matches existing non-person entity of type: {hit_type}"
+        else:
+            existing_non_person = db.query(Entity).filter(
+                Entity.client_id == client_id,
+                Entity.name.ilike(name_clean),
+                Entity.entity_type != "person"
+            ).first()
+            if existing_non_person:
+                return False, "Layer 1 — NER Validation", f"Matches existing non-person entity of type: {existing_non_person.entity_type}"
             
         # Layer 2 — Human Name Validation Heuristics (tolerate middle initials, suffixes, hyphenated names)
         lowercase_particles = {"de", "del", "du", "la", "von", "van", "der", "di", "da"}
@@ -1191,6 +1221,234 @@ class EntityDiscoveryEngine:
                     return False, "Layer 8 — Client Self-Reference Filter", f"Matches the client's own identity term '{term}' -- not a person"
 
         return True, "", ""
+
+    # ------------------------------------------------------------------
+    # Executives page fix (audit/executives-forensics-report.md X1/X2): a name-shape check for typed
+    # searches and candidate review, a read-only reviewed candidate list, and a single-candidate Add.
+    # None of these create feeds, collection jobs, searches or engine runs.
+    # ------------------------------------------------------------------
+    # Two capitalised names glued together ("GodrejGautam"): a capital, 3+ lower-case letters, then another capital.
+    # Prefixes of 1-2 letters (McDonald, DeSouza, MacArthur, O'Neil, DiCaprio) are fine.
+    _GLUED_NAME_RE = re.compile(r"[A-Z][a-z]{3,}[A-Z][a-z]+")
+    # first words that mark a news fragment or a bare title, not a person ("Today Adani", "CM Suvendu")
+    _NON_NAME_FIRST_TOKENS = {
+        "today", "top", "news", "latest", "breaking", "live", "watch", "new", "this", "the", "cm", "pm", "mr", "mrs",
+        "ms", "dr", "shri", "sri", "hon", "chief", "minister", "president", "files", "holds", "settle", "son", "telegram",
+    }
+
+    # words that make a "name" an organisation, place, holiday or news/filler fragment rather than a person
+    _NON_PERSON_TOKENS = {
+        "properties", "estate", "estates", "road", "roads", "residential", "sector", "ncr", "cements", "cement", "wafers",
+        "renewables", "sons", "hobli", "nadu", "jayanti", "agrahara", "realty", "enterprises", "industries", "limited", "ltd",
+        "projects", "infra", "infrastructure", "capital", "finance", "bank", "holdings", "energy", "motors", "steel",
+        "airports", "ports", "worth", "sells", "forecast", "stocks", "shares", "market", "delhi", "mumbai", "bengal", "kolkata",
+        "gujarat", "maharashtra", "pradesh", "india", "bangalore", "bengaluru", "pune", "gurgaon", "noida",
+        "apni", "apno", "aapke", "ke", "ka", "ki", "saath", "baat", "safar", "humsafar", "hai", "hain",
+        "acquire", "acquires", "acquisition", "mech", "enviro", "benzoplast", "labs", "pharma", "tech", "technologies",
+        "systems", "solutions", "ventures", "logistics", "retail", "foods",
+    }
+    _GENERIC_CORPORATE_WORDS = {"group", "properties", "limited", "company", "industries", "holdings", "enterprises",
+                                "corporation", "international", "services", "global", "india"}
+
+    def name_shape_error(self, name: str) -> Optional[str]:
+        """Plain-language reason a typed/stored name cannot be a person's name, or None when it can.
+        Letters of any alphabet (with accents/combining marks), spaces, apostrophes, full stops and hyphens only."""
+        n = re.sub(r"\s+", " ", (name or "").strip())
+        if not n:
+            return "empty name"
+        if len(n) > 80:
+            return "too long to be a name"
+        if any(ch.isdigit() for ch in n):
+            return "contains digits"
+        if not n[0].isalpha():
+            return "does not start with a letter"
+        for ch in n:
+            if not (ch.isalpha() or unicodedata.category(ch).startswith("M") or ch in " '’.-"):
+                return "contains characters a name does not have"
+        if any(self._GLUED_NAME_RE.search(tok) for tok in n.split(" ")):
+            return "two names run together without a space"
+        return None
+
+    def _title_near_name(self, text: str, name: str) -> bool:
+        """In-memory twin of _has_executive_context(..., title_pattern=_PROMOTION_ROLE_PATTERN): a job title within
+        100 characters of the name (the name's own span excluded). Used so the review needs no per-candidate query."""
+        if not text or not name:
+            return False
+        for match in re.finditer(re.escape(name), text, re.IGNORECASE):
+            start, end = match.start(), match.end()
+            context = text[max(0, start - 100):start] + " | " + text[end:min(len(text), end + 100)]
+            if self._PROMOTION_ROLE_PATTERN.search(context):
+                return True
+        return False
+
+    def _client_word_near_name(self, text: str, name: str, client_words: Set[str]) -> bool:
+        """The client's own name within 150 characters of the person's name (e.g. 'X, executive director, Godrej ...')."""
+        if not text or not name or not client_words:
+            return False
+        low = text.lower()
+        for match in re.finditer(re.escape(name), text, re.IGNORECASE):
+            ctx = low[max(0, match.start() - 150):match.end() + 150]
+            if any(w in ctx for w in client_words):
+                return True
+        return False
+
+    def review_executive_candidates(self, db: Session, client_id: str) -> Dict[str, Any]:
+        """Reviewed, ranked, de-duplicated view of the unpromoted candidates (read-only).
+        Hidden: names that fail the shape/validation check, news fragments, names that contain a tracked
+        person's full name, and near-duplicates of a better-ranked candidate.
+        Query count is constant (about eight) however many candidates there are: everything per-candidate is
+        computed from rows loaded once (tests/test_executives_page.py counts the statements)."""
+        client_id = uuid.UUID(str(client_id))
+        candidates = db.query(ExecutiveCandidate).filter(
+            ExecutiveCandidate.client_id == client_id,
+            ExecutiveCandidate.promoted_to_executive_id.is_(None),
+        ).all()
+        tracked = db.query(Entity.name).filter(Entity.client_id == client_id, Entity.entity_type == "person").all()
+        tracked_names = [t[0].lower() for t in tracked]
+        brand_ids = [r[0] for r in db.query(Entity.id).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))).all()]
+        non_person = {n.lower(): et for n, et in db.query(Entity.name, Entity.entity_type).filter(
+            Entity.client_id == client_id, Entity.entity_type != "person").all()}
+        self_terms = self._client_self_reference_terms(db, client_id)
+        client_words = {w for t in self_terms for w in t.split() if len(w) >= 4}
+        # words that identify the client in running text ("godrej", "adani"); generic corporate words excluded
+        client_text_words = {w for w in client_words if w not in self._GENERIC_CORPORATE_WORDS}
+
+        # One load of every source document id, brand co-mentions and document text for the whole batch.
+        per_candidate_ids: Dict[Any, List[uuid.UUID]] = {}
+        all_ids: Set[uuid.UUID] = set()
+        for c in candidates:
+            ids = []
+            for d in (c.source_documents or []):
+                try:
+                    ids.append(uuid.UUID(str(d)))
+                except (ValueError, TypeError):
+                    continue
+            per_candidate_ids[c.id] = ids
+            all_ids.update(ids)
+        brand_doc_ids: Set[uuid.UUID] = set()
+        doc_text: Dict[uuid.UUID, str] = {}
+        if all_ids:
+            if brand_ids:
+                brand_doc_ids = {r[0] for r in db.query(EntityMention.document_id).filter(
+                    EntityMention.entity_id.in_(brand_ids), EntityMention.document_id.in_(list(all_ids))).all()}
+            doc_text = {r[0]: (r[1] or "") for r in db.query(Document.id, Document.normalized_content).filter(
+                Document.id.in_(list(all_ids))).all()}
+
+        text_client_doc_ids = {i for i, tx in doc_text.items() if any(w in tx.lower() for w in client_text_words)}
+
+        rows = []
+        hidden = 0
+        for c in candidates:
+            name = self._strip_possessive_suffix(c.name or "")
+            lname = name.lower()
+            tokens = lname.split()
+            if (
+                self.name_shape_error(name)
+                or not tokens
+                or tokens[0] in self._NON_NAME_FIRST_TOKENS
+                or any(tok in self._NON_PERSON_TOKENS for tok in tokens)
+                or any(tn in lname and tn != lname for tn in tracked_names)
+                or any(set(tokens) <= set(tn.split()) for tn in tracked_names if len(tokens) < len(tn.split()))
+            ):
+                hidden += 1
+                continue
+            ok, _layer, _reason = self._is_valid_person_name_layered(
+                name, db, client_id, source_text=None, self_reference_terms=self_terms, non_person_lookup=non_person)
+            if not ok:
+                hidden += 1
+                continue
+            ids = per_candidate_ids.get(c.id, [])
+            brand_docs = len(set(ids) & (brand_doc_ids | text_client_doc_ids))
+            title_near = any(self._title_near_name(doc_text.get(i, ""), name) for i in ids)
+            client_near = any(self._client_word_near_name(doc_text.get(i, ""), name, client_text_words) for i in ids)
+            carries_client_name = len(tokens) >= 2 and tokens[-1] in client_words and tokens[0] not in client_words
+            tier = (0 if (carries_client_name and brand_docs >= 1)
+                    else 1 if (title_near and client_near)
+                    else 2 if (title_near and brand_docs >= 1)
+                    else 3 if brand_docs >= 1 else 4)
+            rows.append({
+                "id": str(c.id), "name": name, "mention_count": c.mention_count, "confidence": c.confidence,
+                "source_document_count": len(ids), "client_documents": brand_docs, "title_nearby": bool(title_near),
+                "last_seen": c.last_seen.isoformat() if c.last_seen else None, "_tier": tier,
+            })
+        rows.sort(key=lambda r: (r["_tier"], -(r["confidence"] or 0), -(r["mention_count"] or 0), r["name"].lower()))
+
+        kept: List[Dict[str, Any]] = []
+        for r in rows:
+            twin = next((k for k in kept if SequenceMatcher(None, k["name"].lower(), r["name"].lower()).ratio()
+                         >= 0.88), None)  # looser than the 0.93 promotion guard: spelling variants of one candidate
+            if twin is not None:
+                twin.setdefault("also_seen_as", []).append(r["name"])
+                hidden += 1
+                continue
+            kept.append(r)
+        for r in kept:
+            r.pop("_tier", None)
+        return {"candidates": kept, "hidden_count": hidden}
+
+    def add_single_executive_candidate(self, db: Session, client_id: str, candidate_id: str) -> Dict[str, Any]:
+        """Promote exactly ONE candidate (Executives page D2): creates the person entity and its exact
+        keyword, links the candidate. No feeds, no searches, no re-match, no engine run, no pipeline."""
+        try:
+            client_id, candidate_id = uuid.UUID(str(client_id)), uuid.UUID(str(candidate_id))
+        except ValueError:
+            return {"status": "not_found", "message": "That candidate does not belong to this client."}
+        # FOR UPDATE: a double-click / two tabs serialise on the candidate row, so the second request sees the
+        # first one's promoted_to_executive_id and answers "already tracked" instead of creating anything.
+        cand = db.query(ExecutiveCandidate).filter(
+            ExecutiveCandidate.id == candidate_id, ExecutiveCandidate.client_id == client_id
+        ).with_for_update().first()
+        if not cand:
+            return {"status": "not_found", "message": "That candidate does not belong to this client."}
+        name = self._strip_possessive_suffix(cand.name or "")
+        if cand.promoted_to_executive_id is not None:
+            return {"status": "already_tracked", "name": name, "message": f"{name} is already tracked."}
+        shape = self.name_shape_error(name)
+        if shape:
+            return {"status": "rejected", "name": name, "message": f"This does not look like a person's name ({shape})."}
+        if db.get_bind().dialect.name == "postgresql":
+            # Same advisory-lock scheme _process_person_entity uses: two requests for the same person (even via
+            # differently-cased candidate rows) serialise here, so the second sees the first's committed entity.
+            lock_id = int(hashlib.md5(f"{client_id}:{self._normalize_name(name)}".encode()).hexdigest()[:15], 16) - 2**63
+            db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+        ok, _layer, reason = self._is_valid_person_name_layered(
+            name, db, client_id, source_text=None, self_reference_terms=self._client_self_reference_terms(db, client_id))
+        if not ok:
+            return {"status": "rejected", "name": name, "message": f"This does not look like a person's name ({reason})."}
+        existing = db.query(Entity).filter(
+            Entity.client_id == client_id, Entity.name.ilike(name), Entity.entity_type == "person").first()
+        if existing:
+            cand.promoted_to_executive_id = existing.id
+            cand.promoted_at = datetime.now(timezone.utc)
+            db.commit()
+            return {"status": "already_tracked", "name": existing.name, "message": f"{existing.name} is already tracked."}
+        near = self._find_near_duplicate_person_entity(db, client_id, name)
+        if near:
+            return {"status": "duplicate", "name": name, "duplicate_of": near.name,
+                    "message": f"Looks like a duplicate of {near.name}. Nothing was added."}
+        savepoint = db.begin_nested()
+        try:
+            entity = Entity(client_id=client_id, name=name, entity_type="person")
+            db.add(entity)
+            db.flush()
+        except IntegrityError:
+            savepoint.rollback()
+            winner = db.query(Entity).filter(
+                Entity.client_id == client_id, Entity.name.ilike(name), Entity.entity_type == "person").first()
+            if winner is not None:
+                cand.promoted_to_executive_id = winner.id
+                cand.promoted_at = datetime.now(timezone.utc)
+                db.commit()
+            return {"status": "already_tracked", "name": name, "message": f"{name} is already tracked."}
+        savepoint.commit()
+        db.add(EntityKeyword(entity_id=entity.id, keyword_text=name, match_type="exact",
+                             category="PRIMARY", priority=1, is_active=True))
+        cand.promoted_to_executive_id = entity.id
+        cand.promoted_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"status": "added", "name": name, "entity_id": str(entity.id),
+                "message": "Added. A score appears once new coverage mentions them."}
 
     def _strip_possessive_suffix(self, name: str) -> str:
         """Strip a trailing possessive ("Jensen Huang's" -> "Jensen Huang"), same

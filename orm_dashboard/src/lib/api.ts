@@ -456,11 +456,6 @@ export async function fetchExecutives(clientId: string, signal?: AbortSignal) {
   return parseOrThrow(res);
 }
 
-export async function fetchExecutiveHistory(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executive-history`, { signal });
-  return parseOrThrow(res);
-}
-
 export async function fetchSystemStatus(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/collection/status?client_id=${encodeURIComponent(clientId)}`, { signal });
   return parseOrThrow(res);
@@ -532,6 +527,21 @@ export async function fetchExecutiveCandidates(clientId: string, signal?: AbortS
 
 export async function searchExecutive(clientId: string, name: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executive-search?name=${encodeURIComponent(name)}`, { signal });
+  return parseOrThrow(res);
+}
+
+// Reviewed, ranked, de-duplicated candidate list (read-only). Replaces nothing: /executive-candidates stays as is.
+export async function fetchReviewedExecutiveCandidates(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executive-candidates-reviewed`, { signal });
+  return parseOrThrow(res);
+}
+
+// Promotes exactly ONE named candidate (entity + keyword only; no feeds, searches or pipeline).
+export async function addExecutiveCandidate(clientId: string, candidateId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/executive-candidates/${encodeURIComponent(candidateId)}/add`, {
+    method: "POST",
+    signal,
+  });
   return parseOrThrow(res);
 }
 

@@ -183,6 +183,11 @@ describe("computeExecStats", () => {
   it("empty list -> nothing to name", () => {
     expect(computeExecStats([])).toMatchObject({ total: 0, mostMentioned: null, highest: null, lowest: null });
   });
+  it("a no-evidence row (stored as 0.0 / NA) is never the lowest score", () => {
+    const s = computeExecStats([...execs, { name: "Nobody", score: 0, grade: "NA", health_status: "INSUFFICIENT_EVIDENCE", document_count: 0 }]);
+    expect(s.lowest.name).toBe("Bee");
+    expect(s.highest.name).toBe("Ann");
+  });
 });
 
 describe("source state + freshness", () => {

@@ -159,3 +159,12 @@ If this recurs (disk exhaustion during `docker compose build backend`):
    container — don't just eyeball `docker ps` for the ones you expected.
    Verify with `docker ps -a` (all healthy, none `Restarting`) and
    `docker logs orm_dashboard-backend-1 --tail 40` before calling it done.
+
+## UI forensics rule (page audits)
+Applies to any "audit this page" task. Standing rule, in this order:
+1. Inventory the LIVE page first, for every client and every state (scored, unscored, stale, empty, error, candidate): each element is a row with its verbatim text, a screenshot at 1280px or wider, the DOM text and the API payload. Read code only after that.
+2. Exercise every safe control (tabs, filters, tooltips, drawers, chart hovers); list every control not exercised and why. Never click a state-changing control; read its handler first.
+3. A search box or GET is not read-only until its handler is read. If it can create entities, feeds or jobs, type only names verified in the database, and check the box is empty first.
+4. No verdict CORRECT without an independent read-only recompute from raw rows with plain SQL; otherwise UNVERIFIABLE.
+5. Keep a progress file with an end-of-phase check; the final report has "Deviations from task.md" and a self-audit table (rows with a screenshot must equal total rows).
+6. Stay in scope: no fixes during an audit; proposals go in the report.

@@ -338,17 +338,19 @@ export function ExecutiveReputationGradeDefinition() {
     <>
       <span className="block font-bold">Executive Reputation Grade</span>
       <span className="block">
-        This person&apos;s Score (0–100) blends sentiment (35%), risk (30%)
-        and mention visibility (10%) from their own tracked coverage, then
-        maps to a letter grade:
+        This person&apos;s Score (0–100) blends sentiment (weight 35), risk
+        (weight 30) and mention visibility (weight 10) from their own tracked
+        coverage. Components with no evidence are left out and the remaining
+        weights are scaled to add up to 100%. The result is then multiplied by
+        a source-reliability factor (0.70 to 1.20, by the kind of website),
+        kept between 0 and 100, and mapped to a letter grade:
       </span>
       <span className="mt-1 block"><b>A+</b> 90–100 &nbsp; <b>A</b> 80–89.9</span>
       <span className="block"><b>B</b> 70–79.9 &nbsp; <b>C</b> 60–69.9</span>
       <span className="block"><b>D</b> 40–59.9 &nbsp; <b>F</b> below 40</span>
       <span className="mt-1 block">
-        Grades are per-person, not per-client — a low grade with only a
-        handful of tracked mentions reflects thin coverage as much as
-        negative sentiment.
+        Grades are per-person, not per-client. With fewer than 3 documents
+        this page shows &ldquo;Low evidence&rdquo; and withholds the letter.
       </span>
     </>
   );

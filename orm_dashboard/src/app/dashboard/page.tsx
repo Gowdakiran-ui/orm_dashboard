@@ -32,7 +32,6 @@ import { CounterfeitDetectionTab } from "@/components/CounterfeitDetectionTab";
 // Custom Hooks & Utilities
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { usePipelineManager } from "@/hooks/usePipelineManager";
-import { useExecutiveData } from "@/hooks/useExecutiveData";
 import { useCompanyManagement } from "@/hooks/useCompanyManagement";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -109,10 +108,7 @@ function DashboardShell() {
   }, [data.setDashboardRefreshKey]);
   const pipeline = usePipelineManager(data.clientId, handlePipelineComplete);
 
-  // 3. Executive / Entity Promotion Logic
-  const exec = useExecutiveData(data.clientId, () => {
-    data.setDashboardRefreshKey((k) => k + 1);
-  });
+  // 3. (Executive promotion moved into the Executives tab itself: one named candidate at a time.)
 
   // 4. Company Management
   const company = useCompanyManagement(
@@ -360,12 +356,8 @@ function DashboardShell() {
                 <ErrorBoundary fallback={<TelemetryErrorWidget title="Executive Reputation Error" />}>
                   <ExecutivesTab
                     executives={data.executives}
-                    lastProcessedTimestamp={data.systemStatus?.last_processed_timestamp || ""}
-                    documents={data.documents}
                     clientId={data.clientId}
-                    executiveCandidates={data.executiveCandidates}
-                    onPromoteExecutives={exec.handlePromoteExecutives}
-                    promotingExecutives={exec.promotingExecutives}
+                    clientName={activeClientName}
                   />
                 </ErrorBoundary>
               )}

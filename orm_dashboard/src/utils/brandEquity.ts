@@ -165,7 +165,8 @@ export function computeExecStats(executives: any[] | null | undefined): ExecStat
     .filter(e => typeof e.document_count === "number")
     .sort((a, b) => (b.document_count - a.document_count) || a.name.localeCompare(b.name))[0]?.name ?? null;
   const scored = execs
-    .filter(e => typeof e.score === "number")
+    // A person with no evidence is stored as score 0.0 / grade "NA"; that is "no score", not a real zero.
+    .filter(e => typeof e.score === "number" && e.health_status !== "INSUFFICIENT_EVIDENCE")
     .sort((a, b) => (b.score - a.score) || a.name.localeCompare(b.name));
   const highest = scored[0] ?? null;
   const lowest = scored.length > 0 ? scored[scored.length - 1] : null;
