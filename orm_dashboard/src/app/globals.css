@@ -115,9 +115,13 @@
      an as-yet-unidentified sub-pixel overflow. Belt-and-suspenders fix:
      this dashboard never needs horizontal page scroll by design, so
      disallow it outright at the root instead of chasing the exact
-     triggering element -- removes the failure mode regardless of cause. */
+     triggering element -- removes the failure mode regardless of cause.
+     `clip`, not `hidden`: hidden on both html and body makes body a scroll
+     container, which breaks the sidebar's `position: sticky` (it scrolled
+     away with the page, leaving a blank gap beside the main panel). */
   html, body {
     overflow-x: hidden;
+    overflow-x: clip;
   }
 }
 
