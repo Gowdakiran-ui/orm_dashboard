@@ -2,10 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import Link from 'next/link';
 import {
   Activity,
-  ExternalLink, Cpu, TrendingUp, CheckCircle2,
+  ExternalLink, Cpu,
   AlertTriangle, Info, Sparkles, Clock, X
 } from "lucide-react";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
@@ -33,12 +32,12 @@ const SOURCE_TYPE_GROUPS: { key: string; label: string; types: string[] }[] = [
   { key: "reddit", label: "Reddit", types: ["reddit"] },
 ];
 
+type MentionedEntity = { name: string };
+
 export interface FeedTabProps {
   documentsLoading: boolean;
   documentsError: string | null;
   documents: any[];
-  executives?: any[];
-  systemStatus?: any;
   clientId?: string | null;
 }
 
@@ -46,8 +45,6 @@ export function FeedTab({
   documentsLoading,
   documentsError,
   documents = [],
-  executives = [],
-  systemStatus,
   clientId
 }: FeedTabProps) {
   const { theme } = useTheme();
@@ -64,6 +61,9 @@ export function FeedTab({
   // documents.py order_by) fixes the DOM-node count without adding a
   // virtualization dependency.
   const FEED_PAGE_SIZE = 50;
+  // fetchDocuments (api.ts) asks for, and the backend caps at, 500. A list of
+  // exactly that length may be truncated; the endpoint returns no total.
+  const FEED_FETCH_LIMIT = 500;
   const [feedRenderCount, setFeedRenderCount] = useState(FEED_PAGE_SIZE);
 
   // Source-type filter pills above the ingest stream -- display-layer filter
@@ -80,9 +80,18 @@ export function FeedTab({
   // Reset paging when the source filter changes so "Load more" starts from
   // the top of the newly-filtered list instead of an index sized for the
   // previous (likely larger) unfiltered/differently-filtered list.
+  // Also reset on client change: this component stays mounted across a client
+  // switch, so an expanded count from the previous client would otherwise carry over.
   useEffect(() => {
     setFeedRenderCount(FEED_PAGE_SIZE);
-  }, [selectedSourceGroup]);
+  }, [selectedSourceGroup, clientId]);
+
+  // The details endpoint returns no timestamp; the list row already has it.
+  const drawerTimestamp = selectedDocDetails?.timestamp
+    ?? (selectedDocId ? documents.find(d => d?.id === selectedDocId)?.timestamp : undefined);
+
+  const aiSummaryWhat: string | undefined = selectedDocDetails?.risk_explainability?.ai_summary?.what || undefined;
+  const aiSummaryHow: string | undefined = selectedDocDetails?.risk_explainability?.ai_summary?.how_to_solve || undefined;
 
   // Fetch document details when selected ID changes
   useEffect(() => {
@@ -146,7 +155,10 @@ export function FeedTab({
               <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
                 <Activity className="h-3.5 w-3.5 text-emerald-400" /> Real-time Brand Ingest Stream
               </CardTitle>
-              <CardDescription className={`text-[9px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
+              <CardDescription className={`text-[12px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
+              {documents.length === FEED_FETCH_LIMIT && (
+                <p className={`text-[12px] font-mono ${mutedText(theme)}`}>Showing newest {FEED_FETCH_LIMIT} documents</p>
+              )}
               {/* Source-type filter pills -- filters the already-fetched
                   `documents` array client-side, no per-source fetch. */}
               <div className="flex flex-wrap gap-1.5 pt-3">
@@ -175,9 +187,15 @@ export function FeedTab({
                 const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
 
                 // Timestamp formatter
-                const formattedTime = d.timestamp
-                  ? new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : "Recent";
+                // Time only for today's rows; any older row also shows its date,
+                // so a 2017 article doesn't read like today's.
+                const rowDate = d.timestamp ? new Date(d.timestamp) : null;
+                const rowTimeText = rowDate ? rowDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+                const formattedTime = !rowDate
+                  ? "Recent"
+                  : rowDate.toDateString() === new Date().toDateString()
+                    ? rowTimeText
+                    : `${rowDate.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}, ${rowTimeText}`;
                 const isPlaceholder = isPlaceholderTitle(d.title, d.source);
 
                 return (
@@ -203,16 +221,25 @@ export function FeedTab({
                       <Badge variant="outline" className={`text-[8px] py-0 px-1 ${mutedText(theme)} ${isDark ? "border-white/[0.12]" : "border-black/[0.08]"}`}>
                         {d.topic || "General"}
                       </Badge>
-                      <Badge variant="outline" className={`text-[8px] py-0 px-1 ${docRiskColor}`}>
-                        Risk: {d.risk}
-                      </Badge>
-                      <Badge variant="outline" className={`text-[8px] py-0 px-1 ${
-                        d.sentiment > 0.3 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                        d.sentiment < -0.3 ? "bg-red-500/10 text-red-500 border-red-500/20" :
-                        `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`
-                      }`}>
-                        {d.sentiment > 0.3 ? "+" : ""}{d.sentiment !== undefined && d.sentiment !== null ? d.sentiment.toFixed(2) : "0.00"}
-                      </Badge>
+                      {d.scored === false ? (
+                        // Not yet scored: the stored 0 risk / sentiment are placeholders, not results.
+                        <Badge variant="outline" className={`text-[8px] py-0 px-1 ${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`}>
+                          Not scored
+                        </Badge>
+                      ) : (
+                        <>
+                          <Badge variant="outline" className={`text-[8px] py-0 px-1 ${docRiskColor}`}>
+                            Risk: {d.risk}
+                          </Badge>
+                          <Badge variant="outline" className={`text-[8px] py-0 px-1 ${
+                            d.sentiment > 0.3 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                            d.sentiment < -0.3 ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                            `${mutedText(theme)} ${isDark ? "bg-white/[0.04] border-white/[0.12]" : "bg-black/[0.03] border-black/[0.08]"}`
+                          }`}>
+                            {d.sentiment > 0.3 ? "+" : ""}{d.sentiment !== undefined && d.sentiment !== null ? d.sentiment.toFixed(2) : "0.00"}
+                          </Badge>
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => setSelectedDocId(d.id)}
@@ -228,7 +255,7 @@ export function FeedTab({
                 <div className={`flex flex-col items-center justify-center h-full font-mono text-xs py-20 text-center ${mutedText(theme)}`}>
                   <AlertTriangle className={`h-8 w-8 mb-2 ${mutedText(theme)}`} />
                   {selectedSourceGroup === "all"
-                    ? "No intelligence documents matches in database."
+                    ? "No intelligence documents match in database."
                     : `No ${SOURCE_TYPE_GROUPS.find(g => g.key === selectedSourceGroup)?.label || "matching"} documents for this client.`}
                 </div>
               )}
@@ -247,7 +274,7 @@ export function FeedTab({
           {/* Document Intelligence Details -- slide-over drawer for the
               document whose row's Details button was clicked. */}
           {selectedDocId && (
-            <div className="fixed inset-0 z-50 overflow-hidden font-mono">
+            <div className="fixed inset-0 z-50 overflow-hidden font-mono select-text">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setSelectedDocId(null)} />
               <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
                 <div className={`w-[600px] backdrop-blur-2xl border-l flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 ${bodyText(theme)} ${isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]"}`}>
@@ -280,7 +307,7 @@ export function FeedTab({
                         <div className="space-y-1">
                           <h4 className="font-bold text-sm dash-strong leading-snug">{selectedDocDetails.title}</h4>
                           <div className="flex items-center gap-3 text-[9px] dash-muted pt-1">
-                            <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> Ingested at {selectedDocDetails.timestamp ? new Date(selectedDocDetails.timestamp).toLocaleString() : "Recent"}</span>
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> Published {drawerTimestamp ? new Date(drawerTimestamp).toLocaleString() : "Recent"}</span>
                           </div>
                         </div>
 
@@ -298,30 +325,38 @@ export function FeedTab({
                           </div>
                           <div>
                             <span className="text-[8px] dash-muted uppercase block font-bold">Sentiment Score</span>
-                            <span className={`font-bold text-[11px] ${
-                              selectedDocDetails.sentiment >= 0.2 ? "text-emerald-400" :
-                              selectedDocDetails.sentiment <= -0.2 ? "text-red-400" :
-                              "text-amber-400"
-                            }`}>
-                              {selectedDocDetails.sentiment >= 0 ? "+" : ""}{selectedDocDetails.sentiment?.toFixed(2) || "0.00"}
-                            </span>
+                            {selectedDocDetails.scored === false ? (
+                              <span className="dash-muted font-bold text-[11px]">Not scored</span>
+                            ) : (
+                              <span className={`font-bold text-[11px] ${
+                                selectedDocDetails.sentiment >= 0.2 ? "text-emerald-400" :
+                                selectedDocDetails.sentiment <= -0.2 ? "text-red-400" :
+                                "text-amber-400"
+                              }`}>
+                                {selectedDocDetails.sentiment >= 0 ? "+" : ""}{selectedDocDetails.sentiment?.toFixed(2) || "0.00"}
+                              </span>
+                            )}
                           </div>
                           <div>
                             <span className="text-[8px] dash-muted uppercase block font-bold">Risk Index</span>
-                            <span className={`font-bold text-[11px] ${
-                              selectedDocDetails.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" :
-                              selectedDocDetails.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" :
-                              "text-sky-400"
-                            }`}>
-                              {selectedDocDetails.risk} pts
-                            </span>
+                            {selectedDocDetails.scored === false ? (
+                              <span className="dash-muted font-bold text-[11px]">Not scored</span>
+                            ) : (
+                              <span className={`font-bold text-[11px] ${
+                                selectedDocDetails.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400" :
+                                selectedDocDetails.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" :
+                                "text-sky-400"
+                              }`}>
+                                {selectedDocDetails.risk} pts
+                              </span>
+                            )}
                           </div>
                           <div>
                             <span className="text-[8px] dash-muted uppercase block font-bold">Classification Strength</span>
                             <span className="dash-strong text-[11px]">
-                              {selectedDocDetails.topics?.[0]?.confidence !== undefined
+                              {selectedDocDetails.topics?.[0]?.confidence != null
                                 ? `${(selectedDocDetails.topics[0].confidence * 100).toFixed(0)}%`
-                                : "100%"}
+                                : "N/A"}
                             </span>
                           </div>
                           {selectedDocDetails.narrative?.name && (
@@ -337,7 +372,7 @@ export function FeedTab({
                           <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">Mentioned Targets</span>
                           {selectedDocDetails.entities && selectedDocDetails.entities.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                              {selectedDocDetails.entities.map((ent: any, idx: number) => (
+                              {selectedDocDetails.entities.filter((ent: MentionedEntity, idx: number, all: MentionedEntity[]) => all.findIndex((e: MentionedEntity) => e.name === ent.name) === idx).map((ent: any, idx: number) => (
                                 <Badge key={idx} variant="outline" className="dash-box border-sky-500/30 text-sky-400 text-[8.5px]">
                                   {ent.name}
                                 </Badge>
@@ -348,13 +383,22 @@ export function FeedTab({
                           )}
                         </div>
 
-                        {/* AI Classification Summary */}
-                        <div className="space-y-1.5 border-t dash-border pt-3">
-                          <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">AI Classification Summary</span>
-                          <p className="text-[10px] dash-strong leading-relaxed dash-box border dash-border rounded p-2.5">
-                            {selectedDocDetails.normalized_content || "Initial pipeline trace reveals standard media publication matching targeted brand profiles. Ingestion diagnostics show complete metadata structure and low volatile risk vectors."}
-                          </p>
-                        </div>
+                        {/* AI Classification Summary -- only where the risk engine produced
+                            one (risk_explainability.ai_summary, in practice rows with risk > 0);
+                            hidden entirely otherwise. */}
+                        {(aiSummaryWhat || aiSummaryHow) && (
+                          <div className="space-y-1.5 border-t dash-border pt-3">
+                            <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">AI Classification Summary</span>
+                            <div className="text-[10px] dash-strong leading-relaxed dash-box border dash-border rounded p-2.5 space-y-2">
+                              {aiSummaryWhat && (
+                                <p><span className="text-[8px] dash-muted uppercase block font-bold">What</span>{aiSummaryWhat}</p>
+                              )}
+                              {aiSummaryHow && (
+                                <p><span className="text-[8px] dash-muted uppercase block font-bold">How to solve</span>{aiSummaryHow}</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Actions: Open Original URL */}
                         <div className="pt-3 border-t border-dashed dash-border w-full flex items-center justify-between">

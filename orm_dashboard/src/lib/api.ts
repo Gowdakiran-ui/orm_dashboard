@@ -456,11 +456,6 @@ export async function fetchExecutives(clientId: string, signal?: AbortSignal) {
   return parseOrThrow(res);
 }
 
-export async function fetchSystemStatus(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/collection/status?client_id=${encodeURIComponent(clientId)}`, { signal });
-  return parseOrThrow(res);
-}
-
 export async function fetchClientTelemetry(clientId: string, signal?: AbortSignal) {
   const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/telemetry`, { signal });
   return parseOrThrow(res);
@@ -485,20 +480,6 @@ export async function fetchDocumentDetails(clientId: string, documentId: string,
   return parseOrThrow(res);
 }
 
-
-// Not client-scoped -- /sources/ is a global endpoint. This function has no
-// callers anywhere in the codebase (confirmed via grep); kept as-is pending
-// use, but the clientId param it previously had was removed since it was
-// silently unused and misleadingly implied client scoping that doesn't exist.
-export async function fetchSources(signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/sources/`, { signal });
-  return parseOrThrow(res);
-}
-
-export async function fetchCommandCenterStats(clientId: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/collection/status?client_id=${encodeURIComponent(clientId)}`, { signal });
-  return parseOrThrow(res);
-}
 
 /**
  * @hidden — AI Strategic Advisory

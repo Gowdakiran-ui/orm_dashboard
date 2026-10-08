@@ -3,8 +3,7 @@ import {
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
   fetchPlanAdvisory,
   fetchActiveAlerts, fetchCompetitorBenchmarks, fetchRisks,
-  fetchExecutives, fetchSystemStatus, fetchDocuments,
-  fetchCommandCenterStats,
+  fetchExecutives, fetchDocuments,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
 } from "@/lib/api";
 import { formatChartDate } from "@/utils/formatChartDate";
@@ -60,17 +59,11 @@ export function useDashboardData() {
   const [executivesLoading, setExecutivesLoading] = useState(true);
   const [executivesError, setExecutivesError] = useState<string | null>(null);
 
-  const [systemStatus, setSystemStatus] = useState<any>({ status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 });
-  const [systemStatusLoading, setSystemStatusLoading] = useState(true);
-  const [systemStatusError, setSystemStatusError] = useState<string | null>(null);
   
   const [documents, setDocuments] = useState<any[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
 
-  const [commandStats, setCommandStats] = useState<any>({});
-  const [commandStatsLoading, setCommandStatsLoading] = useState(true);
-  const [commandStatsError, setCommandStatsError] = useState<string | null>(null);
 
 
   const [executiveCandidates, setExecutiveCandidates] = useState<any[]>([]);
@@ -115,9 +108,7 @@ export function useDashboardData() {
           setBenchmarksLoading(false);
           setRisksLoading(false);
           setExecutivesLoading(false);
-          setSystemStatusLoading(false);
           setDocumentsLoading(false);
-          setCommandStatsLoading(false);
           setExecutiveCandidatesLoading(false);
           setCompetitorCandidatesLoading(false);
           setTelemetryLoading(false);
@@ -135,9 +126,7 @@ export function useDashboardData() {
           setBenchmarksLoading(false);
           setRisksLoading(false);
           setExecutivesLoading(false);
-          setSystemStatusLoading(false);
           setDocumentsLoading(false);
-          setCommandStatsLoading(false);
           setExecutiveCandidatesLoading(false);
           setCompetitorCandidatesLoading(false);
           setTelemetryLoading(false);
@@ -193,7 +182,6 @@ export function useDashboardData() {
       setExecutives([]);
       setDocuments([]);
       setTelemetry(null);
-      setSystemStatus(null);
     }
 
     // Reset Loading & Error States for Asynchronous Fetching
@@ -206,9 +194,7 @@ export function useDashboardData() {
     setBenchmarksLoading(true);
     setRisksLoading(true);
     setExecutivesLoading(true);
-    setSystemStatusLoading(true);
     setDocumentsLoading(true);
-    setCommandStatsLoading(true);
     setExecutiveCandidatesLoading(true);
     setCompetitorCandidatesLoading(true);
     setTelemetryLoading(true);
@@ -222,9 +208,7 @@ export function useDashboardData() {
     setBenchmarksError(null);
     setRisksError(null);
     setExecutivesError(null);
-    setSystemStatusError(null);
     setDocumentsError(null);
-    setCommandStatsError(null);
     setExecutiveCandidatesError(null);
     setCompetitorCandidatesError(null);
     setTelemetryError(null);
@@ -242,27 +226,6 @@ export function useDashboardData() {
             })
             .catch(() => { if (!signal.aborted) { setTelemetry(null); setTelemetryError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setTelemetryLoading(false); }),
-          
-          fetchSystemStatus(activeClientId, signal)
-            .then(data => {
-              if (!signal.aborted && hasChanged(systemStatus, data)) {
-                setSystemStatus(data);
-              }
-            })
-            .catch(() => { if (!signal.aborted) { setSystemStatus(null); setSystemStatusError("Telemetry Offline"); } })
-            .finally(() => { if (!signal.aborted) setSystemStatusLoading(false); }),
-
-          fetchCommandCenterStats(activeClientId, signal)
-            .then(data => {
-              if (!signal.aborted) {
-                const nextVal = data || {};
-                if (hasChanged(commandStats, nextVal)) {
-                  setCommandStats(nextVal);
-                }
-              }
-            })
-            .catch(() => { if (!signal.aborted) { setCommandStats({}); setCommandStatsError("Telemetry Offline"); } })
-            .finally(() => { if (!signal.aborted) setCommandStatsLoading(false); }),
         ]);
       } catch (err) {}
 
@@ -476,8 +439,7 @@ export function useDashboardData() {
           fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) { setAlerts(data || []); setAlertsError(null); } }),
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
-          fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
-          fetchSystemStatus(clientId, signal).then(data => { if (!signal.aborted) { setSystemStatus(data || { status: 'offline', active_feeds: 0, total_documents_collected: 0, total_documents_matched: 0 }); setSystemStatusError(null); } })
+          fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } })
         ]);
 
         // FINDINGS.md #36: an extended outage after initial load previously had
@@ -530,11 +492,9 @@ export function useDashboardData() {
     setRisks(null);
     setExecutives([]);
     setDocuments([]);
-    setCommandStats(null);
     setExecutiveCandidates([]);
     setCompetitorCandidates([]);
     setTelemetry(null); // Clear telemetry
-    setSystemStatus(null);
     
     // Reset loading states AFTER clearing data
     const isLoading = id !== null;
@@ -548,11 +508,9 @@ export function useDashboardData() {
     setRisksLoading(isLoading);
     setExecutivesLoading(isLoading);
     setDocumentsLoading(isLoading);
-    setCommandStatsLoading(isLoading);
     setExecutiveCandidatesLoading(isLoading);
     setCompetitorCandidatesLoading(isLoading);
     setTelemetryLoading(isLoading); // Reset telemetry loading
-    setSystemStatusLoading(isLoading);
     
     // Reset error states
     setReputationError(null);
@@ -565,11 +523,9 @@ export function useDashboardData() {
     setRisksError(null);
     setExecutivesError(null);
     setDocumentsError(null);
-    setCommandStatsError(null);
     setExecutiveCandidatesError(null);
     setCompetitorCandidatesError(null);
     setTelemetryError(null); // Reset telemetry error
-    setSystemStatusError(null);
     
     // Set new client ID LAST
     setClientId(id);
@@ -615,15 +571,9 @@ export function useDashboardData() {
     executives,
     executivesLoading,
     executivesError,
-    systemStatus,
-    systemStatusLoading,
-    systemStatusError,
     documents,
     documentsLoading,
     documentsError,
-    commandStats,
-    commandStatsLoading,
-    commandStatsError,
     executiveCandidates,
     executiveCandidatesLoading,
     executiveCandidatesError,
@@ -658,9 +608,7 @@ export function useDashboardData() {
     setBenchmarksLoading,
     setRisksLoading,
     setExecutivesLoading,
-    setSystemStatusLoading,
     setDocumentsLoading,
-    setCommandStatsLoading,
     setExecutiveCandidatesLoading,
     setCompetitorCandidatesLoading,
     setReputationError,
@@ -671,9 +619,7 @@ export function useDashboardData() {
     setBenchmarksError,
     setRisksError,
     setExecutivesError,
-    setSystemStatusError,
     setDocumentsError,
-    setCommandStatsError,
     setExecutiveCandidatesError,
     setCompetitorCandidatesError,
     setClients,

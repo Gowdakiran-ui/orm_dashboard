@@ -42,3 +42,7 @@ orm_collection/scratch_timing_test*.py
 
 # Internal audit reports (Brand Equity data-accuracy audit etc.)
 audit/
+
+# Task baselines / planning notes -- not for the repo
+stream_baseline.md
+task.md
