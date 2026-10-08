@@ -85,7 +85,7 @@ export function Sidebar({
       <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden no-scrollbar">
 
         {/* Logo Section */}
-        <div className={`p-6 border-b flex items-center space-x-3 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
+        <div className={`h-20 shrink-0 px-6 border-b flex items-center space-x-3 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
           <div className={`p-2 rounded-lg border ${isDark ? "bg-[#00F5D4]/10 border-[#00F5D4]/30 text-[#00F5D4]" : "bg-[#3B82F6]/10 border-[#3B82F6]/30 text-[#3B82F6]"}`}>
             <Shield className="h-6 w-6" />
           </div>
