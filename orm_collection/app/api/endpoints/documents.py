@@ -1,17 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
 
 from app.core.db import get_db
-from app.schemas.document import DocumentResponse
 from app.models.document import Document, DocumentMatch
 
 router = APIRouter()
 
 from app.core.risk_config import RISK_THRESHOLDS
 from app.utils.explainability import strip_trend_keys
+
+
+def _unique_mentions(mentions):
+    """First EntityMention per (document, entity), in the order given.
+
+    entity_mentions has no unique constraint on (document_id, entity_id) and
+    holds repeated rows for the same pair (301 pairs live, 2026-10-08), so an
+    endpoint that lists one entry per row showed the same target several
+    times. Entities that merely share a name are different entity_ids and are
+    kept apart."""
+    seen = set()
+    unique = []
+    for m in mentions:
+        key = (getattr(m, "document_id", None), getattr(m, "entity_id", None))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(m)
+    return unique
 
 
 def _risk_level_of(score: float) -> str:
@@ -130,22 +148,6 @@ def get_client_visible_documents(db: Session, client_id, skip: int = 0, limit: i
     )
 
 
-@router.get("/", response_model=List[DocumentResponse])
-def read_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
-    # Scoped by client_id (API_FORENSICS.md / FINAL.md #1) — previously
-    # returned every document in the database regardless of caller, unlike
-    # every sibling endpoint in this file. Matches the join pattern already
-    # used correctly in GET /{document_id} and GET /client/{client_id} below.
-    from app.models.entity import Entity
-    query = db.query(Document).join(DocumentMatch).join(Entity).filter(
-        Entity.client_id == client_id
-    )
-    brand_doc_ids = _brand_gated_document_ids(db, client_id)
-    if brand_doc_ids is not None:
-        query = query.filter(Document.id.in_(brand_doc_ids))
-    return query.distinct().order_by(Document.published_at.desc(), Document.id.desc()).offset(skip).limit(limit).all()
-
 @router.get("/{document_id}")
 def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_db)):
     from app.models.entity import Entity, EntityMention
@@ -214,7 +216,7 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     if doc_topic and doc_topic.topic:
         topic_name = getattr(doc_topic.topic, "name", "General")
     
-    mentions = db.query(EntityMention).filter(EntityMention.document_id == doc.id).all()
+    mentions = _unique_mentions(db.query(EntityMention).filter(EntityMention.document_id == doc.id).all())
     entities = [{"name": getattr(m.entity, "name", "Unknown")} for m in mentions if m.entity]
     
     topic_confidence = getattr(doc_topic, "confidence_score", getattr(doc_topic, "confidence", None)) if doc_topic else None
@@ -251,11 +253,11 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
     Shared enrichment: turns a list of already-fetched Document rows into
     the exact response shape the frontend's `documents` array expects
     (id/title/source/timestamp/sentiment/risk/topic/...). Used by
-    both read_client_documents (the main 500-most-recent window) and
-    read_client_documents_by_ids (the targeted id-based fallback) so the
-    two paths can never silently drift into different shapes for the same
-    fields -- this project has already been bitten once by that exact
-    failure mode (see get_client_visible_documents's docstring).
+    read_client_documents (the main 500-most-recent window). Kept as its own
+    helper so any future second path (e.g. an id-based fetch) shares one
+    response shape instead of drifting -- this project has already been
+    bitten once by that exact failure mode (see
+    get_client_visible_documents's docstring).
     """
     if not docs:
         return []
@@ -319,7 +321,7 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
         if dt and dt.document_id and dt.document_id not in doc_topic_map:
             doc_topic_map[dt.document_id] = dt
             
-    mentions = db.query(EntityMention).options(joinedload(EntityMention.entity)).filter(EntityMention.document_id.in_(doc_ids)).all()
+    mentions = _unique_mentions(db.query(EntityMention).options(joinedload(EntityMention.entity)).filter(EntityMention.document_id.in_(doc_ids)).all())
     mention_map = {}
     for m in mentions:
         if m and getattr(m, "entity", None):
@@ -399,44 +401,4 @@ def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: 
         raise HTTPException(status_code=404, detail="Client not found")
 
     docs = get_client_visible_documents(db, client_id, skip=skip, limit=limit)
-    return _build_document_responses(db, client_id, docs)
-
-
-@router.get("/client/{client_id}/by-ids")
-def read_client_documents_by_ids(client_id: UUID, ids: List[UUID] = Query(...), db: Session = Depends(get_db)):
-    """
-    Targeted fetch for a specific set of document ids -- e.g. ids that have
-    aged out of this client's main 500-most-recent-document window
-    (get_client_visible_documents). Scoped to this client via the same
-    DocumentMatch/Entity join and brand-gating every other read here uses.
-
-    Deliberately NOT a general search/filter endpoint: no ordering, no
-    paging, no free-form query -- just "give me these specific ids back."
-    An id that doesn't come back (deleted, or never belonged to this
-    client) is simply absent from the response; the caller shows whatever
-    is actually retrievable rather than the count being silently padded.
-    """
-    from app.models.client import Client
-    from app.models.entity import Entity
-
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    if not ids:
-        return []
-    # A caller's requested id set is realistically tens of documents at
-    # most; this caps the id list the same way limit=500 caps the main
-    # window, so this can't become an unbounded bulk-fetch path dressed up
-    # as a "by ids" lookup.
-    ids = ids[:200]
-
-    query = db.query(Document).join(DocumentMatch).join(Entity).filter(
-        Document.id.in_(ids),
-        Entity.client_id == client_id,
-    )
-    brand_doc_ids = _brand_gated_document_ids(db, client_id)
-    if brand_doc_ids is not None:
-        query = query.filter(Document.id.in_(brand_doc_ids))
-    docs = query.distinct().all()
     return _build_document_responses(db, client_id, docs)

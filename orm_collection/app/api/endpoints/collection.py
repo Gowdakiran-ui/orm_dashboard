@@ -10,7 +10,6 @@ from app.core.celery_app import celery_app
 from app.models.rss_feed import RSSFeed
 from app.models.collection_job import CollectionJob
 from app.models.user import User
-from app.workers.collection_tasks import fetch_feed_task
 
 router = APIRouter()
 
@@ -123,47 +122,3 @@ def get_status(
             "failed": failed_jobs
         }
     }
-
-@router.get("/errors")
-def get_collection_errors(
-    client_id: UUID,
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    _access: UUID = Depends(require_client_access),
-):
-    """
-    Centralized error tracking endpoint.
-    Returns the most recent failed collection jobs with full metadata,
-    scoped to the caller's client.
-    """
-    failed = (
-        db.query(CollectionJob)
-        .join(RSSFeed, RSSFeed.id == CollectionJob.source_id)
-        .filter(CollectionJob.status == "failed", RSSFeed.client_id == client_id)
-        .order_by(CollectionJob.started_at.desc(), CollectionJob.job_id.desc())
-        .limit(limit)
-        .all()
-    )
-    
-    if not failed:
-        return {"error_count": 0, "errors": [], "message": "No collection errors recorded."}
-
-    feed_ids = list({job.source_id for job in failed if job.source_id})
-    feeds = db.query(RSSFeed).filter(RSSFeed.id.in_(feed_ids)).all() if feed_ids else []
-    feed_map = {feed.id: feed for feed in feeds}
-
-    errors = []
-    for job in failed:
-        feed = feed_map.get(job.source_id)
-        errors.append({
-            "job_id": str(job.job_id),
-            "feed_id": str(job.source_id),
-            "feed_name": feed.feed_name if feed else "Unknown",
-            "feed_url": feed.feed_url if feed else "Unknown",
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "failed_at": job.completed_at.isoformat() if job.completed_at else None,
-            "documents_found": job.documents_found,
-            "documents_failed": job.documents_failed,
-        })
-
-    return {"error_count": len(errors), "errors": errors}
