@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime, timezone
@@ -82,6 +83,38 @@ MAX_RESULTS_PER_CALL = 25
 #     exactly matching the real run's billed total.
 
 
+# Reddit's search is fuzzy when the term is not quoted: a live EaseMyTrip run
+# (2026-10-08, Apify run a2aUpH266NScoz5kA) returned 22 posts, none mentioning
+# the brand (travel itineraries, adult fiction), for a brand with real Reddit
+# mentions. Quoted, a 5-result test (run bSAjM3YF8yE38X8UY) returned the real
+# voucher/coupon posts. So the phrase is sent quoted, and anything returned
+# that still does not mention it is dropped before it is saved.
+#
+# Fields checked are the ones the actor really returns (title, body, url,
+# link). It returns no flair field today (confirmed from a real dataset); the
+# flair keys below are only read if a future actor version adds them.
+_FLAIR_KEYS = ("flair", "linkFlairText")
+
+
+def _quote_keyword(keyword: str) -> str:
+    inner = " ".join(keyword.replace('"', " ").split())
+    return f'"{inner}"'
+
+
+def _phrase_text(value: Any) -> str:
+    # Case-insensitive; any run of punctuation/underscore/hyphen becomes one
+    # space, so "godrej_properties" in a post URL slug matches "Godrej Properties".
+    return " " + re.sub(r"[\W_]+", " ", value.lower()).strip() + " " if isinstance(value, str) and value.strip() else ""
+
+
+def _mentions_keyword(item: Dict[str, Any], keyword: str) -> bool:
+    phrase = _phrase_text(keyword)
+    if not phrase:
+        return True  # nothing to check against: never drop on an empty keyword
+    fields = [item.get("title"), item.get("body"), item.get("url"), item.get("link")] + [item.get(k) for k in _FLAIR_KEYS]
+    return any(phrase in _phrase_text(f) for f in fields)
+
+
 class RedditApifyAdapter(BaseSearchAdapter):
     def __init__(self):
         self.api_token = os.environ.get("APIFY_API_TOKEN")
@@ -111,7 +144,7 @@ class RedditApifyAdapter(BaseSearchAdapter):
                 APIFY_RUNS_ENDPOINT,
                 params={"token": self.api_token},
                 json={
-                    "searches": [keyword],
+                    "searches": [_quote_keyword(keyword)],
                     "searchPosts": True,
                     "searchComments": False,
                     "searchCommunities": False,
@@ -178,6 +211,11 @@ class RedditApifyAdapter(BaseSearchAdapter):
             raise Exception(f"Reddit (Apify) Search Failed: HTTP {items_resp.status_code} fetching dataset {dataset_id}: {items_resp.text[:500]}")
 
         results = items_resp.json()
+        if isinstance(results, list):
+            kept = [r for r in results if isinstance(r, dict) and _mentions_keyword(r, keyword)]
+            if len(kept) != len(results):
+                logger.info("reddit_apify_dropped_posts_not_mentioning_keyword", keyword=keyword, returned=len(results), kept=len(kept))
+            results = kept
         return results, None
 
     def normalize(self, raw_data: Dict[str, Any], source_id: str, **kwargs) -> Dict[str, Any]:
