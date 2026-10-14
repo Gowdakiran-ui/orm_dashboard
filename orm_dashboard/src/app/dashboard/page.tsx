@@ -289,6 +289,7 @@ function DashboardShell() {
                   {analyticsSubTab === "overview" && (
                     <ErrorBoundary fallback={<TelemetryErrorWidget title="Overview Analytics Error" />}>
                       <OverviewAnalyticsPanel
+                        reputation={data.reputationSummary?.reputation}
                         sentimentDistData={analytics.sentimentDistData}
                         topicDistData={analytics.topicDistData}
                         repHistory={data.repHistory}

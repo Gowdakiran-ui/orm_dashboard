@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Shield, ShieldAlert, AlertTriangle, CheckCircle, Activity, Info, BarChart3 } from "lucide-react";
+import { Shield, ShieldAlert, AlertTriangle, CheckCircle, Activity, Info, BarChart3, LineChart } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot
@@ -144,22 +144,6 @@ export function RiskAnalyticsPanel({
     }
     return { rowTotals, colTotals, grandTotal };
   }, [riskHeatmapData]);
-
-  // 4. Force timeline mapping even if empty to prevent empty panel
-  const activeTimelineData = useMemo(() => {
-    if (alertTimelineData && alertTimelineData.length > 0) return alertTimelineData;
-    // Last 7 days flat baseline
-    const list = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      list.push({
-        date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        count: 0
-      });
-    }
-    return list;
-  }, [alertTimelineData]);
 
   // Alerts timeline statistics
   const alertStats = useMemo(() => {
@@ -387,12 +371,20 @@ export function RiskAnalyticsPanel({
             </div>
           </CardHeader>
           <CardContent className="pl-2 h-[240px] relative">
+            {alertTimelineData.length === 0 ? (
+              // No open alerts means no data to plot: an empty state, not a chart padded with made-up zero days.
+              <div className="flex flex-col items-center justify-center h-full space-y-2">
+                <LineChart className="h-6 w-6 opacity-60 text-emerald-500" />
+                <span className="text-[11px] font-bold font-mono text-emerald-500">No open alerts</span>
+                <span className={`text-[9px] font-mono ${mutedText(theme)}`}>Nothing unacknowledged for this client</span>
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={activeTimelineData} margin={{ top: 15, right: 30, left: 0, bottom: 5 }}>
+              <AreaChart data={alertTimelineData} margin={{ top: 15, right: 30, left: 0, bottom: 5 }}>
                 <defs>
                   <linearGradient id="colorAlert" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={alertTimelineData.length === 0 ? "#10B981" : "#EF4444"} stopOpacity={0.35}/>
-                    <stop offset="95%" stopColor={alertTimelineData.length === 0 ? "#10B981" : "#EF4444"} stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.35}/>
+                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.4} />
@@ -402,40 +394,29 @@ export function RiskAnalyticsPanel({
                 <Area
                   type="monotone"
                   dataKey="count"
-                  stroke={alertTimelineData.length === 0 ? "#10B981" : "#EF4444"}
+                  stroke="#EF4444"
                   fillOpacity={1}
                   fill="url(#colorAlert)"
                   strokeWidth={2}
                   isAnimationActive={true}
                   animationDuration={850}
                 />
-
-                {alertTimelineData.length > 0 && (
-                  <>
-                    <ReferenceLine
-                      y={alertStats.avg}
-                      stroke={axisStroke}
-                      strokeDasharray="4 4"
-                      label={{ value: `Avg (${alertStats.avg})`, fill: axisStroke, fontSize: 8, position: 'insideBottomRight' }}
-                    />
-                    <ReferenceDot
-                      x={alertStats.peakDate}
-                      y={alertStats.peakCount}
-                      r={4}
-                      fill="#EF4444"
-                      stroke={isDark ? "#09090b" : "#ffffff"}
-                      label={{ value: `Peak: ${alertStats.peakCount}`, fill: '#EF4444', fontSize: 9, position: 'top' }}
-                    />
-                  </>
-                )}
+                <ReferenceLine
+                  y={alertStats.avg}
+                  stroke={axisStroke}
+                  strokeDasharray="4 4"
+                  label={{ value: `Avg (${alertStats.avg})`, fill: axisStroke, fontSize: 8, position: 'insideBottomRight' }}
+                />
+                <ReferenceDot
+                  x={alertStats.peakDate}
+                  y={alertStats.peakCount}
+                  r={4}
+                  fill="#EF4444"
+                  stroke={isDark ? "#09090b" : "#ffffff"}
+                  label={{ value: `Peak: ${alertStats.peakCount}`, fill: '#EF4444', fontSize: 9, position: 'top' }}
+                />
               </AreaChart>
             </ResponsiveContainer>
-
-            {alertTimelineData.length === 0 && (
-              <div className="absolute inset-0 top-12 flex flex-col items-center justify-center pointer-events-none text-center bg-transparent space-y-1">
-                <span className="text-[11px] font-bold font-mono text-emerald-500">No open alerts</span>
-                <span className={`text-[9px] font-mono ${mutedText(theme)}`}>Nothing unacknowledged for this client</span>
-              </div>
             )}
           </CardContent>
         </Card>

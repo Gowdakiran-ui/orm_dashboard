@@ -12,8 +12,11 @@ import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/t
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { ReputationScoreDefinition, SentimentScaleDefinition, CoverageByTopicDefinition, OverviewSentimentBreakdownDefinition, AverageSentimentHistoryDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
+import { formatReputationScore, type ReputationBlock } from "@/utils/brandEquity";
 
 export interface OverviewAnalyticsPanelProps {
+  // The `reputation` block of /reputation-summary (status + score), the same one Brand Equity reads.
+  reputation?: ReputationBlock | null;
   sentimentDistData: any[];
   topicDistData: any[];
   repHistory: any[];
@@ -23,6 +26,7 @@ export interface OverviewAnalyticsPanelProps {
 }
 
 export function OverviewAnalyticsPanel({
+  reputation,
   sentimentDistData = [],
   topicDistData = [],
   repHistory = [],
@@ -47,9 +51,11 @@ export function OverviewAnalyticsPanel({
     // same metric, not two different ones, just the wrong end of a reversed
     // array). Also relabeled below: this was never an average, it's a
     // single point-in-time score, same as the dashboard's own tile.
-    const latestRep = repHistory.length > 0 ? repHistory[repHistory.length - 1].score : 0;
-    const latestRepScore = latestRep > 0 ? latestRep.toFixed(2) : "0.00";
-    
+    // Current Reputation now reads the same summary block and rule as Brand
+    // Equity (formatReputationScore), so a client with no usable score shows
+    // "N/A" here too instead of "0.00".
+    const latestRepScore = formatReputationScore(reputation);
+
     const dimensionsCount = topicDistData.length;
 
     const posVal = sentimentDistData.find(d => d.name === "Positive")?.value || 0;
@@ -83,7 +89,7 @@ export function OverviewAnalyticsPanel({
       { label: "Topics Covered", value: dimensionsCount, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400", def: undefined as React.ReactNode },
       { label: "Positive Share", value: posRatio, desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400", def: undefined as React.ReactNode }
     ];
-  }, [repHistory, topicDistData, sentimentDistData, accentColor]);
+  }, [reputation, topicDistData, sentimentDistData, accentColor]);
 
   // The trend component was removed from the score on 2026-10-01, so scores
   // stored before that date were computed with a slightly different method

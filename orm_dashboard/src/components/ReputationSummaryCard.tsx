@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
-import { riskStatsFromSummary, computeExecStats, computeCompetitiveStanding, computeVerdict, sourceState, formatAsOf } from "@/utils/brandEquity";
+import { riskStatsFromSummary, computeExecStats, computeCompetitiveStanding, computeVerdict, sourceState, formatAsOf, isReputationScoreKnown, formatReputationScore } from "@/utils/brandEquity";
 import { decodeHtmlEntities } from "@/lib/utils";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/theme/tokens";
@@ -111,8 +111,8 @@ export function ReputationSummaryCard({
   const execAlert = reputationSummary.executive_alert || { open: false, alert: null };
   const riskState = riskStats ? "ready" : "error";
 
-  const scoreKnown = rep.status === "ok" && typeof rep.score === "number";
-  const scoreDisplay = scoreKnown ? rep.score.toFixed(2) : "N/A";
+  const scoreKnown = isReputationScoreKnown(rep);
+  const scoreDisplay = formatReputationScore(rep);
   const gradeDisplay = scoreKnown ? (rep.grade ?? "N/A") : "N/A";
   const asOf = formatAsOf(rep.computed_at);
   const scoreStatusText = scoreKnown

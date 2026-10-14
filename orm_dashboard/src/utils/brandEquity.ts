@@ -173,6 +173,19 @@ export function computeExecStats(executives: any[] | null | undefined): ExecStat
   return { total: execs.length, mostMentioned, highest, lowest };
 }
 
+// The one rule for "is there a reputation score to show": the summary's reputation block says
+// status "ok" and carries a numeric score. Anything else (no_data, insufficient_evidence, missing
+// block) is "N/A", never a zero. Brand Equity and Executive Analytics both read this.
+export interface ReputationBlock { status?: string; score?: number | null; grade?: string | null; computed_at?: string | null }
+
+export function isReputationScoreKnown(rep: ReputationBlock | null | undefined): boolean {
+  return !!rep && rep.status === "ok" && typeof rep.score === "number";
+}
+
+export function formatReputationScore(rep: ReputationBlock | null | undefined): string {
+  return rep && isReputationScoreKnown(rep) ? (rep.score as number).toFixed(2) : "N/A";
+}
+
 export function formatAsOf(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);

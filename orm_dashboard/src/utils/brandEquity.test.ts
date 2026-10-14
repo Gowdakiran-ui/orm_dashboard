@@ -255,3 +255,22 @@ describe("formatFractionAsPercent (confidence / coverage)", () => {
     expect(formatFractionAsPercent(1)).toBe("100%");
   });
 });
+
+import { isReputationScoreKnown, formatReputationScore } from "./brandEquity";
+
+describe("reputation score display rule shared by Brand Equity and Executive Analytics", () => {
+  it("shows N/A for no_data, insufficient_evidence, a missing block, and a non-numeric score", () => {
+    expect(formatReputationScore({ score: null, grade: null, status: "no_data" })).toBe("N/A");
+    expect(formatReputationScore({ score: null, grade: null, status: "insufficient_evidence" })).toBe("N/A");
+    expect(formatReputationScore({ score: 80, status: "no_data" })).toBe("N/A");
+    expect(formatReputationScore({ status: "ok" })).toBe("N/A");
+    expect(formatReputationScore(undefined)).toBe("N/A");
+    expect(formatReputationScore(null)).toBe("N/A");
+  });
+  it("formats a real score to two decimals, and a real zero is not hidden as N/A", () => {
+    expect(formatReputationScore({ score: 75.51474709596108, grade: "B", status: "ok" })).toBe("75.51");
+    expect(formatReputationScore({ score: 0, status: "ok" })).toBe("0.00");
+    expect(isReputationScoreKnown({ score: 76.8, status: "ok" })).toBe(true);
+    expect(isReputationScoreKnown({ score: null, status: "ok" })).toBe(false);
+  });
+});

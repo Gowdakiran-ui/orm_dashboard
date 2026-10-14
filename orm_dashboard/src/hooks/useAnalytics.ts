@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { calculateSentimentDistribution } from "@/utils/calculateSentimentDistribution";
 import { getRiskLevel } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
+import { buildRiskHeatmap } from "@/utils/riskHeatmap";
 
 interface AnalyticsProps {
   documents: any[];
@@ -185,52 +186,10 @@ export function useAnalytics({
     }));
   }, [documents]);
 
-  const riskHeatmapData = useMemo(() => {
-    const categories = Array.from(new Set((documents || []).map(d => d?.topic || "General")));
-    const severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
-
-    const grid: Record<string, Record<string, { count: number; avgRisk: number; avgSentiment: number }>> = {};
-    categories.forEach(c => {
-      grid[c] = { 
-        LOW: { count: 0, avgRisk: 0, avgSentiment: 0 },
-        MEDIUM: { count: 0, avgRisk: 0, avgSentiment: 0 },
-        HIGH: { count: 0, avgRisk: 0, avgSentiment: 0 },
-        CRITICAL: { count: 0, avgRisk: 0, avgSentiment: 0 }
-      };
-    });
-
-    (documents || []).forEach(d => {
-      if (d) {
-        const c = d.topic || "General";
-        const r = d.risk || 0;
-        const s = d.sentiment || 0;
-        const sev = getRiskLevel(r);
-        if (grid[c] && grid[c][sev]) {
-          grid[c][sev].count++;
-          grid[c][sev].avgRisk += r;
-          grid[c][sev].avgSentiment += s;
-        }
-      }
-    });
-
-    categories.forEach(c => {
-      severities.forEach(sev => {
-        if (grid[c][sev].count > 0) {
-          grid[c][sev].avgRisk = grid[c][sev].avgRisk / grid[c][sev].count;
-          grid[c][sev].avgSentiment = grid[c][sev].avgSentiment / grid[c][sev].count;
-        }
-      });
-    });
-
-    // Same display-only floor as Coverage-by-Topic (topicDistData) above --
-    // same underlying `topic` field, same "near-zero for this client" issue.
-    const visibleCategories = categories.filter(c => {
-      const total = severities.reduce((sum, sev) => sum + grid[c][sev].count, 0);
-      return total >= MIN_TOPIC_DOCUMENT_COUNT;
-    });
-
-    return { categories: visibleCategories, severities, grid };
-  }, [documents]);
+  // Same display-only floor as Coverage-by-Topic (topicDistData) above --
+  // same underlying `topic` field, same "near-zero for this client" issue.
+  // Banding and the unscored-document rule live in utils/riskHeatmap.ts.
+  const riskHeatmapData = useMemo(() => buildRiskHeatmap(documents, MIN_TOPIC_DOCUMENT_COUNT), [documents]);
 
   const alertSeverityData = useMemo(() => {
     let low = 0, med = 0, high = 0, crit = 0;
