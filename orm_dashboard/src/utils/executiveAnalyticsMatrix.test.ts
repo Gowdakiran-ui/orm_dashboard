@@ -80,7 +80,8 @@ describe("Landing page makes no forward-looking or trend claims (static guard)",
 });
 
 describe("Executive Analytics uses true totals, labelled rows and plain alert wording (2026-10-03)", () => {
-  const panel = read("components/RiskAnalyticsPanel.tsx");
+  // The panel's figures now live in utils/analyticsPanels.ts (shared with the exported report), so the guard reads both files.
+  const panel = read("components/RiskAnalyticsPanel.tsx") + read("utils/analyticsPanels.ts");
   const defs = read("lib/metricDefinitions.tsx");
   const docsDef = defs.slice(defs.indexOf("export function DocumentsAnalyzedDefinition"), defs.indexOf("export function AverageRiskScoreFeedDefinition"));
   const page = read("app/dashboard/page.tsx");
@@ -90,6 +91,22 @@ describe("Executive Analytics uses true totals, labelled rows and plain alert wo
     expect(panel).toContain("docRisk?.critical");
     expect(panel).toContain('"Unavailable"');
     expect(page).toMatch(/RiskAnalyticsPanel[\s\S]{0,400}reputationSummary=\{data\.reputationSummary\}/);
+  });
+  it("the panel itself takes those totals from riskPanelFacts, with no inline recomputation of its own", () => {
+    // `panel` above also contains utils/analyticsPanels.ts, so a copy of the old inline calculation left behind in the
+    // component would still be satisfied by the helper's text. These checks read the component on its own.
+    const component = read("components/RiskAnalyticsPanel.tsx");
+    expect(component).toMatch(/import \{[^}]*riskPanelFacts[^}]*\} from "@\/utils\/analyticsPanels"/);
+    expect(component).toMatch(/riskPanelFacts\(\{/);
+    expect(component).toMatch(/const \{[^}]*visibleTotal[^}]*criticalTotal[^}]*\} = facts;/);
+    expect(component).not.toContain("visible_documents");
+    expect(component).not.toContain("document_risk");
+    expect(component).not.toMatch(/\.critical/);
+    expect(component).not.toMatch(/const (visibleTotal|criticalTotal|flaggedTotal)/);
+    // and the helper is where the server fields are read
+    const helper = read("utils/analyticsPanels.ts");
+    expect(helper).toContain("docRisk?.visible_documents");
+    expect(helper).toContain("docRisk?.critical");
   });
   it("says so when the charts show fewer articles than the total", () => {
     expect(panel).toContain("in the charts and matrix below");
@@ -111,7 +128,7 @@ describe("Executive Analytics uses true totals, labelled rows and plain alert wo
 });
 
 describe("Executive Analytics average never treats an unscored article as zero risk", () => {
-  const panel = read("components/RiskAnalyticsPanel.tsx");
+  const panel = read("components/RiskAnalyticsPanel.tsx") + read("utils/analyticsPanels.ts");
   it("averages only scored articles", () => {
     expect(panel).toContain("d.scored === true && typeof d.risk === \"number\"");
     expect(panel).not.toMatch(/sum \+ \(d\.impact \|\| 0\)/);

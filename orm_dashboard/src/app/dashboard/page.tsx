@@ -21,6 +21,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ExportReportButton } from "@/components/ExportReportButton";
+import { reportIsAllUnavailable, exportDisabledReason as exportDisabledReasonFor, type ReportInput } from "@/utils/reportModel";
 
 import { RiskTab } from "@/components/RiskTab";
 import { FeedTab } from "@/components/FeedTab";
@@ -93,7 +95,7 @@ function DashboardShell() {
 
   // 1. Data Layer
   const data = useDashboardData();
-  const { isSuperAdmin } = useCurrentUser();
+  const { user, isSuperAdmin } = useCurrentUser();
 
   // 2. Pipeline Manager
   // D1: usePipelineManager's polling effect depends on this callback's
@@ -149,6 +151,53 @@ function DashboardShell() {
     competitorCandidates: data.competitorCandidates,
     repHistory: data.repHistory,
     telemetry: data.telemetry
+  });
+
+  // Export Report: disabled until everything the three pages read has finished loading for the selected client.
+  const exportLoading = data.clientsLoading || data.reputationSummaryLoading || data.planAdvisoryLoading || data.executivesLoading
+    || data.benchmarksLoading || data.documentsLoading || data.alertsLoading || data.historyLoading;
+  // pipeline.pipelineRunning belongs to the SELECTED client (usePipelineManager resets and re-checks on every client switch).
+  // A report made while that client's data is being rebuilt would mix old and new figures.
+  const exportAllUnavailable = reportIsAllUnavailable({
+    reputationSummary: data.reputationSummary,
+    reputationSummaryError: data.reputationSummaryError,
+    documentsError: data.documentsError,
+    alertsError: data.alertsError,
+  });
+  const exportDisabledReason = exportDisabledReasonFor({
+    hasClient: !!data.clientId,
+    pipelineRunning: pipeline.pipelineRunning,
+    loading: exportLoading,
+    allUnavailable: exportAllUnavailable,
+  });
+  // Called once per click. The button copies what this returns, so the report is one frozen snapshot of this render.
+  const getReportSnapshot = (): ReportInput => ({
+    clientId: data.clientId,
+    clientName: activeClientName,
+    generatedAt: new Date(),
+    userEmail: user?.email ?? null,
+    browserTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    reputationSummary: data.reputationSummary,
+    reputationSummaryError: data.reputationSummaryError,
+    planAdvisory: data.planAdvisory,
+    planAdvisoryError: data.planAdvisoryError,
+    executives: data.executives,
+    executivesError: data.executivesError,
+    benchmarks: analytics.normalizedBenchmarks,
+    benchmarksError: data.benchmarksError,
+    documents: data.documents,
+    documentsError: data.documentsError,
+    alerts: data.alerts,
+    alertsError: data.alertsError,
+    repHistory: data.repHistory,
+    historyError: data.historyError,
+    analytics: {
+      sentimentDistData: analytics.sentimentDistData,
+      topicDistData: analytics.topicDistData,
+      riskMatrixData: analytics.riskMatrixData,
+      riskHeatmapData: analytics.riskHeatmapData,
+      alertTimelineData: analytics.alertTimelineData,
+    },
   });
 
   const accentFrom = isDark ? "#00F5D4" : "#3B82F6";
@@ -216,6 +265,13 @@ function DashboardShell() {
           activeTab={activeTab}
           currentTime={currentTime}
           liveDegraded={data.livePollDegraded}
+          actions={
+            <ExportReportButton
+              getSnapshot={getReportSnapshot}
+              disabled={exportDisabledReason !== undefined}
+              disabledReason={exportDisabledReason}
+            />
+          }
         />
 
         {/* Dashboard View Container */}

@@ -46,3 +46,9 @@ audit/
 # Task baselines / planning notes -- not for the repo
 stream_baseline.md
 task.md
+
+# Report-export planning files (not for the repo)
+report_inventory.md
+report_samples/
+fixes_before.md
+fixes_after.md

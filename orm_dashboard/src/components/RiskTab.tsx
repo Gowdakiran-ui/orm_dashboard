@@ -21,20 +21,8 @@ import { riskStatsFromSummary, sourceState, formatAsOf } from "@/utils/brandEqui
 import {
   flaggedDocs, buildMatrix, legacyCellDocs, tilesFromSummary, reasonSentence, dateLabel,
   localDateKey, windowNote, unscoredNote, confidencePercent, formatScore, levelWord,
-  MATRIX_BANDS, MATRIX_CONFIDENCE,
+  MATRIX_BANDS, MATRIX_CONFIDENCE, ALERT_ENTITY_TYPE_LABEL,
 } from "@/utils/riskCenter";
-
-// Entity-type prefix for an alert's "Multi-Signal Incident: X" title, so a
-// person, a product, and the client's own brand don't all read as
-// equivalent "incidents" at the same visual tier (ui_redesign_plan.md #5).
-// Reuses the `entity_type` field client_intelligence.py's active-alerts
-// endpoint now serializes -- no guessing from the title text.
-const ALERT_ENTITY_TYPE_LABEL: Record<string, string> = {
-  person: "Executive",
-  product: "Product",
-  brand: "Company",
-  competitor: "Competitor",
-};
 
 const UNAVAILABLE = "—";
 

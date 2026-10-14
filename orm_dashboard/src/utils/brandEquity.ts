@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from "@/lib/utils";
+
 // Pure logic behind the Brand Equity page (ReputationSummaryCard). Kept free of
 // React so every number and sentence the page states can be unit-tested.
 //
@@ -27,6 +29,9 @@ export interface RiskStats {
   topRiskDocs: { title: string; risk: number }[];
   // Items of coverage that have no risk event at all: not "zero risk", not counted.
   unscored: number;
+  // Items that DO carry a risk score (the server's scored_documents); null when an older payload does not send it.
+  // 0 means nothing has been risk-scored yet, which is "no data", not "no risk".
+  scored: number | null;
 }
 
 // Reads the server-computed `document_risk` block of /reputation-summary
@@ -50,6 +55,7 @@ export function riskStatsFromSummary(block: any): RiskStats | null {
     dominantLevel: critical > 0 ? "CRITICAL" : high > 0 ? "HIGH" : medium > 0 ? "MEDIUM" : "NONE",
     topRiskDocs: top,
     unscored: n(block.unscored_documents) ?? 0,
+    scored: n(block.scored_documents),
   };
 }
 
@@ -91,7 +97,7 @@ export function computeCompetitiveStanding(
 }
 
 export interface Verdict {
-  kind: "loading" | "unavailable" | "alert" | "danger" | "flagged" | "clear";
+  kind: "loading" | "unavailable" | "alert" | "danger" | "flagged" | "nodata" | "clear";
   emoji: string;
   text: string;
   action: "risk" | null;
@@ -104,11 +110,13 @@ export interface VerdictInput {
   execAlert: { open: boolean; alert?: { entity_name?: string | null; severity?: string | null } | null };
   dangerCount: number;
   totalRisks: number;
+  // How many articles carry a risk score at all (RiskStats.scored). 0 = nothing scored yet; null/undefined = not known.
+  scoredDocuments?: number | null;
   advisory: { flagged?: boolean; lead?: string } | null | undefined;
 }
 
 // Priority: an open executive alert, then Critical/High documents, then the
-// advisory's own flagged lead, else an explicit clear state. No window
+// advisory's own flagged lead, then "not enough data" when no article has been risk-scored, else an explicit clear state. No window
 // ("this week") or stability claim is made: none is computed anywhere.
 export function computeVerdict(i: VerdictInput): Verdict {
   if (i.riskState === "loading" || i.advisoryState === "loading") {
@@ -139,6 +147,10 @@ export function computeVerdict(i: VerdictInput): Verdict {
   }
   if (i.advisory?.flagged === true && i.advisory.lead) {
     return { kind: "flagged", emoji: "🟡", text: i.advisory.lead, action: null, actionLabel: null };
+  }
+  // Nothing risk-scored yet (new client, or every article still unscored): "no risks" would be a claim nobody has checked.
+  if (i.scoredDocuments === 0) {
+    return { kind: "nodata", emoji: "⚪", text: "Not enough data yet", action: null, actionLabel: null };
   }
   return {
     kind: "clear",
@@ -191,4 +203,151 @@ export function formatAsOf(iso: string | null | undefined): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// ---- Brand Equity page view ------------------------------------------------
+// Everything the Brand Equity page (ReputationSummaryCard) states in words or numbers, built in one
+// place so the page and the exported report read the same function. Pure: no React, no clock.
+export const UNAVAILABLE_TEXT = "Unavailable";
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+// The parts of /reputation-summary and /plan-advisory the Brand Equity page reads.
+export interface ReputationSummaryLike {
+  reputation?: ReputationBlock | null;
+  document_risk?: unknown;
+  sentiment?: { positive: number; neutral: number; negative: number; dominant: string | null } | null;
+  executive_alert?: { open: boolean; alert?: { entity_name?: string | null; severity?: string | null } | null } | null;
+}
+
+export interface BrandEquityViewInput {
+  reputationSummary: ReputationSummaryLike | null | undefined;
+  planAdvisory?: { flagged?: boolean; lead?: string } | null;
+  planAdvisoryLoading?: boolean;
+  planAdvisoryError?: string | null;
+  executives: unknown[];
+  executivesLoading?: boolean;
+  executivesError?: string | null;
+  activeClientName: string;
+  normalizedBenchmarks?: unknown[];
+  benchmarksLoading?: boolean;
+  benchmarksError?: string | null;
+  // How a stored ISO timestamp is shown: the page uses the viewer's locale (formatAsOf), the report uses IST.
+  formatDate?: (iso: string | null | undefined) => string | null;
+}
+
+// The Risk Profile paragraph. The average score is its own part because the page makes it a link.
+export type RiskProfileText =
+  | { kind: "unavailable"; text: string }
+  | { kind: "none"; text: string }
+  | { kind: "some"; before: string; avg: string; after: string };
+
+export function buildBrandEquityView(i: BrandEquityViewInput) {
+  const name = i.activeClientName;
+  const formatDate = i.formatDate ?? formatAsOf;
+  const execState = sourceState(i.executivesLoading, i.executivesError);
+  // plan-advisory resolved without an error but with no payload is a failure too.
+  const advisoryState = sourceState(
+    i.planAdvisoryLoading,
+    i.planAdvisoryError || (!i.planAdvisoryLoading && !i.planAdvisory ? "No data" : null)
+  );
+  const riskStats = riskStatsFromSummary(i.reputationSummary?.document_risk);
+  const execStats = computeExecStats(i.executives);
+  const standing = computeCompetitiveStanding(i.normalizedBenchmarks ?? [], i.benchmarksLoading, i.benchmarksError);
+
+  const rep = i.reputationSummary?.reputation || {};
+  const sentiment = i.reputationSummary?.sentiment || { positive: 0, neutral: 0, negative: 0, dominant: null };
+  const execAlert = i.reputationSummary?.executive_alert || { open: false, alert: null };
+  const riskState: SourceState = riskStats ? "ready" : "error";
+
+  const scoreKnown = isReputationScoreKnown(rep);
+  const scoreDisplay = formatReputationScore(rep);
+  const gradeDisplay = scoreKnown ? (rep.grade ?? "N/A") : "N/A";
+  const asOf = formatDate(rep.computed_at);
+  const scoreStatusText = scoreKnown
+    ? ""
+    : rep.status === "insufficient_evidence"
+    ? "Not enough evidence to score yet"
+    : "No score computed yet";
+
+  const alertNames = execAlert.open && execAlert.alert?.entity_name ? execAlert.alert.entity_name : null;
+  const alertLine = execAlert.open
+    ? `1 open executive-risk alert: ${alertNames ?? "unknown"}.`
+    : "No open executive-risk alerts.";
+
+  // One-line verdict promoted from content that exists further down this page.
+  const verdict = computeVerdict({
+    riskState,
+    advisoryState,
+    execAlert,
+    dangerCount: riskStats?.dangerCount ?? 0,
+    totalRisks: riskStats?.total ?? 0,
+    scoredDocuments: riskStats?.scored ?? null,
+    advisory: i.planAdvisory,
+  });
+
+  const overviewText = scoreKnown
+    ? `${name}'s reputation score is ${scoreDisplay} (${gradeDisplay})${asOf ? `, as of ${asOf}` : ""}.`
+    : rep.status === "insufficient_evidence"
+    ? `There is not enough evidence yet to compute a reputation score for ${name}.`
+    : `No reputation score has been computed yet for ${name}.`;
+
+  const uncheckedText = riskStats && riskStats.unscored > 0
+    ? ` ${riskStats.unscored} ${plural(riskStats.unscored, "item has", "items have")} not been risk-checked yet and ${plural(riskStats.unscored, "is", "are")} not counted.`
+    : "";
+
+  const topTitle = (k: number) => decodeHtmlEntities(riskStats!.topRiskDocs[k].title);
+  const riskProfile: RiskProfileText = !riskStats
+    ? { kind: "unavailable", text: "Risk figures are unavailable." }
+    : riskStats.total === 0
+    ? { kind: "none", text: `No items of coverage carry a risk above Low.${uncheckedText}` }
+    : {
+        kind: "some",
+        before: `${riskStats.total} ${plural(riskStats.total, "item of coverage carries", "items of coverage carry")} a risk above Low (${riskStats.critical} critical, ${riskStats.high} high, ${riskStats.medium} medium), with an average risk score of `,
+        avg: riskStats.avg !== null ? String(Math.round(riskStats.avg)) : UNAVAILABLE_TEXT,
+        after: "." +
+          (riskStats.topRiskDocs.length > 0
+            ? ` The highest-risk item is "${topTitle(0)}" (${Math.round(riskStats.topRiskDocs[0].risk)} pts)` +
+              (riskStats.topRiskDocs[1] ? `, followed by "${topTitle(1)}" (${Math.round(riskStats.topRiskDocs[1].risk)} pts).` : ".")
+            : "") +
+          uncheckedText,
+      };
+
+  const sentimentText = (() => {
+    const counts = `${sentiment.positive} positive, ${sentiment.neutral} neutral and ${sentiment.negative} negative mentions`;
+    if (!sentiment.dominant) return `No mentions of ${name} with a sentiment reading yet.`;
+    if (sentiment.dominant === "mixed") return `Coverage about ${name} is evenly split between its two most common tones: ${counts}.`;
+    return `Coverage about ${name} is mostly ${sentiment.dominant}: ${counts}.`;
+  })();
+
+  const peopleText: string | null = (() => {
+    if (execState === "loading") return "Loading notable people…";
+    if (execState === "error") return "Notable-people data is unavailable.";
+    return (execStats.mostMentioned
+      ? `${execStats.mostMentioned} is the most-mentioned person, out of ${execStats.total} notable people tracked in ${name}'s coverage (not necessarily ${name}'s own staff).`
+      : `No notable people have been tracked yet in ${name}'s coverage.`) +
+      (execStats.highest && execStats.lowest && execStats.highest !== execStats.lowest
+        ? ` ${execStats.highest.name} has the highest reputation score among them (${execStats.highest.score.toFixed(1)}), while ${execStats.lowest.name} has the lowest (${execStats.lowest.score.toFixed(1)}).`
+        : "");
+  })();
+
+  const standingText = (() => {
+    if (standing.state === "loading") return "Loading competitive standing…";
+    if (standing.state === "error") return "Competitive standing is unavailable.";
+    if (standing.state === "empty") return "No competitor comparison available yet.";
+    const rankPart = standing.rank !== null
+      ? `${name} ranks #${standing.rank} among the competitors found in coverage.`
+      : `${name} could not be ranked against competitors yet (not enough evidence).`;
+    const sovPart = standing.shareOfVoice !== null
+      ? ` ${name} accounts for ${standing.shareOfVoice.toFixed(1)}% of all mentions of ${name} and the tracked competitors over the last 30 days (share of voice).`
+      : "";
+    return `${rankPart}${sovPart}${standing.topCompetitor ? ` The top-ranked competitor is ${standing.topCompetitor}.` : ""}`;
+  })();
+
+  return {
+    execState, advisoryState, riskState, riskStats, execStats, standing,
+    rep, sentiment, execAlert,
+    scoreKnown, scoreDisplay, gradeDisplay, asOf, scoreStatusText,
+    verdict, alertLine, overviewText, uncheckedText, riskProfile, sentimentText, peopleText, standingText,
+  };
 }

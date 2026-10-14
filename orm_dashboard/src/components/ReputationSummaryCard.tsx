@@ -1,8 +1,7 @@
 import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
-import { riskStatsFromSummary, computeExecStats, computeCompetitiveStanding, computeVerdict, sourceState, formatAsOf, isReputationScoreKnown, formatReputationScore } from "@/utils/brandEquity";
-import { decodeHtmlEntities } from "@/lib/utils";
+import { buildBrandEquityView } from "@/utils/brandEquity";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { HeroGlass } from "@/components/theme/HeroGlass";
@@ -66,24 +65,18 @@ export function ReputationSummaryCard({
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const { navigateTo } = useTabNavigation();
 
-  // Each independently-loaded source has its own state. A failed or still-
-  // loading source renders "Unavailable" / a placeholder, never a believable
-  // zero (the data hook turns a failed fetch into an empty list + error flag).
-  const execState = sourceState(executivesLoading, executivesError);
-  // plan-advisory resolved without an error but with no payload is a failure too.
-  const advisoryState = sourceState(
-    planAdvisoryLoading,
-    planAdvisoryError || (!planAdvisoryLoading && !planAdvisory ? "No data" : null)
+  // Every number and sentence on this page comes from buildBrandEquityView (utils/brandEquity.ts),
+  // which the exported report reads too. A failed or still-loading source renders "Unavailable" / a
+  // placeholder, never a believable zero (the data hook turns a failed fetch into an empty list + error flag).
+  const view = useMemo(
+    () => buildBrandEquityView({
+      reputationSummary, planAdvisory, planAdvisoryLoading, planAdvisoryError,
+      executives, executivesLoading, executivesError, activeClientName,
+      normalizedBenchmarks, benchmarksLoading, benchmarksError,
+    }),
+    [reputationSummary, planAdvisory, planAdvisoryLoading, planAdvisoryError, executives, executivesLoading, executivesError, activeClientName, normalizedBenchmarks, benchmarksLoading, benchmarksError]
   );
-
-  // Risk figures come from the server (counted over every document, no
-  // window); a missing/malformed block means "unavailable", not zero.
-  const riskStats = useMemo(() => riskStatsFromSummary(reputationSummary?.document_risk), [reputationSummary]);
-  const execStats = useMemo(() => computeExecStats(executives), [executives]);
-  const standing = useMemo(
-    () => computeCompetitiveStanding(normalizedBenchmarks, benchmarksLoading, benchmarksError),
-    [normalizedBenchmarks, benchmarksLoading, benchmarksError]
-  );
+  const { riskStats } = view;
 
   if (reputationSummaryLoading) {
     return (
@@ -106,37 +99,7 @@ export function ReputationSummaryCard({
     );
   }
 
-  const rep = reputationSummary.reputation || {};
-  const sentiment = reputationSummary.sentiment || { positive: 0, neutral: 0, negative: 0, dominant: null };
-  const execAlert = reputationSummary.executive_alert || { open: false, alert: null };
-  const riskState = riskStats ? "ready" : "error";
-
-  const scoreKnown = isReputationScoreKnown(rep);
-  const scoreDisplay = formatReputationScore(rep);
-  const gradeDisplay = scoreKnown ? (rep.grade ?? "N/A") : "N/A";
-  const asOf = formatAsOf(rep.computed_at);
-  const scoreStatusText = scoreKnown
-    ? ""
-    : rep.status === "insufficient_evidence"
-    ? "Not enough evidence to score yet"
-    : "No score computed yet";
-
-  const alertNames = execAlert.open && execAlert.alert?.entity_name ? execAlert.alert.entity_name : null;
-  const alertLine = execAlert.open
-    ? `1 open executive-risk alert: ${alertNames ?? "unknown"}.`
-    : "No open executive-risk alerts.";
-
-  // One-line verdict promoted from content that exists further down this page
-  // (alert line, Critical/High count, advisory). It states only what is
-  // computed: no time window and no stability claim.
-  const verdict = computeVerdict({
-    riskState,
-    advisoryState,
-    execAlert,
-    dangerCount: riskStats?.dangerCount ?? 0,
-    totalRisks: riskStats?.total ?? 0,
-    advisory: planAdvisory,
-  });
+  const { sentiment, scoreKnown, scoreDisplay, gradeDisplay, asOf, scoreStatusText, verdict, overviewText, riskProfile, sentimentText, peopleText, standingText, alertLine } = view;
 
   const UNAVAILABLE = "Unavailable";
   const riskValue = (n: number | undefined) => (riskStats && n !== undefined ? n : UNAVAILABLE);
@@ -217,45 +180,6 @@ export function ReputationSummaryCard({
   const heroCards = cards.map((card, idx) => ({ card, idx })).filter(({ card }) => card.highlight);
   const detailCards = cards.map((card, idx) => ({ card, idx })).filter(({ card }) => !card.highlight);
 
-  const overviewText = scoreKnown
-    ? `${activeClientName}'s reputation score is ${scoreDisplay} (${gradeDisplay})${asOf ? `, as of ${asOf}` : ""}.`
-    : rep.status === "insufficient_evidence"
-    ? `There is not enough evidence yet to compute a reputation score for ${activeClientName}.`
-    : `No reputation score has been computed yet for ${activeClientName}.`;
-
-  const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
-  const uncheckedText = riskStats && riskStats.unscored > 0
-    ? ` ${riskStats.unscored} ${plural(riskStats.unscored, "item has", "items have")} not been risk-checked yet and ${plural(riskStats.unscored, "is", "are")} not counted.`
-    : "";
-
-  const sentimentText = (() => {
-    const counts = `${sentiment.positive} positive, ${sentiment.neutral} neutral and ${sentiment.negative} negative mentions`;
-    if (!sentiment.dominant) return `No mentions of ${activeClientName} with a sentiment reading yet.`;
-    if (sentiment.dominant === "mixed") return `Coverage about ${activeClientName} is evenly split between its two most common tones: ${counts}.`;
-    return `Coverage about ${activeClientName} is mostly ${sentiment.dominant}: ${counts}.`;
-  })();
-
-  const peopleText = (() => {
-    if (execState === "loading") return "Loading notable people…";
-    if (execState === "error") return "Notable-people data is unavailable.";
-    return null;
-  })();
-
-  const standingText = (() => {
-    if (standing.state === "loading") return "Loading competitive standing…";
-    if (standing.state === "error") return "Competitive standing is unavailable.";
-    if (standing.state === "empty") return "No competitor comparison available yet.";
-    const rankPart = standing.rank !== null
-      ? `${activeClientName} ranks #${standing.rank} among the competitors found in coverage.`
-      : `${activeClientName} could not be ranked against competitors yet (not enough evidence).`;
-    const sovPart = standing.shareOfVoice !== null
-      ? ` ${activeClientName} accounts for ${standing.shareOfVoice.toFixed(1)}% of all mentions of ${activeClientName} and the tracked competitors over the last 30 days (share of voice).`
-      : "";
-    return `${rankPart}${sovPart}${standing.topCompetitor ? ` The top-ranked competitor is ${standing.topCompetitor}.` : ""}`;
-  })();
-
-  const topTitle = (i: number) => decodeHtmlEntities(riskStats!.topRiskDocs[i].title);
-
   return (
     <div className="space-y-6">
       <div className={`${glassCard(theme)} p-4 flex flex-wrap items-center justify-between gap-3`}>
@@ -319,21 +243,13 @@ export function ReputationSummaryCard({
                 <InfoTooltip label="About Average Risk Score"><AverageRiskScoreTrackedDefinition /></InfoTooltip>
               </span>
               <p className={sectionTextClass(isDark)}>
-                {!riskStats ? (
-                  "Risk figures are unavailable."
-                ) : riskStats.total === 0 ? (
-                  <>No items of coverage carry a risk above Low.{uncheckedText}</>
+                {riskProfile.kind !== "some" ? (
+                  riskProfile.text
                 ) : (
                   <>
-                    {riskStats.total} {plural(riskStats.total, "item of coverage carries", "items of coverage carry")} a risk above Low ({riskStats.critical} critical, {riskStats.high} high, {riskStats.medium} medium), with an average risk score of{" "}
-                    <button type="button" onClick={() => navigateTo("risk")} className="hover:underline font-bold">{riskStats.avg !== null ? Math.round(riskStats.avg) : UNAVAILABLE}</button>.
-                    {riskStats.topRiskDocs.length > 0 && (
-                      <>
-                        {" "}The highest-risk item is "{topTitle(0)}" ({Math.round(riskStats.topRiskDocs[0].risk)} pts)
-                        {riskStats.topRiskDocs[1] ? `, followed by "${topTitle(1)}" (${Math.round(riskStats.topRiskDocs[1].risk)} pts).` : "."}
-                      </>
-                    )}
-                    {uncheckedText}
+                    {riskProfile.before}
+                    <button type="button" onClick={() => navigateTo("risk")} className="hover:underline font-bold">{riskProfile.avg}</button>
+                    {riskProfile.after}
                   </>
                 )}
               </p>
@@ -350,16 +266,7 @@ export function ReputationSummaryCard({
             <div>
               <span className={sectionLabelClass(isDark)}>Notable People in Coverage</span>
               <p className={sectionTextClass(isDark)}>
-                {peopleText ? peopleText : (
-                  <>
-                    {execStats.mostMentioned
-                      ? <>{execStats.mostMentioned} is the most-mentioned person, out of {execStats.total} notable people tracked in {activeClientName}'s coverage (not necessarily {activeClientName}'s own staff).</>
-                      : <>No notable people have been tracked yet in {activeClientName}'s coverage.</>}
-                    {execStats.highest && execStats.lowest && execStats.highest !== execStats.lowest && (
-                      <> {execStats.highest.name} has the highest reputation score among them ({execStats.highest.score.toFixed(1)}), while {execStats.lowest.name} has the lowest ({execStats.lowest.score.toFixed(1)}).</>
-                    )}
-                  </>
-                )}
+                {peopleText}
               </p>
             </div>
 

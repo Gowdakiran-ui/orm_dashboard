@@ -12,7 +12,8 @@ import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/t
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { ReputationScoreDefinition, SentimentScaleDefinition, CoverageByTopicDefinition, OverviewSentimentBreakdownDefinition, AverageSentimentHistoryDefinition } from "@/lib/metricDefinitions";
 import { formatScore, tooltipScoreFormatter } from "@/utils/formatScore";
-import { formatReputationScore, type ReputationBlock } from "@/utils/brandEquity";
+import type { ReputationBlock } from "@/utils/brandEquity";
+import { overviewKpiValues, formatSentimentScoreKpi, formatPositiveShareKpi, scoringMethodChange, SCORING_CHANGE_NOTE } from "@/utils/analyticsPanels";
 
 export interface OverviewAnalyticsPanelProps {
   // The `reputation` block of /reputation-summary (status + score), the same one Brand Equity reads.
@@ -23,6 +24,8 @@ export interface OverviewAnalyticsPanelProps {
   sentimentHistoryData: any[];
   loading?: boolean;
   error?: string | null;
+  // Chart entrance animations; the Export Report capture turns them off so a chart is complete the moment it mounts.
+  animate?: boolean;
 }
 
 export function OverviewAnalyticsPanel({
@@ -32,77 +35,30 @@ export function OverviewAnalyticsPanel({
   repHistory = [],
   sentimentHistoryData = [],
   loading = false,
-  error = null
+  error = null,
+  animate = true
 }: OverviewAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const accent = isDark ? "#00F5D4" : "#3B82F6";
   const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
-  // 1. KPI Summaries based on live prop telemetry
+  // 1. KPI Summaries based on live prop telemetry (values from utils/analyticsPanels.ts, shared with the exported report).
+  // repHistory arrives already reversed into chronological (oldest-first) order for the trend chart below
+  // (useDashboardData.ts). Current Reputation reads the same summary block and rule as Brand Equity
+  // (formatReputationScore), so a client with no usable score shows "N/A" here too instead of "0.00".
+  // Sentiment Score is derived from the exact same Positive/Neutral/Negative counts that feed the Sentiment
+  // Breakdown donut below, so tile and donut can never visibly disagree.
   const kpis = useMemo(() => {
-    // repHistory arrives already reversed into chronological (oldest-first)
-    // order for the trend chart below (see useDashboardData.ts's
-    // fetchReputationHistory handler) -- the latest point is the LAST
-    // entry, not the first. Reading repHistory[0] here was silently
-    // surfacing the oldest score in the last-30-days window as if it were
-    // current (xoop_ui_clarity_review.md Phase 1: this is what produced
-    // "AVG REPUTATION: 76.32" here vs. the dashboard's correct, current
-    // "REPUTATION SCORE: 60.06" for the same client at the same time --
-    // same metric, not two different ones, just the wrong end of a reversed
-    // array). Also relabeled below: this was never an average, it's a
-    // single point-in-time score, same as the dashboard's own tile.
-    // Current Reputation now reads the same summary block and rule as Brand
-    // Equity (formatReputationScore), so a client with no usable score shows
-    // "N/A" here too instead of "0.00".
-    const latestRepScore = formatReputationScore(reputation);
-
-    const dimensionsCount = topicDistData.length;
-
-    const posVal = sentimentDistData.find(d => d.name === "Positive")?.value || 0;
-    const totalVal = sentimentDistData.reduce((acc, curr) => acc + (curr.value || 0), 0);
-    const posRatio = totalVal > 0 ? `${((posVal / totalVal) * 100).toFixed(0)}%` : "0%";
-
-    // Derived from the exact same Positive/Neutral/Negative counts that
-    // feed the Sentiment Breakdown donut below (sentimentDistData), not a
-    // separate query or the trend chart's single latest bucket -- tile and
-    // donut can now never visibly disagree, since they're the same numbers.
-    // Weighting matches the backend's own convention (sentiment_analyzer.py
-    // score_map: positive=1.0, neutral=0.0, negative=-1.0, see
-    // metricDefinitions.tsx's Sentiment scale note) rather than inventing a
-    // new one.
-    const negVal = sentimentDistData.find(d => d.name === "Negative")?.value || 0;
-    // Same "too few to trust" floor risk_engine.py already uses for trend
-    // significance (risk_engine.py:790,796), reused here rather than picking
-    // a new threshold in isolation.
-    const SENTIMENT_SCORE_MIN_SAMPLE = 5;
-    const hasEnoughSentimentData = totalVal >= SENTIMENT_SCORE_MIN_SAMPLE;
-    const sentimentScoreValue = hasEnoughSentimentData ? (posVal - negVal) / totalVal : null;
-    const latestSentScore = sentimentScoreValue === null
-      ? "Not enough data yet"
-      : sentimentScoreValue > 0
-      ? `+${sentimentScoreValue.toFixed(2)}`
-      : sentimentScoreValue.toFixed(2);
-
+    const v = overviewKpiValues({ reputation, topicDistData, sentimentDistData });
     return [
-      { label: "Current Reputation", value: latestRepScore, desc: "Overall reputation score", icon: Activity, color: accentColor, def: <ReputationScoreDefinition /> },
-      { label: "Sentiment Score", value: latestSentScore, desc: hasEnoughSentimentData ? "How positive coverage is (-1.0 to +1.0)" : "Awaiting more coverage to compute", icon: Smile, color: accentColor, def: <SentimentScaleDefinition /> },
-      { label: "Topics Covered", value: dimensionsCount, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400", def: undefined as React.ReactNode },
-      { label: "Positive Share", value: posRatio, desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400", def: undefined as React.ReactNode }
+      { label: "Current Reputation", value: v.currentReputation, desc: "Overall reputation score", icon: Activity, color: accentColor, def: <ReputationScoreDefinition /> },
+      { label: "Sentiment Score", value: formatSentimentScoreKpi(v.sentimentScore), desc: v.hasEnoughSentimentData ? "How positive coverage is (-1.0 to +1.0)" : "Awaiting more coverage to compute", icon: Smile, color: accentColor, def: <SentimentScaleDefinition /> },
+      { label: "Topics Covered", value: v.topicsCovered, desc: "Distinct topics found in coverage", icon: BarChart3, color: "text-purple-400", def: undefined as React.ReactNode },
+      { label: "Positive Share", value: formatPositiveShareKpi(v.positiveShare), desc: "Favorable media percentage", icon: TrendingUp, color: "text-emerald-400", def: undefined as React.ReactNode }
     ];
   }, [reputation, topicDistData, sentimentDistData, accentColor]);
 
-  // The trend component was removed from the score on 2026-10-01, so scores
-  // stored before that date were computed with a slightly different method
-  // (up to about 3 points). The history itself is left exactly as stored; this
-  // only marks where the method changed.
-  const SCORING_CHANGE_ISO = "2026-10-01T00:00:00Z";
-  const methodChange = useMemo(() => {
-    const cutoff = new Date(SCORING_CHANGE_ISO).getTime();
-    const dated = (repHistory || []).filter((h: any) => h && h.rawDate && !Number.isNaN(new Date(h.rawDate).getTime()));
-    const hasEarlier = dated.some((h: any) => new Date(h.rawDate).getTime() < cutoff);
-    const firstAfter = dated.find((h: any) => new Date(h.rawDate).getTime() >= cutoff);
-    return { hasEarlier, markerDate: hasEarlier && firstAfter ? (firstAfter.date as string) : null };
-  }, [repHistory]);
+  const methodChange = useMemo(() => scoringMethodChange(repHistory), [repHistory]);
 
   const tooltipStyle = {
     backgroundColor: isDark ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
@@ -257,7 +213,7 @@ export function OverviewAnalyticsPanel({
                     <XAxis dataKey="name" stroke={axisStroke} fontSize={9} />
                     <YAxis stroke={axisStroke} fontSize={9} />
                     <Tooltip contentStyle={tooltipStyle} />
-                    <Bar dataKey="value" fill={accent} radius={[3, 3, 0, 0]} isAnimationActive={true} animationDuration={850} />
+                    <Bar dataKey="value" fill={accent} radius={[3, 3, 0, 0]} isAnimationActive={animate} animationDuration={850} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -277,7 +233,7 @@ export function OverviewAnalyticsPanel({
             </CardTitle>
             {methodChange.hasEarlier && (
               <p className={`font-mono text-[10px] mt-1 ${mutedText(theme)}`}>
-                Scoring method updated 1 Oct 2026: earlier scores include a component that has since been removed and can differ by up to about 3 points.
+                {SCORING_CHANGE_NOTE}
               </p>
             )}
           </CardHeader>
@@ -299,7 +255,7 @@ export function OverviewAnalyticsPanel({
                     strokeWidth={2}
                     dot={{ r: 3.5, stroke: accent, fill: isDark ? '#09090b' : '#ffffff', strokeWidth: 1.5 }}
                     activeDot={{ r: 6 }}
-                    isAnimationActive={true}
+                    isAnimationActive={animate}
                     animationDuration={850}
                   />
                 </RechartsLineChart>
@@ -337,7 +293,7 @@ export function OverviewAnalyticsPanel({
                     strokeWidth={2}
                     dot={<SentimentDot />}
                     activeDot={{ r: 6 }}
-                    isAnimationActive={true}
+                    isAnimationActive={animate}
                     animationDuration={850}
                   />
                 </RechartsLineChart>

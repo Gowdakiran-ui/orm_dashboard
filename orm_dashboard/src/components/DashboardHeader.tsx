@@ -9,13 +9,16 @@ export interface DashboardHeaderProps {
   activeTab: string;
   currentTime: string;
   liveDegraded?: boolean;
+  // Optional controls shown at the start of the right-hand cluster (the Export Report button).
+  actions?: React.ReactNode;
 }
 
 export function DashboardHeader({
   activeClientName,
   activeTab,
   currentTime,
-  liveDegraded = false
+  liveDegraded = false,
+  actions
 }: DashboardHeaderProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -50,6 +53,7 @@ export function DashboardHeader({
       </div>
 
       <div className="flex items-center space-x-6 text-xs font-mono">
+        {actions}
         <div className={`flex items-center space-x-2 ${mutedText(theme)}`}>
           <Clock className="h-4 w-4" style={{ color: accent }} />
           <span>{currentTime}</span>

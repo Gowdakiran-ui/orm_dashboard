@@ -13,7 +13,7 @@ import { glassCard, glassTokens, glassPill, mutedText, bodyText, SPECULAR_LINE }
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 import { buildMatrix, flaggedDocs, windowNote, MATRIX_BANDS, MATRIX_CONFIDENCE } from "@/utils/riskCenter";
-import { sourceState } from "@/utils/brandEquity";
+import { riskPanelFacts, alertTimelineStats, heatmapTotals } from "@/utils/analyticsPanels";
 import {
   RiskSeverityDefinition,
   AverageRiskScoreFeedDefinition,
@@ -63,6 +63,8 @@ export interface RiskAnalyticsPanelProps {
   alertTimelineData: any[];
   loading?: boolean;
   error?: string | null;
+  // Chart entrance animations; the Export Report capture turns them off so a chart is complete the moment it mounts.
+  animate?: boolean;
 }
 
 export function RiskAnalyticsPanel({
@@ -74,7 +76,8 @@ export function RiskAnalyticsPanel({
   riskHeatmapData = { categories: [], severities: [], grid: {} },
   alertTimelineData = [],
   loading = false,
-  error = null
+  error = null,
+  animate = true
 }: RiskAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -84,29 +87,18 @@ export function RiskAnalyticsPanel({
 
   // True totals come from the server (same source as Risk Center's tiles); the charts and the matrix are built from the newest
   // articles the page loads (at most 500), and the page says so whenever that is fewer than the total.
-  const summaryReady = sourceState(reputationSummaryLoading, reputationSummaryError) === "ready";
-  const docRisk = summaryReady ? reputationSummary?.document_risk : null;
-  const visibleTotal: number | null = typeof docRisk?.visible_documents === "number" ? docRisk.visible_documents : null;
-  const flaggedTotal: number | null = typeof docRisk?.total === "number" ? docRisk.total : null;
-  const criticalTotal: number | null = typeof docRisk?.critical === "number" ? docRisk.critical : null;
-  const loadedCount = riskMatrixData.length;
-  const loadedNote = visibleTotal !== null && loadedCount < visibleTotal
-    ? `Showing the newest ${loadedCount} of ${visibleTotal} articles in the charts and matrix below.`
-    : null;
-  const openAlerts = alertTimelineData.reduce((sum: number, d: any) => sum + (d?.count || 0), 0);
+  // The figures come from utils/analyticsPanels.ts, shared with the exported report.
+  const facts = useMemo(
+    () => riskPanelFacts({ riskMatrixData, reputationSummary, reputationSummaryLoading, reputationSummaryError, alertTimelineData }),
+    [riskMatrixData, reputationSummary, reputationSummaryLoading, reputationSummaryError, alertTimelineData]
+  );
+  const { visibleTotal, flaggedTotal, criticalTotal, loadedNote, openAlerts, scoredCount, avgRiskVal, alertsStatus } = facts;
 
   // 1. KPI summary data
   const kpis = useMemo(() => {
-    // Only articles that have actually been risk-scored: an unscored article is not a zero-risk article.
-    const scoredList = riskMatrixData.filter(d => d.scored === true && typeof d.risk === "number");
-    const avgRiskVal = scoredList.length > 0
-      ? (scoredList.reduce((sum, d) => sum + d.risk, 0) / scoredList.length)
-      : null;
-    const alertsStatus = openAlerts === 0 ? "No open alerts" : `${openAlerts} open ${openAlerts === 1 ? "alert" : "alerts"}`;
-
     return [
       { label: "Documents Analyzed", value: visibleTotal === null ? "Unavailable" : visibleTotal, desc: "All articles collected for this client, risky or not", icon: Shield, color: accentColor, def: <DocumentsAnalyzedDefinition /> },
-      { label: "Avg Risk Score (Listed Feed)", value: avgRiskVal === null ? "Unavailable" : avgRiskVal.toFixed(2), desc: `Average over the ${scoredList.length} scored articles listed here, zero-risk ones included — see Risk Center for the flagged-only average`, icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
+      { label: "Avg Risk Score (Listed Feed)", value: avgRiskVal === null ? "Unavailable" : avgRiskVal.toFixed(2), desc: `Average over the ${scoredCount} scored articles listed here, zero-risk ones included — see Risk Center for the flagged-only average`, icon: Activity, color: "text-amber-500", def: <AverageRiskScoreFeedDefinition /> },
       { label: "Critical-Risk Documents", value: criticalTotal === null ? "Unavailable" : criticalTotal, desc: `Risk score ${RISK_THRESHOLDS.HIGH_TO_CRITICAL + 1}+, all articles`, icon: ShieldAlert, color: "text-red-500", def: <RiskSeverityDefinition /> },
       // Was titled "Ingestion Status" -- title and content described two
       // different things (a value of "System Stable"/"Active Alerts" is not
@@ -116,7 +108,7 @@ export function RiskAnalyticsPanel({
       // none.
       { label: "Alert Status", value: alertsStatus, desc: openAlerts === 0 ? "Nothing unacknowledged" : "Unacknowledged alerts", icon: CheckCircle, color: alertTimelineData.length === 0 ? "text-emerald-400" : "text-orange-400", def: undefined as React.ReactNode }
     ];
-  }, [riskMatrixData, openAlerts, visibleTotal, criticalTotal, accentColor]);
+  }, [scoredCount, avgRiskVal, alertsStatus, openAlerts, visibleTotal, criticalTotal, accentColor, alertTimelineData.length]);
 
   // 2. Severity x Confidence matrix: the same builder Risk Center uses (platform bands
   // 25/50/75 on the stored severity, confidence from the engine), so a cell here is the
@@ -126,43 +118,10 @@ export function RiskAnalyticsPanel({
   const matrixWindowNote = windowNote(flaggedInList.length, flaggedTotal);
 
   // 3. Threat Concentration Heatmap totals and percentages
-  const { rowTotals, colTotals, grandTotal } = useMemo(() => {
-    const rowTotals: Record<string, number> = {};
-    const colTotals: Record<string, number> = {};
-    let grandTotal = 0;
-    
-    if (riskHeatmapData && riskHeatmapData.categories) {
-      riskHeatmapData.categories.forEach((cat: string) => {
-        rowTotals[cat] = 0;
-        riskHeatmapData.severities.forEach((sev: string) => {
-          const count = riskHeatmapData.grid[cat]?.[sev]?.count || 0;
-          rowTotals[cat] += count;
-          colTotals[sev] = (colTotals[sev] || 0) + count;
-          grandTotal += count;
-        });
-      });
-    }
-    return { rowTotals, colTotals, grandTotal };
-  }, [riskHeatmapData]);
+  const { rowTotals, colTotals, grandTotal } = useMemo(() => heatmapTotals(riskHeatmapData), [riskHeatmapData]);
 
   // Alerts timeline statistics
-  const alertStats = useMemo(() => {
-    if (!alertTimelineData || alertTimelineData.length === 0) return { avg: 0, peakDate: "", peakCount: 0 };
-    const counts = alertTimelineData.map(d => d.count || 0);
-    const sum = counts.reduce((a, b) => a + b, 0);
-    const avg = Number((sum / alertTimelineData.length).toFixed(1));
-    let maxIdx = 0;
-    for (let i = 1; i < counts.length; i++) {
-      if (counts[i] > counts[maxIdx]) {
-        maxIdx = i;
-      }
-    }
-    return {
-      avg,
-      peakDate: alertTimelineData[maxIdx]?.date || "",
-      peakCount: alertTimelineData[maxIdx]?.count || 0
-    };
-  }, [alertTimelineData]);
+  const alertStats = useMemo(() => alertTimelineStats(alertTimelineData), [alertTimelineData]);
 
   const tooltipStyle = {
     backgroundColor: isDark ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
@@ -398,7 +357,7 @@ export function RiskAnalyticsPanel({
                   fillOpacity={1}
                   fill="url(#colorAlert)"
                   strokeWidth={2}
-                  isAnimationActive={true}
+                  isAnimationActive={animate}
                   animationDuration={850}
                 />
                 <ReferenceLine

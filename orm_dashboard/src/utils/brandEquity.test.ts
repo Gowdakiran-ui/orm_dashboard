@@ -10,6 +10,7 @@ import {
   pickTopCompetitor,
   sourceState,
   formatAsOf,
+  buildBrandEquityView,
 } from "./brandEquity";
 
 const bench = (over: any) => ({ competitor_name: "X", rank: 1, sov: 1, client_rank: 4, client_share_of_voice: 95.56, ...over });
@@ -272,5 +273,44 @@ describe("reputation score display rule shared by Brand Equity and Executive Ana
     expect(formatReputationScore({ score: 0, status: "ok" })).toBe("0.00");
     expect(isReputationScoreKnown({ score: 76.8, status: "ok" })).toBe(true);
     expect(isReputationScoreKnown({ score: null, status: "ok" })).toBe(false);
+  });
+});
+
+describe("computeVerdict: nothing risk-scored yet is 'not enough data', never 'all clear'", () => {
+  const base = {
+    riskState: "ready" as const, advisoryState: "ready" as const,
+    execAlert: { open: false }, dangerCount: 0, totalRisks: 0, advisory: { flagged: false, lead: "Nothing significant to flag right now." },
+  };
+  it("no scored article -> 'Not enough data yet' (grey), not the all-clear sentence", () => {
+    const v = computeVerdict({ ...base, scoredDocuments: 0 });
+    expect(v).toMatchObject({ kind: "nodata", emoji: "⚪", text: "Not enough data yet" });
+    expect(v.text).not.toContain("No Critical or High");
+  });
+  it("scored articles exist (even with nothing above Low) -> the existing all-clear sentence, unchanged", () => {
+    expect(computeVerdict({ ...base, scoredDocuments: 120 }).text).toBe("No Critical or High risks flagged. Watching 0 tracked risks.");
+  });
+  it("an older payload without scored_documents (unknown) keeps the existing behaviour", () => {
+    expect(computeVerdict({ ...base, scoredDocuments: null }).kind).toBe("clear");
+    expect(computeVerdict(base).kind).toBe("clear");
+  });
+  it("real signals still win over 'not enough data'", () => {
+    expect(computeVerdict({ ...base, scoredDocuments: 0, execAlert: { open: true, alert: { entity_name: "A", severity: "HIGH" } } }).kind).toBe("alert");
+    expect(computeVerdict({ ...base, scoredDocuments: 0, dangerCount: 1 }).kind).toBe("danger");
+    expect(computeVerdict({ ...base, scoredDocuments: 0, advisory: { flagged: true, lead: "Heads up." } }).kind).toBe("flagged");
+  });
+  it("riskStatsFromSummary carries scored_documents (null when the payload lacks it)", () => {
+    const block = { visible_documents: 80, scored_documents: 0, unscored_documents: 80, total: 0, critical: 0, high: 0, medium: 0, average: null, highest: null, top: [] };
+    expect(riskStatsFromSummary(block)!.scored).toBe(0);
+    expect(riskStatsFromSummary({ ...block, scored_documents: undefined })!.scored).toBeNull();
+  });
+  it("the page view reads it: empty client and all-unscored client say 'Not enough data yet'; a scored client does not change", () => {
+    const view = (document_risk: Record<string, unknown>) => buildBrandEquityView({
+      reputationSummary: { reputation: { status: "ok", score: 70, grade: "B", computed_at: null }, document_risk, sentiment: { positive: 0, neutral: 0, negative: 0, dominant: null }, executive_alert: { open: false, alert: null } },
+      planAdvisory: { flagged: false, lead: "Nothing." }, executives: [], activeClientName: "Acme", normalizedBenchmarks: [],
+    });
+    const none = { visible_documents: 0, scored_documents: 0, unscored_documents: 0, total: 0, critical: 0, high: 0, medium: 0, average: null, highest: null, top: [] };
+    expect(view(none).verdict.text).toBe("Not enough data yet");
+    expect(view({ ...none, visible_documents: 80, unscored_documents: 80 }).verdict.text).toBe("Not enough data yet");
+    expect(view({ ...none, visible_documents: 646, scored_documents: 624, unscored_documents: 22, total: 22, medium: 22, average: 33.7 }).verdict.text).toBe("No Critical or High risks flagged. Watching 22 tracked risks.");
   });
 });
