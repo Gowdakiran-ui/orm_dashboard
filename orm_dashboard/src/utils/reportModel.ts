@@ -40,12 +40,42 @@ export interface ReportAlert {
 export type Block =
   | { type: "heading"; level: 2 | 3; text: string }
   | { type: "text"; text: string; style?: "normal" | "muted" | "note" | "bold" }
-  | { type: "stats"; items: { label: string; value: string; sub?: string }[] }
-  | { type: "table"; columns: string[]; rows: Cell[][]; widths?: number[]; landscape?: boolean; compact?: boolean }
+  | { type: "stats"; key?: string; items: { label: string; value: string; sub?: string }[] }
+  | { type: "table"; key?: string; columns: string[]; rows: Cell[][]; widths?: number[]; landscape?: boolean; compact?: boolean }
   | { type: "alert"; alert: ReportAlert }
   | { type: "chart"; id: ChartId; title: string; caption: string };
 
 export interface ReportSection { id: string; title: string; blocks: Block[] }
+
+// Structured values for the summary-first layout (cover badge, Executive Summary, cards). Everything here is taken from
+// the same variables the sections above are built from; display strings already follow the N/A / Unavailable rules.
+export type NoteId = "times" | "window" | "na" | "positiveMentions" | "positiveShare" | "riskLevels" | "confidence" | "listedFeed" | "unscored" | "topicFloor" | "scoringChange";
+export interface ReportNote { id: NoteId; term: string; text: string }
+
+// Chart data for the native vector charts: the same arrays the dashboard panels draw (useAnalytics), with unusable
+// numbers dropped, never recomputed.
+export type DataState = "ok" | "empty" | "unavailable";
+export interface ReportData {
+  sentiment: { state: DataState; items: { name: string; value: number }[] };
+  topics: { state: DataState; items: { name: string; value: number }[] };
+  repHistory: { state: DataState; points: { label: string; at: string; raw: string; score: number }[]; methodChange: boolean };
+  alerts: { state: DataState; points: { date: string; count: number }[]; avg: string; peak: string; peakDate: string; countsOk: boolean };
+  heatmap: { state: DataState | "na" };
+  captions: Record<ChartId, string>;
+}
+
+export type FactState = "ok" | "na" | "unavailable";
+export interface ReportFacts {
+  score: { state: FactState; display: string; grade: string; asOf: string | null; statusText: string };
+  risk: { state: FactState; signals: string; total: string; critical: string; high: string; medium: string; highest: string; unscored: number; asOf: string | null };
+  tone: { state: FactState; dominant: string | null; positive: number | null; neutral: number | null; negative: number | null };
+  documentsAnalyzed: string;
+  alerts: { state: "ok" | "unavailable"; items: ReportAlert[] };
+  // Flagged articles in the loaded window, highest score first (the Risk Center table order).
+  topRisks: { title: string; severity: string; score: string; source: string; date: string }[];
+  topics: { state: "ok" | "unavailable"; items: { name: string; count: number }[] };
+  texts: { verdict: string; overview: string; riskProfile: string; sentiment: string; people: string; standing: string; alertLine: string; advisory: string | null };
+}
 
 export interface ReportModel {
   meta: {
@@ -54,12 +84,15 @@ export interface ReportModel {
     generatedAt: string;
     userEmail: string | null;
     dataWindow: string[];
-    // "How to read this report": the terms the report prints, in plain words (shown on the cover).
-    guide: { term: string; text: string }[];
+    // The cover's one-line version of the data window.
+    dataWindowLine: string;
     fileName: string;
   };
+  facts: ReportFacts;
   sections: ReportSection[];
-  footnotes: string[];
+  // Numbered notes printed on the last page; tiles carry a small marker that points to them by id.
+  notes: ReportNote[];
+  data: ReportData;
 }
 
 export interface ReportInput {
@@ -93,6 +126,10 @@ export interface ReportInput {
 }
 
 const NA = "N/A";
+
+// Long explanations of the two different "positive" measures. They are printed once, on the Notes page; the tiles carry a marker.
+export const POSITIVE_MENTIONS_NOTE = "One mention is one appearance of the client's brand, a product or a tracked person in one piece of coverage, labelled Positive by the sentiment model. Only coverage that also mentions the client's own brand or product counts, and competitors are left out. It is not an article count, so it does not match the Positive share (document sentiment) in Executive Analytics.";
+export const POSITIVE_SHARE_NOTE = "The share of articles whose sentiment score is above +0.3 (Negative: below -0.3, Neutral: in between). It counts articles, so it does not match the Positive mentions (brand-gated) on Brand Equity.";
 const HEAD_FILL = "#E5E7EB";
 const SEVERITY_FILL: Record<string, string> = { CRITICAL: "#FCA5A5", HIGH: "#FDBA74", MEDIUM: "#FDE68A", LOW: "#BBF7D0" };
 const HEATMAP_RGB: Record<string, [number, number, number]> = { CRITICAL: [239, 68, 68], HIGH: [249, 115, 22], MEDIUM: [234, 179, 8], LOW: [16, 185, 129] };
@@ -231,9 +268,9 @@ export const MIN_TOPIC_ARTICLES = 5;
 function chartCaptions(loadedArticles: number): Record<ChartId, string> {
   const scope = `the newest ${loadedArticles} loaded, ${ARTICLE_WINDOW} at most`;
   return {
-    sentiment: `Articles by sentiment score (${scope}): Positive above +${SENTIMENT_CUTOFF}, Negative below -${SENTIMENT_CUTOFF}, Neutral in between. Exact counts are in the table below.`,
-    topics: `Articles per topic (${scope}); topics with fewer than ${MIN_TOPIC_ARTICLES} articles are not shown. Exact counts are in the table below.`,
-    repHistory: "Each point is one stored Reputation Score (0–100) on the day it was computed (day labels use the browser time zone). Every score with its IST time is in the table below.",
+    sentiment: `Articles by sentiment score (${scope}): Positive above +${SENTIMENT_CUTOFF}, Negative below -${SENTIMENT_CUTOFF}, Neutral in between.`,
+    topics: `Articles per topic (${scope}); topics with fewer than ${MIN_TOPIC_ARTICLES} articles are not shown.`,
+    repHistory: "Each point is one stored Reputation Score (0–100) on the day it was computed (day labels use the browser time zone).",
     alerts: "Open (unacknowledged) alerts per day, grouped by the day each was raised, all severities (day labels use the browser time zone). Average and peak are printed below the chart.",
   };
 }
@@ -252,7 +289,6 @@ export function reportFileName(clientName: string, when: Date): string {
 export function buildReportModel(i: ReportInput): ReportModel {
   const name = clean(i.clientName);
   const sections: ReportSection[] = [];
-  const footnotes: string[] = [];
   const unavailable = (): Block => ({ type: "text", text: UNAVAILABLE_SECTION, style: "muted" });
   const captions = chartCaptions(i.documents.length);
 
@@ -269,6 +305,17 @@ export function buildReportModel(i: ReportInput): ReportModel {
     reputationSummaryError: i.reputationSummaryError,
     alertTimelineData: i.analytics.alertTimelineData,
   });
+
+  const rfacts: ReportFacts = {
+    score: { state: "unavailable", display: UNAVAILABLE_TEXT, grade: NA, asOf: null, statusText: "" },
+    risk: { state: "unavailable", signals: UNAVAILABLE_TEXT, total: UNAVAILABLE_TEXT, critical: UNAVAILABLE_TEXT, high: UNAVAILABLE_TEXT, medium: UNAVAILABLE_TEXT, highest: UNAVAILABLE_TEXT, unscored: 0, asOf: null },
+    tone: { state: "unavailable", dominant: null, positive: null, neutral: null, negative: null },
+    documentsAnalyzed: UNAVAILABLE_TEXT,
+    alerts: { state: "unavailable", items: [] },
+    topRisks: [],
+    topics: { state: "unavailable", items: [] },
+    texts: { verdict: "", overview: UNAVAILABLE_SECTION, riskProfile: UNAVAILABLE_SECTION, sentiment: UNAVAILABLE_SECTION, people: UNAVAILABLE_SECTION, standing: UNAVAILABLE_SECTION, alertLine: UNAVAILABLE_SECTION, advisory: null },
+  };
 
   // ---------------------------------------------------------------- Brand Equity
   const be: Block[] = [];
@@ -295,9 +342,31 @@ export function buildReportModel(i: ReportInput): ReportModel {
     riskNA = riskBad || rs?.scored === 0;
     const risk = (n: number | undefined) => (riskNA ? NA : rs && n !== undefined ? String(n) : UNAVAILABLE_TEXT);
     be.push({ type: "text", text: clean(v.verdict.text), style: "bold" });
+    rfacts.score = { state: v.scoreKnown ? "ok" : "na", display: v.scoreDisplay, grade: v.gradeDisplay, asOf: v.asOf ?? null, statusText: v.scoreStatusText };
+    rfacts.risk = {
+      state: !rs ? "unavailable" : riskNA ? "na" : "ok",
+      signals: risk(rs?.dangerCount), total: risk(rs?.total), critical: risk(rs?.critical), high: risk(rs?.high), medium: risk(rs?.medium),
+      highest: UNAVAILABLE_TEXT, unscored: 0, asOf: null,
+    };
+    rfacts.tone = {
+      state: sentimentBad ? "na" : "ok", dominant: sentimentBad ? null : v.sentiment.dominant ?? null,
+      positive: sentimentBad ? null : v.sentiment.positive, neutral: sentimentBad ? null : v.sentiment.neutral, negative: sentimentBad ? null : v.sentiment.negative,
+    };
+    const advisoryLead = i.planAdvisory && typeof i.planAdvisory.lead === "string" ? clean(i.planAdvisory.lead) : "";
+    rfacts.texts = {
+      verdict: clean(v.verdict.text),
+      overview: clean(v.overviewText),
+      riskProfile: rs?.scored === 0 ? `No articles have been risk-scored yet, so the risk figures are ${NA}.${v.uncheckedText}` : clean(v.riskProfile.kind === "some" ? `${v.riskProfile.before}${v.riskProfile.avg}${v.riskProfile.after}` : v.riskProfile.text),
+      sentiment: sentimentBad ? `Sentiment counts: ${NA}.` : clean(v.sentimentText),
+      people: v.execState === "error" ? UNAVAILABLE_SECTION : clean(v.peopleText),
+      standing: v.standing.state === "error" ? UNAVAILABLE_SECTION : clean(v.standingText),
+      alertLine: clean(v.alertLine),
+      advisory: i.planAdvisoryError || !advisoryLead ? null : advisoryLead,
+    };
     be.push({ type: "heading", level: 3, text: "At a glance" });
     be.push({
       type: "stats",
+      key: "be-glance",
       items: [
         { label: "Reputation Score", value: v.scoreDisplay, sub: v.scoreKnown ? `Grade ${v.gradeDisplay}${v.asOf ? ` · as of ${v.asOf}` : ""}` : v.scoreStatusText },
         { label: "Risk Signals", value: risk(rs?.dangerCount), sub: "Critical + High" },
@@ -308,10 +377,6 @@ export function buildReportModel(i: ReportInput): ReportModel {
         { label: "Positive mentions (brand-gated)", value: sentimentBad ? NA : cnt(v.sentiment.positive), sub: "in coverage" },
         { label: "Overall Tone", value: sentimentBad ? NA : v.sentiment.dominant ?? NA, sub: sentimentBad ? "Sentiment counts could not be read" : `${cnt(v.sentiment.positive)} positive / ${cnt(v.sentiment.neutral)} neutral / ${cnt(v.sentiment.negative)} negative` },
       ],
-    });
-    be.push({
-      type: "text", style: "muted",
-      text: "Positive mentions (brand-gated): one mention is one appearance of the client's brand, a product or a tracked person in one piece of coverage, labelled Positive by the sentiment model. Only coverage that also mentions the client's own brand or product counts, and competitors are left out. It is not an article count, so it does not match the Positive share (document sentiment) in Executive Analytics.",
     });
     be.push({ type: "heading", level: 3, text: "Overview" });
     be.push({ type: "text", text: clean(v.overviewText) });
@@ -339,10 +404,12 @@ export function buildReportModel(i: ReportInput): ReportModel {
   const tiles = tilesFromSummary(riskStats);
   const tilesNA = !summaryFailed && (riskBad || riskStats?.scored === 0);
   const asOfText = tiles?.asOf ? formatIST(tiles.asOf) : null;
+  if (tiles) { rfacts.risk.unscored = tiles.unscored; rfacts.risk.asOf = asOfText; }
+  rfacts.risk.highest = tilesNA ? NA : tiles && tiles.highest !== null ? formatScore(tiles.highest) : UNAVAILABLE_TEXT;
   rc.push({ type: "heading", level: 3, text: `At a glance · all-time counts${asOfText ? ` · scores as of ${asOfText}` : ""}` });
   if (tilesNA) {
     // The screen's tiles show 0 here; on paper nothing was scored, so there is no count to give.
-    rc.push({ type: "stats", items: ["Flagged Articles", "Critical", "High", "Medium", "Highest Score"].map(label => ({ label, value: NA })) });
+    rc.push({ type: "stats", key: "rc-tiles", items: ["Flagged Articles", "Critical", "High", "Medium", "Highest Score"].map(label => ({ label, value: NA })) });
     const nc = unscoredNote(tiles?.unscored);
     if (nc) rc.push({ type: "text", text: nc, style: "note" });
   } else if (!tiles) {
@@ -351,6 +418,7 @@ export function buildReportModel(i: ReportInput): ReportModel {
     const tv = (n: number | null | undefined) => (n !== null && n !== undefined ? String(n) : UNAVAILABLE_TEXT);
     rc.push({
       type: "stats",
+      key: "rc-tiles",
       items: [
         { label: "Flagged Articles", value: tv(tiles.flagged) },
         { label: "Critical", value: tv(tiles.critical) },
@@ -364,6 +432,7 @@ export function buildReportModel(i: ReportInput): ReportModel {
   }
 
   rc.push({ type: "heading", level: 3, text: "Active Alerts" });
+  if (!i.alertsError) rfacts.alerts.state = "ok";
   if (i.alertsError) {
     rc.push(unavailable());
   } else if (i.alerts.length === 0) {
@@ -373,9 +442,7 @@ export function buildReportModel(i: ReportInput): ReportModel {
     for (const a of i.alerts) {
       const ai = a.ai_summary;
       const typeLabel = ALERT_ENTITY_TYPE_LABEL[a.entity_type];
-      rc.push({
-        type: "alert",
-        alert: {
+      const reportAlert: ReportAlert = {
           severity: clean(a.severity),
           title: `${typeLabel ? `${typeLabel}: ` : ""}${clean(a.title)}`,
           alertType: clean(a.alert_type),
@@ -383,8 +450,9 @@ export function buildReportModel(i: ReportInput): ReportModel {
           what: ai ? clean(ai.what) : null,
           when: ai ? clean(ai.when) || "Unknown" : null,
           nextStep: ai ? clean(ai.how_to_solve) : null,
-        },
-      });
+      };
+      rfacts.alerts.items.push(reportAlert);
+      rc.push({ type: "alert", alert: reportAlert });
     }
   }
 
@@ -396,6 +464,7 @@ export function buildReportModel(i: ReportInput): ReportModel {
     const matrix = buildMatrix(riskDocs);
     rc.push({
       type: "table",
+      key: "rc-matrix",
       columns: ["Severity", "LOW CONFIDENCE", "MED CONFIDENCE", "HIGH CONFIDENCE"],
       rows: MATRIX_BANDS.map(band => [
         { text: band, bold: true, fill: SEVERITY_FILL[band] },
@@ -412,6 +481,13 @@ export function buildReportModel(i: ReportInput): ReportModel {
 
     rc.push({ type: "heading", level: 3, text: "Flagged Articles" });
     const shown = riskDocs.slice(0, MAX_FLAGGED_ROWS);
+    rfacts.topRisks = shown.map(d => ({
+      title: clean(d.title),
+      severity: String(d.severity),
+      score: isScore100(d.risk_exact ?? d.risk) ? formatScore(d.risk_exact ?? d.risk) : NA,
+      source: clean(d.source) || "Unknown Source",
+      date: d.timestamp ? `${formatIST(d.timestamp) ?? NA}${d.date_basis === "collected" ? " (collected)" : ""}` : NA,
+    }));
     const wn = windowNote(riskDocs.length, tiles ? tiles.flagged : null);
     if (wn) rc.push({ type: "text", text: wn, style: "note" });
     if (riskDocs.length > shown.length) {
@@ -422,6 +498,7 @@ export function buildReportModel(i: ReportInput): ReportModel {
     } else {
       rc.push({
         type: "table",
+        key: "rc-flagged",
         landscape: true,
         compact: true,
         columns: ["Headline", "Score", "Severity", "Source", "Date (IST)", "Sentiment", "Topic"],
@@ -445,12 +522,14 @@ export function buildReportModel(i: ReportInput): ReportModel {
   const reputationBlock = summaryFailed ? null : summary?.reputation;
   const kv = overviewKpiValues({ reputation: reputationBlock, topicDistData: i.analytics.topicDistData, sentimentDistData: i.analytics.sentimentDistData });
   const overviewFailed = !!i.documentsError || !!i.historyError;
+  if (!i.documentsError) rfacts.topics = { state: "ok", items: i.analytics.topicDistData.filter(d => isCount(d?.value)).map(d => ({ name: clean(d.name), count: d.value })) };
   ea.push({ type: "heading", level: 2, text: "Reputation & Sentiment History" });
   if (overviewFailed) {
     ea.push(unavailable());
   } else {
     ea.push({
       type: "stats",
+      key: "ea-overview",
       items: [
         { label: "Current Reputation", value: kv.currentReputation, sub: "Overall reputation score" },
         { label: "Sentiment Score", value: isUnitScore(kv.sentimentScore) ? formatSentimentScoreKpi(kv.sentimentScore) : NA, sub: kv.hasEnoughSentimentData ? "How positive coverage is (-1.0 to +1.0)" : "Awaiting more coverage to compute" },
@@ -458,7 +537,6 @@ export function buildReportModel(i: ReportInput): ReportModel {
         { label: "Positive share (document sentiment)", value: isScore100(kv.positiveShare) ? `${kv.positiveShare.toFixed(0)}%` : NA, sub: "Favorable media percentage" },
       ],
     });
-    ea.push({ type: "text", style: "muted", text: "Positive share (document sentiment): the share of articles whose sentiment score is above +0.3 (Negative: below -0.3, Neutral: in between). It counts articles, so it does not match the Positive mentions (brand-gated) on Brand Equity." });
 
     ea.push({ type: "heading", level: 3, text: "Sentiment Breakdown" });
     if (i.analytics.sentimentDistData.length > 0) {
@@ -503,11 +581,13 @@ export function buildReportModel(i: ReportInput): ReportModel {
   const riskProfileFailed = !!i.documentsError || !!i.alertsError;
   // facts.openAlerts reads an unusable count as 0, which would say "No open alerts"; check the raw counts instead.
   const alertCountsOk = i.analytics.alertTimelineData.every(d => isCount(d?.count));
+  if (!riskProfileFailed) rfacts.documentsAnalyzed = facts.visibleTotal === null ? UNAVAILABLE_TEXT : String(facts.visibleTotal);
   if (riskProfileFailed) {
     ea.push(unavailable());
   } else {
     ea.push({
       type: "stats",
+      key: "ea-risk",
       items: [
         { label: "Documents Analyzed", value: facts.visibleTotal === null ? UNAVAILABLE_TEXT : String(facts.visibleTotal), sub: "All articles collected for this client, risky or not" },
         { label: "Avg Risk Score (Listed Feed)", value: facts.avgRiskVal === null ? UNAVAILABLE_TEXT : isScore100(facts.avgRiskVal) ? facts.avgRiskVal.toFixed(2) : NA, sub: `Average over the ${cnt(facts.scoredCount)} scored articles listed here, zero-risk ones included` },
@@ -581,7 +661,7 @@ export function buildReportModel(i: ReportInput): ReportModel {
         { text: "100%", align: "center" },
       ]);
       ea.push({
-        type: "table", landscape: true,
+        type: "table", key: "ea-heatmap", landscape: true,
         columns: ["Topic category", "LOW", "MEDIUM", "HIGH", "CRITICAL", "ROW TOTAL", "DIST %"],
         widths: [52, 34, 34, 34, 34, 26, 22],
         rows,
@@ -592,10 +672,43 @@ export function buildReportModel(i: ReportInput): ReportModel {
   sections.push({ id: "executive-analytics", title: "Executive Analytics", blocks: ea });
 
   // ---------------------------------------------------------------- Footnotes
-  footnotes.push(`Charts, the severity × confidence matrices, the heatmap and the flagged-articles table are built from the newest ${ARTICLE_WINDOW} articles at most (the dashboard loads ${i.analytics.riskMatrixData.length} for this client); tile totals count every article.`);
-  if (scoringMethodChange(i.repHistory).hasEarlier) footnotes.push(SCORING_CHANGE_NOTE);
-  footnotes.push("Dates and times in this report are in IST (Asia/Kolkata), except the day labels on charts, which use the browser's time zone, and the alert 'When' text, which is printed as the system recorded it.");
-  footnotes.push(`Time zone used for the chart day labels: ${i.browserTimeZone || "unknown"}.`);
+  const guide = Object.fromEntries(readingGuide().map(g => [g.term, g.text]));
+  const mc = scoringMethodChange(i.repHistory);
+  const notes: ReportNote[] = [
+    { id: "times", term: "Times", text: `${guide["Times"]} Chart day labels use the time zone ${i.browserTimeZone || "unknown"}.` },
+    { id: "window", term: "Data window", text: `Charts, the severity × confidence matrix, the heatmap and the flagged-articles table are built from the newest ${ARTICLE_WINDOW} articles at most (the dashboard loads ${i.analytics.riskMatrixData.length} for this client); tile totals count every article.` },
+    { id: "na", term: "N/A and Unavailable", text: `N/A: ${guide["N/A"].replace(/^There is /, "there is ").replace(/^there is not enough/, "not enough")} Unavailable: ${guide["Unavailable"].replace(/^The data/, "the data")}` },
+    { id: "positiveMentions", term: "Positive mentions (brand-gated)", text: POSITIVE_MENTIONS_NOTE },
+    { id: "positiveShare", term: "Positive share (document sentiment)", text: POSITIVE_SHARE_NOTE },
+    { id: "riskLevels", term: "Risk levels", text: guide["Risk levels"] },
+    { id: "confidence", term: "Confidence", text: guide["Confidence"] },
+    { id: "listedFeed", term: "Avg Risk Score (Listed Feed)", text: guide["Listed Feed"] },
+    { id: "unscored", term: "Unscored articles", text: "Articles that have not been risk-scored yet are not counted as flagged, are not placed in the matrix and are not counted in the heatmap." },
+    { id: "topicFloor", term: "Topics", text: `Topics with fewer than ${MIN_TOPIC_ARTICLES} articles are not shown in the topic chart or the heatmap.` },
+  ];
+  if (mc.hasEarlier) notes.push({ id: "scoringChange", term: "Scoring method", text: SCORING_CHANGE_NOTE });
+
+  // ---- chart data (same arrays the panels draw)
+  const alertCountsAllOk = i.analytics.alertTimelineData.every(d => isCount(d?.count));
+  const alertSt = alertTimelineStats(i.analytics.alertTimelineData);
+  const heatmapObj = i.analytics.riskHeatmapData;
+  const heatmapReadableAll = !heatmapObj || !heatmapObj.categories || (heatmapObj.categories as string[]).every(cat => (heatmapObj.severities as string[]).every(sev => { const c = heatmapObj.grid?.[cat]?.[sev]; return !c || isCount(c.count); }));
+  const data: ReportData = {
+    sentiment: { state: overviewFailed ? "unavailable" : i.analytics.sentimentDistData.length ? "ok" : "empty", items: i.analytics.sentimentDistData.filter(d => isCount(d?.value)).map(d => ({ name: clean(d.name), value: d.value })) },
+    topics: { state: overviewFailed ? "unavailable" : i.analytics.topicDistData.length ? "ok" : "empty", items: i.analytics.topicDistData.filter(d => isCount(d?.value)).map(d => ({ name: clean(d.name), value: d.value })) },
+    repHistory: {
+      state: overviewFailed ? "unavailable" : i.repHistory.length ? "ok" : "empty",
+      points: i.repHistory.filter(h => isScore100(h?.score)).map(h => ({ label: String(h.date ?? ""), at: formatIST(h.rawDate) ?? NA, raw: String(h.rawDate ?? ""), score: h.score })),
+      methodChange: mc.hasEarlier,
+    },
+    alerts: {
+      state: riskProfileFailed ? "unavailable" : i.analytics.alertTimelineData.length ? "ok" : "empty",
+      points: i.analytics.alertTimelineData.filter(d => isCount(d?.count)).map(d => ({ date: String(d.date ?? ""), count: d.count })),
+      avg: alertCountsAllOk ? String(alertSt.avg) : NA, peak: alertCountsAllOk ? String(alertSt.peakCount) : NA, peakDate: alertSt.peakDate, countsOk: alertCountsAllOk,
+    },
+    heatmap: { state: riskProfileFailed ? "unavailable" : !heatmapObj || !heatmapObj.categories || heatmapObj.categories.length === 0 ? "empty" : heatmapReadableAll ? "ok" : "na" },
+    captions,
+  };
 
   const dataWindow: string[] = [];
   dataWindow.push(
@@ -608,6 +721,14 @@ export function buildReportModel(i: ReportInput): ReportModel {
   const riskAsOf = isRec(docRisk) && typeof docRisk.as_of === "string" ? formatIST(docRisk.as_of) : null;
   if (riskAsOf) dataWindow.push(`Risk scores as of ${riskAsOf}`);
 
+  const loaded = i.analytics.riskMatrixData.length;
+  const dataWindowLine = [
+    facts.visibleTotal !== null ? `Newest ${loaded} of ${facts.visibleTotal} articles` : `Newest ${loaded} articles`,
+    ...(repAsOf && repAsOf === riskAsOf
+      ? [`scores as of ${repAsOf}`]
+      : [repAsOf ? `reputation score as of ${repAsOf}` : null, riskAsOf ? `risk scores as of ${riskAsOf}` : null]),
+  ].filter(Boolean).join(" · ");
+
   return {
     meta: {
       title: "XOOP | Reputation Report",
@@ -615,11 +736,13 @@ export function buildReportModel(i: ReportInput): ReportModel {
       generatedAt: formatIST(i.generatedAt) ?? "",
       userEmail: i.userEmail,
       dataWindow,
-      guide: readingGuide(),
+      dataWindowLine,
       fileName: reportFileName(name, i.generatedAt),
     },
+    facts: rfacts,
     sections,
-    footnotes,
+    notes,
+    data,
   };
 
 }

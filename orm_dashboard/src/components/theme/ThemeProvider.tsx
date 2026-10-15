@@ -18,15 +18,11 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
  * Persisted to localStorage, defaults to dark to match the app's existing
  * look. Purely presentational -- never read by any data-fetching hook.
  */
-export function ThemeProvider({ children, forcedTheme }: { children: React.ReactNode; forcedTheme?: Theme }) {
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("dark");
   const [hydrated, setHydrated] = useState(false);
 
-  // forcedTheme (used only by the Export Report chart stage, which must always render light):
-  // the provider shows that theme and never reads, writes or toggles the user's saved preference.
-  // Left undefined (every existing caller), nothing below changes.
   useEffect(() => {
-    if (forcedTheme) return;
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored === "light" || stored === "dark") setTheme(stored);
@@ -34,24 +30,23 @@ export function ThemeProvider({ children, forcedTheme }: { children: React.React
       // localStorage unavailable (private mode, etc.) -- keep the dark default.
     }
     setHydrated(true);
-  }, [forcedTheme]);
+  }, []);
 
   useEffect(() => {
-    if (forcedTheme || !hydrated) return;
+    if (!hydrated) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, theme);
     } catch {
       // ignore write failures
     }
-  }, [theme, hydrated, forcedTheme]);
+  }, [theme, hydrated]);
 
   function toggleTheme() {
-    if (forcedTheme) return;
     setTheme((t) => (t === "dark" ? "light" : "dark"));
   }
 
   return (
-    <ThemeContext.Provider value={{ theme: forcedTheme ?? theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

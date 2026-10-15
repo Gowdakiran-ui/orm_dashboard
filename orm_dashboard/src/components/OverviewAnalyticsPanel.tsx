@@ -24,8 +24,6 @@ export interface OverviewAnalyticsPanelProps {
   sentimentHistoryData: any[];
   loading?: boolean;
   error?: string | null;
-  // Chart entrance animations; the Export Report capture turns them off so a chart is complete the moment it mounts.
-  animate?: boolean;
 }
 
 export function OverviewAnalyticsPanel({
@@ -35,8 +33,7 @@ export function OverviewAnalyticsPanel({
   repHistory = [],
   sentimentHistoryData = [],
   loading = false,
-  error = null,
-  animate = true
+  error = null
 }: OverviewAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -213,7 +210,7 @@ export function OverviewAnalyticsPanel({
                     <XAxis dataKey="name" stroke={axisStroke} fontSize={9} />
                     <YAxis stroke={axisStroke} fontSize={9} />
                     <Tooltip contentStyle={tooltipStyle} />
-                    <Bar dataKey="value" fill={accent} radius={[3, 3, 0, 0]} isAnimationActive={animate} animationDuration={850} />
+                    <Bar dataKey="value" fill={accent} radius={[3, 3, 0, 0]} isAnimationActive animationDuration={850} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -255,7 +252,7 @@ export function OverviewAnalyticsPanel({
                     strokeWidth={2}
                     dot={{ r: 3.5, stroke: accent, fill: isDark ? '#09090b' : '#ffffff', strokeWidth: 1.5 }}
                     activeDot={{ r: 6 }}
-                    isAnimationActive={animate}
+                    isAnimationActive
                     animationDuration={850}
                   />
                 </RechartsLineChart>
@@ -293,7 +290,7 @@ export function OverviewAnalyticsPanel({
                     strokeWidth={2}
                     dot={<SentimentDot />}
                     activeDot={{ r: 6 }}
-                    isAnimationActive={animate}
+                    isAnimationActive
                     animationDuration={850}
                   />
                 </RechartsLineChart>

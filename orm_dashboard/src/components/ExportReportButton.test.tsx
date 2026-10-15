@@ -7,21 +7,6 @@ import { createRoot, Root } from "react-dom/client";
 
 const render = vi.hoisted(() => ({ fn: vi.fn() }));
 vi.mock("@/lib/exportReport", () => ({ renderReportPdf: render.fn }));
-// The real stage needs a laid-out browser; here it just reports that the capture finished (or failed).
-const stage = vi.hoisted(() => ({ mode: "ok" as "ok" | "fail", seenInputs: [] as any[] }));
-vi.mock("@/components/ExportReportStage", async () => {
-  const R = await import("react");
-  return {
-    ExportReportStage: ({ input, onDone, onError }: any) => {
-      stage.seenInputs.push(input);
-      R.useEffect(() => {
-        Promise.resolve().then(() => (stage.mode === "ok" ? onDone({}) : onError(new Error("Sentiment Breakdown chart was captured blank."))));
-      }, []);
-      return null;
-    },
-  };
-});
-
 import { ExportReportButton } from "./ExportReportButton";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import type { ReportInput } from "@/utils/reportModel";
@@ -48,8 +33,6 @@ let downloads: { name: string; href: string }[] = [];
 beforeEach(() => {
   render.fn.mockReset();
   render.fn.mockResolvedValue(new Blob(["%PDF-fake"]));
-  stage.mode = "ok";
-  stage.seenInputs = [];
   downloads = [];
   (URL as any).createObjectURL = vi.fn(() => "blob:fake");
   (URL as any).revokeObjectURL = vi.fn();
@@ -105,23 +88,7 @@ describe("Export Report button", () => {
     await flush();
     expect(getSnapshot).toHaveBeenCalledTimes(1);
     expect(render.fn.mock.calls[0][0].meta.clientName).toBe("Client One");
-    expect(stage.seenInputs[0].clientId).toBe("c1");
     expect(downloads[0].name).toContain("Client_One");
-  });
-  it("shows a clear inline error when the capture fails, and can be retried", async () => {
-    stage.mode = "fail";
-    await mount({ getSnapshot: () => base(), disabled: false });
-    await act(async () => { btn().click(); });
-    await flush();
-    expect(host.querySelector("[role=alert]")?.textContent).toContain("Export failed: Sentiment Breakdown chart was captured blank.");
-    expect(render.fn).not.toHaveBeenCalled();
-    expect(downloads).toHaveLength(0);
-    expect(btn().disabled).toBe(false);
-    stage.mode = "ok";
-    await act(async () => { btn().click(); });
-    await flush();
-    expect(host.querySelector("[role=alert]")).toBeNull();
-    expect(downloads).toHaveLength(1);
   });
   it("shows an error when PDF rendering throws", async () => {
     render.fn.mockRejectedValue(new Error("font missing"));

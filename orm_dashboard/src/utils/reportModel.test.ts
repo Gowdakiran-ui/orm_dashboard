@@ -8,70 +8,14 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), usePathname: () => "/d", useSearchParams: () => new URLSearchParams() }));
-import { buildReportModel, reportFileName, reportIsAllUnavailable, exportDisabledReason, SENTIMENT_CUTOFF, MIN_TOPIC_ARTICLES, UNAVAILABLE_SECTION, MAX_FLAGGED_ROWS, type ReportInput, type ReportModel, type Block } from "./reportModel";
+import { buildReportModel, reportFileName, reportIsAllUnavailable, exportDisabledReason, SENTIMENT_CUTOFF, MIN_TOPIC_ARTICLES, UNAVAILABLE_SECTION, MAX_FLAGGED_ROWS, POSITIVE_MENTIONS_NOTE, POSITIVE_SHARE_NOTE, readingGuide, type ReportInput, type ReportModel, type Block } from "./reportModel";
 import { stripEmoji, formatIST, formatISTDate, istDateKey, needsShaping } from "./reportText";
 import { calculateSentimentDistribution } from "./calculateSentimentDistribution";
 import { buildRiskHeatmap } from "./riskHeatmap";
 
-// ---- fixtures: the same shapes the dashboard hooks hand the report --------------------------------------
-const topics = ["General", "Innovation", "Legal Risk", "Market Share", "Financial Results", "Competition"];
-function mkDocs(n: number, over: (i: number) => any = () => ({})) {
-  return Array.from({ length: n }, (_, i) => {
-    const flagged = i % 9 === 0;
-    const unscored = i % 23 === 5;
-    const risk = unscored ? null : flagged ? [29, 33, 60, 80][i % 4] : 0;
-    const lvl = risk === null ? null : risk > 75 ? "CRITICAL" : risk > 50 ? "HIGH" : risk > 25 ? "MEDIUM" : "LOW";
-    return {
-      id: `d${i}`, title: `Doc ${i}`, source: "Feed", topic: topics[i % topics.length], sentiment: [1, 0, -1, 0.5, 0][i % 5],
-      scored: risk !== null, risk: risk ?? 0, risk_exact: risk === null ? null : risk + 0.3, risk_level: lvl,
-      risk_sentiment: risk === null ? null : "Negative", risk_explainability: i % 7 === 0 ? {} : { confidence: [0.2, 0.5, 0.9][i % 3] },
-      original_content: "SECRET-ARTICLE-BODY", timestamp: new Date(Date.UTC(2026, 8, 1 + (i % 25), 10)).toISOString(), date_basis: i % 4 === 0 ? "collected" : "published",
-      ...over(i),
-    };
-  });
-}
-function analyticsFor(documents: any[], alerts: any[], repHistory: any[]) {
-  const d = calculateSentimentDistribution(documents);
-  const counts: Record<string, number> = {};
-  documents.forEach(x => { const t = x.topic || "General"; counts[t] = (counts[t] || 0) + 1; });
-  const buckets: Record<string, number> = {};
-  alerts.forEach(a => { const k = new Date(a.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }); buckets[k] = (buckets[k] || 0) + 1; });
-  return {
-    sentimentDistData: [
-      { name: "Positive", value: d.positive }, { name: "Neutral", value: d.neutral }, { name: "Negative", value: d.negative },
-    ].filter(x => x.value > 0),
-    topicDistData: Object.entries(counts).map(([name, value]) => ({ name, value })).filter(x => x.value >= 5).sort((a, b) => b.value - a.value),
-    riskMatrixData: documents.map(x => ({ ...x, name: x.title, impact: x.risk, z: x.risk * 2 })),
-    riskHeatmapData: buildRiskHeatmap(documents, 5),
-    alertTimelineData: Object.entries(buckets).map(([date, count]) => ({ date, count })),
-  };
-}
-const summary = (over: any = {}) => ({
-  reputation: { score: 75.51474, grade: "B", status: "ok", computed_at: "2026-10-02T15:02:27Z" },
-  document_risk: { visible_documents: 140, scored_documents: 135, unscored_documents: 5, total: 14, critical: 2, high: 3, medium: 9, average: 40, highest: 80.3, as_of: "2026-10-03T05:55:00Z", top: [{ title: "Doc 0 😱 shock", risk: 29 }, { title: "Doc 9", risk: 33 }] },
-  sentiment: { positive: 98, neutral: 418, negative: 49, dominant: "neutral" },
-  executive_alert: { open: false, alert: null },
-  ...over,
-});
-const alerts = [
-  { id: "a1", alert_type: "Multi-Signal Incident", severity: "HIGH", title: "Multi-Signal Incident: Acme", entity_type: "brand", created_at: "2026-10-08T11:14:24Z", ai_summary: { what: "2 risk signals.", when: "Oct 08, 2026 11:14 UTC", how_to_solve: "Review the documents." } },
-  { id: "a2", alert_type: "Executive Risk", severity: "CRITICAL", title: "Exec", entity_type: "person", created_at: "2026-10-09T01:00:00Z", ai_summary: null },
-];
-const hist = [
-  { rawDate: "2026-09-20T00:00:00Z", date: "Sep 20", score: 72.2 }, { rawDate: "2026-10-02T15:02:00Z", date: "Oct 2", score: 75.51 },
-];
-function input(over: Partial<ReportInput> = {}): ReportInput {
-  const documents = mkDocs(140);
-  return {
-    clientId: "c1", clientName: "Acme Corp", generatedAt: new Date("2026-10-14T08:37:00Z"), userEmail: "me@example.com", browserTimeZone: "Asia/Calcutta",
-    reputationSummary: summary(), reputationSummaryError: null, planAdvisory: { lead: "x", flagged: false }, planAdvisoryError: null,
-    executives: [{ name: "Jane Doe", score: 80, document_count: 5, health_status: "OK" }, { name: "John Roe", score: 50, document_count: 2 }], executivesError: null,
-    benchmarks: [{ competitor_name: "Rival", rank: 1, client_rank: 2, client_share_of_voice: 98.5 }], benchmarksError: null,
-    documents, documentsError: null, alerts, alertsError: null, repHistory: hist, historyError: null,
-    analytics: analyticsFor(documents, alerts, hist),
-    ...over,
-  };
-}
+// Fixtures live in reportTestFixtures.ts (shared with the renderer and summary tests).
+import { mkDocs, analyticsFor, summary, alerts, hist, input } from "./reportTestFixtures";
+
 const allBlocks = (m: ReportModel) => m.sections.flatMap(s => s.blocks);
 const text = (m: ReportModel) => JSON.stringify(m);
 const section = (m: ReportModel, id: string) => m.sections.find(s => s.id === id)!;
@@ -137,11 +81,19 @@ describe("report model, full data", () => {
     expect(t).not.toContain('"Positive Mentions"');
     expect(t).not.toContain('"Positive Share"');
   });
-  it("footnotes: window, IST, browser time zone for chart days", () => {
-    expect(m.footnotes.join(" ")).toContain("newest 500 articles at most");
-    expect(m.footnotes.join(" ")).toContain("IST (Asia/Kolkata)");
-    expect(m.footnotes.join(" ")).toContain("Time zone used for the chart day labels: Asia/Calcutta.");
-    expect(m.footnotes.join(" ")).toContain("Scoring method updated 1 Oct 2026");
+  it("notes: window, IST, browser time zone for chart days, scoring change", () => {
+    const n = m.notes.map(x => x.text).join(" ");
+    expect(n).toContain("newest 500 articles at most");
+    expect(n).toContain("IST (Asia/Kolkata)");
+    expect(n).toContain("Chart day labels use the time zone Asia/Calcutta.");
+    expect(n).toContain("Scoring method updated 1 Oct 2026");
+  });
+  it("the two positive measures are explained once, in the notes, not under the tiles", () => {
+    expect(m.notes.map(x => x.id)).toEqual(expect.arrayContaining(["positiveMentions", "positiveShare"]));
+    expect(m.notes.find(x => x.id === "positiveMentions")!.text).toBe(POSITIVE_MENTIONS_NOTE);
+    expect(m.notes.find(x => x.id === "positiveShare")!.text).toBe(POSITIVE_SHARE_NOTE);
+    expect(JSON.stringify(m.sections)).not.toContain("labelled Positive by the sentiment model");
+    expect(m.notes.map(x => x.term)).toEqual(expect.arrayContaining(["Positive mentions (brand-gated)", "Positive share (document sentiment)"]));
   });
   it("never carries original_content or alertSeverityData", () => {
     expect(text(m)).not.toContain("SECRET-ARTICLE-BODY");
@@ -512,17 +464,18 @@ describe("F8: malformed numbers never reach the report", () => {
 
 describe("clarity: reading guide and chart captions", () => {
   const m = buildReportModel(input());
-  it("the cover guide explains every term the report prints, and only those", () => {
-    expect(m.meta.guide.map(g => g.term)).toEqual(["N/A", "Unavailable", "Risk levels", "Flagged article", "Confidence", "Listed Feed", "Newest 500 articles", "Times"]);
-    const printed = strings(m.sections).join("\n") + m.footnotes.join("\n");
+  const guideList = readingGuide();
+  it("the reading guide wording covers every term the report prints, and only those", () => {
+    expect(guideList.map(g => g.term)).toEqual(["N/A", "Unavailable", "Risk levels", "Flagged article", "Confidence", "Listed Feed", "Newest 500 articles", "Times"]);
+    const printed = strings(m.sections).join("\n") + m.notes.map(n => n.text).join("\n");
     for (const term of ["N/A", "Unavailable", "Confidence", "Listed Feed"]) expect(printed + JSON.stringify(m.meta)).toContain(term);
     // "evidence score" is a dashboard term the report never prints, so it is not explained.
     expect(printed).not.toMatch(/evidence score/i);
-    expect(m.meta.guide.map(g => g.text).join(" ")).not.toMatch(/evidence score/i);
+    expect(guideList.map(g => g.text).join(" ")).not.toMatch(/evidence score/i);
   });
   it("the reused definitions still say the same thing on the dashboard (lib/metricDefinitions.tsx)", () => {
     const defs = readFileSync(path.resolve(__dirname, "../lib/metricDefinitions.tsx"), "utf-8").replace(/\s+/g, " ");
-    const guide = Object.fromEntries(m.meta.guide.map(g => [g.term, g.text]));
+    const guide = Object.fromEntries(guideList.map(g => [g.term, g.text]));
     for (const phrase of ["routine coverage, no action needed", "worth monitoring", "warrants review", "needs immediate attention"]) {
       expect(defs).toContain(phrase); expect(guide["Risk levels"]).toContain(phrase);
     }
@@ -536,8 +489,8 @@ describe("clarity: reading guide and chart captions", () => {
     expect(guide["Listed Feed"]).toContain("including articles that scored 0 risk");
   });
   it("the risk bands in the guide are the platform's 25/50/75", () => {
-    expect(m.meta.guide.find(g => g.term === "Risk levels")!.text).toContain("Low (0–25)");
-    expect(m.meta.guide.find(g => g.term === "Risk levels")!.text).toContain("Critical (76–100)");
+    expect(guideList.find(g => g.term === "Risk levels")!.text).toContain("Low (0–25)");
+    expect(guideList.find(g => g.term === "Risk levels")!.text).toContain("Critical (76–100)");
   });
   it("every chart has a caption, and the numbers in them are the ones the code uses", () => {
     const charts = allBlocks(m).filter((b): b is Extract<Block, { type: "chart" }> => b.type === "chart");
@@ -557,12 +510,7 @@ describe("clarity: reading guide and chart captions", () => {
     expect(readFileSync(path.resolve(__dirname, "../hooks/useAnalytics.ts"), "utf-8")).toContain(`const MIN_TOPIC_DOCUMENT_COUNT = ${MIN_TOPIC_ARTICLES};`);
     // window
     for (const id of ["sentiment", "topics"]) expect(cap[id]).toContain("the newest 140 loaded, 500 at most");
-    // they point at a table that exists right after the chart
-    const blocks = section(m, "executive-analytics").blocks;
-    for (const id of ["sentiment", "topics", "repHistory"]) {
-      const k = blocks.findIndex(b => b.type === "chart" && b.id === id);
-      expect(blocks[k + 1].type).toBe("table");
-      expect(cap[id]).toContain("table below");
-    }
+    // the model carries the same captions for the native charts
+    expect(m.data.captions).toEqual(cap);
   });
 });

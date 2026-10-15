@@ -1,4 +1,4 @@
-// ThemeProvider: forcedTheme (Export Report chart stage) must never touch the saved preference, and must change nothing when absent.
+// ThemeProvider: default theme, saved preference and toggle.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import React, { act } from "react";
 import { createRoot, Root } from "react-dom/client";
@@ -25,7 +25,7 @@ async function mount(el: React.ReactElement) {
 beforeEach(() => { window.localStorage.clear(); });
 afterEach(async () => { await act(async () => { root.unmount(); }); host.remove(); });
 
-describe("ThemeProvider default behaviour (no forcedTheme) is unchanged", () => {
+describe("ThemeProvider default behaviour", () => {
   it("defaults to dark, restores the saved theme, saves it, and toggles", async () => {
     window.localStorage.setItem("xoop-dashboard-theme", "light");
     await mount(React.createElement(ThemeProvider, null, React.createElement(Probe)));
@@ -37,19 +37,5 @@ describe("ThemeProvider default behaviour (no forcedTheme) is unchanged", () => 
   it("with nothing saved it shows dark", async () => {
     await mount(React.createElement(ThemeProvider, null, React.createElement(Probe)));
     expect(shown()).toBe("dark");
-  });
-});
-
-describe("forcedTheme", () => {
-  it("shows the forced theme even when the user saved the other one, and ignores toggling", async () => {
-    window.localStorage.setItem("xoop-dashboard-theme", "dark");
-    await mount(React.createElement(ThemeProvider, { forcedTheme: "light", children: React.createElement(Probe) }));
-    expect(shown()).toBe("light");
-    await act(async () => { toggle(); });
-    expect(shown()).toBe("light");
-  });
-  it("never writes the user's saved preference", async () => {
-    await mount(React.createElement(ThemeProvider, { forcedTheme: "light", children: React.createElement(Probe) }));
-    expect(window.localStorage.getItem("xoop-dashboard-theme")).toBeNull();
   });
 });

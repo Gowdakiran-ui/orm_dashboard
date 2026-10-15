@@ -63,8 +63,6 @@ export interface RiskAnalyticsPanelProps {
   alertTimelineData: any[];
   loading?: boolean;
   error?: string | null;
-  // Chart entrance animations; the Export Report capture turns them off so a chart is complete the moment it mounts.
-  animate?: boolean;
 }
 
 export function RiskAnalyticsPanel({
@@ -76,8 +74,7 @@ export function RiskAnalyticsPanel({
   riskHeatmapData = { categories: [], severities: [], grid: {} },
   alertTimelineData = [],
   loading = false,
-  error = null,
-  animate = true
+  error = null
 }: RiskAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -357,7 +354,7 @@ export function RiskAnalyticsPanel({
                   fillOpacity={1}
                   fill="url(#colorAlert)"
                   strokeWidth={2}
-                  isAnimationActive={animate}
+                  isAnimationActive
                   animationDuration={850}
                 />
                 <ReferenceLine

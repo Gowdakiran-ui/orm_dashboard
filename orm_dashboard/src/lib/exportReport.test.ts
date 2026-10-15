@@ -1,87 +1,81 @@
-// Renderer smoke test: a fixture model becomes a real PDF (several pages, both orientations, tables, charts, shaped-text images).
+// Renderer tests: a report model becomes a real PDF with uniform A4 landscape pages, a theme from reportTheme.ts, vector
+// charts, shaped-text images, and every non-final page well filled.
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "fs";
 import path from "path";
-import { renderReportPdf } from "./exportReport";
-import { readingGuide, type ReportModel, type Block } from "@/utils/reportModel";
+import { renderReportPdf, renderReportPdfDetailed } from "./exportReport";
+import { buildReportModel } from "@/utils/reportModel";
+import { input, mkDocs, analyticsFor, summary, alerts, hist } from "@/utils/reportTestFixtures";
+import { MIN_FILL, PAGE, THEME, FONT_FILES } from "./reportTheme";
 
-const FONT = readFileSync(path.resolve(__dirname, "../../public/fonts/NotoSans-VF.ttf"));
-const loadFont = async () => FONT.buffer.slice(FONT.byteOffset, FONT.byteOffset + FONT.byteLength) as ArrayBuffer;
+const font = (f: string) => { const b = readFileSync(path.resolve(__dirname, "../../public", f.replace(/^\//, ""))); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer; };
+const loadFonts = async () => ({ regular: font(FONT_FILES.regular), bold: font(FONT_FILES.bold) });
 // 1x1 PNG, enough to exercise addImage.
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const textImage = (t: string, o: { maxWidthMm: number; fontSizePt: number }) => ({ dataUrl: PNG, widthMm: Math.min(o.maxWidthMm, t.length * o.fontSizePt * 0.19), heightMm: o.fontSizePt * 0.3528 * 1.35 });
+const deps = { loadFonts, textImage };
 
-const rows = (n: number) => Array.from({ length: n }, (_, i) => [`Headline number ${i} with ₹349 cr and “quotes”`, { text: "33.4", align: "center" as const }, { text: "MEDIUM", fill: "#FDE68A" }, "Feed", "4 Aug 2026, 6:30 PM IST", "Negative", "General"]);
-const model = (flaggedRows: number, extra: Block[] = []): ReportModel => ({
-  meta: { title: "XOOP | Reputation Report", clientName: "Acme Corp", generatedAt: "14 Oct 2026, 2:07 PM IST", userEmail: "me@example.com", dataWindow: ["Articles: newest 449 of 449"], guide: [{ term: "N/A", text: "Not enough data." }], fileName: "x.pdf" },
-  sections: [
-    { id: "brand-equity", title: "Brand Equity", blocks: [
-      { type: "text", text: "No Critical or High risks flagged.", style: "bold" },
-      { type: "stats", items: [{ label: "Reputation Score", value: "75.51", sub: "Grade B" }, { label: "Risk Signals", value: "0" }, { label: "Total", value: "5" }] },
-      { type: "text", text: "A long paragraph. ".repeat(60) },
-    ] },
-    { id: "risk-center", title: "Risk Center", blocks: [
-      { type: "heading", level: 3, text: "Flagged Articles" },
-      { type: "table", landscape: true, compact: true, columns: ["Headline", "Score", "Severity", "Source", "Date (IST)", "Sentiment", "Topic"], widths: [88, 14, 20, 40, 34, 22, 36], rows: rows(flaggedRows) },
-      { type: "alert", alert: { severity: "HIGH", title: "Company: Multi-Signal Incident", alertType: "Multi-Signal Incident", raised: "8 Oct 2026, 4:44 PM IST", what: "what", when: "Oct 08, 2026 11:14 UTC", nextStep: "next" } },
-      ...extra,
-    ] },
-    { id: "executive-analytics", title: "Executive Analytics", blocks: [
-      { type: "heading", level: 3, text: "Coverage by Topic" },
-      { type: "chart", id: "topics", title: "Coverage by Topic", caption: "Articles per topic." },
-    ] },
-  ],
-  footnotes: ["A footnote.", "Another."],
+const medium = { scored: true, risk: 40, risk_exact: 40.2, risk_level: "MEDIUM", risk_sentiment: "Negative" };
+const withFlagged = (n: number) => {
+  const documents = mkDocs(Math.max(140, n * 3), i => (i % 3 === 0 ? medium : {}));
+  return input({ documents, analytics: analyticsFor(documents, alerts, hist) });
+};
+
+describe("report theme and page constants", () => {
+  it("one page size constant: A4 landscape, 297 x 210 mm", () => {
+    expect(PAGE).toMatchObject({ format: "a4", orientation: "landscape", width: 297, height: 210 });
+  });
+  it("every theme value is a token in reportTheme.ts (page background, card, type scale)", () => {
+    expect(THEME.page.background).toMatch(/^#[0-9A-F]{6}$/i);
+    expect(THEME.card.fill).toBe("#FFFFFF");
+    expect(THEME.type.body).toBeGreaterThan(0);
+  });
+  it("the renderer, drawing engine, pages and charts hold no colour literals of their own", () => {
+    for (const f of ["exportReport.ts", "reportDraw.ts", "reportPages.ts", "reportCharts.ts"]) expect(readFileSync(path.resolve(__dirname, f), "utf-8")).not.toMatch(/#[0-9A-Fa-f]{6}\b/);
+  });
 });
-const pages = (blob: Blob) => blob.arrayBuffer().then(b => (Buffer.from(b).toString("latin1").match(/\/Type\s*\/Page\b/g) || []).length);
-const charts = { topics: { dataUrl: PNG, width: 520, height: 260 } };
 
 describe("renderReportPdf", () => {
-  it("produces a PDF with more than one page, without throwing", async () => {
-    const blob = await renderReportPdf(model(40), charts, { loadFont });
-    expect(blob.size).toBeGreaterThan(5000);
-    const head = Buffer.from(await blob.arrayBuffer()).subarray(0, 5).toString("latin1");
-    expect(head).toBe("%PDF-");
-    expect(await pages(blob)).toBeGreaterThan(3);
+  it("every page is A4 landscape; for ordinary data every page but the cover and the last is at least 60% filled", async () => {
+    for (const n of [1, 14, 60]) {
+      const { blob, pages } = await renderReportPdfDetailed(buildReportModel(withFlagged(n)), deps);
+      expect(Buffer.from(await blob.arrayBuffer()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+      expect(pages.length).toBeGreaterThan(3);
+      for (const p of pages) { expect(Math.round(p.width)).toBe(297); expect(Math.round(p.height)).toBe(210); }
+      // The page where a very long flagged table ends is as full as the table's last rows (the only exception).
+      if (n <= 14) for (const p of pages.slice(1, -1)) expect(p.fill, `page ${p.page} of ${pages.length} (n=${n})`).toBeGreaterThanOrEqual(0.6);
+    }
   });
-  it("pages large tables instead of cutting them off (more rows, more pages)", async () => {
-    const small = await pages(await renderReportPdf(model(5), charts, { loadFont }));
-    const big = await pages(await renderReportPdf(model(300), charts, { loadFont }));
-    expect(big).toBeGreaterThan(small + 3);
+  it("the target fill is 70% and the summary page reaches it", async () => {
+    expect(MIN_FILL).toBe(0.7);
+    const { pages } = await renderReportPdfDetailed(buildReportModel(input()), deps);
+    expect(pages[1].fill).toBeGreaterThanOrEqual(MIN_FILL);
+  });
+  it("a long flagged table continues on following pages (more rows, more pages), all the same size", async () => {
+    const small = await renderReportPdfDetailed(buildReportModel(withFlagged(5)), deps);
+    const big = await renderReportPdfDetailed(buildReportModel(withFlagged(200)), deps);
+    expect(big.pages.length).toBeGreaterThan(small.pages.length + 3);
+    expect(new Set(big.pages.map(p => `${Math.round(p.width)}x${Math.round(p.height)}`)).size).toBe(1);
   });
   it("draws text that needs shaping (Devanagari/Tamil) as an image through the shared helper, and only that text", async () => {
-    const textImage = vi.fn((_text: string, _o: unknown) => ({ dataUrl: PNG, widthMm: 40, heightMm: 5 }));
-    const blob = await renderReportPdf(
-      model(3, [{ type: "text", text: "तीन साल बाद फिर अंबानी को पीछे छोड़ देश के नं. 1" }]),
-      charts, { loadFont, textImage }
-    );
-    expect(textImage).toHaveBeenCalled();
-    expect(textImage.mock.calls.every(c => /[ऀ-෿]/.test(c[0]))).toBe(true);
-    expect(blob.size).toBeGreaterThan(5000);
+    const spy = vi.fn(textImage);
+    const documents = mkDocs(60, i => (i % 3 === 0 ? { ...medium, title: i === 0 ? "तीन साल बाद फिर अंबानी को पीछे छोड़ देश" : `Doc ${i}` } : {}));
+    await renderReportPdf(buildReportModel(input({ documents, analytics: analyticsFor(documents, alerts, hist) })), { loadFonts, textImage: spy });
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls.every(c => /[ऀ-෿]/.test(c[0]))).toBe(true);
   });
-  it("a table cell with such text is drawn as an image too", async () => {
-    const textImage = vi.fn((_text: string, _o: unknown) => ({ dataUrl: PNG, widthMm: 30, heightMm: 5 }));
-    const m = model(0);
-    (m.sections[1].blocks[1] as any).rows = [["ரூ.6 லட்சம் கோடி முதலீடு", "1", "MEDIUM", "Feed", "d", "Negative", "General"]];
-    await renderReportPdf(m, charts, { loadFont, textImage });
-    expect(textImage).toHaveBeenCalledTimes(1);
+  it("tags the document language as English and sets the title", async () => {
+    const blob = await renderReportPdf(buildReportModel(input()), deps);
+    const raw = Buffer.from(await blob.arrayBuffer()).toString("latin1");
+    expect(raw).toMatch(/\/Lang \(en-US\)/);
+    expect(raw).toContain("/Title (XOOP | Reputation Report: Acme Corp)");
   });
-  it("fails loudly when a chart the model asks for was not captured", async () => {
-    await expect(renderReportPdf(model(3), {}, { loadFont })).rejects.toThrow(/chart was not captured/);
-  });
-  it("tags the document language as English", async () => {
-    const blob = await renderReportPdf(model(3), charts, { loadFont });
-    expect(Buffer.from(await blob.arrayBuffer()).toString("latin1")).toMatch(/\/Lang \(en-US\)/);
-  });
-  it("the full reading guide fits on the cover page (cover + notes = 2 pages with no sections)", async () => {
-    const m = model(0);
-    m.sections = [];
-    m.meta.guide = readingGuide();
-    expect(await pages(await renderReportPdf(m, charts, { loadFont }))).toBe(2);
-  });
-  it("a chart caption is printed with its chart (the page count does not change when only the caption is added)", async () => {
-    const base = model(0);
-    const withCap = model(0);
-    (withCap.sections[2].blocks[1] as any).caption = "A caption. ".repeat(20);
-    expect(await pages(await renderReportPdf(withCap, charts, { loadFont }))).toBe(await pages(await renderReportPdf(base, charts, { loadFont })));
+  it("renders the empty and the failed states without throwing", async () => {
+    const empty = input({ documents: [], analytics: analyticsFor([], [], []), alerts: [], repHistory: [], reputationSummary: summary({ document_risk: { visible_documents: 0, scored_documents: 0, unscored_documents: 0, total: 0, critical: 0, high: 0, medium: 0 }, sentiment: { positive: 0, neutral: 0, negative: 0, dominant: null } }) });
+    const failed = input({ reputationSummary: null, reputationSummaryError: "x", documentsError: "x", alertsError: "x", historyError: "x", documents: [], analytics: analyticsFor([], [], []), alerts: [], repHistory: [] });
+    for (const i of [empty, failed]) {
+      const { pages } = await renderReportPdfDetailed(buildReportModel(i), deps);
+      expect(pages.length).toBeGreaterThanOrEqual(3);
+    }
   });
 });
