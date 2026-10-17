@@ -55,6 +55,7 @@ celery_app = Celery(
         'app.workers.intelligence_tasks',
         'app.workers.aggregation_tasks',   # R1: explicitly included for beat
         'app.workers.backup_tasks',
+        'app.workers.backfill_tasks',
     ]
 )
 
@@ -79,6 +80,9 @@ celery_app.conf.update(
         # Backups (Section 10) -- lightweight periodic I/O work, same
         # category as the watchdogs above, not worth a dedicated queue.
         'app.workers.backup_tasks.run_backup':            {'queue': 'io_queue'},
+        # One-time historical backfill (never in beat_schedule, never called by Run Pipeline).
+        'app.workers.backfill_tasks.run_client_backfill': {'queue': 'io_queue'},
+        'app.workers.backfill_tasks.drain_backfill_nlp':  {'queue': 'io_queue'},
         # Counterfeit detection scans (Reality Defender / WhoisFreaks /
         # Bolster.ai external API calls) -- dispatched via celery_app.send_task
         # by name from client_intelligence.py, which only consults task_routes

@@ -128,7 +128,12 @@ class YouTubeAdapter(BaseSearchAdapter):
             return
         self.youtube = build("youtube", "v3", developerKey=self.api_key)
 
-    def search(self, keyword: str, cursor: Optional[str] = None, limit: int = 25, order: str = "date", **kwargs) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    def search(self, keyword: str, cursor: Optional[str] = None, limit: int = 25, order: str = "date",
+               published_after: Optional[str] = None, published_before: Optional[str] = None,
+               **kwargs) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        # published_after / published_before (RFC 3339) are only used by the
+        # historical backfill; the live pipeline never passes them, so its
+        # request is byte-for-byte what it was before.
         if not self.available:
             return [], cursor
 
@@ -136,13 +141,19 @@ class YouTubeAdapter(BaseSearchAdapter):
         _reserve_search_quota()
 
         try:
+            date_filters = {}
+            if published_after:
+                date_filters["publishedAfter"] = published_after
+            if published_before:
+                date_filters["publishedBefore"] = published_before
             request = self.youtube.search().list(
                 part="snippet",
                 q=keyword,
                 maxResults=limit,
                 pageToken=cursor,
                 type="video",
-                order=order
+                order=order,
+                **date_filters
             )
             response = request.execute()
         except HttpError as e:
@@ -205,14 +216,20 @@ class YouTubeAdapter(BaseSearchAdapter):
         statistics = raw_data.get("statistics", {})
         video_id = raw_data.get("id", {}).get("videoId", "")
 
+        # No silent now() fallback: a video we cannot date must not look like
+        # it was published today (that would put it inside every "last 30
+        # days" window). Leave published_at None and log it so it is visible;
+        # the historical backfill skips such items outright.
         published_str = snippet.get("publishedAt")
-        published_at = datetime.now(timezone.utc)
+        published_at = None
         if published_str:
             try:
                 # YouTube's publishedAt is always Z-suffixed (UTC).
                 published_at = datetime.strptime(published_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
             except ValueError:
-                pass
+                logger.warning("youtube_unparseable_published_at", video_id=video_id, published_at_raw=published_str)
+        else:
+            logger.warning("youtube_missing_published_at", video_id=video_id)
 
         title = snippet.get("title", "")
         description = snippet.get("description", "")

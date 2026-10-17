@@ -67,6 +67,9 @@ def onboard_new_client(
     client = onboard_client(db, onboarding_data)
     db.add(UserClientAccess(user_id=current_user.id, client_id=client.id))
     db.commit()
+    # One-time historical backfill (not a schedule). Best effort: never fails onboarding.
+    from app.services.backfill.enqueue import enqueue_client_backfill
+    enqueue_client_backfill(client.id)
     return client
 
 

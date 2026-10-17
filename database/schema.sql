@@ -121,6 +121,30 @@ CREATE TABLE public.alerts (
 
 
 --
+-- Name: backfill_slices; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.backfill_slices (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    client_id uuid NOT NULL,
+    entity_id uuid,
+    entity_name character varying(255) NOT NULL,
+    source character varying(30) NOT NULL,
+    query text NOT NULL,
+    slice_start timestamp with time zone NOT NULL,
+    slice_end timestamp with time zone NOT NULL,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    item_count integer,
+    new_count integer,
+    error text,
+    attempts integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT backfill_slices_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('DONE'::character varying)::text, ('SPLIT'::character varying)::text, ('ERROR'::character varying)::text])))
+);
+
+
+--
 -- Name: client_processing_summary; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -826,6 +850,22 @@ ALTER TABLE ONLY public.alert_client_states
 
 
 --
+-- Name: backfill_slices backfill_slices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_slices
+    ADD CONSTRAINT backfill_slices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: backfill_slices uq_backfill_slices_slice; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_slices
+    ADD CONSTRAINT uq_backfill_slices_slice UNIQUE (client_id, source, query, slice_start, slice_end);
+
+
+--
 -- Name: alert_client_states alert_client_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1282,6 +1322,13 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: ix_backfill_slices_client_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_backfill_slices_client_status ON public.backfill_slices USING btree (client_id, status);
+
+
+--
 -- Name: idx_comp_cand_promoted; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1685,6 +1732,22 @@ CREATE UNIQUE INDEX uq_risk_events_daily ON public.risk_events USING btree (clie
 --
 
 CREATE TRIGGER deactivate_feeds_on_entity_delete AFTER DELETE ON public.entities FOR EACH ROW EXECUTE FUNCTION public.deactivate_feeds_on_entity_delete();
+
+
+--
+-- Name: backfill_slices backfill_slices_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_slices
+    ADD CONSTRAINT backfill_slices_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: backfill_slices backfill_slices_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_slices
+    ADD CONSTRAINT backfill_slices_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE SET NULL;
 
 
 --
