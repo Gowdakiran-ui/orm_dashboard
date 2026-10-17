@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 
 from app.models.client import Client
+from app.services.intelligence.score_window import in_window
 from app.models.entity import Entity, EntityMention
 from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
@@ -184,7 +185,7 @@ class BenchmarkEngine:
         # 30-day mentions in bulk
         mentions_query = db.query(EntityMention.entity_id, func.sum(EntityMention.mention_count)).filter(
             EntityMention.entity_id.in_(entity_ids),
-            EntityMention.created_at >= lookback_date
+            in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
             mentions_query = mentions_query.filter(EntityMention.document_id.in_(brand_doc_ids))
@@ -195,7 +196,7 @@ class BenchmarkEngine:
             DocumentSentiment, DocumentSentiment.document_id == EntityMention.document_id
         ).filter(
             EntityMention.entity_id.in_(entity_ids),
-            EntityMention.created_at >= lookback_date
+            in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
             sentiment_query = sentiment_query.filter(EntityMention.document_id.in_(brand_doc_ids))
@@ -207,7 +208,7 @@ class BenchmarkEngine:
         risk_query = db.query(RiskEvent.entity_id, func.avg(RiskEvent.risk_score)).filter(
             RiskEvent.client_id == client_id,
             RiskEvent.entity_id.in_(entity_ids),
-            RiskEvent.created_at >= lookback_date
+            in_window(RiskEvent.created_at, RiskEvent.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
             risk_query = risk_query.filter(RiskEvent.document_id.in_(brand_doc_ids))
@@ -249,7 +250,7 @@ class BenchmarkEngine:
                 SourceHealth, Source.id == SourceHealth.source_id
             ).filter(
                 EntityMention.entity_id.in_(entity_ids),
-                EntityMention.created_at >= lookback_date
+                in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
             )
             if brand_doc_ids is not None:
                 source_rows_query = source_rows_query.filter(EntityMention.document_id.in_(brand_doc_ids))
@@ -966,7 +967,7 @@ class BenchmarkEngine:
         # just carrying document_id through instead of summing mention_count.
         mentions_query = db.query(EntityMention.entity_id, EntityMention.document_id).filter(
             EntityMention.entity_id.in_(all_entity_ids),
-            EntityMention.created_at >= lookback_date
+            in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
             mentions_query = mentions_query.filter(EntityMention.document_id.in_(brand_doc_ids))
@@ -1066,7 +1067,7 @@ class BenchmarkEngine:
 
         doc_ids_query = db.query(EntityMention.document_id).filter(
             EntityMention.entity_id == entity_id,
-            EntityMention.created_at >= lookback_date
+            in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
             doc_ids_query = doc_ids_query.filter(EntityMention.document_id.in_(brand_doc_ids))

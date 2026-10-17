@@ -16,6 +16,7 @@ from app.models.sentiment import DocumentSentiment
 from app.models.risk import RiskEvent
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.client import Client
+from app.services.intelligence.score_window import in_window
 from app.models.alert import Alert
 
 logger = structlog.get_logger()
@@ -250,7 +251,7 @@ class ExecutiveReputationEngine:
         # visibility/source-reliability components below.
         mentions = db.query(EntityMention).filter(
             EntityMention.entity_id.in_(exec_ids),
-            EntityMention.created_at >= lookback_date
+            in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         ).all()
         if brand_doc_ids is not None:
             mentions = [m for m in mentions if m.document_id in brand_doc_ids]
@@ -280,7 +281,7 @@ class ExecutiveReputationEngine:
         risks = db.query(RiskEvent).filter(
             RiskEvent.client_id == client_id,
             RiskEvent.entity_id.in_(exec_ids),
-            RiskEvent.created_at >= lookback_date
+            in_window(RiskEvent.created_at, RiskEvent.document_id, lookback_date)
         ).all()
         if brand_doc_ids is not None:
             risks = [r for r in risks if r.document_id in brand_doc_ids]
@@ -291,7 +292,7 @@ class ExecutiveReputationEngine:
         # Batch preload alerts (shared pool)
         alerts = db.query(Alert).filter(
             Alert.client_id == client_id,
-            Alert.created_at >= lookback_date
+            in_window(Alert.created_at, Alert.document_id, lookback_date)
         ).all()
 
         # Loop over matching executives and calculate scores using preloaded maps
