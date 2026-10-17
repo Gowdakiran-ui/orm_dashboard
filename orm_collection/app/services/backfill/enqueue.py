@@ -27,8 +27,10 @@ def enqueue_client_backfill(client_id) -> bool:
     except Exception as e:      # guard is best effort; the slice table + task lock keep a double enqueue harmless
         logger.warning("backfill_enqueue_guard_unavailable", client_id=str(client_id), error=str(e)[:200])
     try:
-        from app.workers.backfill_tasks import run_client_backfill
-        run_client_backfill.apply_async(args=[str(client_id), None, 0])
+        # send_task by name on the project's own app, like the rest of the API
+        # (a bare @shared_task.apply_async falls back to Celery's default AMQP app)
+        from app.core.celery_app import celery_app
+        celery_app.send_task("app.workers.backfill_tasks.run_client_backfill", args=[str(client_id), None, 0])
         logger.info("backfill_enqueued", client_id=str(client_id))
         return True
     except Exception as e:

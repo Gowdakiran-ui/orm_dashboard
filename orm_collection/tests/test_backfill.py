@@ -227,12 +227,12 @@ def test_onboarding_endpoint_enqueues_backfill_exactly_once(monkeypatch):
     import types
     import app.api.endpoints.clients as clients_ep
     import app.utils.redis_client as rc
-    import app.workers.backfill_tasks as bt
+    from app.core.celery_app import celery_app
 
     fake_redis = _FakeRedis()
     monkeypatch.setattr(rc, "redis_client", fake_redis)
     sent = []
-    monkeypatch.setattr(bt.run_client_backfill, "apply_async", lambda **kw: sent.append(kw))
+    monkeypatch.setattr(celery_app, "send_task", lambda name, **kw: sent.append({"name": name, **kw}))
     monkeypatch.delenv("BACKFILL_ON_ONBOARD", raising=False)
 
     cid = uuid.uuid4()
@@ -254,23 +254,23 @@ def test_onboarding_endpoint_enqueues_backfill_exactly_once(monkeypatch):
 
 def test_onboarding_survives_a_broker_failure(monkeypatch):
     import app.utils.redis_client as rc
-    import app.workers.backfill_tasks as bt
+    from app.core.celery_app import celery_app
     from app.services.backfill.enqueue import enqueue_client_backfill
     monkeypatch.setattr(rc, "redis_client", _FakeRedis())
 
-    def boom(**kw):
+    def boom(name, **kw):
         raise ConnectionError("broker down")
 
-    monkeypatch.setattr(bt.run_client_backfill, "apply_async", boom)
+    monkeypatch.setattr(celery_app, "send_task", boom)
     assert enqueue_client_backfill(uuid.uuid4()) is False     # no exception
 
 
 def test_backfill_on_onboard_can_be_switched_off(monkeypatch):
     import app.utils.redis_client as rc
-    import app.workers.backfill_tasks as bt
+    from app.core.celery_app import celery_app
     from app.services.backfill.enqueue import enqueue_client_backfill
     monkeypatch.setattr(rc, "redis_client", _FakeRedis())
     sent = []
-    monkeypatch.setattr(bt.run_client_backfill, "apply_async", lambda **kw: sent.append(kw))
+    monkeypatch.setattr(celery_app, "send_task", lambda name, **kw: sent.append({"name": name, **kw}))
     monkeypatch.setenv("BACKFILL_ON_ONBOARD", "false")
     assert enqueue_client_backfill(uuid.uuid4()) is False and not sent

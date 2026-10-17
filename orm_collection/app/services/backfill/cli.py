@@ -53,8 +53,8 @@ def main(argv=None) -> int:
         elif a.run_inline:
             print(json.dumps(run_client(db, client.id, cfg), indent=1, default=str))
         else:
-            from app.workers.backfill_tasks import run_client_backfill
-            r = run_client_backfill.apply_async(args=[str(client.id), cfg.to_dict(), 0])
+            from app.core.celery_app import celery_app
+            r = celery_app.send_task("app.workers.backfill_tasks.run_client_backfill", args=[str(client.id), cfg.to_dict(), 0])
             print(json.dumps({"enqueued": r.id, "client": client.name}))
     finally:
         db.close()
