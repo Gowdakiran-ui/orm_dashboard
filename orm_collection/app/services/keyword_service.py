@@ -1,6 +1,28 @@
 from sqlalchemy.orm import Session
 from app.models.entity import EntityKeyword
-from typing import List
+from typing import List, Optional
+import logging
+import re
+
+logger = logging.getLogger(__name__)
+
+# Pure legal-form words only. Dropped from the END of a name, repeatedly ("Pvt Ltd").
+_LEGAL_SUFFIXES = {
+    "limited", "ltd", "pvt", "private", "inc", "incorporated", "llc", "llp", "corporation",
+    "corp", "co", "plc", "enterprises", "company",
+}
+_MIN_STRIPPED_LEN = 4
+
+
+def strip_legal_suffix(name: str) -> Optional[str]:
+    """Name minus trailing legal-form words, or None if nothing was stripped or the result is shorter than 4 characters."""
+    tokens = name.strip().split()
+    while tokens and re.sub(r"[^\w]", "", tokens[-1]).lower() in _LEGAL_SUFFIXES:
+        tokens.pop()
+    clean = " ".join(tokens).strip(" ,.&-")
+    if not clean or clean == name.strip() or len(clean) < _MIN_STRIPPED_LEN:
+        return None
+    return clean
 
 def generate_keywords_for_entity(db: Session, entity_id: str, base_name: str) -> List[EntityKeyword]:
     """
@@ -41,15 +63,25 @@ def generate_keywords_for_entity(db: Session, entity_id: str, base_name: str) ->
             priority=5
         ))
 
-    # Example: If base_name has " Inc" or " LLC", add a version without it
-    if " Inc" in base_name or " LLC" in base_name or " Ltd" in base_name:
-        clean_name = base_name.replace(" Inc", "").replace(" LLC", "").replace(" Ltd", "").strip()
-        keywords.append(EntityKeyword(
-            entity_id=entity_id,
-            keyword_text=clean_name,
-            category="ALIAS",
-            priority=8
-        ))
+    # 2c. Name without legal suffixes (e.g. "Sobha Limited" -> "Sobha"). Press copy almost
+    # never writes the legal suffix; the relevance filter dropped ~90% of items for that
+    # reason. Replaces the older substring check (" Inc"/" LLC"/" Ltd"), which also fired
+    # inside words such as "Incredible" and never handled "Limited".
+    clean_name = strip_legal_suffix(base_name)
+    if clean_name:
+        variants = [clean_name]
+        if " " in clean_name:
+            variants.append(clean_name.replace(" ", ""))
+        existing = {k.keyword_text for k in keywords}
+        for v in variants:
+            if v not in existing:
+                keywords.append(EntityKeyword(
+                    entity_id=entity_id,
+                    keyword_text=v,
+                    category="ALIAS",
+                    priority=8
+                ))
+        logger.info("Generated name variants for %r: %s", base_name, variants)
 
     # 3. EXECUTIVE
     keywords.append(EntityKeyword(
