@@ -25,16 +25,21 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import structlog
 
+from app.services.backfill import settings as bf_settings
 from app.services.backfill import slicing
 from app.services.backfill.fetchers import (
     SOURCES, SourceDef, QuotaPaused, SourceUnavailable, GDELT_WINDOW_DAYS, load_adapter,
 )
 from app.services.backfill.queries import QuerySpec, build_queries
+from app.services.backfill.relevance import KIND_PRIORITY, SOURCE_PRIORITY, is_relevant, tracked_terms
 
 logger = structlog.get_logger()
 
 DEFAULT_START = dt.date(2015, 1, 1)
-NLP_SECONDS_PER_DOC = 4.6   # per-document PROCESSING time quoted in aggregation_tasks.py comments
+# Measured on production 2026-10-18/19 (backfilled docs processed per hour, steady 510-580): ~540 docs/hour
+# with the 2-process NLP worker under load. The 4.6 s/doc quoted in aggregation_tasks.py comments is NOT what
+# the box does for backfill traffic (observed 23-35 s per doc per process).
+NLP_DOCS_PER_HOUR_MEASURED = 540
 
 # slice width in months, by (source, query kind)
 WIDTH_MONTHS: Dict[Tuple[str, str], int] = {
@@ -55,9 +60,11 @@ class BackfillConfig:
     include_competitors: bool = False                   # config flag, default OFF
     include_products: bool = False                      # config flag, default OFF
     exclude_entities: Tuple[str, ...] = ()
-    youtube_units_budget: Optional[int] = 3000          # per Celery run; the daily ceiling in fetchers.py also applies
+    youtube_units_budget: Optional[int] = bf_settings.YOUTUBE_RUN_BUDGET   # per Celery run; the daily ceiling in fetchers.py also applies
     max_slices_per_run: int = 200
     max_attempts: int = 3
+    relevance_filter: bool = bf_settings.RELEVANCE_FILTER_DEFAULT   # drop items naming neither the brand nor a tracked entity
+    youtube_start_year: int = bf_settings.YOUTUBE_START_YEAR         # Google News still starts at `start` (2015)
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -116,7 +123,10 @@ def plan_slices(specs: Iterable[QuerySpec], cfg: BackfillConfig) -> List[Planned
             months = WIDTH_MONTHS.get((name, spec.kind))
             if months is None:
                 continue
-            for a, b in slicing.calendar_slices(cfg.start, end, months):
+            start = cfg.start
+            if name == "youtube":
+                start = max(start, dt.date(cfg.youtube_start_year, 1, 1))
+            for a, b in slicing.calendar_slices(start, end, months):
                 out.append(PlannedSlice(name, spec.kind, spec.entity_id, spec.entity_name, query, a, b))
     return out
 
@@ -185,12 +195,13 @@ def get_or_create_backfill_source(db, client_id, src: SourceDef):
 
 
 def ingest_items(db, client_id, src: SourceDef, raw_items: List[Dict[str, Any]],
-                 now: Optional[dt.datetime] = None) -> Dict[str, int]:
+                 now: Optional[dt.datetime] = None, terms: Optional[List[str]] = None) -> Dict[str, int]:
     """
     Normalise + persist through the normal path (process_and_save_document:
     ON CONFLICT DO NOTHING dedup on canonical url / content_hash, then inline
     entity matching). Items without a real published date are skipped, never
-    defaulted to "now".
+    defaulted to "now". When `terms` is given, items whose title/summary name neither
+    the brand nor a tracked entity are dropped BEFORE anything is saved.
     """
     from app.schemas.document import NormalizedDocument
     from app.services.document_service import process_and_save_document
@@ -198,7 +209,8 @@ def ingest_items(db, client_id, src: SourceDef, raw_items: List[Dict[str, Any]],
     now = now or dt.datetime.now(dt.timezone.utc)
     source = get_or_create_backfill_source(db, client_id, src)
     adapter = load_adapter(src)
-    stats = {"seen": len(raw_items), "saved": 0, "deduped": 0, "skipped_undated": 0, "skipped_future": 0, "failed": 0}
+    stats = {"seen": len(raw_items), "saved": 0, "deduped": 0, "skipped_undated": 0, "skipped_future": 0, "failed": 0,
+             "dropped_irrelevant": 0}
     for raw in raw_items:
         try:
             norm = adapter.normalize(raw, str(source.id))
@@ -214,6 +226,9 @@ def ingest_items(db, client_id, src: SourceDef, raw_items: List[Dict[str, Any]],
                 continue
             if not norm.get("url"):
                 stats["failed"] += 1
+                continue
+            if terms and not is_relevant(norm.get("title"), norm.get("content"), terms):
+                stats["dropped_irrelevant"] += 1
                 continue
             is_saved, _, _ = process_and_save_document(db, NormalizedDocument(**norm))
             stats["saved" if is_saved else "deduped"] += 1
@@ -236,15 +251,29 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
     from app.models.backfill import BackfillSlice
     ctx = ctx if ctx is not None else {"youtube_units_budget": cfg.youtube_units_budget}
     ingest = ingest or ingest_items
+    from app.services.backfill import control
     specs = build_queries(db, client_id, cfg.include_competitors, cfg.include_products, list(cfg.exclude_entities))
     seeded = seed_slices(db, client_id, plan_slices(specs, cfg))
+    terms = tracked_terms(db, client_id, cfg.include_competitors, cfg.include_products) if cfg.relevance_filter else None
+    ing_kwargs = {"terms": terms} if terms else {}
+    # query kind per (source, query) so slices can be taken brand/risk first, executives next
+    kind_by_query = {(name, getattr(sp, SOURCES[name].query_attr)): sp.kind for sp in specs for name in cfg.sources}
 
     summary: Dict[str, Any] = {"seeded": seeded, "processed": 0, "done": 0, "split": 0, "errors": 0,
-                               "saved": 0, "deduped": 0, "skipped_undated": 0, "paused": None, "unavailable": []}
+                               "saved": 0, "deduped": 0, "skipped_undated": 0, "dropped_irrelevant": 0, "paused": None,
+                               "unavailable": [], "stopped": False}
     skip_sources = set()
     tried = set()      # a slice is attempted at most once per run (no hot retry loop); failures wait for the next run
+    def _priority(r):
+        # (tier, source, newest first): brand and risk words first, then people, competitors/products last
+        kind = kind_by_query.get((r.source, r.query), "executive")
+        return (KIND_PRIORITY.get(kind, 9), SOURCE_PRIORITY.get(r.source, 9), -r.slice_end.timestamp())
+
     while summary["processed"] < cfg.max_slices_per_run:
-        q = db.query(BackfillSlice).filter(
+        if control.is_stopped():
+            summary["stopped"] = True
+            break
+        q = db.query(BackfillSlice.id, BackfillSlice.source, BackfillSlice.query, BackfillSlice.slice_end).filter(
             BackfillSlice.client_id == client_id, BackfillSlice.status == "PENDING",
             BackfillSlice.source.in_(list(cfg.sources)),
         )
@@ -252,9 +281,10 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
             q = q.filter(~BackfillSlice.source.in_(list(skip_sources)))
         if tried:
             q = q.filter(~BackfillSlice.id.in_(list(tried)))
-        row = q.order_by(BackfillSlice.slice_end.desc(), BackfillSlice.source).first()
-        if row is None:
+        candidates = q.all()
+        if not candidates:
             break
+        row = db.get(BackfillSlice, min(candidates, key=_priority).id)
         tried.add(row.id)
         src = SOURCES[row.source]
         fetch = (fetchers or {}).get(row.source, src.fetch)
@@ -283,7 +313,7 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
             summary["processed"] += 1
             continue
 
-        st = ingest(db, client_id, src, raw)
+        st = ingest(db, client_id, src, raw, **ing_kwargs)
         row = db.get(BackfillSlice, row.id)
         row.item_count = len(raw)
         row.new_count = st["saved"]
@@ -306,8 +336,12 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
             summary["done"] += 1
         db.commit()
         summary["processed"] += 1
-        for k in ("saved", "deduped", "skipped_undated"):
+        for k in ("saved", "deduped", "skipped_undated", "dropped_irrelevant"):
             summary[k] += st.get(k, 0)
+        logger.info("backfill_slice_done", client_id=str(client_id), source=row.source, query=row.query[:80],
+                    slice_start=str(s), slice_end=str(e), fetched=len(raw), saved=st.get("saved", 0),
+                    deduped=st.get("deduped", 0), dropped_irrelevant=st.get("dropped_irrelevant", 0),
+                    undated=st.get("skipped_undated", 0), status=row.status)
 
     summary["remaining"] = db.query(BackfillSlice).filter(
         BackfillSlice.client_id == client_id, BackfillSlice.status == "PENDING",
@@ -346,7 +380,7 @@ def dry_run(db, client_id, cfg: BackfillConfig, probe: int = 0,
     planned = plan_slices(specs, cfg)
 
     done_keys = set()
-    for r in db.query(BackfillSlice).filter(BackfillSlice.client_id == client_id, BackfillSlice.status.in_(("DONE", "SPLIT"))).all():
+    for r in db.query(BackfillSlice).filter(BackfillSlice.client_id == client_id, BackfillSlice.status.in_(("DONE", "SPLIT", "SKIPPED"))).all():
         done_keys.add((r.source, r.query, r.slice_start.date(), r.slice_end.date()))
     todo = [p for p in planned if (p.source, p.query, p.start, p.end) not in done_keys]
 
@@ -406,8 +440,8 @@ def dry_run(db, client_id, cfg: BackfillConfig, probe: int = 0,
         "youtube_days_at_budget_est": round(yt_units / per_day, 1),
         "fetch_time_minutes_est": round(fetch_seconds / 60, 1),
         "est_new_documents": round(est_docs),
-        "nlp_hours_one_worker": round(est_docs * NLP_SECONDS_PER_DOC / 3600, 1),
-        "nlp_hours_two_workers": round(est_docs * NLP_SECONDS_PER_DOC / 3600 / 2, 1),
+        "nlp_docs_capped": min(round(est_docs), bf_settings.MAX_PROCESS_DOCS_PER_CLIENT),
+        "nlp_hours_at_measured_rate": round(min(est_docs, bf_settings.MAX_PROCESS_DOCS_PER_CLIENT) / NLP_DOCS_PER_HOUR_MEASURED, 1),
         "density_source": {"google_news": ("probe" if probed else "assumption"), "others": "assumption"},
         "probed_items_per_slice": {k: round(v, 1) for k, v in probed.items()},
         "paid_calls": 0, "db_writes": 0,

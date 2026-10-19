@@ -140,7 +140,7 @@ CREATE TABLE public.backfill_slices (
     attempts integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT backfill_slices_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('DONE'::character varying)::text, ('SPLIT'::character varying)::text, ('ERROR'::character varying)::text])))
+    CONSTRAINT backfill_slices_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('DONE'::character varying)::text, ('SPLIT'::character varying)::text, ('ERROR'::character varying)::text, ('SKIPPED'::character varying)::text])))
 );
 
 

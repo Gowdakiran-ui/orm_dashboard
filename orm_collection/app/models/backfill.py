@@ -12,7 +12,8 @@ class BackfillSlice(Base):
     finished slice. See database/migrations/0014_add_backfill_slices.sql.
 
     status: PENDING (planned / failed-and-retryable), DONE, SPLIT (hit the
-    per-call cap, replaced by smaller child slices), ERROR (retries exhausted).
+    per-call cap, replaced by smaller child slices), ERROR (retries exhausted),
+    SKIPPED (deliberately not fetched; never picked up, never deleted).
     """
     __tablename__ = "backfill_slices"
     __table_args__ = (

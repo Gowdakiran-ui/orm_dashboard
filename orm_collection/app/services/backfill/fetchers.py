@@ -28,7 +28,8 @@ YT_MAX_PAGES = 3
 # YouTube: backfill may only use units while the day's TOTAL (live pipeline +
 # backfill) is below this ceiling, so the live pipeline always keeps
 # DAILY_QUOTA_LIMIT - ceiling units of its own.
-YT_BACKFILL_DAILY_CEILING = 4000
+from app.services.backfill import settings as _bf_settings
+YT_BACKFILL_DAILY_CEILING = _bf_settings.YOUTUBE_DAILY_CEILING   # BACKFILL_YT_DAILY_CEILING, default 4000
 
 GN_PACE_SECONDS = 1.0
 GDELT_WINDOW_DAYS = 90

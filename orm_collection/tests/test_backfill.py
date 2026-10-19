@@ -50,7 +50,7 @@ def _client(db, execs=("Jane Doe",), with_competitor=False):
     return c
 
 
-def _fake_ingest(db, client_id, src, raw):
+def _fake_ingest(db, client_id, src, raw, **kw):
     return {"seen": len(raw), "saved": len(raw), "deduped": 0, "skipped_undated": 0, "skipped_future": 0, "failed": 0}
 
 
