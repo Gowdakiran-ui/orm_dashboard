@@ -1,3 +1,4 @@
+import { formatDMY } from "./dateFormat";
 // Pure helpers for the Competitors tab (audit/competitors-audit.md F-01, F-02, F-04, F-05, F-06, F-09, F-10, F-12).
 // Everything here is plain data in / plain data out so each rule can be tested without rendering the page.
 
@@ -126,7 +127,7 @@ export function asOfLabel(iso: unknown): string | null {
   if (typeof iso !== "string" || !iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return `As of ${d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}`;
+  return `As of ${formatDMY(d)}`;
 }
 
 export function noEvidenceMessage(competitorName: string, clientName: string): string {
@@ -164,4 +165,45 @@ export function riskTileLabel(clientName: string): string {
 /** Number formatting that never throws on a missing value. */
 export function fixed(value: unknown, digits: number): string {
   return isNum(value) ? value.toFixed(digits) : "N/A";
+}
+
+
+// ---- Competitor cards (the page's opening view) -------------------------------------------------------------
+export interface CompetitorCardView {
+  name: string;
+  hasScore: boolean;
+  scoreText: string;          // "83.3 / 100" or "Not enough coverage"
+  scoreMeaning: string;
+  rankText: string | null;
+  sovText: string | null;
+  sovMeaning: string | null;
+  evidence: string | null;
+  thin: boolean;              // fewer than LOW_EVIDENCE_MENTIONS mentions: score shown, with a caution
+  thinNote: string | null;
+  asOf: string | null;        // "Data as of 20-10-2026"
+}
+
+/** One card per compared competitor, built only from the already-served /benchmark row. */
+export function competitorCardView(b: any, clientName: string): CompetitorCardView {
+  const name = String(b?.competitor_name ?? "Unknown");
+  const mentions = isNum(b?.mentions_30d) ? Math.round(b.mentions_30d) : null;
+  const scored = b?.health_status !== "INSUFFICIENT_EVIDENCE" && isNum(b?.reputation) && isNum(b?.rank) && b.rank > 0;
+  const asOfIso = typeof b?.as_of === "string" ? b.as_of : null;
+  const asOf = asOfIso && formatDMY(asOfIso, "") ? `Data as of ${formatDMY(asOfIso)}` : null;
+  const thin = scored && mentions !== null && mentions < LOW_EVIDENCE_MENTIONS;
+  return {
+    name,
+    hasScore: scored,
+    scoreText: scored ? `${(b.reputation as number).toFixed(1)} / 100` : "Not enough coverage",
+    scoreMeaning: scored
+      ? `How healthy ${name}'s reputation looks in recent articles that also mention ${clientName}. Higher is better; 100 is the best possible.`
+      : `No article from the last 30 days mentions both ${name} and ${clientName}, so no score is shown.`,
+    rankText: scored ? `Ranked #${b.rank} with ${clientName}` : null,
+    sovText: isNum(b?.sov) ? `${(b.sov as number).toFixed(1)}% share of voice` : null,
+    sovMeaning: isNum(b?.sov) ? `Out of every 100 mentions of ${clientName} and the compared competitors, about ${Math.round(b.sov)} are ${name}.` : null,
+    evidence: mentions === null ? null : `Based on ${mentions} mention${mentions === 1 ? "" : "s"} in the last 30 days`,
+    thin,
+    thinNote: thin ? `Thin evidence: only ${mentions} mention${mentions === 1 ? "" : "s"}, so treat this score with caution.` : null,
+    asOf,
+  };
 }

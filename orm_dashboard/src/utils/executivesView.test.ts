@@ -67,3 +67,25 @@ describe("Executives page source", () => {
     expect(src).toContain("Confirm add");
   });
 });
+
+
+import { pickTopTrackedExecutives, trackedCardView } from "./executivesView";
+
+describe("default tracked-executive cards", () => {
+  const rows = [
+    { name: "NoCov", score: 0, health_status: "INSUFFICIENT_EVIDENCE", document_count: 0 },
+    { name: "Low", score: 40, grade: "D", health_status: "COMPLETE", document_count: 9 },
+    { name: "High", score: 70, grade: "B", health_status: "COMPLETE", document_count: 3 },
+  ];
+  it("scored people first by score; unscored last; capped", () => {
+    expect(pickTopTrackedExecutives(rows).map(r => r.name)).toEqual(["High", "Low", "NoCov"]);
+    expect(pickTopTrackedExecutives(rows, 2).map(r => r.name)).toEqual(["High", "Low"]);
+    expect(pickTopTrackedExecutives(null)).toEqual([]);
+  });
+  it("cards say what happened", () => {
+    expect(trackedCardView(rows[0], "Acme").headline).toBe("No score yet");
+    expect(trackedCardView(rows[0], "Acme").detail).toContain("No coverage mentioning Acme");
+    expect(trackedCardView(rows[2], "Acme")).toMatchObject({ hasScore: true, headline: "70.00 · grade B", detail: "3 articles in the last 30 days" });
+    expect(trackedCardView({ ...rows[2], document_count: 2 }, "Acme").headline).toContain("grade withheld");
+  });
+});

@@ -16,13 +16,14 @@ import { tooltipScoreFormatter } from "@/utils/formatScore";
 import { fetchDocumentDetails, searchCompetitor, fetchTopicDistribution } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
+import { formatDMY } from "@/utils/dateFormat";
 import { ProductCompareSection } from "@/components/ProductCompareSection";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { CompetitorRadarAxesDefinition, CompetitorComparableScoreDefinition, CompetitorShareOfVoiceDefinition, TopicOwnershipDefinition } from "@/lib/metricDefinitions";
 import {
   MIN_TOPIC_COMPARISON_COUNT, ACTIVITY_ARTICLE_CAP, hasEvidence, clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice,
   rankedEntityCount, rankLabel, emptyStateMessage, comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption,
-  asOfLabel, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, lowEvidenceTitle, riskTileLabel, fixed,
+  asOfLabel, competitorCardView, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, lowEvidenceTitle, riskTileLabel, fixed,
 } from "@/utils/competitorCompare";
 
 export interface CompetitorsTabProps {
@@ -163,15 +164,19 @@ export function CompetitorsTab({
     }
   }
 
-  async function handleCompetitorSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const query = searchQuery.trim();
+  function startCompetitorSearch(raw: string) {
+    const query = raw.trim();
     if (!clientId || !query) return;
     searchPollRef.current.cancelled = false;
     setSearchLoading(true);
     setSearchErrorMsg(null);
     setSearchResult(null);
     pollCompetitorSearch(query, 1);
+  }
+
+  async function handleCompetitorSearch(e: React.FormEvent) {
+    e.preventDefault();
+    startCompetitorSearch(searchQuery);
   }
 
   useEffect(() => {
@@ -450,7 +455,46 @@ export function CompetitorsTab({
         </CardContent>
       </Card>
 
-      {!hasTrackedCompetitors && (() => {
+      {!hasTrackedCompetitors && comparedNames.length > 0 && searchResult?.status !== "searching" && searchResult?.status !== "unpromoted_candidate" && searchResult?.status !== "tracked" && (
+        <Card className={glassCard(theme)}>
+          <div className={SPECULAR_LINE} />
+          <CardHeader className="pb-3">
+            <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)}`}>
+              {comparedNames.length} competitor{comparedNames.length === 1 ? " is" : "s are"} being compared with {activeClientName}
+            </CardTitle>
+            <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
+              Scores use articles from the last 30 days that also mention {activeClientName}. Select a card for the head-to-head.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {(normalizedBenchmarks || []).map((b: any) => {
+                const v = competitorCardView(b, activeClientName);
+                return (
+                  <button
+                    key={b.competitor_id || v.name}
+                    type="button"
+                    onClick={() => { setSearchQuery(v.name); startCompetitorSearch(v.name); }}
+                    className={`text-left rounded-2xl p-4 space-y-1.5 border ${isDark ? "border-white/[0.10] bg-black/30 hover:bg-white/[0.04]" : "border-black/[0.06] bg-black/[0.03] hover:bg-black/[0.02]"}`}
+                  >
+                    <span className={`block font-mono text-sm font-bold ${bodyText(theme)}`}>{v.name}</span>
+                    <span className={`block font-mono text-xl font-bold ${v.hasScore ? "text-[#D4AF37]" : mutedText(theme)}`}>{v.scoreText}</span>
+                    <span className={`block text-xs ${mutedText(theme)}`}>{v.scoreMeaning}</span>
+                    {v.rankText && <span className={`block text-xs font-mono ${bodyText(theme)}`}>{v.rankText}</span>}
+                    {v.sovText && <span className={`block text-xs font-mono ${bodyText(theme)}`}>{v.sovText}</span>}
+                    {v.sovMeaning && <span className={`block text-xs ${mutedText(theme)}`}>{v.sovMeaning}</span>}
+                    {v.evidence && <span className={`block text-xs font-mono ${mutedText(theme)}`}>{v.evidence}</span>}
+                    {v.thinNote && <span className="block text-xs font-mono text-amber-500">{v.thinNote}</span>}
+                    {v.asOf && <span className={`block text-xs font-mono ${mutedText(theme)}`}>{v.asOf}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!hasTrackedCompetitors && comparedNames.length === 0 && (() => {
         const empty = emptyStateMessage({ comparedNames, searchStatus: searchResult?.status, clientName: activeClientName });
         if (!empty) return null;
         return (
@@ -777,7 +821,7 @@ export function CompetitorsTab({
                   </TableCell>
                   <TableCell className={`font-mono text-xs truncate max-w-[80px] ${mutedText(theme)}`}>{doc.source}</TableCell>
                   <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
-                    {doc.timestamp ? new Date(doc.timestamp).toLocaleDateString(undefined, { dateStyle: 'short' }) : "N/A"}
+                    {doc.timestamp ? formatDMY(doc.timestamp) : "N/A"}
                   </TableCell>
                   <TableCell className="text-right">
                     <button

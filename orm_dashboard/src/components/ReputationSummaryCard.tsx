@@ -6,7 +6,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { HeroGlass } from "@/components/theme/HeroGlass";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, AverageRiskScoreTrackedDefinition, EntitySentimentSplitDefinition, ShareOfVoiceDefinition } from "@/lib/metricDefinitions";
+import { ReputationScoreDefinition, ReputationGradeDefinition, RiskCountSummaryDefinition, RiskSignalsDefinition, AverageRiskScoreTrackedDefinition, EntitySentimentSplitDefinition, ShareOfVoiceDefinition } from "@/lib/metricDefinitions";
 import { useTabNavigation } from "@/hooks/useTabNavigation";
 
 export interface ReputationSummaryCardProps {
@@ -123,6 +123,10 @@ export function ReputationSummaryCard({
       {count} {word}
     </button>
   );
+  // All-history headline, with the last-365-days count beside it in plain words.
+  const riskSignalsSub = riskStats && riskStats.dangerCount365 !== null
+    ? `Critical + High, all time · ${riskStats.dangerCount365} in the last 365 days`
+    : "Critical + High, all time";
   const severityBreakdownSub = riskStats ? (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
       {severityCountLink(riskStats.critical, "Critical", "critical", "text-red-500")}
@@ -144,7 +148,7 @@ export function ReputationSummaryCard({
     onClick?: () => void;
   }> = [
     { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}${asOf ? ` · as of ${asOf}` : ""}` : scoreStatusText, color: "text-[#D4AF37]", highlight: true, def: reputationScoreAndGradeDef },
-    { label: "Risk Signals", value: riskValue(riskStats?.dangerCount), sub: "Critical + High", color: !riskStats ? "text-zinc-400" : riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true },
+    { label: "Risk Signals", value: riskValue(riskStats?.dangerCount), sub: riskSignalsSub, color: !riskStats ? "text-zinc-400" : riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true, def: <RiskSignalsDefinition /> },
     { label: "Total Risks Tracked (all time)", value: riskValue(riskStats?.total), sub: severityBreakdownSub, color: !riskStats ? "text-zinc-400" : RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Mentions", value: sentiment.positive, sub: "in coverage", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
     { label: "Overall Tone", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive} positive / ${sentiment.neutral} neutral / ${sentiment.negative} negative`, color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },

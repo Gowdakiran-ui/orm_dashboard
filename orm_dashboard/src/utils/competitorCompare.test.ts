@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import {
   clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice, rankedEntityCount, rankLabel, emptyStateMessage,
-  comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption, asOfLabel, noEvidenceMessage, hiddenTopics, hiddenTopicsNote,
+  comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption, asOfLabel, competitorCardView, noEvidenceMessage, hiddenTopics, hiddenTopicsNote,
   hasEvidence, RADAR_AXES, isLowEvidence, lowEvidenceTitle, riskTileLabel, fixed, LOW_EVIDENCE_MENTIONS,
 } from "@/utils/competitorCompare";
 
@@ -121,7 +121,7 @@ describe("evidence, dates and hidden topics (F-11, F-12)", () => {
     expect(evidenceCaption(null, "Godrej")).toBeNull();
   });
   it("as-of label is a date, deterministic in UTC, and null for bad input", () => {
-    expect(asOfLabel("2026-10-02T08:46:35.438010+00:00")).toBe("As of Oct 2, 2026");
+    expect(asOfLabel("2026-10-02T08:46:35.438010+00:00")).toBe("As of 02-10-2026");
     expect(asOfLabel(null)).toBeNull();
     expect(asOfLabel("not a date")).toBeNull();
   });
@@ -193,5 +193,34 @@ describe("no trend wording on the page (ground rule 2)", () => {
     const a = src.indexOf("export function CompetitorRadarAxesDefinition");
     const b = src.indexOf("export function TopicOwnershipDefinition");
     expect(src.slice(a, b)).not.toMatch(TREND);
+  });
+});
+
+
+describe("competitor cards", () => {
+  const row = (over: any) => ({ competitor_id: "1", competitor_name: "Lodha", rank: 1, reputation: 83.3, sov: 1.36, health_status: "COMPLETE", mentions_30d: 4, as_of: "2026-10-20T03:41:10Z", ...over });
+  it("a scored competitor gets a plain meaning per number and a dated 'Data as of'", () => {
+    const v = competitorCardView(row({}), "Godrej Properties");
+    expect(v).toMatchObject({ hasScore: true, scoreText: "83.3 / 100", rankText: "Ranked #1 with Godrej Properties", sovText: "1.4% share of voice", evidence: "Based on 4 mentions in the last 30 days", thin: false, thinNote: null });
+    expect(v.scoreMeaning).toContain("that also mention Godrej Properties");
+    expect(v.sovMeaning).toContain("about 1 are Lodha");
+    expect(v.asOf).toMatch(/^Data as of \d{2}-\d{2}-2026$/);
+  });
+  it("one mention shows the score with a thin-evidence caution (nothing is hidden or re-ranked)", () => {
+    const v = competitorCardView(row({ competitor_name: "Banke", reputation: 80, mentions_30d: 1 }), "Godrej");
+    expect(v.hasScore).toBe(true);
+    expect(v.thin).toBe(true);
+    expect(v.thinNote).toBe("Thin evidence: only 1 mention, so treat this score with caution.");
+  });
+  it("no evidence says what happened instead of a number", () => {
+    const v = competitorCardView(row({ competitor_name: "Orris", rank: 0, reputation: null, health_status: "INSUFFICIENT_EVIDENCE", mentions_30d: 0, sov: 0 }), "Godrej");
+    expect(v.hasScore).toBe(false);
+    expect(v.scoreText).toBe("Not enough coverage");
+    expect(v.scoreMeaning).toContain("No article from the last 30 days mentions both Orris and Godrej");
+  });
+  it("missing as_of / mentions are simply left out", () => {
+    const v = competitorCardView(row({ as_of: null, mentions_30d: null }), "Godrej");
+    expect(v.asOf).toBeNull();
+    expect(v.evidence).toBeNull();
   });
 });

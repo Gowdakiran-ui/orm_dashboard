@@ -471,7 +471,8 @@ export function EntitySentimentSplitDefinition() {
         products, or a tracked person in one piece of coverage, labelled
         Positive, Neutral or Negative by the sentiment model. Only coverage
         that also mentions the client&apos;s own brand or product counts, and
-        tracked competitors are left out.
+        tracked competitors are left out. The count covers all coverage to
+        date, not a recent window.
       </span>
       <span className="mt-1 block">
         One article can hold several mentions (one for the brand, one for each
@@ -539,6 +540,20 @@ export function ThreatConcentrationHeatmapDefinition() {
       <span className="block mt-1">
         <b>R:</b> that cell&apos;s average Risk Score (0–100). <b>S:</b> its
         average sentiment (-1.0 to +1.0).
+      </span>
+    </>
+  );
+}
+
+export function RiskSignalsDefinition() {
+  return (
+    <>
+      <span className="block font-bold">Risk Signals</span>
+      <span className="block">
+        How many pieces of coverage are serious enough to be rated Critical or High (a risk score above {MED_MAX}).
+        The big number counts every article ever collected for this client, however old, so a serious story from years
+        ago still shows. The smaller number counts only articles published in the last 365 days. Each article is counted
+        once, at its highest score.
       </span>
     </>
   );

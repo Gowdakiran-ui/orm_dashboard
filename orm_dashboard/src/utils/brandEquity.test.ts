@@ -25,6 +25,13 @@ describe("riskStatsFromSummary (server-computed document risk)", () => {
     expect(s.topRiskDocs.map(t => t.title)).toEqual(["a", "b"]);
   });
 
+  it("reads the last-365-days Critical+High count next to the all-history headline; null when absent", () => {
+    const s = riskStatsFromSummary({ ...block, critical: 2, high: 1, medium: 20, critical_high_365d: 1 })!;
+    expect(s.dangerCount).toBe(3);
+    expect(s.dangerCount365).toBe(1);
+    expect(riskStatsFromSummary(block)!.dangerCount365).toBeNull();
+  });
+
   it("different inputs give different outputs", () => {
     expect(riskStatsFromSummary({ ...block, critical: 2, medium: 20 })!.dangerCount).toBe(2);
     expect(riskStatsFromSummary({ ...block, critical: 2, medium: 20 })!.dominantLevel).toBe("CRITICAL");
@@ -175,6 +182,16 @@ describe("computeExecStats", () => {
     expect(s.highest.name).toBe("Ann");
     expect(s.lowest.name).toBe("Bee");
     expect(s.total).toBe(2);
+  });
+  it("a tie is described as a tie, never as one 'highest' and one 'lowest' with the same number", () => {
+    const view = (executives: unknown[]) => buildBrandEquityView({
+      reputationSummary: { reputation: { status: "ok", score: 70, grade: "B", computed_at: null }, document_risk: undefined, sentiment: { positive: 0, neutral: 0, negative: 0, dominant: null }, executive_alert: { open: false, alert: null } },
+      planAdvisory: { flagged: false, lead: "Nothing." }, executives, activeClientName: "Acme", normalizedBenchmarks: [],
+    }).peopleText;
+    const tied = view([{ name: "Pia", score: 60.192, document_count: 72 }, { name: "Gee", score: 60.192, document_count: 4 }]);
+    expect(tied).toContain("Gee and Pia are tied on reputation score (60.2).");
+    expect(tied).not.toContain("has the highest");
+    expect(view([{ name: "Pia", score: 61, document_count: 72 }, { name: "Gee", score: 59, document_count: 4 }])).toContain("Pia has the highest reputation score among them (61.0), while Gee has the lowest (59.0).");
   });
   it("an executive without a numeric score is not read as 0", () => {
     const s = computeExecStats([...execs, { name: "NoScore", score: null, document_count: 2 }]);

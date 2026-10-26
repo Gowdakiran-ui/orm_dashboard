@@ -1,4 +1,5 @@
 import { decodeHtmlEntities } from "@/lib/utils";
+import { formatDMYTime } from "./dateFormat";
 
 // Pure logic behind the Brand Equity page (ReputationSummaryCard). Kept free of
 // React so every number and sentence the page states can be unit-tested.
@@ -25,6 +26,8 @@ export interface RiskStats {
   // When the newest of these scores was computed (ISO), if known.
   asOf: string | null;
   dangerCount: number;
+  // Critical + High among documents published in the last 365 days; null when an older payload does not send it.
+  dangerCount365: number | null;
   dominantLevel: "CRITICAL" | "HIGH" | "MEDIUM" | "NONE";
   topRiskDocs: { title: string; risk: number }[];
   // Items of coverage that have no risk event at all: not "zero risk", not counted.
@@ -52,6 +55,7 @@ export function riskStatsFromSummary(block: any): RiskStats | null {
     highest: n(block.highest),
     asOf: typeof block.as_of === "string" ? block.as_of : null,
     dangerCount: critical + high,
+    dangerCount365: n(block.critical_high_365d),
     dominantLevel: critical > 0 ? "CRITICAL" : high > 0 ? "HIGH" : medium > 0 ? "MEDIUM" : "NONE",
     topRiskDocs: top,
     unscored: n(block.unscored_documents) ?? 0,
@@ -202,7 +206,7 @@ export function formatAsOf(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDMYTime(d);
 }
 
 // ---- Brand Equity page view ------------------------------------------------
@@ -314,7 +318,8 @@ export function buildBrandEquityView(i: BrandEquityViewInput) {
       };
 
   const sentimentText = (() => {
-    const counts = `${sentiment.positive} positive, ${sentiment.neutral} neutral and ${sentiment.negative} negative mentions`;
+    // The server counts one row per brand / product / tracked-person mention in each article, over all coverage to date.
+    const counts = `${sentiment.positive} positive, ${sentiment.neutral} neutral and ${sentiment.negative} negative mentions (all time; one article can hold several mentions)`;
     if (!sentiment.dominant) return `No mentions of ${name} with a sentiment reading yet.`;
     if (sentiment.dominant === "mixed") return `Coverage about ${name} is evenly split between its two most common tones: ${counts}.`;
     return `Coverage about ${name} is mostly ${sentiment.dominant}: ${counts}.`;
@@ -327,7 +332,10 @@ export function buildBrandEquityView(i: BrandEquityViewInput) {
       ? `${execStats.mostMentioned} is the most-mentioned person, out of ${execStats.total} notable people tracked in ${name}'s coverage (not necessarily ${name}'s own staff).`
       : `No notable people have been tracked yet in ${name}'s coverage.`) +
       (execStats.highest && execStats.lowest && execStats.highest !== execStats.lowest
-        ? ` ${execStats.highest.name} has the highest reputation score among them (${execStats.highest.score.toFixed(1)}), while ${execStats.lowest.name} has the lowest (${execStats.lowest.score.toFixed(1)}).`
+        ? (execStats.highest.score.toFixed(1) === execStats.lowest.score.toFixed(1)
+          // a tie is not a "highest" and a "lowest": say so
+          ? ` ${execStats.highest.name} and ${execStats.lowest.name} are tied on reputation score (${execStats.highest.score.toFixed(1)}).`
+          : ` ${execStats.highest.name} has the highest reputation score among them (${execStats.highest.score.toFixed(1)}), while ${execStats.lowest.name} has the lowest (${execStats.lowest.score.toFixed(1)}).`)
         : "");
   })();
 

@@ -24,12 +24,12 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 let host: HTMLDivElement;
 let root: Root;
 
-async function mount(clientId = "client-1") {
+async function mount(clientId = "client-1", trackedExecutives?: any[]) {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root.render(React.createElement(ThemeProvider, null, React.createElement(ExecutivesTab, { clientId, clientName: "Godrej Properties" })));
+    root.render(React.createElement(ThemeProvider, null, React.createElement(ExecutivesTab, { clientId, clientName: "Godrej Properties", trackedExecutives })));
   });
 }
 
@@ -64,6 +64,42 @@ describe("Executives page before any search", () => {
     expect(host.querySelectorAll("table").length).toBe(0);
     expect(api.searchExecutive).not.toHaveBeenCalled();
     expect(api.fetchReviewedExecutiveCandidates).not.toHaveBeenCalled();     // the reviewed-candidates endpoint is not used by the page
+  });
+});
+
+describe("default view: top tracked executives", () => {
+  const tracked = [
+    { entity_id: "a", name: "Gaurav Pandey", score: 0, health_status: "INSUFFICIENT_EVIDENCE", document_count: 0 },
+    { entity_id: "b", name: "Pirojsha Godrej", score: 60.2, grade: "C", health_status: "COMPLETE", document_count: 2 },
+    { entity_id: "c", name: "Geetika Trehan", score: 60.2, grade: "C", health_status: "COMPLETE", document_count: 1 },
+    ...Array.from({ length: 8 }, (_, i) => ({ entity_id: `x${i}`, name: `Extra Person ${i}`, score: 50 - i, grade: "D", health_status: "COMPLETE", document_count: 5 })),
+  ];
+
+  it("lists at most 8 tracked people, scored first, and says why an unscored person has no score", async () => {
+    await mount("client-1", tracked);
+    const text = host.textContent || "";
+    expect(text).toContain("Tracked executives");
+    const cards = Array.from(host.querySelectorAll("button")).filter(b => b.textContent?.includes("Person") || b.textContent?.includes("Godrej") || b.textContent?.includes("Trehan") || b.textContent?.includes("Pandey"));
+    expect(cards.length).toBe(8);
+    expect(text).toContain("Pirojsha Godrej");
+    expect(text).not.toContain("Gaurav Pandey");           // 11 tracked, unscored sorts last and falls outside the top 8
+    expect(text).not.toContain("No executive selected yet.");
+  });
+
+  it("an unscored person shows a plain reason, and a card opens the same read-only search", async () => {
+    await mount("client-1", tracked.slice(0, 3));
+    expect(host.textContent).toContain("No coverage mentioning Godrej Properties together with this person in the last 30 days.");
+    api.searchExecutive.mockResolvedValue({ status: "tracked_no_coverage", executive: { name: "Gaurav Pandey", entity_id: "a" }, client_name: "Godrej Properties" });
+    await click(buttonByText("Gaurav Pandey") ?? Array.from(host.querySelectorAll("button")).find(b => b.textContent?.includes("Gaurav Pandey")));
+    await act(async () => { await Promise.resolve(); });
+    expect(api.searchExecutive).toHaveBeenCalledWith("client-1", "Gaurav Pandey");
+    expect(host.textContent).toContain("Older articles may exist; they are not counted.");
+  });
+
+  it("never lists candidates and has no free-text add", async () => {
+    await mount("client-1", tracked.slice(0, 3));
+    expect(host.textContent).not.toContain("Add This Executive");
+    expect(api.fetchReviewedExecutiveCandidates).not.toHaveBeenCalled();
   });
 });
 
@@ -103,13 +139,14 @@ describe("search results", () => {
     await mount();
     api.searchExecutive.mockResolvedValue({ status: "not_found" });
     await search("Suraj Kumar");
-    expect(host.textContent).toContain("No tracked executive or candidate matches");
+    expect(host.textContent).toContain("No tracked executive or discovered candidate matches");
+    expect(host.textContent).toContain("Only people already found in the coverage can be tracked");
     api.searchExecutive.mockResolvedValue({ status: "invalid_name", reason: "two names run together without a space" });
     await search("Nadir GodrejGautam Adani");
     expect(host.textContent).toContain("two names run together without a space");
     api.searchExecutive.mockResolvedValue({ status: "tracked_no_coverage", executive: { name: "Nadir Godrej", entity_id: "e2" }, client_name: "Godrej Properties" });
     await search("Nadir Godrej");
-    expect(host.textContent).toContain("Tracked, but no coverage that mentions Godrej Properties together with this person");
+    expect(host.textContent).toContain("no article published in the last 30 days mentions Godrej Properties together with this person");
   });
 
   it("a tracked person shows the corrected display: events from the backend, Low evidence, withheld grade, Based on N documents, stale label", async () => {

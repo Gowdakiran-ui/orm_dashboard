@@ -265,6 +265,9 @@ function DashboardShell() {
           activeTab={activeTab}
           currentTime={currentTime}
           liveDegraded={data.livePollDegraded}
+          dataAsOf={data.reputationSummaryLoading || !data.reputationSummary
+            ? { state: "loading" }
+            : { state: "ready", finishedAt: data.reputationSummary?.last_pipeline_run?.finished_at ?? null }}
           actions={
             <ExportReportButton
               getSnapshot={getReportSnapshot}
@@ -414,6 +417,7 @@ function DashboardShell() {
                   <ExecutivesTab
                     clientId={data.clientId}
                     clientName={activeClientName}
+                    trackedExecutives={data.executives}
                   />
                 </ErrorBoundary>
               )}

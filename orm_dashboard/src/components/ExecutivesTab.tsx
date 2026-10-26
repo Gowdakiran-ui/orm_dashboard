@@ -12,16 +12,20 @@ import { glassCard, mutedText, bodyText } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 import { ExecutiveSentimentBreakdownDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
-import { executiveView, basedOnLine, eventsLabel, appearsInLine } from "@/utils/executivesView";
+import { executiveView, basedOnLine, eventsLabel, appearsInLine, pickTopTrackedExecutives, trackedCardView, notFoundLine, noCoverageLine } from "@/utils/executivesView";
+import { formatDMY } from "@/utils/dateFormat";
 
 export interface ExecutivesTabProps {
   clientId?: string | null;
   clientName?: string;
+  // The client's already-tracked executives (the same list Brand Equity reads). Candidates are never listed.
+  trackedExecutives?: any[] | null;
 }
 
-// The page shows only the search box until a search is made. Nothing about tracked people or candidates is listed:
-// a name is looked up (read-only) and the result is shown. The only way onto the page's data is a search.
-export function ExecutivesTab({ clientId, clientName = "this client" }: ExecutivesTabProps) {
+// The page opens on the client's top tracked executives (never candidates). A card, or a search by name, opens the
+// read-only detail. Adding a person is still only possible from a searched candidate, after a confirmation.
+export function ExecutivesTab({ clientId, clientName = "this client", trackedExecutives = null }: ExecutivesTabProps) {
+  const topTracked = useMemo(() => pickTopTrackedExecutives(trackedExecutives), [trackedExecutives]);
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const cardBorder = isDark ? "border-white/[0.12]" : "border-black/[0.06]";
@@ -204,7 +208,7 @@ export function ExecutivesTab({ clientId, clientName = "this client" }: Executiv
             <div className={`border rounded p-4 space-y-1 ${surfaceBorder} ${surfaceBg}`}>
               <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.executive?.name}</span>
               <p className={`text-xs font-mono ${mutedText(theme)}`}>
-                Tracked, but no coverage that mentions {searchResult.client_name || clientName} together with this person. There is nothing to score.
+                {noCoverageLine(searchResult.client_name || clientName)}
               </p>
             </div>
           )}
@@ -227,7 +231,7 @@ export function ExecutivesTab({ clientId, clientName = "this client" }: Executiv
 
           {searchResult && searchResult.status === "not_found" && (
             <p className={`text-xs font-mono ${mutedText(theme)}`}>
-              No tracked executive or candidate matches {`"`}{searchQuery}{`"`}.
+              {notFoundLine(searchQuery, clientName)}
             </p>
           )}
 
@@ -241,7 +245,40 @@ export function ExecutivesTab({ clientId, clientName = "this client" }: Executiv
         </CardContent>
       </Card>
 
-      {!selectedExecutive && (
+      {!selectedExecutive && topTracked.length > 0 && (
+        <Card className={glassCard(theme)}>
+          <CardHeader className={`pb-3 border-b ${cardBorder}`}>
+            <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
+              <Users className="h-4 w-4 text-[#38BDF8] mr-2" />
+              Tracked executives
+            </CardTitle>
+            <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
+              Top {topTracked.length} people tracked for {clientName}, scored from coverage published in the last 30 days. Select one to see the articles behind the score.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {topTracked.map((e: any) => {
+                const v = trackedCardView(e, clientName);
+                return (
+                  <button
+                    key={e.entity_id || e.name}
+                    type="button"
+                    onClick={() => { setAddMessage(null); setSearchQuery(e.name); runSearch(e.name); }}
+                    className={`text-left border rounded p-3 space-y-1 ${surfaceBorder} ${surfaceBg} ${rowHoverBg}`}
+                  >
+                    <span className={`block font-mono text-sm font-bold ${bodyText(theme)}`}>{e.name}</span>
+                    <span className={`block font-mono text-lg font-bold ${v.hasScore ? "text-[#D4AF37]" : mutedText(theme)}`}>{v.headline}</span>
+                    <span className={`block font-mono text-xs ${mutedText(theme)}`}>{v.detail}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!selectedExecutive && topTracked.length === 0 && (
         <Card className={`${glassCard(theme)} h-40`}>
           <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
             <Users className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
@@ -341,7 +378,7 @@ export function ExecutivesTab({ clientId, clientName = "this client" }: Executiv
                         </TableCell>
                         <TableCell className={`font-mono text-xs truncate max-w-[100px] ${mutedText(theme)}`}>{doc.source}</TableCell>
                         <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
-                          {doc.timestamp ? new Date(doc.timestamp).toLocaleDateString(undefined, { dateStyle: 'short' }) : "N/A"}
+                          {doc.timestamp ? formatDMY(doc.timestamp) : "N/A"}
                         </TableCell>
                         <TableCell className={`font-mono text-xs text-center ${doc.names_executive ? bodyText(theme) : "text-amber-500"}`}>
                           {doc.names_executive ? "Yes" : "No"}
