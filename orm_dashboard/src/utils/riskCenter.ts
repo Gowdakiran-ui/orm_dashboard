@@ -7,6 +7,7 @@
 
 import { getRiskLevel, RISK_THRESHOLDS, type RiskLevel } from "./riskLevel";
 import { sourceState, type RiskStats } from "./brandEquity";
+import { formatDMYTime } from "./dateFormat";
 
 export type FlaggedLevel = Exclude<RiskLevel, "LOW">;
 
@@ -165,7 +166,7 @@ export function dateLabel(d: any, locale?: string): { text: string; collected: b
   if (!d?.timestamp) return { text: "N/A", collected: false };
   const t = new Date(d.timestamp);
   if (Number.isNaN(t.getTime())) return { text: "N/A", collected: false };
-  return { text: t.toLocaleString(locale, { dateStyle: "short", timeStyle: "short" }), collected: d.date_basis === "collected" };
+  return { text: formatDMYTime(t), collected: d.date_basis === "collected" };
 }
 
 // ---- Date filter (?date=YYYY-MM-DD, local day) -----------------------------

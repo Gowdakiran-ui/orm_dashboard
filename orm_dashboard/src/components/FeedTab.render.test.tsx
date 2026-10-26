@@ -8,6 +8,7 @@ import { createRoot, Root } from "react-dom/client";
 const api = vi.hoisted(() => ({ fetchDocumentDetails: vi.fn() }));
 vi.mock("@/lib/api", () => api);
 
+import { formatDMYTime } from "@/utils/dateFormat";
 import { FeedTab } from "./FeedTab";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
@@ -101,15 +102,14 @@ describe("B2 classification strength", () => {
 });
 
 describe("B4 row dates", () => {
-  it("today's row keeps time only; an older row also shows its date", async () => {
+  it("every row shows its date as DD-MM-YYYY, today's included, then the time", async () => {
     const today = new Date();
     const old = new Date("2017-08-16T11:48:47+00:00");
     await mount({ documents: [doc(0, { timestamp: today.toISOString() }), doc(1, { timestamp: old.toISOString() })] });
-    const timeOnly = today.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    expect(rowTime(0)).toBe(timeOnly);
-    const t1 = rowTime(1) || "";
-    expect(t1).toContain("2017");
-    expect(t1).toContain(old.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    expect(rowTime(0)).toBe(formatDMYTime(today));
+    expect(rowTime(0)).toMatch(/^\d{2}-\d{2}-\d{4}, \d{2}:\d{2} (AM|PM)$/);
+    expect(rowTime(1)).toBe(formatDMYTime(old));
+    expect(rowTime(1)).toContain("-2017");
   });
   it("a row with no timestamp still reads 'Recent'", async () => {
     await mount({ documents: [doc(0, { timestamp: null })] });

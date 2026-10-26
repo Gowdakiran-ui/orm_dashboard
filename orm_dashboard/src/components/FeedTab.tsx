@@ -15,6 +15,7 @@ import { fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
+import { formatDMYTime } from "@/utils/dateFormat";
 
 
 // Real ingest-time source categories (Document.document_type, exposed by
@@ -186,16 +187,8 @@ export function FeedTab({
               {filteredDocuments.slice(0, feedRenderCount).map((d, i) => {
                 const docRiskColor = d.risk > RISK_THRESHOLDS.HIGH_TO_CRITICAL ? "text-red-400 border-red-950/40 bg-red-950/20" : d.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400 border-amber-950/40 bg-amber-950/20" : "text-sky-400 border-sky-950/40 bg-sky-950/20";
 
-                // Timestamp formatter
-                // Time only for today's rows; any older row also shows its date,
-                // so a 2017 article doesn't read like today's.
-                const rowDate = d.timestamp ? new Date(d.timestamp) : null;
-                const rowTimeText = rowDate ? rowDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
-                const formattedTime = !rowDate
-                  ? "Recent"
-                  : rowDate.toDateString() === new Date().toDateString()
-                    ? rowTimeText
-                    : `${rowDate.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}, ${rowTimeText}`;
+                // Every row shows its date (DD-MM-YYYY) and time, today's included.
+                const formattedTime = d.timestamp ? formatDMYTime(d.timestamp, "Recent") : "Recent";
                 const isPlaceholder = isPlaceholderTitle(d.title, d.source);
 
                 return (

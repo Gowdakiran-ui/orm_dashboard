@@ -3,6 +3,7 @@ import { calculateSentimentDistribution } from "@/utils/calculateSentimentDistri
 import { getRiskLevel } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { buildRiskHeatmap } from "@/utils/riskHeatmap";
+import { formatDM, formatDMYTime } from "@/utils/dateFormat";
 
 interface AnalyticsProps {
   documents: any[];
@@ -152,7 +153,7 @@ export function useAnalytics({
     const buckets: Record<string, number> = {};
     (documents || []).forEach(d => {
       if (d && d.timestamp) {
-        const dateStr = new Date(d.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const dateStr = formatDM(d.timestamp);
         buckets[dateStr] = (buckets[dateStr] || 0) + 1;
       }
     });
@@ -222,7 +223,7 @@ export function useAnalytics({
     const buckets: Record<string, { sum: number, count: number }> = {};
     (documents || []).forEach(d => {
       if (d && d.timestamp) {
-        const dateStr = new Date(d.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const dateStr = formatDM(d.timestamp);
         if (!buckets[dateStr]) {
           buckets[dateStr] = { sum: 0, count: 0 };
         }
@@ -245,7 +246,7 @@ export function useAnalytics({
       if (a) {
         const ts = a.timestamp || a.created_at;
         if (ts) {
-          const dateStr = new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          const dateStr = formatDM(ts);
           buckets[dateStr] = (buckets[dateStr] || 0) + 1;
         }
       }
@@ -315,7 +316,7 @@ export function useAnalytics({
     const formatLastRun = (isoStr: string | null) => {
       if (!isoStr) return "Never";
       try {
-        return new Date(isoStr).toLocaleTimeString();
+        return formatDMYTime(isoStr);
       } catch {
         return "Unknown";
       }

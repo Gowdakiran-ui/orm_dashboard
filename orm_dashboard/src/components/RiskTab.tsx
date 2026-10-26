@@ -17,6 +17,7 @@ import {
   CriticalRisksVsActiveAlertsDefinition,
   FlaggedArticlesDefinition,
 } from "@/lib/metricDefinitions";
+import { formatDMYTime } from "@/utils/dateFormat";
 import { riskStatsFromSummary, sourceState, formatAsOf } from "@/utils/brandEquity";
 import {
   flaggedDocs, buildMatrix, legacyCellDocs, tilesFromSummary, reasonSentence, dateLabel,
@@ -324,7 +325,7 @@ export function RiskTab({
                         <span className={`text-xs shrink-0 hidden sm:inline ${mutedText(theme)}`}>{alert.alert_type}</span>
                       </div>
                       <span className={`text-xs shrink-0 sm:ml-3 ${mutedText(theme)}`}>
-                        {alert.created_at ? new Date(alert.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "N/A"}
+                        {alert.created_at ? formatDMYTime(alert.created_at) : "N/A"}
                       </span>
                     </button>
 

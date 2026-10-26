@@ -14,11 +14,13 @@ describe("formatChartDate", () => {
     expect(formatChartDate("")).toBe("N/A");
   });
 
-  it("returns 'Invalid Date' for an unparseable date string (JS Date does not throw)", () => {
-    // `new Date("not-a-date")` doesn't throw -- it produces an Invalid Date
-    // object, so formatChartDate's try/catch never triggers here; the N/A
-    // fallback is reserved for a genuinely thrown error (or null/undefined).
-    expect(formatChartDate("not-a-date")).toBe("Invalid Date");
+  it("returns 'N/A' for an unparseable date string", () => {
+    expect(formatChartDate("not-a-date")).toBe("N/A");
+  });
+
+  it("is day-month (DD-MM), with the hour when asked", () => {
+    expect(formatChartDate(new Date(2026, 8, 4, 16).toISOString())).toBe("04-09");
+    expect(formatChartDate(new Date(2026, 8, 4, 16).toISOString(), true)).toBe("04-09, 04 PM");
   });
 
   it("returns a real (non-fallback) formatted string for a valid ISO date", () => {

@@ -3,14 +3,21 @@ import { Terminal, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassPill, mutedText } from "@/components/theme/tokens";
+import { formatDMYTime } from "@/utils/dateFormat";
 
 export interface DashboardHeaderProps {
   activeClientName: string;
   activeTab: string;
   currentTime: string;
   liveDegraded?: boolean;
+  // When the last successful Run Pipeline finished: "loading" until known, null = no successful run yet.
+  dataAsOf?: { state: "loading" } | { state: "ready"; finishedAt: string | null };
   // Optional controls shown at the start of the right-hand cluster (the Export Report button).
   actions?: React.ReactNode;
+}
+
+export function dataAsOfText(finishedAt: string | null): string {
+  return finishedAt ? `Data as of ${formatDMYTime(finishedAt)} (last Run Pipeline)` : "No successful Run Pipeline yet";
 }
 
 export function DashboardHeader({
@@ -18,6 +25,7 @@ export function DashboardHeader({
   activeTab,
   currentTime,
   liveDegraded = false,
+  dataAsOf,
   actions
 }: DashboardHeaderProps) {
   const { theme } = useTheme();
@@ -54,6 +62,11 @@ export function DashboardHeader({
 
       <div className="flex items-center space-x-6 text-xs font-mono">
         {actions}
+        {activeTab !== "admin" && dataAsOf && dataAsOf.state === "ready" && (
+          <span className={mutedText(theme)} title="Time the last successful Run Pipeline finished. Everything on this page is as of then.">
+            {dataAsOfText(dataAsOf.finishedAt)}
+          </span>
+        )}
         <div className={`flex items-center space-x-2 ${mutedText(theme)}`}>
           <Clock className="h-4 w-4" style={{ color: accent }} />
           <span>{currentTime}</span>
