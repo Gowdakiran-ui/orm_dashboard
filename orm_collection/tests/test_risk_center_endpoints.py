@@ -220,7 +220,7 @@ def test_empty_client_summary_has_null_highest_average_and_as_of(db):
     cid = _client(db)
     r = ci._document_risk_summary(db, cid)
     assert r == {"visible_documents": 0, "scored_documents": 0, "unscored_documents": 0, "total": 0,
-                 "critical": 0, "high": 0, "medium": 0, "average": None, "highest": None, "as_of": None, "top": []}
+                 "critical": 0, "high": 0, "medium": 0, "critical_high_365d": 0, "average": None, "highest": None, "as_of": None, "top": []}
 
 
 # ---------------------------------------------------------------------------

@@ -415,6 +415,10 @@ def _build_benchmark_response(
         "health_status": b.health_status,
         "confidence_score": b.confidence_score,
         "data_coverage": b.data_coverage,
+        # Additive (Competitor Compare cards): the mention count the score rests on (30-day, brand co-occurring)
+        # and when this row was scored, so thin or stale data is visible per competitor.
+        "mentions_30d": (b.evidence_metadata or {}).get("mentions_30d"),
+        "as_of": b.created_at.isoformat() if b.created_at else None,
         # Engine's own client figures for this run (additive fields).
         "client_comparable_score": client_comparable_score,
         "client_rank": client_rank,
@@ -1251,6 +1255,7 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
     counted as zero-risk. `as_of` is when the newest of these scores was
     computed (None if there are none).
     """
+    from datetime import datetime, timedelta, timezone
     from app.core.risk_config import RISK_THRESHOLDS
     from app.api.endpoints.documents import get_client_visible_document_ids
     from app.models.document import Document
@@ -1280,6 +1285,16 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
     medium = len(risky_raw) - critical - high
     risky = {d: round(v) for d, v in risky_raw.items()}
 
+    # Critical + High among documents PUBLISHED in the last 365 days (additive field; the headline
+    # count above stays all-history). Same per-document highest-score basis as `critical` / `high`.
+    danger_ids = [d for d, v in risky_raw.items() if v > RISK_THRESHOLDS["MEDIUM_TO_HIGH"]]
+    critical_high_365d = 0
+    if danger_ids:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=365)
+        critical_high_365d = db.query(Document.id).filter(
+            Document.id.in_(danger_ids), Document.published_at >= cutoff
+        ).count()
+
     top: List[Dict[str, Any]] = []
     if risky:
         ordered_ids = sorted(risky, key=lambda d: (-risky[d], str(d)))[:20]
@@ -1295,6 +1310,7 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
         "critical": critical,
         "high": high,
         "medium": medium,
+        "critical_high_365d": critical_high_365d,
         "average": (sum(risky.values()) / len(risky)) if risky else None,
         "highest": max(risky_raw.values()) if risky_raw else None,
         "as_of": as_of.isoformat() if as_of else None,
@@ -1478,11 +1494,19 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
             "alert": {"title": alert.title, "entity_name": entity.name if entity else None, "severity": alert.severity}
         }
 
+    # Additive: when the last SUCCESSFUL Run Pipeline for this client finished, shown on every main page as
+    # "Data as of ..." so stale data cannot be mistaken for current. None when no run has succeeded yet.
+    from app.models.pipeline_run import PipelineRun
+    last_ok = db.query(PipelineRun.finished_at).filter(
+        PipelineRun.client_id == str(client_id), PipelineRun.status == "SUCCESS", PipelineRun.finished_at.isnot(None)
+    ).order_by(PipelineRun.finished_at.desc()).first()
+
     return {
         "reputation": reputation,
         "document_risk": _document_risk_summary(db, client_id),
         "sentiment": sentiment,
-        "executive_alert": executive_alert
+        "executive_alert": executive_alert,
+        "last_pipeline_run": {"finished_at": last_ok[0].isoformat() if last_ok and last_ok[0] else None},
     }
 
 @router.get("/{client_id}/plan-advisory", response_model=Dict[str, Any])

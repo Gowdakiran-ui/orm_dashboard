@@ -277,7 +277,8 @@ def test_plan_advisory_flagged_true_for_open_executive_alert(db):
 def _row(rank, sov, rep, name, health="COMPLETE", rid=None, eid=None):
     b = SimpleNamespace(id=uuid.uuid4(), competitor_entity_id=eid or uuid.uuid4(), rank=rank, share_of_voice=sov,
                         reputation_score=rep, sentiment_score=0.1, risk_score=5.0, visibility_score=10.0,
-                        health_status=health, confidence_score=0.9, data_coverage=0.9)
+                        health_status=health, confidence_score=0.9, data_coverage=0.9,
+                        evidence_metadata={"mentions_30d": 4.0}, created_at=datetime.datetime(2026, 10, 20, 3, 41, tzinfo=datetime.timezone.utc))
     return (b, SimpleNamespace(name=name))
 
 
@@ -286,6 +287,12 @@ GODREJ_LIKE = lambda: [
     _row(5, 1.58, 62.79, "Orris"), _row(6, 1.00, 51.73, "Lodha"),
     _row(0, 0.0, 0.0, "M3M", health="INSUFFICIENT_EVIDENCE"),
 ]
+
+
+def test_benchmark_rows_carry_the_mention_count_and_as_of_for_each_competitor():
+    out = ci._build_benchmark_response([_row(1, 1.0, 80.0, "A")], 70.0, 25, 0)
+    assert out[0]["mentions_30d"] == 4.0
+    assert out[0]["as_of"] == "2026-10-20T03:41:00+00:00"
 
 
 def test_benchmark_client_rank_counts_valid_competitors_with_a_higher_score():
@@ -533,13 +540,46 @@ def test_document_risk_summary_empty_client_has_no_average(db):
     cid = _client(db)
     r = ci._document_risk_summary(db, cid)
     assert r == {"visible_documents": 0, "scored_documents": 0, "unscored_documents": 0, "total": 0,
-                 "critical": 0, "high": 0, "medium": 0, "average": None, "highest": None, "as_of": None, "top": []}
+                 "critical": 0, "high": 0, "medium": 0, "critical_high_365d": 0, "average": None, "highest": None, "as_of": None, "top": []}
+
+
+def test_document_risk_summary_counts_critical_high_published_in_last_365_days(db):
+    cid = _client(db)
+    db.info["cid"] = cid
+    brand = _entity(db, cid, "Acme", "brand")
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    def doc(title, score, days_ago):
+        d = _visible_doc(db, brand, title, scores=[score])
+        db.query(Document).filter(Document.id == d).update({"published_at": now - datetime.timedelta(days=days_ago)})
+        db.commit()
+
+    doc("old-crit", 90.0, 900)        # all-history only
+    doc("recent-crit", 90.0, 30)
+    doc("recent-high", 60.0, 300)
+    doc("old-high", 60.0, 400)
+    doc("recent-medium", 40.0, 10)    # medium never counts
+    r = ci._document_risk_summary(db, cid)
+    assert (r["critical"], r["high"]) == (2, 2)               # headline stays all-history
+    assert r["critical_high_365d"] == 2
 
 
 def test_reputation_summary_exposes_document_risk_block(db):
     cid = _client(db)
     s = _summary(db, cid)
     assert "document_risk" in s and s["document_risk"]["total"] == 0
+
+
+def test_reputation_summary_reports_the_last_successful_pipeline_run(db):
+    from app.models.pipeline_run import PipelineRun
+    cid = _client(db)
+    assert _summary(db, cid)["last_pipeline_run"] == {"finished_at": None}          # no run yet
+    t = lambda h: datetime.datetime(2026, 10, 20, h, 0, tzinfo=datetime.timezone.utc)
+    for rid, status, fin in (("r1", "SUCCESS", t(3)), ("r2", "FAILED", t(9)), ("r3", "SUCCESS", t(5)), ("r4", "RUNNING", None)):
+        db.add(PipelineRun(client_id=str(cid), run_id=rid, status=status, stage=status, started_at=t(1), finished_at=fin))
+    db.add(PipelineRun(client_id=str(uuid.uuid4()), run_id="other", status="SUCCESS", stage="SUCCESS", started_at=t(1), finished_at=t(11)))
+    db.commit()
+    assert _summary(db, cid)["last_pipeline_run"]["finished_at"].startswith("2026-10-20T05:00:00")   # newest SUCCESS of THIS client only (SQLite drops the tz)
 
 
 def test_benchmark_endpoint_prefers_the_exact_client_score_and_uses_client_entity_id(db):

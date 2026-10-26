@@ -21,6 +21,7 @@ from app.core.risk_config import (
     DYNAMIC_SOURCE_RELIABILITY_MAP,
     RISK_THRESHOLDS,
 )
+from app.services.intelligence.risk_floor import HIGH_FLOOR_SCORE, serious_floor_applies
 from app.core.reach_trust_config import (
     get_reach_modifier,
     get_trust_modifier,
@@ -647,11 +648,13 @@ class RiskEngine:
 
         # Optimization: Combined query with outerjoin to fetch Source and SourceCategory in 1 step
         source_reliability = 1.0
+        source_text = ""   # Source name + url, read by the serious-coverage floor's outlet exclusion
         if document.source_id:
             source_info = db.query(Source.name, Source.url, Source.source_type, SourceCategory.name.label("category_name")).outerjoin(
                 SourceCategory, Source.category_id == SourceCategory.id
             ).filter(Source.id == document.source_id).first()
             if source_info:
+                source_text = f"{source_info.name or ''} {source_info.url or ''}"
                 cat_key = (source_info.category_name or "").lower()
                 name_lower = (source_info.name or "").lower()
                 url_lower = (source_info.url or "").lower()
@@ -836,6 +839,18 @@ class RiskEngine:
                 if not is_risk_relevant:
                     final_score = 0.0
 
+                # Serious-coverage floor (risk_floor.py): legal / regulatory / enforcement / fraud /
+                # protest press coverage about the client's own brand is at least HIGH, even when the
+                # outlet-trust or neutral-sentiment gate above zeroed it. A classification rule, not a
+                # formula change; the LLM role gate below can still zero it (BYSTANDER / EXONERATED).
+                serious_floor_applied = False
+                if entity.entity_type == "brand" and serious_floor_applies(
+                    document.title, document.document_type, ent_sent_label,
+                    cached_role_by_client_entity.get((client_id, entity.id)), entity.name, source_text,
+                ) and final_score < HIGH_FLOOR_SCORE:
+                    final_score = HIGH_FLOOR_SCORE
+                    serious_floor_applied = True
+
                 # LLM-assisted role gate: only for documents already scoring
                 # above the LOW/MEDIUM boundary (see
                 # RISK_ROLE_CLASSIFICATION_MIN_SCORE docstring). role is None
@@ -897,6 +912,7 @@ class RiskEngine:
                         if role_classification not in ("BYSTANDER", "EXONERATED")
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
                     ),
+                    "serious_floor_applied": serious_floor_applied and role_classification not in ("BYSTANDER", "EXONERATED"),
                     "role_classification": role_classification,
                     # Deliberately stays "llm" (not a distinct "llm_cached" tier)
                     # on a cache hit: a cached label is the same LLM judgment,
