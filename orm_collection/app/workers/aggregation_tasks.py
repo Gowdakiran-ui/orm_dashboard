@@ -1248,6 +1248,29 @@ def _stage_collect_reddit(ctx: PipelineContext, db, log) -> List[str]:
     return _stage_collect_social_search(ctx, db, log, "reddit", RedditApifyAdapter(), MAX_RESULTS_PER_CALL)
 
 
+# Catch-up for documents saved by the social search collectors (YouTube / Instagram / Reddit). Their Source rows are
+# shared synthetic ones ("search://youtube", ...), not a client's feed URL, so the feed-based PENDING pickup in
+# _stage_collect never saw them: ten Godrej YouTube videos sat PENDING from 6 Sep. A PENDING search document older than
+# this many hours is no longer being worked on by a collection that is still running.
+SEARCH_PENDING_STALE_HOURS = 1
+SEARCH_PENDING_CATCHUP_LIMIT = 200      # bounds the extra work one Run Pipeline can take on
+
+
+def _stale_pending_search_doc_ids(db, now=None, limit: int = SEARCH_PENDING_CATCHUP_LIMIT) -> List[str]:
+    """Ids of PENDING documents from the shared search sources that are older than SEARCH_PENDING_STALE_HOURS (oldest first)."""
+    from datetime import timedelta
+    from app.models.document import Document
+    from app.models.source import Source
+
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(hours=SEARCH_PENDING_STALE_HOURS)
+    rows = db.query(Document.id).join(Source, Source.id == Document.source_id).filter(
+        Source.url.like("search://%"),
+        Document.processing_status == "PENDING",
+        Document.collected_at < cutoff,
+    ).order_by(Document.collected_at).limit(limit).all()
+    return [str(r[0]) for r in rows]
+
+
 def _stage_collect(ctx: PipelineContext, db) -> List[str]:
     """
     COLLECTING stage: fetch RSS feeds for this client, deduplicate,
@@ -1328,6 +1351,11 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
         all_ids = list(set(new_doc_ids + pending_ids))
     else:
         all_ids = list(set(new_doc_ids))
+
+    stale_search_ids = _stale_pending_search_doc_ids(db)
+    if stale_search_ids:
+        log.info("catchup_stale_pending_search_documents", count=len(stale_search_ids))
+        all_ids = list(set(all_ids + stale_search_ids))
 
     duration_ms = (time.perf_counter() - t0) * 1000
     log.info("stage_complete", new_docs=len(new_doc_ids), total_to_process=len(all_ids), duration_ms=round(duration_ms, 2))
