@@ -4,8 +4,9 @@ import { formatDMY } from "./dateFormat";
 
 export const ACTIVITY_ARTICLE_CAP = 500; // the page's /documents/client list is the newest 500 articles
 export const MIN_TOPIC_COMPARISON_COUNT = 5;
-// Display-only: a score that rests on fewer mentions than this gets a "Low evidence" badge. No score or rank changes.
-export const LOW_EVIDENCE_MENTIONS = 3;
+// A competitor with fewer 30-day mentions than this (that also name the client) gets "Not enough coverage" instead of a
+// score. Display only: the engine's stored score and rank are not changed. Unknown counts are never treated as low.
+export const LOW_EVIDENCE_MENTIONS = 5;
 
 export type RadarValues = { reputation: number | null; sentiment: number | null; riskContainment: number | null; sov: number | null };
 
@@ -13,7 +14,7 @@ export const isNum = (x: unknown): x is number => typeof x === "number" && Numbe
 
 /** A competitor row from competitor-search has no usable numbers when the engine had no evidence. */
 export function hasEvidence(c: any): boolean {
-  return !!c && c.health_status !== "INSUFFICIENT_EVIDENCE" && isNum(c.reputation_score);
+  return !!c && c.health_status !== "INSUFFICIENT_EVIDENCE" && isNum(c.reputation_score) && !isLowEvidence(c.mentions_30d);
 }
 
 /**
@@ -148,13 +149,18 @@ export function hiddenTopicsNote(hidden: string[]): string | null {
   return `${hidden.length} topic${hidden.length === 1 ? "" : "s"} with fewer than ${MIN_TOPIC_COMPARISON_COUNT} articles across both entities ${hidden.length === 1 ? "is" : "are"} not shown (${hidden.join(", ")}), so the bars can add up to less than 100%.`;
 }
 
-/** True when the score rests on fewer than LOW_EVIDENCE_MENTIONS mentions (display only). Unknown counts are not flagged. */
+/** True when the score would rest on fewer than LOW_EVIDENCE_MENTIONS mentions: no score is shown. Unknown counts are not flagged. */
 export function isLowEvidence(mentions: unknown): boolean {
   return isNum(mentions) && Math.round(mentions) < LOW_EVIDENCE_MENTIONS;
 }
 
 export function lowEvidenceTitle(): string {
-  return `Fewer than ${LOW_EVIDENCE_MENTIONS} mentions in the last 30 days: treat this score as indicative only.`;
+  return `Fewer than ${LOW_EVIDENCE_MENTIONS} mentions in the last 30 days that also mention the client: not enough coverage to show a score.`;
+}
+
+export function notEnoughCoverageMessage(name: string, clientName: string, mentions: unknown): string {
+  const n = isNum(mentions) ? Math.round(mentions) : 0;
+  return `Not enough coverage: only ${n} mention${n === 1 ? "" : "s"} of ${name} together with ${clientName} in the last 30 days (fewer than ${LOW_EVIDENCE_MENTIONS}), so no score is shown.`;
 }
 
 /** The Risk tile counts only articles that mention the client, so a competitor's own other stories are not in it. */
@@ -187,17 +193,20 @@ export interface CompetitorCardView {
 export function competitorCardView(b: any, clientName: string): CompetitorCardView {
   const name = String(b?.competitor_name ?? "Unknown");
   const mentions = isNum(b?.mentions_30d) ? Math.round(b.mentions_30d) : null;
-  const scored = b?.health_status !== "INSUFFICIENT_EVIDENCE" && isNum(b?.reputation) && isNum(b?.rank) && b.rank > 0;
+  const lowEvidence = isLowEvidence(b?.mentions_30d);
+  const scored = b?.health_status !== "INSUFFICIENT_EVIDENCE" && isNum(b?.reputation) && isNum(b?.rank) && b.rank > 0 && !lowEvidence;
   const asOfIso = typeof b?.as_of === "string" ? b.as_of : null;
   const asOf = asOfIso && formatDMY(asOfIso, "") ? `Data as of ${formatDMY(asOfIso)}` : null;
-  const thin = scored && mentions !== null && mentions < LOW_EVIDENCE_MENTIONS;
+  const thin = false;   // thin evidence no longer shows a caution: below the minimum there is no score at all
   return {
     name,
     hasScore: scored,
     scoreText: scored ? `${(b.reputation as number).toFixed(1)} / 100` : "Not enough coverage",
     scoreMeaning: scored
       ? `How healthy ${name}'s reputation looks in recent articles that also mention ${clientName}. Higher is better; 100 is the best possible.`
-      : `No article from the last 30 days mentions both ${name} and ${clientName}, so no score is shown.`,
+      : lowEvidence && (mentions ?? 0) > 0
+        ? notEnoughCoverageMessage(name, clientName, mentions)
+        : `No article from the last 30 days mentions both ${name} and ${clientName}, so no score is shown.`,
     rankText: scored ? `Ranked #${b.rank} with ${clientName}` : null,
     sovText: isNum(b?.sov) ? `${(b.sov as number).toFixed(1)}% share of voice` : null,
     sovMeaning: isNum(b?.sov) ? `Out of every 100 mentions of ${clientName} and the compared competitors, about ${Math.round(b.sov)} are ${name}.` : null,

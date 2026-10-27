@@ -23,7 +23,7 @@ import { CompetitorRadarAxesDefinition, CompetitorComparableScoreDefinition, Com
 import {
   MIN_TOPIC_COMPARISON_COUNT, ACTIVITY_ARTICLE_CAP, hasEvidence, clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice,
   rankedEntityCount, rankLabel, emptyStateMessage, comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption,
-  asOfLabel, competitorCardView, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, lowEvidenceTitle, riskTileLabel, fixed,
+  asOfLabel, competitorCardView, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, notEnoughCoverageMessage, riskTileLabel, fixed,
 } from "@/utils/competitorCompare";
 
 export interface CompetitorsTabProps {
@@ -406,6 +406,10 @@ export function CompetitorsTab({
                 <p className={`text-xs font-mono ${mutedText(theme)}`}>
                   {noEvidenceMessage(searchResult.competitor.name, activeClientName)}
                 </p>
+              ) : isLowEvidence(searchResult.competitor.mentions_30d) ? (
+                <p className={`text-xs font-mono ${mutedText(theme)}`}>
+                  {notEnoughCoverageMessage(searchResult.competitor.name, activeClientName, searchResult.competitor.mentions_30d)}
+                </p>
               ) : (
                 <>
                   <div className="grid grid-cols-4 gap-3 text-xs font-mono">
@@ -429,11 +433,6 @@ export function CompetitorsTab({
                     </div>
                   </div>
                   <p className={`text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
-                    {isLowEvidence(searchResult.competitor.mentions_30d) && (
-                      <Badge className="mr-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-[10px]" title={lowEvidenceTitle()}>
-                        Low evidence
-                      </Badge>
-                    )}
                     {[evidenceCaption(searchResult.competitor.mentions_30d, activeClientName), asOfLabel(searchResult.competitor.as_of)].filter(Boolean).join(" ")}
                   </p>
                 </>

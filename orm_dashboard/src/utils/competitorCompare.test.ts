@@ -4,7 +4,7 @@ import path from "path";
 import {
   clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice, rankedEntityCount, rankLabel, emptyStateMessage,
   comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption, asOfLabel, competitorCardView, noEvidenceMessage, hiddenTopics, hiddenTopicsNote,
-  hasEvidence, RADAR_AXES, isLowEvidence, lowEvidenceTitle, riskTileLabel, fixed, LOW_EVIDENCE_MENTIONS,
+  hasEvidence, RADAR_AXES, isLowEvidence, lowEvidenceTitle, notEnoughCoverageMessage, riskTileLabel, fixed, LOW_EVIDENCE_MENTIONS,
 } from "@/utils/competitorCompare";
 
 const GODREJ_BREAKDOWN = { sentiment: 55.564516129032256, risk: 99.36112274821953, source: 96.84, visibility: 11.9 };
@@ -140,13 +140,13 @@ describe("evidence, dates and hidden topics (F-11, F-12)", () => {
   });
 });
 
-describe("low-evidence badge and risk label (display only)", () => {
-  it("flags fewer than 3 mentions, not 3 or more, and never an unknown count", () => {
-    expect(LOW_EVIDENCE_MENTIONS).toBe(3);
+describe("minimum evidence for a competitor score and risk label (display only)", () => {
+  it("flags fewer than 5 mentions, not 5 or more, and never an unknown count", () => {
+    expect(LOW_EVIDENCE_MENTIONS).toBe(5);
     expect(isLowEvidence(1)).toBe(true);
-    expect(isLowEvidence(2)).toBe(true);
-    expect(isLowEvidence(2.4)).toBe(true);
-    expect(isLowEvidence(3)).toBe(false);
+    expect(isLowEvidence(4)).toBe(true);
+    expect(isLowEvidence(4.4)).toBe(true);
+    expect(isLowEvidence(5)).toBe(false);
     expect(isLowEvidence(11)).toBe(false);
     expect(isLowEvidence(null)).toBe(false);
     expect(isLowEvidence(undefined)).toBe(false);
@@ -155,9 +155,12 @@ describe("low-evidence badge and risk label (display only)", () => {
     const live: Record<string, number> = { EMAAR: 1, "Banke International Properties": 1, DLF: 10, "Orris Infrastructure": 11, Lodha: 8 };
     expect(Object.entries(live).filter(([, n]) => isLowEvidence(n)).map(([k]) => k)).toEqual(["EMAAR", "Banke International Properties"]);
   });
-  it("the badge text states the threshold and does not change any score", () => {
-    expect(lowEvidenceTitle()).toContain("Fewer than 3 mentions");
-    expect(competitorRadarValues(EMAAR)!.reputation).toBe(93.33466640005332); // same value with or without the badge
+  it("the text states the threshold; a low-evidence competitor has no radar score, a normal one keeps it", () => {
+    expect(lowEvidenceTitle()).toContain("Fewer than 5 mentions");
+    expect(notEnoughCoverageMessage("Banke", "Godrej", 1)).toBe("Not enough coverage: only 1 mention of Banke together with Godrej in the last 30 days (fewer than 5), so no score is shown.");
+    expect(hasEvidence({ health_status: "COMPLETE", reputation_score: 80, mentions_30d: 1 })).toBe(false);
+    expect(hasEvidence({ health_status: "COMPLETE", reputation_score: 80, mentions_30d: 5 })).toBe(true);
+    expect(hasEvidence({ health_status: "COMPLETE", reputation_score: 80 })).toBe(true);   // unknown count is not hidden
   });
   it("the Risk tile says which coverage it counts", () => {
     expect(riskTileLabel("Godrej Properties")).toBe("Risk in coverage that mentions Godrej Properties");
@@ -198,19 +201,22 @@ describe("no trend wording on the page (ground rule 2)", () => {
 
 
 describe("competitor cards", () => {
-  const row = (over: any) => ({ competitor_id: "1", competitor_name: "Lodha", rank: 1, reputation: 83.3, sov: 1.36, health_status: "COMPLETE", mentions_30d: 4, as_of: "2026-10-20T03:41:10Z", ...over });
+  const row = (over: any) => ({ competitor_id: "1", competitor_name: "Lodha", rank: 1, reputation: 83.3, sov: 1.36, health_status: "COMPLETE", mentions_30d: 6, as_of: "2026-10-20T03:41:10Z", ...over });
   it("a scored competitor gets a plain meaning per number and a dated 'Data as of'", () => {
     const v = competitorCardView(row({}), "Godrej Properties");
-    expect(v).toMatchObject({ hasScore: true, scoreText: "83.3 / 100", rankText: "Ranked #1 with Godrej Properties", sovText: "1.4% share of voice", evidence: "Based on 4 mentions in the last 30 days", thin: false, thinNote: null });
+    expect(v).toMatchObject({ hasScore: true, scoreText: "83.3 / 100", rankText: "Ranked #1 with Godrej Properties", sovText: "1.4% share of voice", evidence: "Based on 6 mentions in the last 30 days", thin: false, thinNote: null });
     expect(v.scoreMeaning).toContain("that also mention Godrej Properties");
     expect(v.sovMeaning).toContain("about 1 are Lodha");
     expect(v.asOf).toMatch(/^Data as of \d{2}-\d{2}-2026$/);
   });
-  it("one mention shows the score with a thin-evidence caution (nothing is hidden or re-ranked)", () => {
+  it("one mention (Banke: 80 from 1 mention) shows Not enough coverage instead of a score; 5 mentions shows it", () => {
     const v = competitorCardView(row({ competitor_name: "Banke", reputation: 80, mentions_30d: 1 }), "Godrej");
-    expect(v.hasScore).toBe(true);
-    expect(v.thin).toBe(true);
-    expect(v.thinNote).toBe("Thin evidence: only 1 mention, so treat this score with caution.");
+    expect(v.hasScore).toBe(false);
+    expect(v.scoreText).toBe("Not enough coverage");
+    expect(v.rankText).toBeNull();
+    expect(v.scoreMeaning).toContain("only 1 mention of Banke together with Godrej");
+    expect(competitorCardView(row({ mentions_30d: 4 }), "Godrej").hasScore).toBe(false);
+    expect(competitorCardView(row({ mentions_30d: 5 }), "Godrej").hasScore).toBe(true);
   });
   it("no evidence says what happened instead of a number", () => {
     const v = competitorCardView(row({ competitor_name: "Orris", rank: 0, reputation: null, health_status: "INSUFFICIENT_EVIDENCE", mentions_30d: 0, sov: 0 }), "Godrej");
