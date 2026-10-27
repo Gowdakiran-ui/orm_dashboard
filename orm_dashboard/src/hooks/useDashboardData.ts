@@ -1,9 +1,10 @@
+import type { DocumentCounts } from "@/utils/documentCounts";
 import { useEffect, useState, useRef } from "react";
 import {
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
   fetchPlanAdvisory,
   fetchActiveAlerts, fetchCompetitorBenchmarks, fetchRisks,
-  fetchExecutives, fetchDocuments,
+  fetchExecutives, fetchDocuments, fetchDocumentCounts,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
 } from "@/lib/api";
 import { formatChartDate } from "@/utils/formatChartDate";
@@ -63,6 +64,7 @@ export function useDashboardData() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [documentCounts, setDocumentCounts] = useState<DocumentCounts | null>(null);
 
 
 
@@ -373,6 +375,8 @@ export function useDashboardData() {
             .catch((err) => { if (!signal.aborted) { console.error("dashboard fetch failed: Documents", err); setDocuments([]); setDocumentsError("Telemetry Offline"); } })
             .finally(() => { if (!signal.aborted) setDocumentsLoading(false); }),
 
+          fetchDocumentCounts(activeClientId, signal).then(c => { if (!signal.aborted) setDocumentCounts(c); }),
+
           fetchExecutiveCandidates(activeClientId, signal)
             .then(data => {
               if (!signal.aborted) {
@@ -439,7 +443,8 @@ export function useDashboardData() {
           fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) { setAlerts(data || []); setAlertsError(null); } }),
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
-          fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } })
+          fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
+          fetchDocumentCounts(clientId, signal).then(c => { if (!signal.aborted) setDocumentCounts(c); })
         ]);
 
         // FINDINGS.md #36: an extended outage after initial load previously had
@@ -572,6 +577,7 @@ export function useDashboardData() {
     executivesLoading,
     executivesError,
     documents,
+    documentCounts,
     documentsLoading,
     documentsError,
     executiveCandidates,

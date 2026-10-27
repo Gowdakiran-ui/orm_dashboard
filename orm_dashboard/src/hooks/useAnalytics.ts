@@ -4,6 +4,7 @@ import { getRiskLevel } from "@/utils/riskLevel";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { buildRiskHeatmap } from "@/utils/riskHeatmap";
 import { formatDM, formatDMYTime } from "@/utils/dateFormat";
+import { coverageNote, sentimentSlicesFromCounts, topicSlicesFromCounts, type DocumentCounts } from "@/utils/documentCounts";
 
 interface AnalyticsProps {
   documents: any[];
@@ -17,6 +18,8 @@ interface AnalyticsProps {
   competitorCandidates: any[];
   repHistory: any[];
   telemetry?: any;
+  // True totals from /documents/client/{id}/counts; null/absent keeps every number list-based (newest 500).
+  documentCounts?: DocumentCounts | null;
 }
 
 export function useAnalytics({
@@ -30,7 +33,8 @@ export function useAnalytics({
   executiveCandidates,
   competitorCandidates,
   repHistory,
-  telemetry
+  telemetry,
+  documentCounts
 }: AnalyticsProps) {
 
   const normalizedBenchmarks = useMemo(() => {
@@ -92,13 +96,14 @@ export function useAnalytics({
   }, [documents]);
 
   const sentimentDistData = useMemo(() => {
+    if (documentCounts) return sentimentSlicesFromCounts(documentCounts);
     const { positive, neutral, negative } = calculateSentimentDistribution(documents);
     return [
       { name: "Positive", value: positive, color: "#10B981" },
       { name: "Neutral", value: neutral, color: "#64748B" },
       { name: "Negative", value: negative, color: "#EF4444" }
     ].filter(item => item.value > 0);
-  }, [documents]);
+  }, [documents, documentCounts]);
 
   // The 17-topic taxonomy is shared across every client regardless of
   // industry fit (by design -- not something this filter changes), so a
@@ -115,6 +120,7 @@ export function useAnalytics({
   const MIN_TOPIC_DOCUMENT_COUNT = 5;
 
   const topicDistData = useMemo(() => {
+    if (documentCounts) return topicSlicesFromCounts(documentCounts, MIN_TOPIC_DOCUMENT_COUNT);
     const counts: Record<string, number> = {};
     (documents || []).forEach(d => {
       if (d) {
@@ -514,6 +520,7 @@ export function useAnalytics({
     lastProcessedTimestamp,
     sentimentDistData,
     topicDistData,
+    coverageNote: coverageNote(documentCounts ?? null, (documents || []).length),
     riskSeverityData,
     pipelineTimelineData,
     sourceContData,

@@ -150,7 +150,8 @@ function DashboardShell() {
     executiveCandidates: data.executiveCandidates,
     competitorCandidates: data.competitorCandidates,
     repHistory: data.repHistory,
-    telemetry: data.telemetry
+    telemetry: data.telemetry,
+    documentCounts: data.documentCounts
   });
 
   // Export Report: disabled until everything the three pages read has finished loading for the selected client.
@@ -351,6 +352,7 @@ function DashboardShell() {
                         reputation={data.reputationSummary?.reputation}
                         sentimentDistData={analytics.sentimentDistData}
                         topicDistData={analytics.topicDistData}
+                        coverageNote={analytics.coverageNote}
                         repHistory={data.repHistory}
                         sentimentHistoryData={analytics.sentimentHistoryData}
                         loading={data.documentsLoading || data.historyLoading}

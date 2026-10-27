@@ -1,3 +1,4 @@
+import { parseDocumentCounts } from "@/utils/documentCounts";
 import { decodeHtmlEntities } from "./utils";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -473,6 +474,16 @@ export async function fetchDocuments(clientId: string, signal?: AbortSignal) {
   // Decode HTML entities baked into upstream RSS titles (xoop_ui_clarity_review.md
   // "&amp;" bug) once here, at the single source every tab's `documents` state reads from.
   return Array.isArray(docs) ? docs.map((d: any) => (d && d.title ? { ...d, title: decodeHtmlEntities(d.title) } : d)) : docs;
+}
+
+// True totals over every visible document (the list above stops at 500). Null when the API does not have it yet.
+export async function fetchDocumentCounts(clientId: string, signal?: AbortSignal) {
+  try {
+    const res = await fetchWithRetry(`${API_BASE}/documents/client/${clientId}/counts`, { signal });
+    return parseDocumentCounts(await parseOrThrow(res));
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchDocumentDetails(clientId: string, documentId: string, signal?: AbortSignal) {

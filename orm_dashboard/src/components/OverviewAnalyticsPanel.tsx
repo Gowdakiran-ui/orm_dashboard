@@ -20,6 +20,8 @@ export interface OverviewAnalyticsPanelProps {
   reputation?: ReputationBlock | null;
   sentimentDistData: any[];
   topicDistData: any[];
+  // One plain sentence when the day-by-day charts see only the newest 500 of a larger corpus.
+  coverageNote?: string | null;
   repHistory: any[];
   sentimentHistoryData: any[];
   loading?: boolean;
@@ -30,6 +32,7 @@ export function OverviewAnalyticsPanel({
   reputation,
   sentimentDistData = [],
   topicDistData = [],
+  coverageNote = null,
   repHistory = [],
   sentimentHistoryData = [],
   loading = false,
@@ -119,6 +122,7 @@ export function OverviewAnalyticsPanel({
 
   return (
     <div className="space-y-6">
+      {coverageNote && (<p className={`text-xs font-mono ${mutedText(theme)}`}>{coverageNote}</p>)}
       {/* KPI summaries header */}
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 font-mono">
         {kpis.map((k, idx) => {

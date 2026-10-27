@@ -170,7 +170,7 @@ def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_
     from app.models.source import Source
     from app.models.sentiment import DocumentSentiment
     from app.models.risk import RiskEvent
-    from app.models.topic import DocumentTopic
+    from app.models.topic import DocumentTopic, Topic
     from app.models.alert import Alert
     
     source = db.query(Source).filter(Source.id == doc.source_id).first()
@@ -267,7 +267,7 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
     from app.models.source import Source
     from app.models.sentiment import DocumentSentiment, EntitySentiment
     from app.models.risk import RiskEvent
-    from app.models.topic import DocumentTopic
+    from app.models.topic import DocumentTopic, Topic
     from app.models.document import DocumentMatch
     doc_ids = [doc.id for doc in docs]
     
@@ -390,6 +390,56 @@ def _build_document_responses(db: Session, client_id, docs: List[Document]) -> l
         })
 
     return results
+
+
+@router.get("/client/{client_id}/counts")
+def read_client_document_counts(client_id: UUID, db: Session = Depends(get_db)):
+    """
+    Additive, read-only true totals for the Analytics page. The documents list is capped at the newest 500, so
+    a count taken from it silently covers only part of a large corpus (Godrej: 500 of 1,603). These are counted over
+    EVERY visible document (same set as get_client_visible_document_ids): the total, the Positive / Neutral / Negative
+    split of document sentiment (same +-0.3 cut the page uses on the list) and the number of documents per topic
+    (each document's highest-confidence topic, "General" when it has none).
+    """
+    from collections import Counter
+    from app.models.client import Client
+    from app.models.sentiment import DocumentSentiment
+    from app.models.topic import DocumentTopic, Topic
+
+    if not db.query(Client.id).filter(Client.id == client_id).first():
+        raise HTTPException(status_code=404, detail="Client not found")
+    ids = get_client_visible_document_ids(db, client_id)
+    sentiment = {"positive": 0, "neutral": 0, "negative": 0, "unscored": 0}
+    topics: Counter = Counter()
+    if ids:
+        scored = {}
+        for doc_id, score in db.query(DocumentSentiment.document_id, DocumentSentiment.sentiment_score).filter(
+            DocumentSentiment.document_id.in_(ids)
+        ).all():
+            scored[doc_id] = score
+        for doc_id in ids:
+            score = scored.get(doc_id)
+            if score is None:
+                sentiment["unscored"] += 1
+            elif score > 0.3:
+                sentiment["positive"] += 1
+            elif score < -0.3:
+                sentiment["negative"] += 1
+            else:
+                sentiment["neutral"] += 1
+        best = {}
+        for doc_id, topic_name in db.query(DocumentTopic.document_id, Topic.name).join(
+            Topic, Topic.id == DocumentTopic.topic_id
+        ).filter(DocumentTopic.document_id.in_(ids)).order_by(DocumentTopic.confidence_score.desc()).all():
+            best.setdefault(doc_id, topic_name)
+        for doc_id in ids:
+            topics[best.get(doc_id) or "General"] += 1
+    return {
+        "total_documents": len(ids),
+        "listed_documents": min(len(ids), 500),
+        "sentiment": sentiment,
+        "topics": dict(topics),
+    }
 
 
 @router.get("/client/{client_id}")
