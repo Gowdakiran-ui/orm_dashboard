@@ -31,7 +31,7 @@ from app.services.backfill.fetchers import (
     SOURCES, SourceDef, QuotaPaused, SourceUnavailable, GDELT_WINDOW_DAYS, load_adapter,
 )
 from app.services.backfill.queries import QuerySpec, build_queries
-from app.services.backfill.relevance import KIND_PRIORITY, SOURCE_PRIORITY, is_relevant, tracked_terms
+from app.services.backfill.relevance import KIND_PRIORITY, SOURCE_PRIORITY, is_relevant, relevance_rules, tracked_terms
 
 logger = structlog.get_logger()
 
@@ -227,7 +227,7 @@ def ingest_items(db, client_id, src: SourceDef, raw_items: List[Dict[str, Any]],
             if not norm.get("url"):
                 stats["failed"] += 1
                 continue
-            if terms and not is_relevant(norm.get("title"), norm.get("content"), terms):
+            if terms and not is_relevant(norm.get("title"), norm.get("content"), terms, src.name):
                 stats["dropped_irrelevant"] += 1
                 continue
             is_saved, _, _ = process_and_save_document(db, NormalizedDocument(**norm))
@@ -254,7 +254,7 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
     from app.services.backfill import control
     specs = build_queries(db, client_id, cfg.include_competitors, cfg.include_products, list(cfg.exclude_entities))
     seeded = seed_slices(db, client_id, plan_slices(specs, cfg))
-    terms = tracked_terms(db, client_id, cfg.include_competitors, cfg.include_products) if cfg.relevance_filter else None
+    terms = relevance_rules(db, client_id, cfg.include_competitors, cfg.include_products) if cfg.relevance_filter else None
     ing_kwargs = {"terms": terms} if terms else {}
     # query kind per (source, query) so slices can be taken brand/risk first, executives next
     kind_by_query = {(name, getattr(sp, SOURCES[name].query_attr)): sp.kind for sp in specs for name in cfg.sources}
