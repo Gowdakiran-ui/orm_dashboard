@@ -1,6 +1,6 @@
 """Serious-coverage HIGH floor: which real Godrej titles it covers and which it must leave alone."""
 import pytest
-from app.services.intelligence.risk_floor import serious_floor_applies, HIGH_FLOOR_SCORE
+from app.services.intelligence.risk_floor import serious_floor_applies, HIGH_FLOOR_SCORE, noise_cap_reason, LOW_CAP_SCORE
 
 NAME = "Godrej Properties"
 
@@ -162,3 +162,73 @@ def test_engine_scores_are_unchanged_when_the_flag_is_off(monkeypatch):
     monkeypatch.delenv("RISK_FLOOR_ENABLED", raising=False)
     p = _score("Godrej Properties fined Rs 30 lakh by MahaRERA - DNA India")
     assert p["risk_score"] == 0.0 and p["explainability"]["serious_floor_applied"] is False
+
+
+def test_inventiva_and_dismissed_complaints_are_excluded():
+    assert f("Godrej Properties Land Dispute: Allegations of Cheating and Breach of Trust - Inventiva") is False
+    assert f("Why No Action By ED & CBI On Real Estate Fraud Involving Godrej Properties - inventiva.co.in") is False
+    assert serious_floor_applies("Godrej Properties fined Rs 30 lakh by MahaRERA", "rss", "Neutral", None, NAME, "Inventiva https://inventiva.co.in/feed") is False
+    assert f("Karnataka RERA Dismisses Real Estate Agent's Complaint Against Godrej Properties - Live Law") is False
+    assert f("RERA dismisses Godrej Properties' appeal; orders refund to buyers - Live Law") is True   # Godrej lost
+
+
+# ---- market-move / results / promotional wording, dropped charges ----
+@pytest.mark.parametrize("title,reason", [
+    ("Godrej Properties Crashes Nearly 4% On Posting Loss In March Quarter - NDTV Profit", "financial_results"),
+    ("Godrej Properties Ltd Falls 2.55%, BSE Realty index Drops 1.81% - Business Standard", "market_move"),
+    ("Godrej Properties share price falls 7%: What triggered the sudden sell-off in trade today? - Livemint", "market_move"),
+    ("Godrej Properties - Negative Breakout: These 5 stocks cross below their 200 DMAs - The Economic Times", "market_move"),
+    ("Top stock picks: Analysts recommend buying Cyient DLM; cautious on PNB, Godrej Properties", "market_move"),
+    ("Adani Group stocks rise after US drops fraud charges against Gautam Adani - Reuters", None),     # 'fraud' is serious: handled by the floor exclusion
+    ("Godrej Properties Q1 net profit falls 42%; booking value rises 22% - Business Standard", "financial_results"),
+    ("Godrej Properties Q1 PAT Slips 46 % QoQ , Revenue Down 85 %", "financial_results"),
+    ("Sobha Q2 profit plunges 54.5% to 33 crore even as H1 sales hit record - Business Standard", "financial_results"),
+    ("Sobha Shares Fall Over 4% After Q2 Results - NDTV Profit", "financial_results"),
+])
+def test_market_and_results_titles_are_capped_as_noise(title, reason):
+    assert noise_cap_reason(title, "rss") == reason
+
+
+@pytest.mark.parametrize("title", [
+    "Godrej Properties shares fall after SEBI orders probe into disclosures",   # serious term wins
+    "Godrej Properties fined Rs 30 lakh by MahaRERA - DNA India",
+    "Godrej Properties shares crash 5% as ED raids offices",
+    "Bengaluru-based Sobha Limited hit with ransomware attack, company says no impact observed",
+    "Godrej Vanantara Apartment Scam: Duplicate NOC",
+    "Godrej Properties pulls out of Rs 700 cr deal with DB Realty - Livemint",   # deal wording is NOT capped (decision pending)
+])
+def test_serious_or_unrelated_titles_are_not_capped(title):
+    assert noise_cap_reason(title, "rss") is None
+
+
+def test_promotional_video_titles_are_capped_only_on_video_and_image_posts():
+    t = "Why is SOBHA so Expensive? The Truth About 1456 Quality Checks."
+    assert noise_cap_reason(t, "youtube") == "promotional"
+    assert noise_cap_reason(t, "instagram") == "promotional"
+    assert noise_cap_reason(t, "rss") is None
+    assert noise_cap_reason("Sobha Ayana 3BHK Bangalore | Panathur Road Luxury Apartments", "youtube") == "promotional"
+    assert noise_cap_reason("Godrej Vanantara Apartment Scam: Duplicate NOC", "youtube") is None      # a real complaint video keeps scoring
+    assert noise_cap_reason("Godrej Air project: Home buyers protest delayed flats delivery", "youtube") is None
+
+
+def test_floor_skips_market_move_results_and_dropped_charges():
+    assert f("Adani Properties stocks rise after US drops fraud charges against Gautam Adani - Reuters") is False
+    assert serious_floor_applies("Adani Group stocks rise after US drops fraud charges against Gautam Adani - Reuters", "rss", "Neutral", None, "Adani Group") is False
+    assert f("Godrej Properties shares jump 3% after court rejects plea - Mint") is False      # share-price headline
+    assert f("CBI drops case against Godrej Properties - Mint") is False
+    assert f("Godrej Properties Q1 profit falls after RERA penalty - Mint") is False             # results headline
+
+
+def test_engine_caps_a_results_story_at_low_when_the_flag_is_on_and_leaves_it_when_off(monkeypatch):
+    title = "Godrej Properties Q1 net profit falls 42%; booking value rises 22% - Business Standard"
+    off = None
+    monkeypatch.delenv("RISK_FLOOR_ENABLED", raising=False)
+    off = _score(title, sentiment="Negative")
+    assert off["risk_score"] > LOW_CAP_SCORE                       # today's behaviour is unchanged while the flag is off
+    monkeypatch.setenv("RISK_FLOOR_ENABLED", "1")
+    on = _score(title, sentiment="Negative")
+    assert on["risk_score"] == LOW_CAP_SCORE and on["risk_level"] == "LOW"
+    assert on["explainability"]["noise_cap_applied"] == "financial_results"
+    # a serious story is not capped
+    fine = _score("Godrej Properties fined Rs 30 lakh by MahaRERA - Business Standard", sentiment="Negative")
+    assert fine["risk_score"] > LOW_CAP_SCORE and fine["explainability"]["noise_cap_applied"] is None

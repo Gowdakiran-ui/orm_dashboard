@@ -125,8 +125,8 @@ export function ReputationSummaryCard({
   );
   // All-history headline, with the last-365-days count beside it in plain words.
   const riskSignalsSub = riskStats && riskStats.dangerCount365 !== null
-    ? `Critical + High, all time · ${riskStats.dangerCount365} in the last 365 days`
-    : "Critical + High, all time";
+    ? `Critical + High documents, all time · ${riskStats.dangerCount365} in the last 365 days`
+    : "Critical + High documents, all time";
   const severityBreakdownSub = riskStats ? (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
       {severityCountLink(riskStats.critical, "Critical", "critical", "text-red-500")}

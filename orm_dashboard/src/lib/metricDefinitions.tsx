@@ -550,10 +550,11 @@ export function RiskSignalsDefinition() {
     <>
       <span className="block font-bold">Risk Signals</span>
       <span className="block">
-        How many pieces of coverage are serious enough to be rated Critical or High (a risk score above {MED_MAX}).
-        The big number counts every article ever collected for this client, however old, so a serious story from years
-        ago still shows. The smaller number counts only articles published in the last 365 days. Each article is counted
-        once, at its highest score.
+        How many documents (articles, posts or videos) are serious enough to be rated Critical or High (a risk score
+        above {MED_MAX}). This counts documents, not separate incidents: several outlets reporting the same event each
+        count once. The big number counts every document ever collected for this client, however old, so a serious
+        story from years ago still shows. The smaller number counts only documents published in the last 365 days.
+        Each document is counted once, at its highest score.
       </span>
     </>
   );

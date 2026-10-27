@@ -21,7 +21,9 @@ from app.core.risk_config import (
     DYNAMIC_SOURCE_RELIABILITY_MAP,
     RISK_THRESHOLDS,
 )
-from app.services.intelligence.risk_floor import HIGH_FLOOR_SCORE, serious_floor_applies
+from app.services.intelligence.risk_floor import (
+    HIGH_FLOOR_SCORE, LOW_CAP_SCORE, floor_enabled, noise_cap_reason, serious_floor_applies,
+)
 from app.core.reach_trust_config import (
     get_reach_modifier,
     get_trust_modifier,
@@ -843,6 +845,13 @@ class RiskEngine:
                 # protest press coverage about the client's own brand is at least HIGH, even when the
                 # outlet-trust or neutral-sentiment gate above zeroed it. A classification rule, not a
                 # formula change; the LLM role gate below can still zero it (BYSTANDER / EXONERATED).
+                # Market-move / financial-results / promotional titles are not reputational events: cap at LOW
+                # (same RISK_FLOOR_ENABLED flag, off by default). Runs first so the paid role check is skipped too.
+                noise_cap_applied = None
+                if floor_enabled() and entity.entity_type == "brand" and final_score > LOW_CAP_SCORE:
+                    noise_cap_applied = noise_cap_reason(document.title, document.document_type)
+                    if noise_cap_applied:
+                        final_score = LOW_CAP_SCORE
                 serious_floor_applied = False
                 if entity.entity_type == "brand" and serious_floor_applies(
                     document.title, document.document_type, ent_sent_label,
@@ -913,6 +922,7 @@ class RiskEngine:
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
                     ),
                     "serious_floor_applied": serious_floor_applied and role_classification not in ("BYSTANDER", "EXONERATED"),
+                    "noise_cap_applied": noise_cap_applied,
                     "role_classification": role_classification,
                     # Deliberately stays "llm" (not a distinct "llm_cached" tier)
                     # on a cache hit: a cached label is the same LLM judgment,
