@@ -12,7 +12,7 @@ import { glassCard, mutedText, bodyText } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 import { ExecutiveSentimentBreakdownDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
-import { executiveView, basedOnLine, eventsLabel, appearsInLine, pickTopTrackedExecutives, trackedCardView, notFoundLine, noCoverageLine } from "@/utils/executivesView";
+import { executiveView, basedOnLine, eventsLabel, appearsInLine, noScoreReason, pickTopTrackedExecutives, trackedCardView, notFoundLine, noCoverageLine } from "@/utils/executivesView";
 import { formatDMY } from "@/utils/dateFormat";
 
 export interface ExecutivesTabProps {
@@ -188,7 +188,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                 </div>
               ) : (
                 <p className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)}`}>
-                  No score yet. A score appears once new coverage mentions them together with {clientName}.
+                  No score yet. {noScoreReason(selectedExecutive, clientName)}
                 </p>
               )}
               {view.hasScore && basedOnLine(selectedExecutive) && (

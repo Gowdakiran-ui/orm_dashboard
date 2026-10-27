@@ -239,6 +239,36 @@ def test_executives_list_carries_as_of(env):
     assert rows[0]["as_of"] and rows[0]["document_count"] == 1 and rows[0]["health_status"] == "PARTIAL"
 
 
+def test_executives_list_reports_older_coverage_that_the_30_day_score_cannot_see(env):
+    """Gaurav Pandey on prod: 9 articles with the brand (newest 14 months old), score 0 / INSUFFICIENT_EVIDENCE / document_count 0.
+    The 30-day rule is intended; the list now also says how many articles exist and when the newest was published."""
+    db, _ = env
+    c, brand = _client(db)
+    p = _person(db, c.id, "Gaurav Pandey")
+    old = dt.datetime(2025, 8, 4, tzinfo=dt.timezone.utc)
+    for i in range(3):
+        d = _doc(db, f"Godrej Properties re-appoints Gaurav Pandey {i}", brand, p)
+        db.query(Document).filter(Document.id == d.id).update({"published_at": old - dt.timedelta(days=i)})
+    nobrand = _doc(db, "Gaurav Pandey alone, no brand", None, p)         # does not count: no brand co-occurrence
+    db.commit()
+    _score(db, p, [], score=0.0, grade="NA", health="INSUFFICIENT_EVIDENCE")
+    row = ci.get_client_executives(c.id, db)[0]
+    assert row["document_count"] == 0 and row["health_status"] == "INSUFFICIENT_EVIDENCE"
+    assert row["articles_all_time"] == 3
+    assert row["latest_article_at"].startswith("2025-08-04")
+
+
+def test_executive_with_no_brand_coverage_reports_zero_all_time(env):
+    db, _ = env
+    c, brand = _client(db)
+    p = _person(db, c.id, "Nadir Godrej")
+    _doc(db, "Nadir Godrej steps down at Godrej Industries", None, p)     # group news, no brand mention
+    _doc(db, "Godrej Properties launches a project", brand, None)
+    _score(db, p, [], score=0.0, grade="NA", health="INSUFFICIENT_EVIDENCE")
+    # the read gate hides people with no brand co-occurrence at all, so the totals helper is checked directly
+    assert ci._executive_coverage_totals(db, c.id, [p.id]) == {}
+
+
 # ---------------------------------------------------------------- X3: surname rule
 def test_surname_rule(env):
     db, eng = env

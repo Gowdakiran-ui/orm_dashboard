@@ -170,11 +170,14 @@ export interface ExecStats {
   mostMentioned: string | null;
   highest: any | null;
   lowest: any | null;
+  tied: boolean;
 }
 
 // Executives: most-mentioned by real document_count (name tiebreak); highest /
 // lowest by the executive's composite reputation score. Entries without a
 // numeric score are left out of the score comparison rather than read as 0.
+export const TIE_POINTS = 0.5;
+
 export function computeExecStats(executives: any[] | null | undefined): ExecStats {
   const execs = (executives || []).filter(e => e && e.name);
   const mostMentioned = [...execs]
@@ -186,7 +189,9 @@ export function computeExecStats(executives: any[] | null | undefined): ExecStat
     .sort((a, b) => (b.score - a.score) || a.name.localeCompare(b.name));
   const highest = scored[0] ?? null;
   const lowest = scored.length > 0 ? scored[scored.length - 1] : null;
-  return { total: execs.length, mostMentioned, highest, lowest };
+  // Scores within TIE_POINTS of each other are a tie, not a highest and a lowest (Pirojsha 60.22 vs Geetika 60.19).
+  const tied = !!highest && !!lowest && highest !== lowest && highest.score - lowest.score <= TIE_POINTS;
+  return { total: execs.length, mostMentioned, highest, lowest, tied };
 }
 
 // The one rule for "is there a reputation score to show": the summary's reputation block says
@@ -332,9 +337,9 @@ export function buildBrandEquityView(i: BrandEquityViewInput) {
       ? `${execStats.mostMentioned} is the most-mentioned person, out of ${execStats.total} notable people tracked in ${name}'s coverage (not necessarily ${name}'s own staff).`
       : `No notable people have been tracked yet in ${name}'s coverage.`) +
       (execStats.highest && execStats.lowest && execStats.highest !== execStats.lowest
-        ? (execStats.highest.score.toFixed(1) === execStats.lowest.score.toFixed(1)
+        ? (execStats.tied
           // a tie is not a "highest" and a "lowest": say so
-          ? ` ${execStats.highest.name} and ${execStats.lowest.name} are tied on reputation score (${execStats.highest.score.toFixed(1)}).`
+          ? ` ${execStats.highest.name} and ${execStats.lowest.name} are tied on reputation score (${execStats.highest.score.toFixed(1)}, within ${TIE_POINTS} points).`
           : ` ${execStats.highest.name} has the highest reputation score among them (${execStats.highest.score.toFixed(1)}), while ${execStats.lowest.name} has the lowest (${execStats.lowest.score.toFixed(1)}).`)
         : "");
   })();

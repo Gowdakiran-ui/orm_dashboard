@@ -197,6 +197,39 @@ def get_client_reputation_breakdown(client_id: UUID, db: Session = Depends(get_d
         "visibility": rep.visibility_component
     }
 
+def _executive_coverage_totals(db: Session, client_id, entity_ids) -> Dict[Any, Dict[str, Any]]:
+    """
+    All-time coverage per tracked person, additive to the 30-day score: how many distinct articles name this
+    person together with the client's own brand/product (the same co-occurrence rule the score uses) and the date of
+    the newest one. The score window is 30 days by design, so a person with real but older coverage is scored
+    INSUFFICIENT_EVIDENCE with document_count 0; these two numbers let the page say so instead of "no coverage".
+    """
+    from app.models.document import Document
+    from app.models.entity import Entity, EntityMention
+
+    ids = list(entity_ids)
+    if not ids:
+        return {}
+    q = db.query(
+        EntityMention.entity_id,
+        func.count(func.distinct(EntityMention.document_id)),
+        func.max(func.coalesce(Document.published_at, EntityMention.created_at)),
+    ).join(Document, Document.id == EntityMention.document_id).filter(EntityMention.entity_id.in_(ids))
+    brand_or_product_ids = [
+        r[0] for r in db.query(Entity.id).filter(
+            Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
+        ).all()
+    ]
+    if brand_or_product_ids:
+        q = q.filter(EntityMention.document_id.in_(
+            db.query(EntityMention.document_id).filter(EntityMention.entity_id.in_(brand_or_product_ids))
+        ))
+    out: Dict[Any, Dict[str, Any]] = {}
+    for eid, n, latest in q.group_by(EntityMention.entity_id).all():
+        out[eid] = {"articles_all_time": int(n), "latest_article_at": latest.isoformat() if latest else None}
+    return out
+
+
 def _brand_or_product_gated_person_entity_ids(db: Session, client_id):
     """
     Brand co-occurrence containment (xoop_ui_clarity_review.md Phase 0,
@@ -278,6 +311,7 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
     if gated_ids is not None:
         scores = [s for s in scores if s.entity_id in gated_ids]
 
+    totals = _executive_coverage_totals(db, client_id, [s.entity_id for s in scores])
     return [{
         "id": str(s.id),
         "entity_id": str(s.entity_id),
@@ -295,7 +329,10 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
         # second computation. Brand Equity's "Most Mentioned Person" tile
         # previously sorted by a `mention_count` field that never existed
         # anywhere in this response or the underlying table.
-        "document_count": (s.calculation_lineage or {}).get("raw_values", {}).get("document_count")
+        "document_count": (s.calculation_lineage or {}).get("raw_values", {}).get("document_count"),
+        # Additive: all-time articles naming this person with the client's brand, and the newest one's date.
+        "articles_all_time": totals.get(s.entity_id, {}).get("articles_all_time", 0),
+        "latest_article_at": totals.get(s.entity_id, {}).get("latest_article_at"),
     } for s in scores]
 
 @router.get("/{client_id}/executive-history", response_model=Dict[str, List[Dict[str, Any]]])
@@ -643,6 +680,7 @@ def _executive_evidence(db: Session, client_id, entity, score) -> Dict[str, Any]
 def _executive_payload(db: Session, client_id, entity, score) -> Dict[str, Any]:
     from datetime import datetime, timezone
     has_score = bool(score) and score.health_status != "INSUFFICIENT_EVIDENCE"
+    coverage = _executive_coverage_totals(db, client_id, [entity.id]).get(entity.id, {})
     lineage = (score.calculation_lineage or {}) if score else {}
     docs = (lineage.get("raw_values") or {}).get("document_count") if has_score else None
     age_days = None
@@ -666,6 +704,8 @@ def _executive_payload(db: Session, client_id, entity, score) -> Dict[str, Any]:
             "health_status": (score.health_status if score else "NO_SCORE_YET"),
             "component_scores": lineage.get("component_scores") if has_score else None,
             "document_count": docs,
+            "articles_all_time": coverage.get("articles_all_time", 0),
+            "latest_article_at": coverage.get("latest_article_at"),
             "as_of": score.created_at.isoformat() if score and score.created_at else None,
             "age_days": age_days,
             "stale": bool(age_days is not None and age_days > _EXEC_STALE_DAYS),

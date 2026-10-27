@@ -82,6 +82,13 @@ describe("default tracked-executive cards", () => {
     expect(pickTopTrackedExecutives(rows, 2).map(r => r.name)).toEqual(["High", "Low"]);
     expect(pickTopTrackedExecutives(null)).toEqual([]);
   });
+  it("a person with older coverage says so; one with none says that; old payloads keep the plain line", () => {
+    const gaurav = { name: "Gaurav Pandey", score: 0, health_status: "INSUFFICIENT_EVIDENCE", document_count: 0, articles_all_time: 9, latest_article_at: "2025-08-04T00:00:00Z" };
+    expect(trackedCardView(gaurav, "Godrej Properties").detail).toBe("9 articles mention this person with Godrej Properties, but none in the last 30 days (newest 04-08-2025), so there is no score yet.");
+    expect(trackedCardView({ ...gaurav, articles_all_time: 1 }, "Godrej").detail).toContain("1 article mentions this person with Godrej");
+    expect(trackedCardView({ ...gaurav, articles_all_time: 0 }, "Godrej").detail).toBe("No article mentions this person together with Godrej, so there is nothing to score.");
+    expect(trackedCardView({ name: "X", score: 0, health_status: "INSUFFICIENT_EVIDENCE" }, "Godrej").detail).toContain("last 30 days");
+  });
   it("cards say what happened", () => {
     expect(trackedCardView(rows[0], "Acme").headline).toBe("No score yet");
     expect(trackedCardView(rows[0], "Acme").detail).toContain("No coverage mentioning Acme");

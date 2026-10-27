@@ -91,13 +91,25 @@ export function pickTopTrackedExecutives(executives: any[] | null | undefined, l
     .slice(0, limit);
 }
 
+// Why a person has no score: the score looks at the last 30 days only, so say whether older coverage exists.
+// `articles_all_time` / `latest_article_at` come from the API (additive); older payloads fall back to the plain line.
+export function noScoreReason(e: any, clientName: string): string {
+  const n = typeof e?.articles_all_time === "number" ? e.articles_all_time : null;
+  if (n !== null && n > 0) {
+    const newest = typeof e.latest_article_at === "string" ? formatDMY(e.latest_article_at, "") : "";
+    return `${n} article${n === 1 ? "" : "s"} mention${n === 1 ? "s" : ""} this person with ${clientName}, but none in the last 30 days${newest ? ` (newest ${newest})` : ""}, so there is no score yet.`;
+  }
+  if (n === 0) return `No article mentions this person together with ${clientName}, so there is nothing to score.`;
+  return `No coverage mentioning ${clientName} together with this person in the last 30 days.`;
+}
+
 export interface TrackedCardView { hasScore: boolean; headline: string; detail: string }
 
 // One card: the score and grade, or a plain sentence saying why there is no score.
 export function trackedCardView(e: any, clientName: string, now: number = Date.now()): TrackedCardView {
   const v = executiveView(e, now);
   if (!v.hasScore) {
-    return { hasScore: false, headline: "No score yet", detail: `No coverage mentioning ${clientName} together with this person in the last 30 days.` };
+    return { hasScore: false, headline: "No score yet", detail: noScoreReason(e, clientName) };
   }
   const docs = typeof e.document_count === "number" ? e.document_count : null;
   const grade = v.badge === "low_evidence" ? "grade withheld" : `grade ${v.gradeText}`;

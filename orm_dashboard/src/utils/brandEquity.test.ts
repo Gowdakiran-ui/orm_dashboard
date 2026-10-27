@@ -189,7 +189,12 @@ describe("computeExecStats", () => {
       planAdvisory: { flagged: false, lead: "Nothing." }, executives, activeClientName: "Acme", normalizedBenchmarks: [],
     }).peopleText;
     const tied = view([{ name: "Pia", score: 60.192, document_count: 72 }, { name: "Gee", score: 60.192, document_count: 4 }]);
-    expect(tied).toContain("Gee and Pia are tied on reputation score (60.2).");
+    expect(tied).toContain("Gee and Pia are tied on reputation score (60.2, within 0.5 points).");
+    // Pirojsha 60.2173 vs Geetika 60.192 differ at the second decimal: still a tie
+    expect(view([{ name: "Piro", score: 60.2173, document_count: 72 }, { name: "Gee", score: 60.192, document_count: 4 }])).toContain("tied on reputation score");
+    // exactly 0.5 apart is a tie, 0.6 apart is not
+    expect(view([{ name: "A", score: 60.5, document_count: 5 }, { name: "B", score: 60.0, document_count: 5 }])).toContain("tied");
+    expect(view([{ name: "A", score: 60.6, document_count: 5 }, { name: "B", score: 60.0, document_count: 5 }])).toContain("has the highest");
     expect(tied).not.toContain("has the highest");
     expect(view([{ name: "Pia", score: 61, document_count: 72 }, { name: "Gee", score: 59, document_count: 4 }])).toContain("Pia has the highest reputation score among them (61.0), while Gee has the lowest (59.0).");
   });
