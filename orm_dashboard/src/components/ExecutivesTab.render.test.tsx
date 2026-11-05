@@ -200,6 +200,19 @@ describe("default view with seeded executives", () => {
     expect(text).not.toContain("Add This Executive");
   });
 
+  it("a seeded card shows the further-articles line from 3 up, with the score unchanged, and nothing under 3", async () => {
+    api.fetchSeeded.mockResolvedValue(seeded);
+    const rows = [
+      { ...tracked[0], search_hits_uncounted: 12 },
+      { entity_id: "p9", name: "Gaurav Pandey", score: 63.5, grade: "C", health_status: "COMPLETE", document_count: 6, window_days: 365, search_hits_uncounted: 2 },
+    ];
+    await mount("client-1", rows);
+    const text = host.textContent || "";
+    expect(text).toContain("12 further articles found by search, not counted in the score");
+    expect(text).not.toMatch(/(^|\D)2 further articles/);
+    expect(text).toContain("61.50");
+  });
+
   it("a failed seeded read leaves the page as it was", async () => {
     api.fetchSeeded.mockRejectedValue(new Error("down"));
     await mount("client-1", tracked);

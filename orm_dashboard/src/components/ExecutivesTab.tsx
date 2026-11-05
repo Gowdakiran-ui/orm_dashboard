@@ -12,7 +12,7 @@ import { glassCard, mutedText, bodyText } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 import { ExecutiveSentimentBreakdownDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
-import { executiveView, basedOnLine, eventsLabel, appearsInLine, noScoreReason, orderTrackedExecutives, trackedCardView, notFoundLine, noCoverageLine } from "@/utils/executivesView";
+import { executiveView, basedOnLine, eventsLabel, appearsInLine, noScoreReason, orderTrackedExecutives, trackedCardView, notFoundLine, noCoverageLine, furtherArticlesLine } from "@/utils/executivesView";
 import { windowPhrase } from "@/utils/windowText";
 import { useSeeded } from "@/hooks/useSeeded";
 import { formatDMY } from "@/utils/dateFormat";
@@ -283,6 +283,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                     {o.alsoTracked && <span className={`block font-mono text-xs ${mutedText(theme)}`}>also tracked</span>}
                     <span className={`block font-mono text-lg font-bold ${v.hasScore ? "text-[#D4AF37]" : mutedText(theme)}`}>{v.headline}</span>
                     <span className={`block font-mono text-xs ${mutedText(theme)}`}>{v.detail}</span>
+                    {furtherArticlesLine(e) && <span className={`block font-mono text-xs ${mutedText(theme)}`}>{furtherArticlesLine(e)}</span>}
                   </button>
                 );
               })}

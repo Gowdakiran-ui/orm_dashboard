@@ -128,6 +128,15 @@ export function trackedCardView(e: any, clientName: string, now: number = Date.n
   };
 }
 
+// Seeded executives only: articles the person's own search returned that do not mention them, so they are not in the score.
+// Shown from 3 up; null (not seeded, older payload, or fewer than 3) shows nothing. Never changes a score or grade.
+export const FURTHER_ARTICLES_MIN = 3;
+export function furtherArticlesLine(e: any): string | null {
+  const n = typeof e?.search_hits_uncounted === "number" ? e.search_hits_uncounted : null;
+  if (n === null || n < FURTHER_ARTICLES_MIN) return null;
+  return `${n} further articles found by search, not counted in the score`;
+}
+
 export function noCoverageLine(clientName: string, windowDaysValue?: number | null): string {
   return `Tracked, but no article published in the ${windowPhrase(windowDaysValue)} mentions ${clientName} together with this person, so there is nothing to score yet. Older articles may exist; they are not counted.`;
 }

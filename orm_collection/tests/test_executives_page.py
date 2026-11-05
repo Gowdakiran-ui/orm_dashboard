@@ -615,3 +615,45 @@ def test_add_takes_the_same_advisory_lock_scheme_as_candidate_discovery_and_link
     src = inspect.getsource(ed.EntityDiscoveryEngine.add_single_executive_candidate)
     assert "pg_advisory_xact_lock" in src and "with_for_update" in src
     assert "winner" in src       # a unique-name collision links the candidate to the entity that won
+
+
+# ---------------------------------------------------------------- search_hits_uncounted (additive, seeded executives, display only)
+def test_executives_list_counts_search_hits_without_a_mention_inside_the_window(env):
+    from app.models.document_feed_hit import DocumentFeedHit
+    from app.models.seeded_entity import SeededEntity
+    db, _ = env
+    c, brand = _client(db)
+    p = _person(db, c.id, "Gaurav Pandey")
+    plain = _person(db, c.id, "Not Seeded")
+    db.add(SeededEntity(client_id=c.id, entity_id=p.id, kind="executive", name="Gaurav Pandey", rank=2, status="active", validated=True))
+    now = dt.datetime.now(dt.timezone.utc)
+
+    def hit(pub, mention=False, entity=p):
+        d = _doc(db, "Godrej Properties launches a tower", brand, p if mention else None)
+        db.query(Document).filter(Document.id == d.id).update({"published_at": pub})
+        db.add(DocumentFeedHit(document_id=d.id, client_id=c.id, entity_id=entity.id, source="google_news", seen_at=now))
+        db.commit()
+    for i in range(4):
+        hit(now - dt.timedelta(days=10 + i))                    # in the window, no mention: counted
+    hit(now - dt.timedelta(days=800))                           # older than the 365-day window: not counted
+    hit(now - dt.timedelta(days=5), mention=True)               # already mentioned (so already scored): not counted
+    _score(db, p, [], score=63.0, grade="C")
+    _doc(db, "Godrej Properties and Not Seeded", brand, plain)                     # passes the brand co-occurrence gate
+    _score(db, plain, [], score=50.0, grade="C")
+    rows = {r["name"]: r for r in ci.get_client_executives(c.id, db)}
+    assert rows["Gaurav Pandey"]["search_hits_uncounted"] == 4
+    assert rows["Gaurav Pandey"]["score"] == 63.0 and rows["Gaurav Pandey"]["grade"] == "C"      # no score or grade change
+    assert rows["Not Seeded"]["search_hits_uncounted"] is None                                      # not a seeded executive
+
+
+def test_executives_list_search_hits_is_zero_without_the_hits_table(env, monkeypatch):
+    from app.models.seeded_entity import SeededEntity
+    from app.services.seeding import gates
+    db, _ = env
+    c, brand = _client(db)
+    p = _person(db, c.id, "Gaurav Pandey")
+    db.add(SeededEntity(client_id=c.id, entity_id=p.id, kind="executive", name="Gaurav Pandey", rank=2, status="active", validated=True))
+    db.commit()
+    _score(db, p, [])
+    monkeypatch.setattr(gates, "hits_table_exists", lambda db_: False)
+    assert ci.get_client_executives(c.id, db)[0]["search_hits_uncounted"] == 0

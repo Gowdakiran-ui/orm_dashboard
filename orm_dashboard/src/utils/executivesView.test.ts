@@ -1,10 +1,20 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import path from "path";
-import { executiveView, basedOnLine, eventsLabel, appearsInLine, isStale, ageInDays } from "./executivesView";
+import { executiveView, basedOnLine, eventsLabel, appearsInLine, isStale, ageInDays, furtherArticlesLine } from "./executivesView";
 
 const NOW = new Date("2026-10-03T12:00:00Z").getTime();
 const scored = { score: 57.97767, grade: "D", document_count: 11, health_status: "PARTIAL", as_of: "2026-10-02T08:33:56Z" };
+
+describe("furtherArticlesLine", () => {
+  it("shows only for a number of 3 or more; nothing for under 3, null or a missing field", () => {
+    expect(furtherArticlesLine({ search_hits_uncounted: 3 })).toBe("3 further articles found by search, not counted in the score");
+    expect(furtherArticlesLine({ search_hits_uncounted: 55 })).toBe("55 further articles found by search, not counted in the score");
+    for (const e of [{ search_hits_uncounted: 2 }, { search_hits_uncounted: 0 }, { search_hits_uncounted: null }, {}, undefined]) {
+      expect(furtherArticlesLine(e as any)).toBeNull();
+    }
+  });
+});
 
 describe("executiveView", () => {
   it("shows a real score and grade with at least 3 documents", () => {

@@ -331,8 +331,13 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
     totals = _executive_coverage_totals(db, client_id, [s.entity_id for s in scores])
     from app.services.seeding.gates import seeded_rows
     seed_by_entity = {r.entity_id: r for r in seeded_rows(db, client_id, "executive")}
+    from app.core.config import settings as _settings
+    from app.services.seeding.gates import uncounted_hit_counts
+    uncounted = uncounted_hit_counts(db, [s.entity_id for s in scores if s.entity_id in seed_by_entity], _settings.EXEC_WINDOW_DAYS)
     return [{
         "seeded": s.entity_id in seed_by_entity,
+        # Additive, seeded executives only: articles their own search returned inside the score window that carry no mention of them (not scored).
+        "search_hits_uncounted": uncounted.get(s.entity_id, 0) if s.entity_id in seed_by_entity else None,
         "seed_rank": seed_by_entity[s.entity_id].rank if s.entity_id in seed_by_entity else None,
         "seed_role": seed_by_entity[s.entity_id].role if s.entity_id in seed_by_entity else None,
         # Look-back the stored score used (older rows predate the setting and used 30 days).
