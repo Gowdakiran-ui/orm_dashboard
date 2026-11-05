@@ -1219,3 +1219,57 @@ def test_ownership_evidence_is_matched_to_the_right_competitor_even_when_the_mod
     assert ek({"candidate": "Goibibo is owned by MakeMyTrip Limited", "child": "Goibibo"}, names) == "goibibo"
     assert ek({"candidate": "ixigo is owned by MakeMyTrip Limited", "child": ""}, names) == "ixigo"          # earliest name in the sentence = the child
     assert ek({"candidate": "ixigo", "child": "ixigo"}, names) == "ixigo"
+
+
+# ------------------------------------------------------------------------------------------ add aliases to a seeded entity
+def _yatra_setup(db):
+    c, brand = _client(db, name="EaseMyTrip", domain="easemytrip.com")
+    yat = Entity(id=uuid.uuid4(), client_id=c.id, name="Yatra.com", entity_type="competitor")
+    db.add(yat)
+    db.add(EntityKeyword(entity_id=yat.id, keyword_text="Yatra.com", match_type="exact", category="PRIMARY", priority=1, is_active=True))
+    db.add(SeededEntity(client_id=c.id, entity_id=yat.id, kind="competitor", name="Yatra.com", rank=2, context_term="online travel",
+                        status="active", validated=True, aliases=[]))
+    docs = {}
+    for key, title, body in [("a", "Yatra Online, Inc. announces results", "online travel"), ("b", "Yatra.com offers", "x"),
+                             ("c", "Bharat Jodo Yatra reaches Delhi", "x")]:
+        d = Document(id=uuid.uuid4(), url=f"http://y.test/{key}", title=title, normalized_content=body, published_at=dt.datetime.now(dt.timezone.utc))
+        db.add(d)
+        db.flush()
+        docs[key] = d
+        db.add(EntityMention(document_id=d.id, entity_id=brand.id, mention_count=1))        # visible to the client's pages
+    db.commit()
+    return c, yat, docs
+
+
+def test_add_aliases_reports_only_without_write_and_applies_the_alias_safety_rule(db):
+    c, yat, docs = _yatra_setup(db)
+    noisy = _news(*(["Yatra Online results"] * 14 + ["Bharat Jodo Yatra rally"] * 36))                # the bare word is mostly the Hindi word
+    out = service.add_aliases(db, c.id, "yatra.com", ["Yatra Online", "Yatra"], write=False, fetch=lambda q, a, b: noisy)
+    by = {a["alias"]: a for a in out["resolved"]}
+    assert by["Yatra Online"]["enabled"] and not by["Yatra"]["enabled"] and "false-match" in by["Yatra"]["reason"]
+    assert out["enabled"] == ["Yatra Online"] and out["written"] is False
+    assert db.query(EntityKeyword).filter(EntityKeyword.entity_id == yat.id).count() == 1                # nothing written
+    assert db.query(SeededEntity).filter(SeededEntity.entity_id == yat.id).one().aliases == []
+
+
+def test_add_aliases_with_write_stores_them_adds_keywords_and_rematches_visible_documents(db):
+    c, yat, docs = _yatra_setup(db)
+    noisy = _news(*(["Yatra Online results"] * 14 + ["Bharat Jodo Yatra rally"] * 36))
+    out = service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online", "Yatra"], write=True, fetch=lambda q, a, b: noisy)
+    assert out["written"] is True and out["rematch"]["Yatra.com"]["new_mentions"] == 2                   # b (the name) and a (the alias); c is the Hindi word
+    row = db.query(SeededEntity).filter(SeededEntity.entity_id == yat.id).one()
+    assert {(a["alias"], a["enabled"]) for a in row.aliases} == {("Yatra Online", True), ("Yatra", False)}
+    kws = {k.keyword_text for k in db.query(EntityKeyword).filter(EntityKeyword.entity_id == yat.id)}
+    assert kws == {"Yatra.com", "Yatra Online"}                                                          # the disabled bare alias is not a keyword
+    assert {m.document_id for m in db.query(EntityMention).filter(EntityMention.entity_id == yat.id)} == {docs["a"].id, docs["b"].id}
+    again = service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online"], write=True, fetch=lambda q, a, b: noisy)
+    assert again["new"] == [] and again["written"] is False                                              # re-running adds nothing
+    assert db.query(EntityKeyword).filter(EntityKeyword.entity_id == yat.id, EntityKeyword.keyword_text == "Yatra Online").count() == 1
+
+
+def test_add_aliases_for_an_unknown_or_retired_entity_changes_nothing(db):
+    c, yat, docs = _yatra_setup(db)
+    assert "error" in service.add_aliases(db, c.id, "Nobody", ["Nobody Ltd"], write=True)
+    db.query(SeededEntity).filter(SeededEntity.entity_id == yat.id).update({"status": "retired"})
+    db.commit()
+    assert "error" in service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online"], write=True)

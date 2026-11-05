@@ -359,6 +359,44 @@ def _refresh_matcher_and_rematch(db, client_id, entities) -> None:
         logger.warning("seeding_rematch_failed", error=str(e)[:200])
 
 
+def add_aliases(db, client_id, name: str, aliases: List[str], write: bool = False, fetch: Optional[Callable] = None,
+                measure: bool = True) -> Dict[str, Any]:
+    """Add aliases the news uses to one ACTIVE seeded entity, under the same safety rule as seeding (aliases.resolve_aliases:
+    multi-word accepted, a bare competitor alias only after the 50-document false-match measurement, generic words and a
+    person's single word rejected). Without write=True it only reports what would happen. With write=True the resolved aliases
+    are stored on the seeded row, the enabled ones become ALIAS keywords on the entity, the live matcher is refreshed and the
+    seed-scoped rematch runs for that entity. No LLM call; the measurement uses free Google News requests."""
+    from app.models.entity import EntityKeyword
+    from app.models.seeded_entity import SeededEntity
+    row = db.query(SeededEntity).filter(SeededEntity.client_id == client_id, SeededEntity.name.ilike(name),
+                                        SeededEntity.status == "active").first()
+    if row is None:
+        return {"error": f'No active seeded entity named "{name}".'}
+    ctx = [row.context_term] if row.context_term else []
+    resolved = alias_mod.resolve_aliases(row.name, aliases, row.kind, ctx, measure, fetch)
+    have = {str(a.get("alias", "")).strip().lower() for a in (row.aliases or [])}
+    new = [a for a in resolved if a["alias"].strip().lower() not in have]
+    out: Dict[str, Any] = {"entity": row.name, "resolved": resolved, "new": new,
+                           "enabled": [a["alias"] for a in new if a["enabled"]], "written": False}
+    if not write or not new:
+        return out
+    row.aliases = list(row.aliases or []) + new           # reassigned so the JSON column change is tracked
+    existing = {k[0].strip().lower() for k in db.query(EntityKeyword.keyword_text).filter(EntityKeyword.entity_id == row.entity_id).all()}
+    for kw in _enabled_alias_keywords(row.entity_id, new):
+        if kw.keyword_text.strip().lower() not in existing:
+            db.add(kw)
+    db.commit()
+    try:
+        from app.services.matching_engine import engine_instance
+        engine_instance.refresh_processor(db)
+    except Exception as e:
+        logger.warning("alias_matcher_refresh_failed", error=str(e)[:200])
+    from app.services.seeding import rematch as rematch_mod
+    out["rematch"] = rematch_mod.rematch_seeded(db, client_id, [row.entity_id])
+    out["written"] = True
+    return out
+
+
 def retire(db, client_id, name: str) -> Dict[str, Any]:
     from app.models.entity import Entity
     from app.models.rss_feed import RSSFeed

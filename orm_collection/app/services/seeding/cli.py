@@ -7,6 +7,7 @@ CLI for seeded top-5 executives / competitors.
   python -m app.services.seeding.cli --client "Godrej Properties" --rematch     # re-run the seed-scoped rematch of existing documents
   python -m app.services.seeding.cli --client "Godrej Properties" --retire "Name"
   python -m app.services.seeding.cli --client X --proposal-file plan.json --preview-rematch   # read-only: documents each chosen entity would gain
+  python -m app.services.seeding.cli --client X --add-alias "Yatra.com" --aliases "Yatra Online,Yatra" [--write]   # alias safety rule; report only without --write
 
 --dry-run and --apply make ONE web-grounded Claude Haiku 4.5 call through OpenRouter (about $0.015) unless --proposal-file is
 given. If that call fails the command aborts and writes nothing; it never falls back to the plain model. The chosen list is
@@ -36,7 +37,10 @@ def main(argv=None) -> int:
     mode.add_argument("--apply", action="store_true", help="write the chosen list, entities, feeds, website and rematch")
     mode.add_argument("--retire", metavar="NAME", help="retire one seeded entity (leaves the entity in place)")
     mode.add_argument("--rematch", action="store_true", help="re-run the seed-scoped rematch for the stored active list")
+    mode.add_argument("--add-alias", metavar="NAME", help="add the aliases in --aliases to one active seeded entity (report only unless --write)")
     mode.add_argument("--preview-rematch", action="store_true", help="read-only: existing documents each chosen entity would gain (needs --proposal-file)")
+    ap.add_argument("--aliases", metavar="A,B", help="with --add-alias: comma-separated aliases")
+    ap.add_argument("--write", action="store_true", help="with --add-alias: store them, refresh the matcher and rematch")
     ap.add_argument("--refresh", action="store_true", help="with --apply: replace an already stored list")
     ap.add_argument("--no-measure-aliases", action="store_true", help="skip the 50-document alias measurement (bare aliases stay off)")
     ap.add_argument("--json", action="store_true", help="print the plan as JSON")
@@ -51,6 +55,13 @@ def main(argv=None) -> int:
             return 2
         if a.retire:
             print(json.dumps(service.retire(db, client.id, a.retire), indent=2))
+            return 0
+        if a.add_alias:
+            aliases = [x.strip() for x in (a.aliases or "").split(",") if x.strip()]
+            if not aliases:
+                print("--add-alias needs --aliases", file=sys.stderr)
+                return 2
+            print(json.dumps(service.add_aliases(db, client.id, a.add_alias, aliases, write=a.write), indent=2, default=str))
             return 0
         if a.rematch:
             from app.services.seeding import rematch
