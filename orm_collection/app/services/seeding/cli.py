@@ -7,6 +7,7 @@ CLI for seeded top-5 executives / competitors.
   python -m app.services.seeding.cli --client "Godrej Properties" --rematch     # re-run the seed-scoped rematch of existing documents
   python -m app.services.seeding.cli --client "Godrej Properties" --retire "Name"
   python -m app.services.seeding.cli --client X --proposal-file plan.json --preview-rematch   # read-only: documents each chosen entity would gain
+  python -m app.services.seeding.cli --client X --link-search-hits [--months 24] [--write]   # link already-held search results to the seeded executives
   python -m app.services.seeding.cli --client X --add-alias "Yatra.com" --aliases "Yatra Online,Yatra" [--write]   # alias safety rule; report only without --write
 
 --dry-run and --apply make ONE web-grounded Claude Haiku 4.5 call through OpenRouter (about $0.015) unless --proposal-file is
@@ -37,10 +38,12 @@ def main(argv=None) -> int:
     mode.add_argument("--apply", action="store_true", help="write the chosen list, entities, feeds, website and rematch")
     mode.add_argument("--retire", metavar="NAME", help="retire one seeded entity (leaves the entity in place)")
     mode.add_argument("--rematch", action="store_true", help="re-run the seed-scoped rematch for the stored active list")
+    mode.add_argument("--link-search-hits", action="store_true", help="free Google News search per seeded executive; link the documents already held, then attribute (report only unless --write)")
     mode.add_argument("--add-alias", metavar="NAME", help="add the aliases in --aliases to one active seeded entity (report only unless --write)")
     mode.add_argument("--preview-rematch", action="store_true", help="read-only: existing documents each chosen entity would gain (needs --proposal-file)")
     ap.add_argument("--aliases", metavar="A,B", help="with --add-alias: comma-separated aliases")
-    ap.add_argument("--write", action="store_true", help="with --add-alias: store them, refresh the matcher and rematch")
+    ap.add_argument("--write", action="store_true", help="with --add-alias or --link-search-hits: write (otherwise only report)")
+    ap.add_argument("--months", type=int, default=24, help="with --link-search-hits: look-back in months (monthly slices)")
     ap.add_argument("--refresh", action="store_true", help="with --apply: replace an already stored list")
     ap.add_argument("--no-measure-aliases", action="store_true", help="skip the 50-document alias measurement (bare aliases stay off)")
     ap.add_argument("--json", action="store_true", help="print the plan as JSON")
@@ -55,6 +58,16 @@ def main(argv=None) -> int:
             return 2
         if a.retire:
             print(json.dumps(service.retire(db, client.id, a.retire), indent=2))
+            return 0
+        if a.link_search_hits:
+            from app.services.seeding import attribution
+            if not a.write:
+                from app.services.seeding.gates import seeded_rows
+                print(json.dumps({"would_search": [r.name for r in seeded_rows(db, client.id, "executive")], "months": a.months,
+                                  "note": "free Google News requests; saves nothing new; add --write to record the links and attribute them"}, indent=2))
+                return 0
+            linked = attribution.link_existing(db, client.id, months=a.months)
+            print(json.dumps({"linked": linked, "attributed": attribution.attribute_hits(db, client.id)}, indent=2))
             return 0
         if a.add_alias:
             aliases = [x.strip() for x in (a.aliases or "").split(",") if x.strip()]

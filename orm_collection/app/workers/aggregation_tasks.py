@@ -1303,9 +1303,11 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
 
     # Seeded entities' own search feeds are capped per run (steady state): at most SEED_RUN_CAP_PER_ENTITY new documents
     # per feed per run, newest first as the feed returns them. Every other feed is unchanged.
-    from app.services.seeding.gates import seeded_feed_urls
+    from app.services.seeding.gates import seeded_feed_urls, seeded_exec_feed_map
     from app.services.seeding.settings import RUN_CAP_PER_ENTITY
+    from app.services.seeding import attribution
     capped_feed_urls = seeded_feed_urls(db, ctx.client_id)
+    exec_feed_map = seeded_exec_feed_map(db, ctx.client_id)       # executive search feeds: link every document they return
 
     for feed in client_feeds:
         source = _get_or_create_source(db, feed)
@@ -1329,6 +1331,8 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
                 norm = adapter.normalize(entry, str(source.id))
                 norm_doc = NormalizedDocument(**norm)
                 is_saved, _, _ = process_and_save_document(db, norm_doc)
+                if feed.feed_url in exec_feed_map:
+                    attribution.record_hit_for_item(db, ctx.client_id, exec_feed_map[feed.feed_url], norm, "rss", feed.feed_url)
                 if is_saved:
                     feed_saved += 1
                     # Item 20: process_and_save_document() inserts
@@ -1344,6 +1348,13 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
                         new_doc_ids.append(str(db_doc.id))
         except Exception as fe:
             log.warning("feed_fetch_failed", feed_name=feed.feed_name, error=str(fe))
+
+    if exec_feed_map:
+        try:
+            attribution.attribute_hits(db, ctx.client_id)
+        except Exception as ae:
+            db.rollback()
+            log.warning("attribute_hits_failed", error=str(ae)[:200])
 
     youtube_doc_ids = _stage_collect_youtube(ctx, db, client, log)
     new_doc_ids.extend(youtube_doc_ids)

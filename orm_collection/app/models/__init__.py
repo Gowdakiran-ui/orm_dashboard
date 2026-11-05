@@ -26,3 +26,4 @@ from app.models.user import User, UserClientAccess
 from app.models.counterfeit_scan import CounterfeitScan
 from app.models.backfill import BackfillSlice
 from app.models.seeded_entity import SeededEntity
+from app.models.document_feed_hit import DocumentFeedHit

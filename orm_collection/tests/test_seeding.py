@@ -1273,3 +1273,185 @@ def test_add_aliases_for_an_unknown_or_retired_entity_changes_nothing(db):
     db.query(SeededEntity).filter(SeededEntity.entity_id == yat.id).update({"status": "retired"})
     db.commit()
     assert "error" in service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online"], write=True)
+
+
+# ----------------------------------------------------------------------- search-hit attribution (document_feed_hits)
+def _count_hits_on(monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "SEEDED_COUNT_SEARCH_HITS", True)
+
+
+def _attr_setup(db):
+    from app.models.document_feed_hit import DocumentFeedHit  # noqa: F401
+    c, brand = _client(db)
+    gp = Entity(id=uuid.uuid4(), client_id=c.id, name="Gaurav Pandey", entity_type="person")
+    other = Entity(id=uuid.uuid4(), client_id=c.id, name="Not Seeded", entity_type="person")
+    db.add_all([gp, other])
+    db.add(SeededEntity(client_id=c.id, entity_id=gp.id, kind="executive", name="Gaurav Pandey", rank=2, status="active", validated=True))
+    now = dt.datetime.now(dt.timezone.utc)
+    docs = {}
+    for key, title, body in [
+        ("named", "Gaurav Pandey, Godrej Properties CEO, on demand", "x"),                  # already counted: full name + company in the text
+        ("company", "Godrej Properties buys land in Kolkata", "residential project"),         # body-only mention: company in the text
+        ("role", "Housing major's CEO sees strong demand", "x"),                              # role word only
+        ("surname", "Pandey says launches on track", "x"),                                    # surname only
+        ("unrelated", "Cricket team wins the series", "sports desk"),                         # the search returned it, nothing in the text fits
+        ("nohit", "Godrej Properties launches a tower", "x"),                                  # never returned by the executive's search
+    ]:
+        d = Document(id=uuid.uuid4(), url=f"http://a.test/{key}", content_hash=f"h-{key}", title=title, normalized_content=body, published_at=now)
+        db.add(d)
+        db.flush()
+        docs[key] = d
+        db.add(EntityMention(document_id=d.id, entity_id=brand.id, mention_count=1))
+    db.add(EntityMention(document_id=docs["named"].id, entity_id=gp.id, mention_count=1))
+    db.commit()
+    return c, gp, other, docs
+
+
+def test_a_search_hit_is_recorded_for_a_held_document_by_url_or_by_headline_hash_and_never_twice(db):
+    from app.models.document_feed_hit import DocumentFeedHit
+    from app.services.seeding import attribution
+    from app.utils.text_processing import generate_content_hash
+    c, gp, other, docs = _attr_setup(db)
+    docs["company"].content_hash = generate_content_hash("Godrej Properties buys land in Kolkata")
+    db.commit()
+    assert attribution.record_hit_for_item(db, c.id, gp.id, {"url": "http://a.test/company?utm=1", "content": "x"}, "google_news", "q")       # by canonical URL
+    assert attribution.record_hit_for_item(db, c.id, gp.id, {"url": "http://elsewhere.test/other-url", "content": "Godrej Properties buys land in Kolkata"}, "google_news", "q")   # same headline, another URL
+    assert not attribution.record_hit_for_item(db, c.id, gp.id, {"url": "http://nowhere.test/x", "content": "never saved"}, "google_news", "q")
+    assert db.query(DocumentFeedHit).filter(DocumentFeedHit.entity_id == gp.id).count() == 1          # both resolved to the one held document
+    attribution.record_hit(db, c.id, gp.id, docs["company"].id, "google_news", "q")
+    assert db.query(DocumentFeedHit).count() == 1
+
+
+def test_attribute_hits_adds_a_mention_only_when_the_stored_text_holds_the_company_the_surname_or_a_role(db, monkeypatch):
+    _count_hits_on(monkeypatch)
+    from app.services.seeding import attribution
+    c, gp, other, docs = _attr_setup(db)
+    for key in ("named", "company", "role", "surname", "unrelated"):
+        attribution.record_hit(db, c.id, gp.id, docs[key].id, "google_news", "q")
+    preview = attribution.attribute_hits(db, c.id, write=False)
+    assert preview["Gaurav Pandey"] == {"hits": 5, "already_mentioned": 1, "attributed": 3, "blocked_by_guard": 1}
+    assert db.query(EntityMention).filter(EntityMention.entity_id == gp.id).count() == 1                  # report only
+    out = attribution.attribute_hits(db, c.id)
+    assert out["Gaurav Pandey"]["attributed"] == 3
+    got = {m.document_id for m in db.query(EntityMention).filter(EntityMention.entity_id == gp.id)}
+    assert got == {docs["named"].id, docs["company"].id, docs["role"].id, docs["surname"].id}              # the unrelated document is not attributed
+    assert db.query(EntityMention).filter(EntityMention.entity_id == gp.id, EntityMention.document_id == docs["company"].id).one().confidence_score == 0.6
+    assert attribution.attribute_hits(db, c.id)["Gaurav Pandey"]["attributed"] == 0                         # idempotent
+    assert db.query(EntityMention).filter(EntityMention.entity_id == other.id).count() == 0
+
+
+def test_the_executive_gate_counts_hit_documents_that_pass_the_guard_and_changes_nothing_without_hits(db, monkeypatch):
+    _count_hits_on(monkeypatch)
+    from app.services.seeding import attribution, gates
+    c, gp, other, docs = _attr_setup(db)
+    # a body-only document with a mention but no hit is NOT counted (the text has neither the full name with the company)
+    db.add(EntityMention(document_id=docs["nohit"].id, entity_id=gp.id, mention_count=1))
+    db.commit()
+    before = gates.seeded_gate_doc_ids(db, c.id, [gp.id])[gp.id]
+    assert before == {docs["named"].id}
+    for key in ("company", "role", "unrelated"):
+        attribution.record_hit(db, c.id, gp.id, docs[key].id, "google_news", "q")
+    attribution.attribute_hits(db, c.id)
+    after = gates.seeded_gate_doc_ids(db, c.id, [gp.id])[gp.id]
+    assert after == {docs["named"].id, docs["company"].id, docs["role"].id}                                 # hit + mention + guard; "unrelated" has a hit but fails the guard; "nohit" has no hit
+    assert gates.guard_passes("x", "y", ["godrej properties"], "Gaurav Pandey") is False
+    assert gates.guard_passes("Pandey said", "", ["godrej properties"], "Gaurav Pandey") is True
+
+
+def test_backfill_records_the_hits_of_a_seeded_executives_slice_and_attributes_them(db, monkeypatch):
+    _count_hits_on(monkeypatch)
+    from app.models.document_feed_hit import DocumentFeedHit
+    from app.services.backfill import engine as bf
+    c, gp, other, docs = _attr_setup(db)
+
+    class FakeAdapter:
+        def normalize(self, raw, source_id):
+            return {"url": raw["url"], "content": raw.get("content", "")}
+
+    monkeypatch.setattr(bf, "load_adapter", lambda src: FakeAdapter())
+    fetched = [{"url": "http://a.test/company"}, {"url": "http://a.test/role"}, {"url": "http://not-held.test/z"}]
+
+    def fetch(query, s, e, ctx):
+        return fetched if "Gaurav" in query and "fraud" not in query else []
+
+    def ingest(db_, client_id, src, raw, **kw):
+        return {"saved": 0, "deduped": len(raw), "skipped_undated": 0, "dropped_irrelevant": 0}
+
+    cfg = bf.BackfillConfig(sources=("google_news",), max_slices_per_run=200, relevance_filter=False)
+    summary = bf.run_client(db, c.id, cfg, fetchers={"google_news": fetch}, ingest=ingest)
+    assert {h.document_id for h in db.query(DocumentFeedHit).filter(DocumentFeedHit.entity_id == gp.id)} == {docs["company"].id, docs["role"].id}
+    assert summary["attributed"]["Gaurav Pandey"] == 2
+    assert {m.document_id for m in db.query(EntityMention).filter(EntityMention.entity_id == gp.id)} == {docs["named"].id, docs["company"].id, docs["role"].id}
+
+
+def test_run_pipeline_links_the_documents_a_seeded_executives_feed_returns_even_when_already_held(db, monkeypatch):
+    _count_hits_on(monkeypatch)
+    import app.workers.aggregation_tasks as agg
+    import app.adapters.registry as registry
+    import app.services.document_service as docsvc
+    import app.workers.collection_tasks as ct
+    from app.models.document_feed_hit import DocumentFeedHit
+    from app.services.client_service import provision_entity_search_feeds
+
+    c, brand = _client(db)
+    gp = Entity(id=uuid.uuid4(), client_id=c.id, name="Gaurav Pandey", entity_type="person")
+    dlf = Entity(id=uuid.uuid4(), client_id=c.id, name="DLF", entity_type="competitor")
+    db.add_all([gp, dlf])
+    db.add_all([SeededEntity(client_id=c.id, entity_id=gp.id, kind="executive", name="Gaurav Pandey", rank=2, status="active", validated=True),
+                SeededEntity(client_id=c.id, entity_id=dlf.id, kind="competitor", name="DLF", rank=1, context_term="real estate", status="active", validated=True)])
+    db.commit()
+    exec_feeds = provision_entity_search_feeds(db, c.id, "Gaurav Pandey", co_occur_with="Godrej Properties", quote=True, co_quoted=True)
+    provision_entity_search_feeds(db, c.id, "DLF", co_occur_with="real estate", quote=True, co_quoted=False)
+    plain_feed = RSSFeed(feed_name="Brand Google News Feed", feed_url="https://news.google.com/rss/search?q=Godrej", client_id=c.id, is_active=True,
+                         source_type="entity_search", source_format="rss")
+    db.add(plain_feed)
+    held = {}
+    for i in range(3):
+        d = Document(id=uuid.uuid4(), url=f"http://held.test/art-{i}", content_hash=f"hh{i}", title="Godrej Properties news %d" % i, normalized_content="x",
+                     published_at=dt.datetime.now(dt.timezone.utc))
+        db.add(d)
+        held[i] = d
+    db.commit()
+
+    class FakeAdapter:
+        def fetch(self, url):
+            return [{"link": f"http://held.test/art-{i}"} for i in range(3)] + [{"link": "http://new.test/not-held"}]
+
+        def normalize(self, entry, source_id):
+            return {"url": entry["link"], "title": "t", "content": "c", "published_at": dt.datetime.now(dt.timezone.utc), "source_id": source_id}
+
+    monkeypatch.setitem(registry.ADAPTER_REGISTRY, "rss", FakeAdapter)
+    monkeypatch.setitem(registry.ADAPTER_REGISTRY, "gdelt_json", FakeAdapter)
+    monkeypatch.setitem(registry.ADAPTER_REGISTRY, "hn_algolia_json", FakeAdapter)
+    monkeypatch.setattr(docsvc, "process_and_save_document", lambda db_, nd: (False, True, 0))       # every item is already held (deduped)
+    monkeypatch.setattr(ct, "_get_or_create_source", lambda db_, feed: SimpleNamespace(id=uuid.uuid4()))
+    for name in ("_stage_collect_youtube", "_stage_collect_instagram", "_stage_collect_reddit"):
+        monkeypatch.setattr(agg, name, lambda *a, **k: [])
+    monkeypatch.setattr(agg, "_stale_pending_search_doc_ids", lambda *a, **k: [])
+    from app.schemas import document as docschema
+    monkeypatch.setattr(docschema, "NormalizedDocument", lambda **kw: SimpleNamespace(**kw))
+
+    agg._stage_collect(SimpleNamespace(client_id=c.id, run_id="r1", worker_id="w1"), db)
+    hits = db.query(DocumentFeedHit).all()
+    assert {h.entity_id for h in hits} == {gp.id}                                      # only the executive's feeds link; the brand and competitor feeds do not
+    assert {h.document_id for h in hits} == {held[0].id, held[1].id, held[2].id}      # the held ones, once each; the unheld item has nothing to link
+    assert {h.query for h in hits} <= {f.feed_url for f in exec_feeds}
+    # the guard: these held documents name Godrej Properties in the title, so they are attributed to the executive
+    assert {m.document_id for m in db.query(EntityMention).filter(EntityMention.entity_id == gp.id)} == {held[0].id, held[1].id, held[2].id}
+
+
+def test_with_the_switch_off_hits_are_recorded_but_nothing_is_attributed_or_counted(db):
+    from app.core.config import settings
+    from app.models.document_feed_hit import DocumentFeedHit
+    from app.services.seeding import attribution, gates
+    assert settings.SEEDED_COUNT_SEARCH_HITS is False                                    # the shipped default
+    c, gp, other, docs = _attr_setup(db)
+    db.add(EntityMention(document_id=docs["company"].id, entity_id=gp.id, mention_count=1))   # a mention exists, but the text does not hold name + company
+    db.commit()
+    attribution.record_hit(db, c.id, gp.id, docs["company"].id, "google_news", "q")
+    attribution.record_hit(db, c.id, gp.id, docs["role"].id, "google_news", "q")
+    assert db.query(DocumentFeedHit).count() == 2                                         # recorded
+    out = attribution.attribute_hits(db, c.id)                                            # report only: shows what turning it on would add
+    assert out["Gaurav Pandey"]["attributed"] == 1 and db.query(EntityMention).filter(EntityMention.entity_id == gp.id).count() == 2
+    assert gates.seeded_gate_doc_ids(db, c.id, [gp.id])[gp.id] == {docs["named"].id}      # the gate is exactly as before

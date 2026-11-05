@@ -2,7 +2,10 @@
 Seeded-entity document gates, used by the executive and benchmark engines in place of the brand-entity gate.
 
 - SEEDED executive: a document counts when the person's full name (or an enabled multi-word alias) AND the company name
-  both appear in the document's title or summary (first LEAD_CHARS characters of the stored text).
+  both appear in the document's title or summary (first LEAD_CHARS characters of the stored text), OR when the executive's own
+  "Name" "Company" search returned it (a document_feed_hits row) and the stored text holds the company, the surname or a role
+  word (guard_passes). The search matches the full article, but only the headline and summary are stored, so the name is often
+  only in the body; a sample of 24 such articles read in full named the person in all 24 (reports/).
 - SEEDED competitor: a document counts when it is about the competitor itself: its full name appears in the title or
   summary and, for a one-word name, a sector (context) word appears in the text. It does not need to mention the client.
 
@@ -27,6 +30,69 @@ def table_exists(db) -> bool:
         return inspect(db.get_bind()).has_table("seeded_entities")
     except Exception:
         return False
+
+
+def hits_table_exists(db) -> bool:
+    """False until migration 0017 is applied; the hit-based attribution is then simply absent."""
+    from sqlalchemy import inspect
+    try:
+        return inspect(db.get_bind()).has_table("document_feed_hits")
+    except Exception:
+        return False
+
+
+ROLE_WORDS = ("ceo", "cfo", "coo", "md", "managing director", "chief executive", "chief financial", "chairman", "chairperson",
+              "chairwoman", "chair", "promoter", "founder", "co founder", "cofounder", "director", "president", "executive")
+
+
+def guard_passes(title: Optional[str], lead: Optional[str], company_terms_: Iterable[str], name: str) -> bool:
+    """Pure. A document returned by an executive's own search is attributed to the person only when the stored title/summary holds
+    the company name, the surname or a role word, so a document the search returned for some unrelated reason is not."""
+    text = _norm(title) + _norm(lead)
+    parts = _norm(name).split()
+    surname = parts[-1] if parts else ""
+    cos = [_norm(c) for c in company_terms_ if c]
+    if any(c in text for c in cos):
+        return True
+    if len(surname) >= 3 and (" " + surname + " ") in text:
+        return True
+    return any((" " + w + " ") in text for w in ROLE_WORDS)
+
+
+def count_hits_enabled() -> bool:
+    from app.core.config import settings
+    return bool(getattr(settings, "SEEDED_COUNT_SEARCH_HITS", False))
+
+
+def hit_doc_ids(db, entity_id) -> Set:
+    if not hits_table_exists(db):
+        return set()
+    from app.models.document_feed_hit import DocumentFeedHit
+    return {r[0] for r in db.query(DocumentFeedHit.document_id).filter(DocumentFeedHit.entity_id == entity_id).all()}
+
+
+def uncounted_hit_counts(db, entity_ids: Iterable, window_days: int) -> Dict:
+    """{entity_id: N}: documents this executive's own search returned (document_feed_hits) inside the window that carry NO mention of
+    them, so they are not in the score. Display only. With SEEDED_COUNT_SEARCH_HITS on, attributed documents have a mention and drop out.
+    Window date = the document's published_at, else the time the hit was recorded. 0 for everyone until migration 0017 is applied."""
+    import datetime as dt
+    ids = list(entity_ids)
+    out = {i: 0 for i in ids}
+    if not ids or not hits_table_exists(db):
+        return out
+    from app.models.document import Document
+    from app.models.document_feed_hit import DocumentFeedHit
+    from app.models.entity import EntityMention
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=int(window_days))
+    mentioned = db.query(EntityMention.id).filter(EntityMention.document_id == DocumentFeedHit.document_id,
+                                                  EntityMention.entity_id == DocumentFeedHit.entity_id).exists()
+    rows = db.query(DocumentFeedHit.entity_id, func.count(func.distinct(DocumentFeedHit.document_id))).join(
+        Document, Document.id == DocumentFeedHit.document_id).filter(
+        DocumentFeedHit.entity_id.in_(ids), ~mentioned,
+        func.coalesce(Document.published_at, DocumentFeedHit.seen_at) >= cutoff).group_by(DocumentFeedHit.entity_id).all()
+    for eid, n in rows:
+        out[eid] = int(n)
+    return out
 
 
 def seeded_rows(db, client_id, kind: Optional[str] = None):
@@ -119,12 +185,35 @@ def seeded_gate_doc_ids(db, client_id, entity_ids: Iterable) -> Dict:
     for r in rows:
         aliases = enabled_alias_texts(r)
         if r.kind == "executive":
-            out[r.entity_id] = person_doc_ids(_lead_rows(db, r.entity_id), [r.name] + aliases, co)
+            rows_ = _lead_rows(db, r.entity_id)
+            base = person_doc_ids(rows_, [r.name] + aliases, co)
+            hits = hit_doc_ids(db, r.entity_id) if count_hits_enabled() else set()
+            extra = {d for (d, t, l) in rows_ if d in hits and d not in base and guard_passes(t, l, co, r.name)} if hits else set()
+            out[r.entity_id] = base | extra
         else:
             # context words (any one of them, 4+ letters) rather than the whole phrase, which rarely appears verbatim.
             # The full name must be in the title/summary; for a one-word name a context word may be anywhere in the text.
             ctx = [w for w in _norm(r.context_term).split() if len(w) >= 4] if r.context_term else []
             out[r.entity_id] = competitor_doc_ids(_lead_rows(db, r.entity_id, ctx), [r.name] + aliases, ctx)
+    return out
+
+
+def seeded_exec_feed_map(db, client_id) -> Dict[str, object]:
+    """{search-feed URL: executive entity id} for the client's active seeded executives (what the Run Pipeline polls for them)."""
+    from app.models.entity import Entity
+    from app.services.client_service import entity_search_feed_urls
+    rows = seeded_rows(db, client_id, "executive")
+    if not rows:
+        return {}
+    names = {e.id: e.name for e in db.query(Entity).filter(Entity.id.in_([r.entity_id for r in rows])).all()}
+    brand_row = db.query(Entity).filter(Entity.client_id == client_id, Entity.entity_type == "brand").first()
+    company = brand_row.name if brand_row else next(iter(company_terms(db, client_id)), None)
+    out: Dict[str, object] = {}
+    for r in rows:
+        name = names.get(r.entity_id)
+        if name:
+            for url in entity_search_feed_urls(name, co_occur_with=company, quote=True, co_quoted=True).values():
+                out[url] = r.entity_id
     return out
 
 

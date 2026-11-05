@@ -784,6 +784,21 @@ CREATE TABLE public.source_health (
 
 
 --
+-- Name: document_feed_hits; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.document_feed_hits (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    document_id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    entity_id uuid NOT NULL,
+    source character varying(30) NOT NULL,
+    query text,
+    seen_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: seeded_entities; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -879,6 +894,22 @@ ALTER TABLE ONLY public.alert_client_states
 
 ALTER TABLE ONLY public.backfill_slices
     ADD CONSTRAINT backfill_slices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: document_feed_hits document_feed_hits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_feed_hits
+    ADD CONSTRAINT document_feed_hits_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: document_feed_hits uq_document_feed_hits_document_entity; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_feed_hits
+    ADD CONSTRAINT uq_document_feed_hits_document_entity UNIQUE (document_id, entity_id);
 
 
 --
@@ -1362,6 +1393,20 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: ix_document_feed_hits_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_document_feed_hits_client_id ON public.document_feed_hits USING btree (client_id);
+
+
+--
+-- Name: ix_document_feed_hits_entity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_document_feed_hits_entity_id ON public.document_feed_hits USING btree (entity_id);
+
+
+--
 -- Name: ix_seeded_entities_client_kind; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1786,6 +1831,30 @@ CREATE UNIQUE INDEX uq_risk_events_daily ON public.risk_events USING btree (clie
 --
 
 CREATE TRIGGER deactivate_feeds_on_entity_delete AFTER DELETE ON public.entities FOR EACH ROW EXECUTE FUNCTION public.deactivate_feeds_on_entity_delete();
+
+
+--
+-- Name: document_feed_hits document_feed_hits_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_feed_hits
+    ADD CONSTRAINT document_feed_hits_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: document_feed_hits document_feed_hits_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_feed_hits
+    ADD CONSTRAINT document_feed_hits_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: document_feed_hits document_feed_hits_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_feed_hits
+    ADD CONSTRAINT document_feed_hits_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
 
 
 --

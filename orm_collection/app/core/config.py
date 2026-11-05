@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     EXEC_WINDOW_DAYS: int = 365
     BENCHMARK_WINDOW_DAYS: int = 90
 
+    # Seeded executives: count documents their own "Name" "Company" search returned even when the person's name is only in the article
+    # body (services/seeding/attribution.py). OFF by default: the links are always recorded, but nothing is attributed or counted until
+    # this is true. Measured on 24 articles read in full: all 24 name the person, 17 name the person twice or in the headline, 3 in the
+    # headline; a person named once in a company-results article takes that article's sentiment, so turning this on moves scores.
+    SEEDED_COUNT_SEARCH_HITS: bool = False
+
     # DigitalOcean-managed PgBouncer connection pool (structural fix for the
     # 2026-09-05 connection-exhaustion incident -- see db.py/docker-compose.yml
     # comments). A distinct setting, not a DATABASE_URL override: backup_tasks.py

@@ -272,6 +272,27 @@ def skip_pending_for_entity(db, client_id, entity_id) -> int:
     return n
 
 
+# ------------------------------------------------------------------ search hits
+def record_search_hits(db, client_id, src: SourceDef, entity_id, query: str, raw_items: List[Dict[str, Any]]) -> int:
+    """After a slice of a SEEDED EXECUTIVE's "Name" "Company" search was ingested, record which held documents it returned (saved now
+    or already held, for example from the brand feed). Never raises: a failure here must not lose the slice."""
+    from app.services.seeding import attribution
+    n = 0
+    try:
+        adapter = load_adapter(src)
+        for raw in raw_items:
+            try:
+                norm = adapter.normalize(raw, "00000000-0000-0000-0000-000000000000")
+            except Exception:
+                continue
+            if attribution.record_hit_for_item(db, client_id, entity_id, norm, src.name, query):
+                n += 1
+    except Exception as e:
+        db.rollback()
+        logger.warning("search_hits_failed", error=str(e)[:200])
+    return n
+
+
 # ------------------------------------------------------------------------ run
 def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]] = None,
                fetchers: Optional[Dict[str, Callable]] = None,
@@ -289,6 +310,8 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
     seeded = seed_slices(db, client_id, plan_slices(specs, cfg))
     caps = seeded_caps(db, client_id)
     seeded_competitors = any(sp.seeded and sp.kind == "competitor" for sp in specs)
+    from app.services.seeding.gates import seeded_entity_ids
+    hit_exec_ids = {str(i) for i in seeded_entity_ids(db, client_id, "executive")}     # executives whose search results are linked
     capped_ids = set()
     for eid, c in caps.items():
         import uuid as _uuid
@@ -357,6 +380,8 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
         st = ingest(db, client_id, src, raw, **ing_kwargs)
         row = db.get(BackfillSlice, row.id)
         ent_key = str(row.entity_id) if row.entity_id else None
+        if ent_key in hit_exec_ids and raw:
+            record_search_hits(db, client_id, src, row.entity_id, row.query, raw)
         row.item_count = len(raw)
         row.new_count = st["saved"]
         row.error = None
@@ -394,6 +419,13 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
         BackfillSlice.source.in_(list(cfg.sources)),
     ).count()
     summary["youtube_units_used"] = ctx.get("youtube_units_used", 0)
+    if hit_exec_ids:
+        try:
+            from app.services.seeding import attribution
+            summary["attributed"] = {k: v["attributed"] for k, v in attribution.attribute_hits(db, client_id).items()}
+        except Exception as e:
+            db.rollback()
+            logger.warning("attribute_hits_failed", error=str(e)[:200])
     return summary
 
 
