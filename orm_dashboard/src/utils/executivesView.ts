@@ -2,9 +2,10 @@ import { formatDMY } from "./dateFormat";
 import { windowPhrase } from "./windowText";
 // Pure display rules for the Executives page (kept free of React so every sentence can be unit-tested).
 //
-// Rules: a person with no stored score is "No score yet", never a zero or a grade; under 3 documents the
-// letter grade is withheld on this page (the API still returns it); a row last scored more than 14 days
-// ago is marked stale with its date. The scoring itself is not touched here.
+// Rules: a person with no stored score is "No score yet", never a zero or a grade; under 3 articles the page shows
+// "Limited coverage (N articles)" instead of the score and grade (the API still returns both: with so few articles every
+// executive with neutral coverage gets the same ~60.2, which says nothing about the person); a row last scored more than 14
+// days ago is marked stale with its date. The scoring itself is not touched here.
 
 export const STALE_AFTER_DAYS = 14;
 export const LOW_EVIDENCE_DOCS = 3;
@@ -32,6 +33,10 @@ export function formatAsOfDate(asOf: string | null | undefined): string | null {
 
 export type ExecBadge = "scored" | "low_evidence" | "no_score";
 
+export function limitedCoverageText(n: number): string {
+  return `Limited coverage (${n} article${n === 1 ? "" : "s"})`;
+}
+
 export interface ExecView {
   badge: ExecBadge;
   scoreText: string;
@@ -51,7 +56,7 @@ export function executiveView(e: any, now: number = Date.now()): ExecView {
   const docs = typeof e.document_count === "number" ? e.document_count : null;
   const scoreText = e.score.toFixed(2);
   if (docs !== null && docs < LOW_EVIDENCE_DOCS) {
-    return { badge: "low_evidence", scoreText, gradeText: `Grade withheld: fewer than ${LOW_EVIDENCE_DOCS} documents`, hasScore: true, staleNote, asOfText };
+    return { badge: "low_evidence", scoreText: limitedCoverageText(docs), gradeText: "-", hasScore: true, staleNote, asOfText };
   }
   return { badge: "scored", scoreText, gradeText: e.grade ?? "-", hasScore: true, staleNote, asOfText };
 }
@@ -115,10 +120,10 @@ export function trackedCardView(e: any, clientName: string, now: number = Date.n
     return { hasScore: false, headline: "No score yet", detail: noScoreReason(e, clientName) };
   }
   const docs = typeof e.document_count === "number" ? e.document_count : null;
-  const grade = v.badge === "low_evidence" ? "grade withheld" : `grade ${v.gradeText}`;
+  const limited = v.badge === "low_evidence";
   return {
     hasScore: true,
-    headline: `${v.scoreText} · ${grade}`,
+    headline: limited ? v.scoreText : `${v.scoreText} · grade ${v.gradeText}`,
     detail: `${docs !== null ? `${docs} article${docs === 1 ? "" : "s"} in the ${windowPhrase(e?.window_days)}` : `Scored from the ${windowPhrase(e?.window_days)}`}${v.staleNote ? `. ${v.staleNote}` : ""}`,
   };
 }

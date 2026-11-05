@@ -11,12 +11,14 @@ describe("executiveView", () => {
     const v = executiveView(scored, NOW);
     expect(v).toMatchObject({ badge: "scored", scoreText: "57.98", gradeText: "D", hasScore: true, staleNote: null });
   });
-  it("withholds the letter grade under 3 documents (display only)", () => {
+  it("shows Limited coverage (N articles) instead of a score and grade under 3 articles (display only)", () => {
     const v = executiveView({ ...scored, score: 60.192, grade: "C", document_count: 1 }, NOW);
     expect(v.badge).toBe("low_evidence");
-    expect(v.scoreText).toBe("60.19");
-    expect(v.gradeText).toBe("Grade withheld: fewer than 3 documents");
-    expect(v.gradeText).not.toContain("C");
+    expect(v.scoreText).toBe("Limited coverage (1 article)");
+    expect(v.gradeText).toBe("-");
+    expect(v.scoreText).not.toContain("60.19");
+    expect(executiveView({ ...scored, score: 60.2173, grade: "C", document_count: 2 }, NOW).scoreText).toBe("Limited coverage (2 articles)");
+    expect(executiveView({ ...scored, score: 60.2427, grade: "C", document_count: 3 }, NOW)).toMatchObject({ badge: "scored", scoreText: "60.24", gradeText: "C" });
   });
   it("an unscored person never gets a number or a grade", () => {
     for (const e of [
@@ -93,6 +95,7 @@ describe("default tracked-executive cards", () => {
     expect(trackedCardView(rows[0], "Acme").headline).toBe("No score yet");
     expect(trackedCardView(rows[0], "Acme").detail).toContain("No coverage mentioning Acme");
     expect(trackedCardView(rows[2], "Acme")).toMatchObject({ hasScore: true, headline: "70.00 · grade B", detail: "3 articles in the last 30 days" });
-    expect(trackedCardView({ ...rows[2], document_count: 2 }, "Acme").headline).toContain("grade withheld");
+    expect(trackedCardView({ ...rows[2], document_count: 2 }, "Acme").headline).toBe("Limited coverage (2 articles)");
+    expect(trackedCardView({ ...rows[2], document_count: 2 }, "Acme").headline).not.toMatch(/grade|70\.00/);
   });
 });

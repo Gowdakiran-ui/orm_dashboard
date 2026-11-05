@@ -151,7 +151,7 @@ describe("search results", () => {
     expect(host.textContent).toContain("no article published in the last 30 days mentions Godrej Properties together with this person");
   });
 
-  it("a tracked person shows the corrected display: events from the backend, Low evidence, withheld grade, Based on N documents, stale label", async () => {
+  it("a tracked person shows the corrected display: events from the backend, Low evidence, Limited coverage instead of a score, Based on N documents, stale label", async () => {
     const events = [{ id: "d1", title: "Headline one", source: "Reuters", topic: "General", timestamp: "2026-10-01T00:00:00Z", sentiment: 0, risk: 0, reputation_impact: "+0.0", names_executive: true, snippet: "x" }];
     api.searchExecutive.mockResolvedValue({ status: "tracked", executive: {
       name: "Geetika Trehan", entity_id: "e3", score: 60.192, grade: "C", health_status: "PARTIAL", document_count: 1, events, sentiment_split: { positive: 0, neutral: 1, negative: 0 },
@@ -159,9 +159,10 @@ describe("search results", () => {
     await mount();
     await search("Geetika Trehan");
     const text = host.textContent || "";
-    expect(text).toContain("60.19");
+    expect(text).toContain("Limited coverage (1 article)");
+    expect(text).not.toContain("60.19");
     expect(text).toContain("LOW EVIDENCE");
-    expect(text).toContain("Grade withheld: fewer than 3 documents");
+    expect(text).not.toContain("Grade withheld");
     expect(text).toContain("Based on 1 document. Biggest drag on the score: Sentiment (12.3 points lost).");
     expect(text).toContain("Stale: last scored");
     expect(text).toContain("1 document behind this score");

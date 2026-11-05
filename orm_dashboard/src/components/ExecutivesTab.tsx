@@ -177,7 +177,9 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                 </div>
               </div>
               <p className={`text-xs font-mono ${mutedText(theme)}`}>{appearsInLine(clientName)}</p>
-              {view.hasScore ? (
+              {view.hasScore && view.badge === "low_evidence" ? (
+                <p className="text-sm font-mono font-bold text-amber-500">{view.scoreText}</p>
+              ) : view.hasScore ? (
                 <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                   <div>
                     <span className={`block ${mutedText(theme)}`}>Score</span>
@@ -188,7 +190,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                       Grade
                       <InfoTooltip label="About Executive Reputation Grade"><ExecutiveReputationGradeDefinition /></InfoTooltip>
                     </span>
-                    <span className={`font-bold ${view.badge === "low_evidence" ? "text-xs" : "text-sm"} ${bodyText(theme)}`}>{view.gradeText}</span>
+                    <span className={`font-bold text-sm ${bodyText(theme)}`}>{view.gradeText}</span>
                   </div>
                 </div>
               ) : (
