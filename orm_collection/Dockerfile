@@ -13,7 +13,7 @@ WORKDIR /app
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY requirements.txt constraints.txt ./
 
 # Large deps (torch, via transformers) can hit mid-download read timeouts
 # on a flaky connection; pip's own --retries doesn't cover a timeout
@@ -23,7 +23,7 @@ COPY requirements.txt .
 # shipping an image with no dependencies installed.
 RUN success=0; \
     for i in 1 2 3 4 5; do \
-      if pip install --no-cache-dir --default-timeout=180 -r requirements.txt; then success=1; break; fi; \
+      if pip install --no-cache-dir --default-timeout=180 -c constraints.txt -r requirements.txt; then success=1; break; fi; \
       echo "pip install attempt $i failed, retrying..."; sleep 5; \
     done; \
     if [ "$success" -ne 1 ]; then echo "pip install failed after 5 attempts"; exit 1; fi
