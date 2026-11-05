@@ -6,8 +6,10 @@ Seeded-entity document gates, used by the executive and benchmark engines in pla
   "Name" "Company" search returned it (a document_feed_hits row) and the stored text holds the company, the surname or a role
   word (guard_passes). The search matches the full article, but only the headline and summary are stored, so the name is often
   only in the body; a sample of 24 such articles read in full named the person in all 24 (reports/).
-- SEEDED competitor: a document counts when it is about the competitor itself: its full name appears in the title or
-  summary and, for a one-word name, a sector (context) word appears in the text. It does not need to mention the client.
+- SEEDED competitor: a document counts when it passes EITHER gate (the union): the brand co-occurrence gate every competitor has
+  (the document mentions the competitor and the client's brand/product), or the self-coverage gate: the competitor's full name
+  appears in the title or summary and, for a one-word name, a sector (context) word appears in the text. The second gate alone
+  dropped real articles whose stored text lacks the name or the sector word (DLF 15 to 1, Lodha 12 to 1 on a local copy).
 
 Non-seeded entities keep the existing gates unchanged.
 """
@@ -106,6 +108,18 @@ def seeded_rows(db, client_id, kind: Optional[str] = None):
     return q.order_by(SeededEntity.kind.desc(), SeededEntity.rank).all()      # executives, then competitors; each in seed order
 
 
+def retired_entity_ids(db, client_id) -> Set:
+    """Entities whose seeded row was retired and that have no active seeded row. They stay in the database but are not shown on the
+    Competitor Compare or Executives pages. Empty before migration 0016."""
+    from app.models.seeded_entity import SeededEntity
+    if not table_exists(db):
+        return set()
+    rows = db.query(SeededEntity.entity_id, SeededEntity.status).filter(
+        SeededEntity.client_id == client_id, SeededEntity.entity_id.isnot(None)).all()
+    active = {e for e, st in rows if st == "active"}
+    return {e for e, st in rows if st == "retired"} - active
+
+
 def seeded_entity_ids(db, client_id, kind: Optional[str] = None) -> Set:
     return {r.entity_id for r in seeded_rows(db, client_id, kind)}
 
@@ -174,6 +188,17 @@ def competitor_doc_ids(rows: Iterable, name_terms: List[str], context_terms: Lis
     return out
 
 
+def brand_cooccurring_doc_ids(db, client_id, entity_id) -> Set:
+    """The old competitor gate: documents that mention this entity and also the client's brand or product entity."""
+    from app.models.entity import Entity, EntityMention
+    brand_ids = [b[0] for b in db.query(Entity.id).filter(Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))).all()]
+    if not brand_ids:
+        return set()
+    mine = db.query(EntityMention.document_id).filter(EntityMention.entity_id == entity_id)
+    theirs = db.query(EntityMention.document_id).filter(EntityMention.entity_id.in_(brand_ids))
+    return {r[0] for r in mine.intersect(theirs).all()}
+
+
 def seeded_gate_doc_ids(db, client_id, entity_ids: Iterable) -> Dict:
     """{entity_id: set(document ids)} for the seeded entities among `entity_ids`. Other entities are absent."""
     wanted = set(entity_ids)
@@ -194,8 +219,14 @@ def seeded_gate_doc_ids(db, client_id, entity_ids: Iterable) -> Dict:
             # context words (any one of them, 4+ letters) rather than the whole phrase, which rarely appears verbatim.
             # The full name must be in the title/summary; for a one-word name a context word may be anywhere in the text.
             ctx = [w for w in _norm(r.context_term).split() if len(w) >= 4] if r.context_term else []
-            out[r.entity_id] = competitor_doc_ids(_lead_rows(db, r.entity_id, ctx), [r.name] + aliases, ctx)
+            own = competitor_doc_ids(_lead_rows(db, r.entity_id, ctx), [r.name] + aliases, ctx)
+            out[r.entity_id] = own | brand_cooccurring_doc_ids(db, client_id, r.entity_id)       # union: either gate counts
     return out
+
+
+def multiword_alias_texts(row) -> List[str]:
+    """Enabled aliases of two or more words: the ones that get their own search feeds (a one-word alias would pull in unrelated news)."""
+    return [a for a in enabled_alias_texts(row) if len(a.split()) >= 2]
 
 
 def seeded_exec_feed_map(db, client_id) -> Dict[str, object]:
@@ -229,10 +260,16 @@ def seeded_feed_urls(db, client_id) -> set:
     brand_row = db.query(Entity).filter(Entity.client_id == client_id, Entity.entity_type == "brand").first()
     company = brand_row.name if brand_row else brand
     urls = set()
+    alias_urls = set()
     for r in rows:
         name = names.get(r.entity_id)
         if not name:
             continue
         co = company if r.kind == "executive" else (r.context_term or None)
         urls.update(entity_search_feed_urls(name, co_occur_with=co, quote=True, co_quoted=(r.kind == "executive")).values())
+        for alias in multiword_alias_texts(r):          # alias search feeds (add-alias) are capped per run like the entity's own
+            alias_urls.update(entity_search_feed_urls(alias, co_occur_with=co, quote=True, co_quoted=(r.kind == "executive")).values())
+    if alias_urls:                                      # only those that exist as feeds of this client
+        from app.models.rss_feed import RSSFeed
+        urls |= {u for (u,) in db.query(RSSFeed.feed_url).filter(RSSFeed.client_id == client_id, RSSFeed.feed_url.in_(list(alias_urls))).all()}
     return urls

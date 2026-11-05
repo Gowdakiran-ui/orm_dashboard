@@ -1263,7 +1263,7 @@ def test_add_aliases_with_write_stores_them_adds_keywords_and_rematches_visible_
     assert kws == {"Yatra.com", "Yatra Online"}                                                          # the disabled bare alias is not a keyword
     assert {m.document_id for m in db.query(EntityMention).filter(EntityMention.entity_id == yat.id)} == {docs["a"].id, docs["b"].id}
     again = service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online"], write=True, fetch=lambda q, a, b: noisy)
-    assert again["new"] == [] and again["written"] is False                                              # re-running adds nothing
+    assert again["new"] == []                                                                            # re-running adds no alias
     assert db.query(EntityKeyword).filter(EntityKeyword.entity_id == yat.id, EntityKeyword.keyword_text == "Yatra Online").count() == 1
 
 
@@ -1455,3 +1455,60 @@ def test_with_the_switch_off_hits_are_recorded_but_nothing_is_attributed_or_coun
     out = attribution.attribute_hits(db, c.id)                                            # report only: shows what turning it on would add
     assert out["Gaurav Pandey"]["attributed"] == 1 and db.query(EntityMention).filter(EntityMention.entity_id == gp.id).count() == 2
     assert gates.seeded_gate_doc_ids(db, c.id, [gp.id])[gp.id] == {docs["named"].id}      # the gate is exactly as before
+
+
+# ------------------------------------------------------------------------------------------ alias search feeds
+def _feeds_for(db, c, text):
+    from app.models.rss_feed import RSSFeed
+    return db.query(RSSFeed).filter(RSSFeed.client_id == c.id, RSSFeed.feed_url.like(f"%{text}%")).all()
+
+
+def test_a_multiword_alias_gets_its_three_search_feeds_a_bare_alias_none_and_a_rerun_adds_no_duplicates(db):
+    c, yat, docs = _yatra_setup(db)
+    noisy = _news(*(["Yatra Online results"] * 14 + ["Bharat Jodo Yatra rally"] * 36))
+    out = service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online", "Yatra"], write=True, fetch=lambda q, a, b: noisy)
+    feeds = _feeds_for(db, c, "Yatra+Online")
+    assert len(feeds) == 3 and {f.source_format for f in feeds} == {"rss", "gdelt_json", "hn_algolia_json"} and all(f.is_active for f in feeds)
+    assert len(out["alias_feeds"]) == 3
+    assert _feeds_for(db, c, "q=Yatra&") == [] and _feeds_for(db, c, "query=Yatra&") == []              # the disabled bare alias has none
+    service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online"], write=True, fetch=lambda q, a, b: noisy)
+    assert len(_feeds_for(db, c, "Yatra+Online")) == 3
+
+
+def test_rerunning_add_alias_for_an_alias_stored_earlier_creates_its_missing_feeds_and_the_run_cap_covers_them(db):
+    c, yat, docs = _yatra_setup(db)
+    row = db.query(SeededEntity).filter(SeededEntity.entity_id == yat.id).one()
+    row.aliases = [{"alias": "Yatra Online", "enabled": True, "reason": "multi-word"}]                  # stored by the earlier run, no feeds yet
+    db.commit()
+    assert _feeds_for(db, c, "Yatra+Online") == []
+    out = service.add_aliases(db, c.id, "Yatra.com", ["Yatra Online"], write=True, fetch=lambda q, a, b: [])
+    assert out["new"] == [] and len(out["alias_feeds"]) == 3 and len(_feeds_for(db, c, "Yatra+Online")) == 3
+    urls = gates.seeded_feed_urls(db, c.id)
+    assert {f.feed_url for f in _feeds_for(db, c, "Yatra+Online")} <= urls                                # capped per run like the entity's own feeds
+
+
+# ------------------------------------------------------------------------------------------ competitor gate = union
+def test_seeded_competitor_gate_is_the_union_of_self_coverage_and_the_old_brand_cooccurrence_gate(db):
+    c, brand = _client(db)
+    dlf = Entity(id=uuid.uuid4(), client_id=c.id, name="DLF", entity_type="competitor")
+    plain = Entity(id=uuid.uuid4(), client_id=c.id, name="Lodha", entity_type="competitor")
+    db.add_all([dlf, plain])
+    db.add(SeededEntity(client_id=c.id, entity_id=dlf.id, kind="competitor", name="DLF", rank=1, context_term="real estate",
+                        validated=True, status="active"))
+    docs = {}
+    for key, title, body in [("self", "DLF launches a real estate tower", "real estate"),                  # new gate: name in the title + sector word
+                             ("both", "Housing sector update", "plot launches across cities"),            # old gate only: mentions DLF and the client, no name in the text
+                             ("alone", "Construction costs rise", "cement prices")]:                      # mentions DLF only, name not in the text: neither
+        d = _doc(db, title, body)
+        db.flush()
+        docs[key] = d
+        db.add(EntityMention(document_id=d.id, entity_id=dlf.id, mention_count=1))
+    db.add(EntityMention(document_id=docs["both"].id, entity_id=brand.id, mention_count=1))
+    lo = _doc(db, "Housing sector update 2", "plots")
+    db.flush()
+    db.add_all([EntityMention(document_id=lo.id, entity_id=plain.id, mention_count=1), EntityMention(document_id=lo.id, entity_id=brand.id, mention_count=1)])
+    db.commit()
+    got = gates.seeded_gate_doc_ids(db, c.id, [dlf.id, plain.id])
+    assert got[dlf.id] == {docs["self"].id, docs["both"].id}                                              # either gate counts
+    assert plain.id not in got                                                                            # a non-seeded competitor is not touched here
+    assert gates.competitor_doc_ids([(docs["both"].id, "Housing sector update", "plot launches", 0)], ["DLF"], ["real"]) == set()   # the new gate alone drops it

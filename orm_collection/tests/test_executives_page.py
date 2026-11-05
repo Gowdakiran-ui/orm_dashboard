@@ -657,3 +657,47 @@ def test_executives_list_search_hits_is_zero_without_the_hits_table(env, monkeyp
     _score(db, p, [])
     monkeypatch.setattr(gates, "hits_table_exists", lambda db_: False)
     assert ci.get_client_executives(c.id, db)[0]["search_hits_uncounted"] == 0
+
+
+# ---------------------------------------------------------------- retired seeded entities are not shown (entities stay)
+def test_retired_seeded_executive_is_not_listed_but_an_active_one_and_the_entity_remain(env):
+    from app.models.seeded_entity import SeededEntity
+    db, _ = env
+    c, brand = _client(db)
+    keep = _person(db, c.id, "Pirojsha Godrej")
+    gone = _person(db, c.id, "Retired Person")
+    for p in (keep, gone):
+        d = _doc(db, f"Godrej Properties and {p.name}", brand, p)
+        _score(db, p, [d])
+    db.add(SeededEntity(client_id=c.id, entity_id=keep.id, kind="executive", name="Pirojsha Godrej", rank=1, status="active", validated=True))
+    db.add(SeededEntity(client_id=c.id, entity_id=gone.id, kind="executive", name="Retired Person", rank=2, status="retired", validated=True))
+    db.commit()
+    assert {r["name"] for r in ci.get_client_executives(c.id, db)} == {"Pirojsha Godrej"}               # not even as "also tracked"
+    assert db.query(Entity).filter(Entity.id == gone.id).count() == 1                                    # the entity is kept
+
+
+def test_retired_seeded_competitor_is_not_in_the_benchmark_and_the_share_ignores_it(env):
+    from fastapi import Response
+    from app.models.competitor_benchmark import CompetitorBenchmark
+    from app.models.seeded_entity import SeededEntity
+    db, _ = env
+    c, brand = _client(db, "EaseMyTrip")
+    ents = {}
+    for name in ("MakeMyTrip", "OYO Rooms"):
+        e = Entity(id=uuid.uuid4(), client_id=c.id, name=name, entity_type="competitor")
+        db.add(e)
+        ents[name] = e
+    db.commit()
+    now = dt.datetime.now(dt.timezone.utc)
+    for rank, (name, e) in enumerate(ents.items(), start=1):
+        db.add(CompetitorBenchmark(client_id=c.id, competitor_entity_id=e.id, reputation_score=60.0, executive_reputation_score=0.0,
+                                   sentiment_score=0.0, risk_score=0.0, visibility_score=1.0, share_of_voice=10.0, rank=rank, run_id="r1",
+                                   health_status="COMPLETE", confidence_score=0.9, data_coverage=0.9,
+                                   calculation_lineage={"client_comparable_score": 50.0}, evidence_metadata={}, created_at=now))
+    db.add(SeededEntity(client_id=c.id, entity_id=ents["MakeMyTrip"].id, kind="competitor", name="MakeMyTrip", rank=1, status="active", validated=True))
+    db.add(SeededEntity(client_id=c.id, entity_id=ents["OYO Rooms"].id, kind="competitor", name="OYO Rooms", rank=2, status="retired", validated=True))
+    db.commit()
+    out = ci.get_client_benchmark(c.id, Response(), 25, 0, db)
+    assert [r["competitor_name"] for r in out] == ["MakeMyTrip"]
+    assert out[0]["client_share_of_voice"] == 90.0                                                      # computed from the competitors actually served
+    assert db.query(Entity).filter(Entity.name == "OYO Rooms").count() == 1                              # the entity is kept

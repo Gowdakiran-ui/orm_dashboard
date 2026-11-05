@@ -327,6 +327,10 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
     gated_ids = _brand_or_product_gated_person_entity_ids(db, client_id)
     if gated_ids is not None:
         scores = [s for s in scores if s.entity_id in gated_ids]
+    from app.services.seeding.gates import retired_entity_ids
+    retired_ids = retired_entity_ids(db, client_id)
+    if retired_ids:
+        scores = [s for s in scores if s.entity_id not in retired_ids]             # a retired seeded executive is not shown, not even as "also tracked"
 
     totals = _executive_coverage_totals(db, client_id, [s.entity_id for s in scores])
     from app.services.seeding.gates import seeded_rows
@@ -557,7 +561,10 @@ def get_client_benchmark(
         if competitor_count < 1:
             return [{"message": "No competitor intelligence available."}]
 
-    from app.services.seeding.gates import seeded_rows
+    from app.services.seeding.gates import retired_entity_ids, seeded_rows
+    retired = retired_entity_ids(db, client_id)
+    if retired:
+        rows = [p for p in rows if p[0].competitor_entity_id not in retired]       # a retired seeded competitor is not shown (entity kept)
     seed_ranks = {r.entity_id: r.rank for r in seeded_rows(db, client_id, "competitor")}
     return _build_benchmark_response(rows, client_comparable_score, limit, offset, client_entity_id, seed_ranks=seed_ranks)
 

@@ -378,13 +378,25 @@ def add_aliases(db, client_id, name: str, aliases: List[str], write: bool = Fals
     new = [a for a in resolved if a["alias"].strip().lower() not in have]
     out: Dict[str, Any] = {"entity": row.name, "resolved": resolved, "new": new,
                            "enabled": [a["alias"] for a in new if a["enabled"]], "written": False}
-    if not write or not new:
+    if not write:
         return out
-    row.aliases = list(row.aliases or []) + new           # reassigned so the JSON column change is tracked
+    if new:
+        row.aliases = list(row.aliases or []) + new           # reassigned so the JSON column change is tracked
     existing = {k[0].strip().lower() for k in db.query(EntityKeyword.keyword_text).filter(EntityKeyword.entity_id == row.entity_id).all()}
     for kw in _enabled_alias_keywords(row.entity_id, new):
         if kw.keyword_text.strip().lower() not in existing:
             db.add(kw)
+    # A multi-word alias also gets its own Google News / GDELT / HN search feeds (the existing provisioning, same query style as the
+    # entity's own feeds); they are polled by the Run Pipeline. A one-word or disabled alias gets none.
+    from app.services.client_service import provision_entity_search_feeds
+    from app.services.seeding.gates import enabled_alias_texts
+    co = client_context(db, client_id)["name"] if row.kind == "executive" else (row.context_term or None)
+    # Every enabled multi-word alias of the row (not only the new ones), so re-running the command for an alias stored earlier creates
+    # its feeds; provisioning skips feeds that already exist.
+    alias_feeds = []
+    for alias in [a for a in enabled_alias_texts(row) if len(a.split()) >= 2]:
+        alias_feeds += provision_entity_search_feeds(db, client_id, alias, co_occur_with=co, quote=True, co_quoted=(row.kind == "executive"))
+    out["alias_feeds"] = [f.feed_url for f in alias_feeds]
     db.commit()
     try:
         from app.services.matching_engine import engine_instance
