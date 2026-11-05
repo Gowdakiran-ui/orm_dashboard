@@ -44,7 +44,7 @@ NLP_DOCS_PER_HOUR_MEASURED = 540
 # slice width in months, by (source, query kind)
 WIDTH_MONTHS: Dict[Tuple[str, str], int] = {
     ("google_news", "brand"): 1, ("google_news", "risk"): 3, ("google_news", "executive"): 12,
-    ("google_news", "competitor"): 3, ("google_news", "product"): 12,
+    ("google_news", "competitor"): 3, ("google_news", "product"): 12, ("google_news", "seed_risk"): 12,
     ("youtube", "brand"): 1, ("youtube", "risk"): 12, ("youtube", "executive"): 12,
     ("youtube", "competitor"): 12, ("youtube", "product"): 12,
     ("hn", "brand"): 12, ("hn", "executive"): 12, ("hn", "competitor"): 12, ("hn", "product"): 12,
@@ -124,6 +124,8 @@ def plan_slices(specs: Iterable[QuerySpec], cfg: BackfillConfig) -> List[Planned
             if months is None:
                 continue
             start = cfg.start
+            if spec.seeded:
+                start = max(start, end - dt.timedelta(days=730))
             if name == "youtube":
                 start = max(start, dt.date(cfg.youtube_start_year, 1, 1))
             for a, b in slicing.calendar_slices(start, end, months):
@@ -239,6 +241,37 @@ def ingest_items(db, client_id, src: SourceDef, raw_items: List[Dict[str, Any]],
     return stats
 
 
+# ------------------------------------------------------------------ seeded caps
+def seeded_caps(db, client_id) -> Dict[str, Dict[str, Any]]:
+    """{entity_id: {"cap": int, "since": datetime}} for active seeded entities (60 new documents per executive, 30 per
+    competitor). Only slices created at or after the entity was seeded count toward its cap."""
+    from app.services.seeding import settings as seed_settings
+    from app.services.seeding.gates import seeded_rows
+    out = {}
+    for r in seeded_rows(db, client_id):
+        cap = seed_settings.EXEC_BACKFILL_CAP if r.kind == "executive" else seed_settings.COMPETITOR_BACKFILL_CAP
+        out[str(r.entity_id)] = {"cap": cap, "since": r.seeded_at}
+    return out
+
+
+def seeded_new_count(db, client_id, entity_id, since) -> int:
+    from sqlalchemy import func
+    from app.models.backfill import BackfillSlice
+    q = db.query(func.coalesce(func.sum(BackfillSlice.new_count), 0)).filter(
+        BackfillSlice.client_id == client_id, BackfillSlice.entity_id == entity_id)
+    if since is not None:
+        q = q.filter(BackfillSlice.created_at >= since)
+    return int(q.scalar() or 0)
+
+
+def skip_pending_for_entity(db, client_id, entity_id) -> int:
+    from app.models.backfill import BackfillSlice
+    n = db.query(BackfillSlice).filter(BackfillSlice.client_id == client_id, BackfillSlice.entity_id == entity_id,
+                                       BackfillSlice.status == "PENDING").update({"status": "SKIPPED"}, synchronize_session=False)
+    db.commit()
+    return n
+
+
 # ------------------------------------------------------------------------ run
 def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]] = None,
                fetchers: Optional[Dict[str, Callable]] = None,
@@ -254,7 +287,15 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
     from app.services.backfill import control
     specs = build_queries(db, client_id, cfg.include_competitors, cfg.include_products, list(cfg.exclude_entities))
     seeded = seed_slices(db, client_id, plan_slices(specs, cfg))
-    terms = relevance_rules(db, client_id, cfg.include_competitors, cfg.include_products) if cfg.relevance_filter else None
+    caps = seeded_caps(db, client_id)
+    seeded_competitors = any(sp.seeded and sp.kind == "competitor" for sp in specs)
+    capped_ids = set()
+    for eid, c in caps.items():
+        import uuid as _uuid
+        if seeded_new_count(db, client_id, _uuid.UUID(eid), c["since"]) >= c["cap"]:
+            skip_pending_for_entity(db, client_id, _uuid.UUID(eid))
+            capped_ids.add(eid)
+    terms = relevance_rules(db, client_id, cfg.include_competitors or seeded_competitors, cfg.include_products) if cfg.relevance_filter else None
     ing_kwargs = {"terms": terms} if terms else {}
     # query kind per (source, query) so slices can be taken brand/risk first, executives next
     kind_by_query = {(name, getattr(sp, SOURCES[name].query_attr)): sp.kind for sp in specs for name in cfg.sources}
@@ -315,6 +356,7 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
 
         st = ingest(db, client_id, src, raw, **ing_kwargs)
         row = db.get(BackfillSlice, row.id)
+        ent_key = str(row.entity_id) if row.entity_id else None
         row.item_count = len(raw)
         row.new_count = st["saved"]
         row.error = None
@@ -336,6 +378,10 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
             summary["done"] += 1
         db.commit()
         summary["processed"] += 1
+        if ent_key in caps and ent_key not in capped_ids:
+            if seeded_new_count(db, client_id, row.entity_id, caps[ent_key]["since"]) >= caps[ent_key]["cap"]:
+                capped_ids.add(ent_key)
+                skip_pending_for_entity(db, client_id, row.entity_id)
         for k in ("saved", "deduped", "skipped_undated", "dropped_irrelevant"):
             summary[k] += st.get(k, 0)
         logger.info("backfill_slice_done", client_id=str(client_id), source=row.source, query=row.query[:80],

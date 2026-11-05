@@ -784,6 +784,30 @@ CREATE TABLE public.source_health (
 
 
 --
+-- Name: seeded_entities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.seeded_entities (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    client_id uuid NOT NULL,
+    entity_id uuid,
+    kind character varying(20) NOT NULL,
+    name character varying(255) NOT NULL,
+    rank integer NOT NULL,
+    role text,
+    context_term character varying(120),
+    aliases jsonb,
+    sources jsonb,
+    pair_count_24m integer,
+    validated boolean DEFAULT false NOT NULL,
+    status character varying(20) DEFAULT 'needs_review'::character varying NOT NULL,
+    seeded_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT seeded_entities_kind_check CHECK (((kind)::text = ANY (ARRAY[('executive'::character varying)::text, ('competitor'::character varying)::text]))),
+    CONSTRAINT seeded_entities_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('needs_review'::character varying)::text, ('retired'::character varying)::text])))
+);
+
+
+--
 -- Name: sources; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -855,6 +879,22 @@ ALTER TABLE ONLY public.alert_client_states
 
 ALTER TABLE ONLY public.backfill_slices
     ADD CONSTRAINT backfill_slices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: seeded_entities seeded_entities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.seeded_entities
+    ADD CONSTRAINT seeded_entities_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: seeded_entities uq_seeded_entities_client_kind_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.seeded_entities
+    ADD CONSTRAINT uq_seeded_entities_client_kind_name UNIQUE (client_id, kind, name);
 
 
 --
@@ -1322,6 +1362,20 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: ix_seeded_entities_client_kind; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_seeded_entities_client_kind ON public.seeded_entities USING btree (client_id, kind, status);
+
+
+--
+-- Name: ix_seeded_entities_entity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_seeded_entities_entity_id ON public.seeded_entities USING btree (entity_id);
+
+
+--
 -- Name: ix_backfill_slices_client_status; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1732,6 +1786,22 @@ CREATE UNIQUE INDEX uq_risk_events_daily ON public.risk_events USING btree (clie
 --
 
 CREATE TRIGGER deactivate_feeds_on_entity_delete AFTER DELETE ON public.entities FOR EACH ROW EXECUTE FUNCTION public.deactivate_feeds_on_entity_delete();
+
+
+--
+-- Name: seeded_entities seeded_entities_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.seeded_entities
+    ADD CONSTRAINT seeded_entities_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: seeded_entities seeded_entities_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.seeded_entities
+    ADD CONSTRAINT seeded_entities_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE SET NULL;
 
 
 --

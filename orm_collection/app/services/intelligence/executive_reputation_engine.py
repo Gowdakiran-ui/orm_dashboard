@@ -17,6 +17,7 @@ from app.models.risk import RiskEvent
 from app.models.executive_reputation import ExecutiveReputationScore
 from app.models.client import Client
 from app.services.intelligence.score_window import in_window
+from app.core.config import settings as _cfg
 from app.models.alert import Alert
 
 logger = structlog.get_logger()
@@ -210,6 +211,12 @@ class ExecutiveReputationEngine:
                 Entity.client_id == client_id, Entity.entity_type.in_(("brand", "product"))
             ).all()
         ]
+        # Seeded executives (services/seeding): documents count when the person's full name AND the company name are in
+        # the title/summary, instead of the brand-entity gate. Every other executive keeps the brand gate unchanged.
+        from app.services.seeding.gates import seeded_entity_ids, seeded_gate_doc_ids
+        seeded_exec_ids = seeded_entity_ids(db, client_id, "executive") & {e.id for e in executives}
+        seeded_doc_sets = seeded_gate_doc_ids(db, client_id, seeded_exec_ids) if seeded_exec_ids else {}
+
         brand_doc_ids = None
         if brand_or_product_ids:
             brand_doc_ids = set(
@@ -219,6 +226,9 @@ class ExecutiveReputationEngine:
             )
             gated_executive_ids = set()
             for ex in executives:
+                if ex.id in seeded_exec_ids:
+                    gated_executive_ids.add(ex.id)     # kept even with no document yet: shows as "no score yet"
+                    continue
                 person_doc_ids = set(
                     m.document_id for m in db.query(EntityMention).filter(
                         EntityMention.entity_id == ex.id
@@ -241,7 +251,13 @@ class ExecutiveReputationEngine:
 
         exec_ids = [e.id for e in executives]
         now_utc = datetime.datetime.now(datetime.timezone.utc)
-        lookback_date = now_utc - datetime.timedelta(days=30)
+        # Executive scoring window: config (settings.EXEC_WINDOW_DAYS, default 365); it was a fixed 30 days.
+        lookback_date = now_utc - datetime.timedelta(days=int(_cfg.EXEC_WINDOW_DAYS))
+
+        def _doc_ok(eid, did):
+            if eid in seeded_doc_sets:
+                return did in seeded_doc_sets[eid]
+            return brand_doc_ids is None or did in brand_doc_ids
 
         # P3: Batch preloading of all executive mentions, risks, and alerts
         #
@@ -253,8 +269,7 @@ class ExecutiveReputationEngine:
             EntityMention.entity_id.in_(exec_ids),
             in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         ).all()
-        if brand_doc_ids is not None:
-            mentions = [m for m in mentions if m.document_id in brand_doc_ids]
+        mentions = [m for m in mentions if _doc_ok(m.entity_id, m.document_id)]
 
         # Group mentions by executive entity_id
         mention_map = {eid: [] for eid in exec_ids}
@@ -283,8 +298,7 @@ class ExecutiveReputationEngine:
             RiskEvent.entity_id.in_(exec_ids),
             in_window(RiskEvent.created_at, RiskEvent.document_id, lookback_date)
         ).all()
-        if brand_doc_ids is not None:
-            risks = [r for r in risks if r.document_id in brand_doc_ids]
+        risks = [r for r in risks if _doc_ok(r.entity_id, r.document_id)]
         risk_map = {eid: [] for eid in exec_ids}
         for r in risks:
             risk_map[r.entity_id].append(r)
@@ -464,7 +478,8 @@ class ExecutiveReputationEngine:
             "raw_values": {
                 "avg_sentiment": round(avg_sentiment, 4) if avg_sentiment is not None else None,
                 "total_mentions": total_mentions,
-                "document_count": len(doc_ids)
+                "document_count": len(doc_ids),
+                "window_days": int(_cfg.EXEC_WINDOW_DAYS)
             },
             "confidence_calculation": {
                 "doc_confidence": round(doc_confidence, 4),
@@ -474,7 +489,7 @@ class ExecutiveReputationEngine:
                 f"Insufficient evidence: active weight {active_weight:.2f} < "
                 f"{self.MIN_ACTIVE_WEIGHT:.2f}; no grade stated."
                 if not has_evidence else
-                f"Executive reputation calculated dynamically over 30-day window with health state: {health_status}."
+                f"Executive reputation calculated dynamically over a {int(_cfg.EXEC_WINDOW_DAYS)}-day window with health state: {health_status}."
             )
         }
 

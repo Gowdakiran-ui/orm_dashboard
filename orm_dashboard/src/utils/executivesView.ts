@@ -1,4 +1,5 @@
 import { formatDMY } from "./dateFormat";
+import { windowPhrase } from "./windowText";
 // Pure display rules for the Executives page (kept free of React so every sentence can be unit-tested).
 //
 // Rules: a person with no stored score is "No score yet", never a zero or a grade; under 3 documents the
@@ -91,16 +92,18 @@ export function pickTopTrackedExecutives(executives: any[] | null | undefined, l
     .slice(0, limit);
 }
 
-// Why a person has no score: the score looks at the last 30 days only, so say whether older coverage exists.
+// Why a person has no score: the score looks at one look-back window only (`window_days` from the API, 30 on rows stored before the
+// setting existed), so say whether older coverage exists.
 // `articles_all_time` / `latest_article_at` come from the API (additive); older payloads fall back to the plain line.
 export function noScoreReason(e: any, clientName: string): string {
   const n = typeof e?.articles_all_time === "number" ? e.articles_all_time : null;
+  const win = windowPhrase(e?.window_days);
   if (n !== null && n > 0) {
     const newest = typeof e.latest_article_at === "string" ? formatDMY(e.latest_article_at, "") : "";
-    return `${n} article${n === 1 ? "" : "s"} mention${n === 1 ? "s" : ""} this person with ${clientName}, but none in the last 30 days${newest ? ` (newest ${newest})` : ""}, so there is no score yet.`;
+    return `${n} article${n === 1 ? "" : "s"} mention${n === 1 ? "s" : ""} this person with ${clientName}, but none in the ${win}${newest ? ` (newest ${newest})` : ""}, so there is no score yet.`;
   }
   if (n === 0) return `No article mentions this person together with ${clientName}, so there is nothing to score.`;
-  return `No coverage mentioning ${clientName} together with this person in the last 30 days.`;
+  return `No coverage mentioning ${clientName} together with this person in the ${win}.`;
 }
 
 export interface TrackedCardView { hasScore: boolean; headline: string; detail: string }
@@ -116,14 +119,53 @@ export function trackedCardView(e: any, clientName: string, now: number = Date.n
   return {
     hasScore: true,
     headline: `${v.scoreText} · ${grade}`,
-    detail: `${docs !== null ? `${docs} article${docs === 1 ? "" : "s"} in the last 30 days` : "Scored from the last 30 days"}${v.staleNote ? `. ${v.staleNote}` : ""}`,
+    detail: `${docs !== null ? `${docs} article${docs === 1 ? "" : "s"} in the ${windowPhrase(e?.window_days)}` : `Scored from the ${windowPhrase(e?.window_days)}`}${v.staleNote ? `. ${v.staleNote}` : ""}`,
   };
 }
 
-export function noCoverageLine(clientName: string): string {
-  return `Tracked, but no article published in the last 30 days mentions ${clientName} together with this person, so there is nothing to score yet. Older articles may exist; they are not counted.`;
+export function noCoverageLine(clientName: string, windowDaysValue?: number | null): string {
+  return `Tracked, but no article published in the ${windowPhrase(windowDaysValue)} mentions ${clientName} together with this person, so there is nothing to score yet. Older articles may exist; they are not counted.`;
 }
 
 export function notFoundLine(query: string, clientName: string): string {
   return `No tracked executive or discovered candidate matches "${query}" in ${clientName}'s coverage. Only people already found in the coverage can be tracked; try the full name as it appears in articles.`;
+}
+
+// ---- Seeded executives: the page opens on them, in role order -----------------------------------------------
+export const ALSO_TRACKED_EXECUTIVES = 3;
+
+export interface SeededExecutive { entity_id: string; name: string; rank: number; role?: string | null }
+
+export interface OrderedExecutive {
+  row: any;               // the /executives row (a stand-in with no score when the person has no row yet)
+  seeded: boolean;
+  seedRole: string | null;
+  alsoTracked: boolean;   // tracked before seeding (or outside the seeded list) and still shown
+  placeholder: boolean;   // seeded, no score row yet
+}
+
+// Seeded executives first, in the order the API gives them (role order: chair, MD/CEO, CFO, founders, others), each
+// with its stored score row if there is one. After them, up to ALSO_TRACKED_EXECUTIVES other tracked people by the
+// existing rule, labelled "also tracked". With no seeded list this is exactly the previous behaviour.
+export function orderTrackedExecutives(
+  executives: any[] | null | undefined,
+  seeded: SeededExecutive[] | null | undefined,
+  limit: number = TOP_TRACKED_EXECUTIVES,
+): OrderedExecutive[] {
+  const rows = (executives || []).filter(e => e && e.name);
+  if (!seeded || seeded.length === 0) {
+    return pickTopTrackedExecutives(rows, limit).map(row => ({ row, seeded: false, seedRole: null, alsoTracked: false, placeholder: false }));
+  }
+  const byEntity = new Map<string, any>(rows.filter(r => r.entity_id).map(r => [String(r.entity_id), r]));
+  const seededIds = new Set(seeded.map(s => String(s.entity_id)));
+  const first: OrderedExecutive[] = [...seeded].sort((a, b) => a.rank - b.rank).map(s => {
+    const found = byEntity.get(String(s.entity_id));
+    return {
+      row: found || { entity_id: s.entity_id, name: s.name, score: null, health_status: "NO_SCORE_YET", document_count: null, articles_all_time: null },
+      seeded: true, seedRole: s.role || null, alsoTracked: false, placeholder: !found,
+    };
+  });
+  const rest = pickTopTrackedExecutives(rows.filter(r => !seededIds.has(String(r.entity_id))), ALSO_TRACKED_EXECUTIVES)
+    .map(row => ({ row, seeded: false, seedRole: null, alsoTracked: true, placeholder: false }));
+  return [...first, ...rest].slice(0, Math.max(limit, first.length + rest.length));
 }

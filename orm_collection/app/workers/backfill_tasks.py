@@ -102,6 +102,27 @@ def run_client_backfill(self, client_id: str, config: dict = None, resume_count:
 
 
 @shared_task(bind=True, queue="io_queue", max_retries=0)
+def seed_and_backfill_client(self, client_id: str):
+    """Onboarding: seed the client's top-5 executives / competitors, then enqueue the backfill (which includes them)."""
+    from app.services.backfill.enqueue import enqueue_client_backfill
+    from app.services.seeding import service as seeding_service
+    from app.services.seeding.proposer import SeedingAborted
+    db = SessionLocal()
+    try:
+        try:
+            result = seeding_service.seed_client(db, client_id, apply=True)
+            logger.info("onboarding_seeding_done", client_id=client_id, applied=result.get("applied"))
+        except SeedingAborted as e:
+            logger.warning("onboarding_seeding_aborted", client_id=client_id, error=str(e)[:300])
+        except Exception as e:
+            db.rollback()
+            logger.error("onboarding_seeding_failed", client_id=client_id, error=str(e)[:300])
+    finally:
+        db.close()
+    return {"backfill_enqueued": enqueue_client_backfill(client_id)}
+
+
+@shared_task(bind=True, queue="io_queue", max_retries=0)
 def drain_backfill_nlp(self, tick: int = 0, chain: str = None):
     from app.services.backfill import control, processing
     from app.utils.redis_client import redis_client

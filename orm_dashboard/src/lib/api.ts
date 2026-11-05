@@ -542,8 +542,15 @@ export async function fetchCompetitorCandidates(clientId: string, signal?: Abort
   return parseOrThrow(res);
 }
 
+// POST: a name that is not tracked yet creates the entity and its feeds on the server, so this is not a GET.
 export async function searchCompetitor(clientId: string, name: string, signal?: AbortSignal) {
-  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/competitor-search?name=${encodeURIComponent(name)}`, { signal });
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/competitor-search?name=${encodeURIComponent(name)}`, { method: "POST", signal });
+  return parseOrThrow(res);
+}
+
+// The client's seeded executives (role order) and competitors (seed order) plus the scoring windows. Read-only.
+export async function fetchSeeded(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/seeded`, { signal });
   return parseOrThrow(res);
 }
 

@@ -234,6 +234,7 @@ def test_onboarding_endpoint_enqueues_backfill_exactly_once(monkeypatch):
     sent = []
     monkeypatch.setattr(celery_app, "send_task", lambda name, **kw: sent.append({"name": name, **kw}))
     monkeypatch.delenv("BACKFILL_ON_ONBOARD", raising=False)
+    monkeypatch.setenv("SEED_ON_ONBOARD", "false")      # this test is about the backfill-once guard; the seeding hook has its own test
 
     cid = uuid.uuid4()
     monkeypatch.setattr(clients_ep, "onboard_client", lambda db, data: types.SimpleNamespace(id=cid))

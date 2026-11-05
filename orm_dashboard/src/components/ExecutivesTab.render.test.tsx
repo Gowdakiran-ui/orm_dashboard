@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   addExecutiveCandidate: vi.fn(),
   fetchReviewedExecutiveCandidates: vi.fn(),
   fetchDocumentDetails: vi.fn(),
+  fetchSeeded: vi.fn(),
 }));
 vi.mock("@/lib/api", () => api);
 // recharts needs real layout; the chart is not under test here
@@ -47,6 +48,7 @@ const buttonByText = (label: string) => Array.from(host.querySelectorAll("button
 beforeEach(() => {
   Object.values(api).forEach((f: any) => f.mockReset());
   api.fetchDocumentDetails.mockResolvedValue({ url: null });
+  api.fetchSeeded.mockResolvedValue(null);   // no seeded list: the page behaves as before seeding
 });
 afterEach(async () => { await act(async () => { root.unmount(); }); host.remove(); });
 
@@ -165,5 +167,42 @@ describe("search results", () => {
     expect(text).toContain("1 document behind this score");
     expect(host.querySelectorAll("tbody tr").length).toBe(1);
     expect(text).toContain("Appears in Godrej Properties coverage");
+  });
+});
+
+describe("default view with seeded executives", () => {
+  const tracked = [
+    { entity_id: "p1", name: "Pirojsha Godrej", score: 61.5, grade: "C", health_status: "COMPLETE", document_count: 6, window_days: 365 },
+    { entity_id: "p2", name: "Geetika Trehan", score: 0, health_status: "INSUFFICIENT_EVIDENCE", document_count: 0, articles_all_time: 3, latest_article_at: "2026-09-24T10:09:17+00:00", window_days: 30 },
+  ];
+  const seeded = {
+    window: { executive_days: 365, benchmark_days: 90 },
+    executives: [
+      { entity_id: "p1", name: "Pirojsha Godrej", rank: 1, role: "Chairperson" },
+      { entity_id: "p9", name: "Gaurav Pandey", rank: 2, role: "MD & CEO" },
+    ],
+    competitors: [],
+  };
+
+  it("opens on the seeded leaders in role order with their role, a no-score card for one without a row, 'also tracked' after, and the window in the text", async () => {
+    api.fetchSeeded.mockResolvedValue(seeded);
+    await mount("client-1", tracked);
+    const text = host.textContent || "";
+    expect(api.fetchSeeded).toHaveBeenCalledWith("client-1", expect.anything());
+    const order = ["Pirojsha Godrej", "Chairperson", "Gaurav Pandey", "MD & CEO", "Geetika Trehan", "also tracked"].map(t => text.indexOf(t));
+    expect(order.every(i => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);               // that exact order on the page
+    expect(text).toContain("2 leaders of Godrej Properties in role order, then other people already tracked.");
+    expect(text).toContain("Scored from coverage published in the last 365 days.");
+    expect(text).toContain("6 articles in the last 365 days");
+    expect(text).toContain("No score yet");                                    // Gaurav Pandey has no score row yet: never a zero
+    expect(text).not.toContain("Add This Executive");
+  });
+
+  it("a failed seeded read leaves the page as it was", async () => {
+    api.fetchSeeded.mockRejectedValue(new Error("down"));
+    await mount("client-1", tracked);
+    expect(host.textContent).toContain("Top 2 people tracked for Godrej Properties.");
+    expect(host.textContent).not.toContain("also tracked");
   });
 });

@@ -12,7 +12,9 @@ import { glassCard, mutedText, bodyText } from "@/components/theme/tokens";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 import { ExecutiveSentimentBreakdownDefinition, ExecutiveReputationGradeDefinition } from "@/lib/metricDefinitions";
-import { executiveView, basedOnLine, eventsLabel, appearsInLine, noScoreReason, pickTopTrackedExecutives, trackedCardView, notFoundLine, noCoverageLine } from "@/utils/executivesView";
+import { executiveView, basedOnLine, eventsLabel, appearsInLine, noScoreReason, orderTrackedExecutives, trackedCardView, notFoundLine, noCoverageLine } from "@/utils/executivesView";
+import { windowPhrase } from "@/utils/windowText";
+import { useSeeded } from "@/hooks/useSeeded";
 import { formatDMY } from "@/utils/dateFormat";
 
 export interface ExecutivesTabProps {
@@ -25,7 +27,10 @@ export interface ExecutivesTabProps {
 // The page opens on the client's top tracked executives (never candidates). A card, or a search by name, opens the
 // read-only detail. Adding a person is still only possible from a searched candidate, after a confirmation.
 export function ExecutivesTab({ clientId, clientName = "this client", trackedExecutives = null }: ExecutivesTabProps) {
-  const topTracked = useMemo(() => pickTopTrackedExecutives(trackedExecutives), [trackedExecutives]);
+  // Seeded executives (validated top leaders, role order) open the page; other tracked people follow as "also tracked".
+  const seeded = useSeeded(clientId);
+  const topTracked = useMemo(() => orderTrackedExecutives(trackedExecutives, seeded?.executives), [trackedExecutives, seeded]);
+  const scoreWindow = seeded?.window?.executive_days ?? topTracked.find(o => !o.placeholder)?.row?.window_days ?? null;
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const cardBorder = isDark ? "border-white/[0.12]" : "border-black/[0.06]";
@@ -208,7 +213,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
             <div className={`border rounded p-4 space-y-1 ${surfaceBorder} ${surfaceBg}`}>
               <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.executive?.name}</span>
               <p className={`text-xs font-mono ${mutedText(theme)}`}>
-                {noCoverageLine(searchResult.client_name || clientName)}
+                {noCoverageLine(searchResult.client_name || clientName, selectedExecutive?.window_days)}
               </p>
             </div>
           )}
@@ -253,12 +258,16 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
               Tracked executives
             </CardTitle>
             <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-              Top {topTracked.length} people tracked for {clientName}, scored from coverage published in the last 30 days. Select one to see the articles behind the score.
+              {seeded && seeded.executives.length > 0
+                ? `${seeded.executives.length} leaders of ${clientName} in role order, then other people already tracked. `
+                : `Top ${topTracked.length} people tracked for ${clientName}. `}
+              Scored from coverage published in the {windowPhrase(scoreWindow)}. Select one to see the articles behind the score.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {topTracked.map((e: any) => {
+              {topTracked.map((o) => {
+                const e: any = o.row;
                 const v = trackedCardView(e, clientName);
                 return (
                   <button
@@ -268,6 +277,8 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                     className={`text-left border rounded p-3 space-y-1 ${surfaceBorder} ${surfaceBg} ${rowHoverBg}`}
                   >
                     <span className={`block font-mono text-sm font-bold ${bodyText(theme)}`}>{e.name}</span>
+                    {o.seedRole && <span className={`block font-mono text-xs ${mutedText(theme)}`}>{o.seedRole}</span>}
+                    {o.alsoTracked && <span className={`block font-mono text-xs ${mutedText(theme)}`}>also tracked</span>}
                     <span className={`block font-mono text-lg font-bold ${v.hasScore ? "text-[#D4AF37]" : mutedText(theme)}`}>{v.headline}</span>
                     <span className={`block font-mono text-xs ${mutedText(theme)}`}>{v.detail}</span>
                   </button>
@@ -350,7 +361,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                 </Badge>
               </CardTitle>
               <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-                The documents from the last 30 days that were counted in this score. {"“"}Names them{"”"} says whether the full name is in the text.
+                The documents from the {windowPhrase(selectedExecutive?.window_days)} that were counted in this score. {"“"}Names them{"”"} says whether the full name is in the text.
               </CardDescription>
             </CardHeader>
             <CardContent>

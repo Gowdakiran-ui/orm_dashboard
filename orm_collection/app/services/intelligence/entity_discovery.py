@@ -47,6 +47,8 @@ class EntityDiscoveryConfig:
     # EXECUTIVE_MENTION_THRESHOLD above -- now matches it instead of being a
     # stricter, unexplained outlier between the two entity types.
     COMPETITOR_MENTION_THRESHOLD = 2
+    # Typo guard for competitor names: similarity of the distinctive first words (see _find_near_duplicate_competitor_entity).
+    COMPETITOR_HEAD_TYPO_THRESHOLD = 0.85
     # Lowered from 0.70→0.65: _calculate_org_confidence base is 0.70 for names without
     # corporate suffixes (Inc/Corp/Ltd), so 0.70 still blocked every such
     # candidate regardless of mention count -- same failure mode the prior
@@ -2058,6 +2060,7 @@ class EntityDiscoveryEngine:
             Entity.client_id == client_id,
             Entity.entity_type == "competitor"
         ).all()
+        head = self._competitor_head(name)
         for entity in existing:
             other = self._normalize_name(entity.name)
             if len(other) < EntityDiscoveryConfig.COMPETITOR_NEAR_DUPLICATE_MIN_LENGTH:
@@ -2065,7 +2068,19 @@ class EntityDiscoveryEngine:
             ratio = SequenceMatcher(None, normalized, other).ratio()
             if ratio >= EntityDiscoveryConfig.COMPETITOR_NAME_SIMILARITY_THRESHOLD:
                 return entity
+            # Typo guard: a near-miss spelling of the other name's distinctive first word ("Relianca" vs
+            # "Reliance Industries", whose whole-name ratio is far lower). Identical first words are NOT flagged
+            # (those are different companies of one group, e.g. "Reliance Retail"), only close-but-different ones.
+            other_head = self._competitor_head(entity.name)
+            if head and other_head and head != other_head and len(head) >= 5 and len(other_head) >= 5:
+                if SequenceMatcher(None, head, other_head).ratio() >= EntityDiscoveryConfig.COMPETITOR_HEAD_TYPO_THRESHOLD:
+                    return entity
         return None
+
+    def _competitor_head(self, name: str) -> str:
+        """First word of the normalized name (corporate suffixes already stripped), "" if none."""
+        parts = self._normalize_name(name).split()
+        return parts[0] if parts else ""
 
     def _rematch_recent_documents_for_new_entity(
         self,

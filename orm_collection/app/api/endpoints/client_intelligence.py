@@ -2,6 +2,7 @@ import os
 import time
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
+from app.core.auth import require_super_admin
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -227,6 +228,19 @@ def _executive_coverage_totals(db: Session, client_id, entity_ids) -> Dict[Any, 
     out: Dict[Any, Dict[str, Any]] = {}
     for eid, n, latest in q.group_by(EntityMention.entity_id).all():
         out[eid] = {"articles_all_time": int(n), "latest_article_at": latest.isoformat() if latest else None}
+    # Seeded executives: the same two numbers on the seeded gate (full name and company name in title/summary).
+    from app.services.seeding.gates import seeded_entity_ids, seeded_gate_doc_ids
+    seeded_here = seeded_entity_ids(db, client_id, "executive") & set(ids)
+    if seeded_here:
+        doc_sets = seeded_gate_doc_ids(db, client_id, seeded_here)
+        for eid in seeded_here:
+            docs = doc_sets.get(eid) or set()
+            if not docs:
+                out[eid] = {"articles_all_time": 0, "latest_article_at": None}
+                continue
+            n, latest = db.query(func.count(func.distinct(Document.id)), func.max(Document.published_at)).filter(
+                Document.id.in_(list(docs))).one()
+            out[eid] = {"articles_all_time": int(n or 0), "latest_article_at": latest.isoformat() if latest else None}
     return out
 
 
@@ -285,6 +299,9 @@ def _brand_or_product_gated_person_entity_ids(db: Session, client_id):
         )
         if person_doc_ids & brand_doc_ids:
             gated_ids.add(pid)
+    # Seeded executives are scored on their own gate (full name + company in title/summary), so they always pass here.
+    from app.services.seeding.gates import seeded_entity_ids
+    gated_ids |= seeded_entity_ids(db, client_id, "executive")
     return gated_ids
 
 
@@ -312,7 +329,14 @@ def get_client_executives(client_id: UUID, db: Session = Depends(get_db)):
         scores = [s for s in scores if s.entity_id in gated_ids]
 
     totals = _executive_coverage_totals(db, client_id, [s.entity_id for s in scores])
+    from app.services.seeding.gates import seeded_rows
+    seed_by_entity = {r.entity_id: r for r in seeded_rows(db, client_id, "executive")}
     return [{
+        "seeded": s.entity_id in seed_by_entity,
+        "seed_rank": seed_by_entity[s.entity_id].rank if s.entity_id in seed_by_entity else None,
+        "seed_role": seed_by_entity[s.entity_id].role if s.entity_id in seed_by_entity else None,
+        # Look-back the stored score used (older rows predate the setting and used 30 days).
+        "window_days": ((s.calculation_lineage or {}).get("raw_values") or {}).get("window_days", 30),
         "id": str(s.id),
         "entity_id": str(s.entity_id),
         "name": s.executive_name,
@@ -392,6 +416,7 @@ def _build_benchmark_response(
     limit: int,
     offset: int,
     client_entity_id=None,
+    seed_ranks=None,
 ) -> List[Dict[str, Any]]:
     """
     Pure assembly of the /benchmark payload from one benchmark run's rows
@@ -422,6 +447,9 @@ def _build_benchmark_response(
         return (0 if ranked else 1, b.rank if ranked else 0, (e.name or "").lower())
 
     ordered = sorted(rows, key=sort_key)
+    if seed_ranks:
+        # Seeded competitors first, in seed order; the rest keep the existing order ("also tracked").
+        ordered = sorted(ordered, key=lambda p: (0, seed_ranks[p[0].competitor_entity_id]) if p[0].competitor_entity_id in seed_ranks else (1, 0))
 
     client_rank = None
     if client_comparable_score is not None:
@@ -455,6 +483,10 @@ def _build_benchmark_response(
         # Additive (Competitor Compare cards): the mention count the score rests on (30-day, brand co-occurring)
         # and when this row was scored, so thin or stale data is visible per competitor.
         "mentions_30d": (b.evidence_metadata or {}).get("mentions_30d"),
+        # Look-back the stored row used (older rows predate the setting and used 30 days); seeded flag and order.
+        "window_days": (b.evidence_metadata or {}).get("window_days", 30),
+        "seeded": bool(seed_ranks) and b.competitor_entity_id in seed_ranks,
+        "seed_rank": (seed_ranks or {}).get(b.competitor_entity_id),
         "as_of": b.created_at.isoformat() if b.created_at else None,
         # Engine's own client figures for this run (additive fields).
         "client_comparable_score": client_comparable_score,
@@ -520,7 +552,9 @@ def get_client_benchmark(
         if competitor_count < 1:
             return [{"message": "No competitor intelligence available."}]
 
-    return _build_benchmark_response(rows, client_comparable_score, limit, offset, client_entity_id)
+    from app.services.seeding.gates import seeded_rows
+    seed_ranks = {r.entity_id: r.rank for r in seeded_rows(db, client_id, "competitor")}
+    return _build_benchmark_response(rows, client_comparable_score, limit, offset, client_entity_id, seed_ranks=seed_ranks)
 
 @router.get("/{client_id}/topic-distribution", response_model=Dict[str, Any])
 def get_client_topic_distribution(
@@ -594,6 +628,49 @@ def get_client_product_documents(
 
     docs = BenchmarkEngine().get_entity_documents(db, str(client_id), entity_id)
     return {"documents": _build_document_responses(db, str(client_id), docs)}
+
+@router.get("/{client_id}/seeded", response_model=Dict[str, Any])
+def get_client_seeded(client_id: UUID, db: Session = Depends(get_db)):
+    """READ-ONLY. The client's seeded executives (role order) and competitors (seed order) plus the scoring windows, so
+    the two pages can open on them. Only validated, active rows are listed; needs_review rows are never shown.
+    Empty lists (and the default windows) before seeding or before migration 0016 is applied."""
+    from app.core.config import settings
+    from app.services.seeding.gates import seeded_rows
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    from app.models.entity import Entity
+    rows = seeded_rows(db, client_id)
+    names = {e.id: e.name for e in db.query(Entity).filter(Entity.id.in_([r.entity_id for r in rows])).all()} if rows else {}
+
+    def _item(r):
+        return {"entity_id": str(r.entity_id), "name": names.get(r.entity_id, r.name), "rank": r.rank, "role": r.role,
+                "context_term": r.context_term, "sources": r.sources or [], "pair_count_24m": r.pair_count_24m}
+
+    return {
+        "window": {"executive_days": int(settings.EXEC_WINDOW_DAYS), "benchmark_days": int(settings.BENCHMARK_WINDOW_DAYS)},
+        "executives": [_item(r) for r in rows if r.kind == "executive"],
+        "competitors": [_item(r) for r in rows if r.kind == "competitor"],
+    }
+
+
+@router.post("/{client_id}/seeded/refresh", response_model=Dict[str, Any])
+def refresh_client_seeded(client_id: UUID, apply: bool = Query(False, description="False = dry run (propose and validate only)"),
+                          db: Session = Depends(get_db), _admin=Depends(require_super_admin)):
+    """Super admin only. One web-grounded LLM call (about $0.014). apply=false returns the plan and writes nothing;
+    apply=true writes it. Aborts with 502 (nothing written) if the web call fails; never falls back to the plain model."""
+    from app.services.seeding import service as seeding_service
+    from app.services.seeding.proposer import SeedingAborted
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    try:
+        # the endpoint IS the explicit refresh: with apply=true it replaces a stored list (rows no longer chosen are retired)
+        result = seeding_service.seed_client(db, client_id, apply=apply, refresh=True)
+    except SeedingAborted as e:
+        raise HTTPException(status_code=502, detail=f"Seeding aborted, nothing written: {e}")
+    return {"applied": result["applied"], "plan": result["plan"]}
+
 
 @router.get("/{client_id}/executive-candidates", response_model=List[Dict[str, Any]])
 def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_db)):
@@ -697,6 +774,7 @@ def _executive_payload(db: Session, client_id, entity, score) -> Dict[str, Any]:
             "id": str(score.id) if score else None,
             "entity_id": str(entity.id),
             "name": entity.name,
+            "window_days": ((lineage.get("raw_values") or {}).get("window_days", 30)) if score else None,
             "score": score.score if has_score else None,
             "grade": score.grade if has_score else None,
             "confidence_score": score.confidence_score if has_score else None,
@@ -825,9 +903,12 @@ def get_client_competitor_candidates(client_id: UUID, db: Session = Depends(get_
         "source_document_count": len(c.source_documents) if c.source_documents else 0
     } for c in candidates]
 
-@router.get("/{client_id}/competitor-search", response_model=Dict[str, Any])
+@router.post("/{client_id}/competitor-search", response_model=Dict[str, Any])
 def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     """
+    POST, not GET: a name that is not tracked yet CREATES the entity, its keyword and its search feeds (and a
+    tracked one may queue a risk+benchmark run), so it must not be reachable by a prefetch, a link or a cached GET.
+
     Competitor Compare redesign (TASK.md Part 2.2/2.3): search-first, no
     auto-surfaced candidate noise. Four states, polled by the frontend (the
     "searching" state is deliberately transient -- collection/processing is
@@ -886,6 +967,10 @@ def search_client_competitor(client_id: UUID, name: str = Query(..., min_length=
                 # mention the client) the score rests on, and when this row was
                 # computed. Neither is a scoring input.
                 "mentions_30d": measured(benchmark.visibility_score if benchmark else None),
+                # Look-back the stored row used (30 on rows stored before the setting existed) and whether the
+                # competitor is seeded (scored on documents about itself, so the page does not say "with the client").
+                "window_days": ((benchmark.evidence_metadata or {}).get("window_days", 30)) if benchmark else None,
+                "seeded": bool((benchmark.evidence_metadata or {}).get("seeded", False)) if benchmark else False,
                 "as_of": benchmark.created_at.isoformat() if (benchmark and benchmark.created_at) else None,
                 "reason": reason,
             }

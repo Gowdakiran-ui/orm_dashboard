@@ -1301,19 +1301,36 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
 
     new_doc_ids: List[str] = []
 
+    # Seeded entities' own search feeds are capped per run (steady state): at most SEED_RUN_CAP_PER_ENTITY new documents
+    # per feed per run, newest first as the feed returns them. Every other feed is unchanged.
+    from app.services.seeding.gates import seeded_feed_urls
+    from app.services.seeding.settings import RUN_CAP_PER_ENTITY
+    capped_feed_urls = seeded_feed_urls(db, ctx.client_id)
+
     for feed in client_feeds:
         source = _get_or_create_source(db, feed)
+        feed_cap = RUN_CAP_PER_ENTITY if feed.feed_url in capped_feed_urls else None
+        feed_saved = 0
 
         adapter_cls = ADAPTER_REGISTRY.get(feed.source_format, RSSAdapter)
         adapter = adapter_cls()
 
+        # Run Pipeline polls every active feed each run but used to leave last_polled_at to the (unscheduled)
+        # fetch_feed_task path, so the field read "never" / months ago. Stamp it when the attempt starts, as
+        # fetch_feed_task does. Display only: nothing in this path reads it.
+        feed.last_polled_at = datetime.now(timezone.utc)
+        db.commit()
+
         try:
             entries = adapter.fetch(feed.feed_url)
             for entry in entries:
+                if feed_cap is not None and feed_saved >= feed_cap:
+                    break
                 norm = adapter.normalize(entry, str(source.id))
                 norm_doc = NormalizedDocument(**norm)
                 is_saved, _, _ = process_and_save_document(db, norm_doc)
                 if is_saved:
+                    feed_saved += 1
                     # Item 20: process_and_save_document() inserts
                     # Document.url as canonicalize_url(doc_data.url), not the
                     # raw URL (document_service.py:24,40) -- looking it back

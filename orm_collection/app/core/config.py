@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     # frequent DB usage where reusing a warm connection matters.
     DB_USE_NULLPOOL: bool = False
 
+    # Scoring windows (days). Config, not formulas: the same engines run, only the look-back changes.
+    # EXEC_WINDOW_DAYS is the executive-score window; BENCHMARK_WINDOW_DAYS is the competitor-benchmark window and is
+    # used for the client and every competitor alike. Exposed to the UI as `window_days` so the page text matches.
+    EXEC_WINDOW_DAYS: int = 365
+    BENCHMARK_WINDOW_DAYS: int = 90
+
     # DigitalOcean-managed PgBouncer connection pool (structural fix for the
     # 2026-09-05 connection-exhaustion incident -- see db.py/docker-compose.yml
     # comments). A distinct setting, not a DATABASE_URL override: backup_tasks.py

@@ -1,4 +1,5 @@
 import { formatDMY } from "./dateFormat";
+import { windowPhrase } from "./windowText";
 // Pure helpers for the Competitors tab (audit/competitors-audit.md F-01, F-02, F-04, F-05, F-06, F-09, F-10, F-12).
 // Everything here is plain data in / plain data out so each rule can be tested without rendering the page.
 
@@ -118,10 +119,12 @@ export function activityScopeNote(clientName: string): string {
   return `Articles found among the newest ${ACTIVITY_ARTICLE_CAP} about ${clientName}. The scores above use the last 30 days, so this list can differ from what they rest on.`;
 }
 
-export function evidenceCaption(mentions: unknown, clientName: string): string | null {
+export function evidenceCaption(mentions: unknown, clientName: string, windowDaysValue?: number | null, seeded: boolean = false): string | null {
   if (!isNum(mentions)) return null;
   const n = Math.round(mentions);
-  return `Based on ${n} mention${n === 1 ? "" : "s"} in the last 30 days (only articles that also mention ${clientName} count).`;
+  return seeded
+    ? `Based on ${n} mention${n === 1 ? "" : "s"} in the ${windowPhrase(windowDaysValue)} (articles about this competitor itself; they do not need to mention ${clientName}).`
+    : `Based on ${n} mention${n === 1 ? "" : "s"} in the ${windowPhrase(windowDaysValue)} (only articles that also mention ${clientName} count).`;
 }
 
 export function asOfLabel(iso: unknown): string | null {
@@ -154,13 +157,14 @@ export function isLowEvidence(mentions: unknown): boolean {
   return isNum(mentions) && Math.round(mentions) < LOW_EVIDENCE_MENTIONS;
 }
 
-export function lowEvidenceTitle(): string {
-  return `Fewer than ${LOW_EVIDENCE_MENTIONS} mentions in the last 30 days that also mention the client: not enough coverage to show a score.`;
+export function lowEvidenceTitle(windowDaysValue?: number | null): string {
+  return `Fewer than ${LOW_EVIDENCE_MENTIONS} mentions in the ${windowPhrase(windowDaysValue)} that also mention the client: not enough coverage to show a score.`;
 }
 
-export function notEnoughCoverageMessage(name: string, clientName: string, mentions: unknown): string {
+export function notEnoughCoverageMessage(name: string, clientName: string, mentions: unknown, windowDaysValue?: number | null, seeded: boolean = false): string {
   const n = isNum(mentions) ? Math.round(mentions) : 0;
-  return `Not enough coverage: only ${n} mention${n === 1 ? "" : "s"} of ${name} together with ${clientName} in the last 30 days (fewer than ${LOW_EVIDENCE_MENTIONS}), so no score is shown.`;
+  const together = seeded ? "" : ` together with ${clientName}`;
+  return `Not enough coverage: only ${n} mention${n === 1 ? "" : "s"} of ${name}${together} in the ${windowPhrase(windowDaysValue)} (fewer than ${LOW_EVIDENCE_MENTIONS}), so no score is shown.`;
 }
 
 /** The Risk tile counts only articles that mention the client, so a competitor's own other stories are not in it. */
@@ -205,14 +209,61 @@ export function competitorCardView(b: any, clientName: string): CompetitorCardVi
     scoreMeaning: scored
       ? `How healthy ${name}'s reputation looks in recent articles that also mention ${clientName}. Higher is better; 100 is the best possible.`
       : lowEvidence && (mentions ?? 0) > 0
-        ? notEnoughCoverageMessage(name, clientName, mentions)
-        : `No article from the last 30 days mentions both ${name} and ${clientName}, so no score is shown.`,
+        ? notEnoughCoverageMessage(name, clientName, mentions, b?.window_days, !!b?.seeded)
+        : b?.seeded
+          ? `No article from the ${windowPhrase(b?.window_days)} is about ${name}, so no score is shown.`
+          : `No article from the ${windowPhrase(b?.window_days)} mentions both ${name} and ${clientName}, so no score is shown.`,
     rankText: scored ? `Ranked #${b.rank} with ${clientName}` : null,
     sovText: isNum(b?.sov) ? `${(b.sov as number).toFixed(1)}% share of voice` : null,
     sovMeaning: isNum(b?.sov) ? `Out of every 100 mentions of ${clientName} and the compared competitors, about ${Math.round(b.sov)} are ${name}.` : null,
-    evidence: mentions === null ? null : `Based on ${mentions} mention${mentions === 1 ? "" : "s"} in the last 30 days`,
+    evidence: mentions === null ? null : `Based on ${mentions} mention${mentions === 1 ? "" : "s"} in the ${windowPhrase(b?.window_days)}`,
     thin,
     thinNote: thin ? `Thin evidence: only ${mentions} mention${mentions === 1 ? "" : "s"}, so treat this score with caution.` : null,
     asOf,
   };
+}
+
+
+// ---- Seeded competitors: the page opens on them, in seed order ---------------------------------------------
+export interface SeededCompetitor { entity_id: string; name: string; rank: number; context_term?: string | null }
+
+export interface CompetitorCard extends CompetitorCardView {
+  key: string;
+  entityId: string | null;
+  seeded: boolean;
+  alsoTracked: boolean;      // tracked outside the seeded list and still shown
+  placeholder: boolean;      // seeded, but no benchmark row yet: "Tracked, no coverage yet"
+}
+
+/** Card for a seeded competitor that has no benchmark row yet. Never a score, never a zero. */
+export function placeholderCardView(name: string, clientName: string): CompetitorCardView {
+  return {
+    name, hasScore: false, scoreText: "Tracked, no coverage yet",
+    scoreMeaning: `${name} is tracked and being searched for, but no article about it has been scored yet, so there is nothing to compare with ${clientName}. It appears here after the next Run Pipeline.`,
+    rankText: null, sovText: null, sovMeaning: null, evidence: null, thin: false, thinNote: null, asOf: null,
+  };
+}
+
+/** Seeded competitors first in seed order (a card from their /benchmark row, or the placeholder), then every other
+ *  compared competitor as "also tracked". With no seeded list this is exactly one card per /benchmark row. */
+export function buildCompetitorCards(benchmarks: any[] | null | undefined, seeded: SeededCompetitor[] | null | undefined, clientName: string): CompetitorCard[] {
+  const rows = (benchmarks || []).filter(b => b && b.competitor_name);
+  const hasSeed = !!seeded && seeded.length > 0;
+  if (!hasSeed) {
+    return rows.map(b => ({ ...competitorCardView(b, clientName), key: String(b.competitor_id || b.competitor_name), entityId: b.competitor_id ? String(b.competitor_id) : null, seeded: false, alsoTracked: false, placeholder: false }));
+  }
+  const byEntity = new Map<string, any>(rows.filter(b => b.competitor_id).map(b => [String(b.competitor_id), b]));
+  const seededIds = new Set((seeded as SeededCompetitor[]).map(s => String(s.entity_id)));
+  const first: CompetitorCard[] = [...(seeded as SeededCompetitor[])].sort((a, b) => a.rank - b.rank).map(s => {
+    const row = byEntity.get(String(s.entity_id));
+    // A seeded competitor with no row, or a row with no evidence and no mention at all, has nothing to show yet.
+    const empty = !row || (row.health_status === "INSUFFICIENT_EVIDENCE" && (!isNum(row.mentions_30d) || Math.round(row.mentions_30d) === 0));
+    const view = empty ? placeholderCardView(s.name, clientName) : competitorCardView({ ...row, seeded: true }, clientName);
+    return { ...view, key: String(s.entity_id), entityId: String(s.entity_id), seeded: true, alsoTracked: false, placeholder: empty };
+  });
+  const rest: CompetitorCard[] = rows.filter(b => !seededIds.has(String(b.competitor_id))).map(b => ({
+    ...competitorCardView(b, clientName), key: String(b.competitor_id || b.competitor_name), entityId: b.competitor_id ? String(b.competitor_id) : null,
+    seeded: false, alsoTracked: true, placeholder: false,
+  }));
+  return [...first, ...rest];
 }

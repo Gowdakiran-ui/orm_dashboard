@@ -57,7 +57,7 @@ def has_risk_term(title: Optional[str], content: Optional[str]) -> bool:
 
 
 # Query-kind priority for collection: brand and risk words first, then people, competitors/products last.
-KIND_PRIORITY = {"brand": 0, "risk": 0, "executive": 1, "competitor": 2, "product": 3}
+KIND_PRIORITY = {"brand": 0, "risk": 0, "seed_risk": 0, "executive": 1, "competitor": 2, "product": 3}
 SOURCE_PRIORITY = {"google_news": 0, "hn": 1, "gdelt": 2, "youtube": 3}
 
 

@@ -23,8 +23,10 @@ import { CompetitorRadarAxesDefinition, CompetitorComparableScoreDefinition, Com
 import {
   MIN_TOPIC_COMPARISON_COUNT, ACTIVITY_ARTICLE_CAP, hasEvidence, clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice,
   rankedEntityCount, rankLabel, emptyStateMessage, comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption,
-  asOfLabel, competitorCardView, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, notEnoughCoverageMessage, riskTileLabel, fixed,
+  asOfLabel, buildCompetitorCards, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, notEnoughCoverageMessage, riskTileLabel, fixed,
 } from "@/utils/competitorCompare";
+import { windowPhrase } from "@/utils/windowText";
+import { useSeeded } from "@/hooks/useSeeded";
 
 export interface CompetitorsTabProps {
   benchmarksLoading: boolean;
@@ -242,6 +244,11 @@ export function CompetitorsTab({
   );
   const competitorHasEvidence = hasEvidence(selectedCompetitor);
   const comparedNames: string[] = useMemo(() => (normalizedBenchmarks || []).map((b: any) => b?.competitor_name).filter(Boolean), [normalizedBenchmarks]);
+  // Seeded competitors (validated closest competitors, seed order) open the page; other compared competitors follow as
+  // "also tracked". A seeded competitor with no benchmark row yet shows "Tracked, no coverage yet".
+  const seeded = useSeeded(clientId);
+  const competitorCards = useMemo(() => buildCompetitorCards(normalizedBenchmarks, seeded?.competitors, activeClientName), [normalizedBenchmarks, seeded, activeClientName]);
+  const benchWindow = seeded?.window?.benchmark_days ?? (normalizedBenchmarks || []).find((b: any) => b?.window_days)?.window_days ?? null;
   const rankTotal = useMemo(() => rankedEntityCount(normalizedBenchmarks), [normalizedBenchmarks]);
 
   // 4. VERIFIED COMPETITOR EVENTS FILTERING -- scoped to the one selected
@@ -408,7 +415,7 @@ export function CompetitorsTab({
                 </p>
               ) : isLowEvidence(searchResult.competitor.mentions_30d) ? (
                 <p className={`text-xs font-mono ${mutedText(theme)}`}>
-                  {notEnoughCoverageMessage(searchResult.competitor.name, activeClientName, searchResult.competitor.mentions_30d)}
+                  {notEnoughCoverageMessage(searchResult.competitor.name, activeClientName, searchResult.competitor.mentions_30d, searchResult.competitor.window_days, !!searchResult.competitor.seeded)}
                 </p>
               ) : (
                 <>
@@ -433,7 +440,7 @@ export function CompetitorsTab({
                     </div>
                   </div>
                   <p className={`text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
-                    {[evidenceCaption(searchResult.competitor.mentions_30d, activeClientName), asOfLabel(searchResult.competitor.as_of)].filter(Boolean).join(" ")}
+                    {[evidenceCaption(searchResult.competitor.mentions_30d, activeClientName, searchResult.competitor.window_days, !!searchResult.competitor.seeded), asOfLabel(searchResult.competitor.as_of)].filter(Boolean).join(" ")}
                   </p>
                 </>
               )}
@@ -454,29 +461,32 @@ export function CompetitorsTab({
         </CardContent>
       </Card>
 
-      {!hasTrackedCompetitors && comparedNames.length > 0 && searchResult?.status !== "searching" && searchResult?.status !== "unpromoted_candidate" && searchResult?.status !== "tracked" && (
+      {!hasTrackedCompetitors && competitorCards.length > 0 && searchResult?.status !== "searching" && searchResult?.status !== "unpromoted_candidate" && searchResult?.status !== "tracked" && (
         <Card className={glassCard(theme)}>
           <div className={SPECULAR_LINE} />
           <CardHeader className="pb-3">
             <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)}`}>
-              {comparedNames.length} competitor{comparedNames.length === 1 ? " is" : "s are"} being compared with {activeClientName}
+              {competitorCards.length} competitor{competitorCards.length === 1 ? " is" : "s are"} being compared with {activeClientName}
             </CardTitle>
             <CardDescription className={`text-xs font-mono ${mutedText(theme)}`}>
-              Scores use articles from the last 30 days that also mention {activeClientName}. Select a card for the head-to-head.
+              {seeded && seeded.competitors.length > 0
+                ? `Closest competitors first, in seed order, then others already tracked. Scores use articles from the ${windowPhrase(benchWindow)} about each competitor; they do not need to mention ${activeClientName}. `
+                : `Scores use articles from the ${windowPhrase(benchWindow)} that also mention ${activeClientName}. `}
+              Select a card for the head-to-head.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {(normalizedBenchmarks || []).map((b: any) => {
-                const v = competitorCardView(b, activeClientName);
+              {competitorCards.map((v) => {
                 return (
                   <button
-                    key={b.competitor_id || v.name}
+                    key={v.key}
                     type="button"
                     onClick={() => { setSearchQuery(v.name); startCompetitorSearch(v.name); }}
                     className={`text-left rounded-2xl p-4 space-y-1.5 border ${isDark ? "border-white/[0.10] bg-black/30 hover:bg-white/[0.04]" : "border-black/[0.06] bg-black/[0.03] hover:bg-black/[0.02]"}`}
                   >
                     <span className={`block font-mono text-sm font-bold ${bodyText(theme)}`}>{v.name}</span>
+                    {v.alsoTracked && <span className={`block font-mono text-xs ${mutedText(theme)}`}>also tracked</span>}
                     <span className={`block font-mono text-xl font-bold ${v.hasScore ? "text-[#D4AF37]" : mutedText(theme)}`}>{v.scoreText}</span>
                     <span className={`block text-xs ${mutedText(theme)}`}>{v.scoreMeaning}</span>
                     {v.rankText && <span className={`block text-xs font-mono ${bodyText(theme)}`}>{v.rankText}</span>}
@@ -493,7 +503,7 @@ export function CompetitorsTab({
         </Card>
       )}
 
-      {!hasTrackedCompetitors && comparedNames.length === 0 && (() => {
+      {!hasTrackedCompetitors && competitorCards.length === 0 && (() => {
         const empty = emptyStateMessage({ comparedNames, searchStatus: searchResult?.status, clientName: activeClientName });
         if (!empty) return null;
         return (
@@ -695,7 +705,7 @@ export function CompetitorsTab({
               <p className={`text-xs font-mono ${mutedText(theme)}`}>Waiting for verified competitor data.</p>
             )}
             <p className={`mt-2 text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
-              Counts only articles that also mention {activeClientName}, over the last 30 days.
+              Counts only articles that also mention {activeClientName}, over the {windowPhrase(benchWindow)}.
             </p>
           </CardContent>
         </Card>

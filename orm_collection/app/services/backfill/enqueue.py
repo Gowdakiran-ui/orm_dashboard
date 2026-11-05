@@ -36,3 +36,28 @@ def enqueue_client_backfill(client_id) -> bool:
     except Exception as e:
         logger.warning("backfill_enqueue_failed", client_id=str(client_id), error=str(e)[:200])
         return False
+
+
+def enqueue_client_seeding_then_backfill(client_id) -> bool:
+    """
+    Onboarding hook: seed the top-5 executives / competitors (one web-grounded LLM call), THEN run the backfill so the
+    seeded entities are included. Runs as one Celery task (seed_and_backfill_client). If seeding aborts, the task logs it and
+    still enqueues the normal backfill. Never raises. SEED_ON_ONBOARD=false keeps the old behaviour (backfill only).
+    """
+    if os.environ.get("SEED_ON_ONBOARD", "true").strip().lower() in ("0", "false", "no", "off"):
+        return enqueue_client_backfill(client_id)
+    try:
+        from app.utils.redis_client import redis_client
+        if not redis_client.client.set(f"seed:enqueued:{client_id}", "1", nx=True, ex=_ENQUEUED_TTL):
+            logger.info("seed_and_backfill_already_enqueued", client_id=str(client_id))
+            return False
+    except Exception as e:      # guard is best effort, like the backfill one: seeding is idempotent per (client, kind, name)
+        logger.warning("seed_enqueue_guard_unavailable", client_id=str(client_id), error=str(e)[:200])
+    try:
+        from app.core.celery_app import celery_app
+        celery_app.send_task("app.workers.backfill_tasks.seed_and_backfill_client", args=[str(client_id)])
+        logger.info("seed_and_backfill_enqueued", client_id=str(client_id))
+        return True
+    except Exception as e:
+        logger.warning("seed_and_backfill_enqueue_failed", client_id=str(client_id), error=str(e)[:200])
+        return enqueue_client_backfill(client_id)

@@ -1,3 +1,4 @@
+import urllib.parse
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -206,7 +207,7 @@ def onboard_client(db: Session, onboarding_data: ClientOnboarding) -> Client:
 
     return db_client
 
-def entity_search_feed_urls(entity_name: str, co_occur_with: Optional[str] = None) -> dict:
+def entity_search_feed_urls(entity_name: str, co_occur_with: Optional[str] = None, quote: bool = False, co_quoted: bool = True) -> dict:
     """
     Same 3 query-URL formulas onboard_client uses to provision the primary
     entity's feeds (Google News RSS, GDELT DOC 2.0, HN Algolia), factored out
@@ -229,6 +230,20 @@ def entity_search_feed_urls(entity_name: str, co_occur_with: Optional[str] = Non
     being searched for), so its 3 URLs are byte-for-byte unchanged from
     before this parameter existed.
     """
+    if quote:
+        # Seeded entities: exact-phrase queries ("Name" "Company") so a name that is also an ordinary word does not
+        # pull in unrelated stories. The default (False) leaves every existing caller's URLs byte-for-byte unchanged.
+        q_name = '"' + entity_name.replace('"', " ").strip() + '"'
+        co = co_occur_with.replace('"', " ").strip() if co_occur_with else ""
+        # Executives: "Name" "Company". Competitors: "Name" plus the sector words unquoted (a quoted multi-word sector
+        # phrase almost never appears verbatim, so it would starve the feed).
+        q_all = q_name + ((' "' + co + '"') if co_quoted else (" " + co) if co else "")
+        enc = urllib.parse.quote_plus(q_all)
+        return {
+            "google_news": f"https://news.google.com/rss/search?q={enc}",
+            "gdelt": f"https://api.gdeltproject.org/api/v2/doc/doc?query={enc}&mode=artlist&format=json&maxrecords=50",
+            "hn_algolia": f"https://hn.algolia.com/api/v1/search?query={urllib.parse.quote_plus(q_all.replace(chr(34), ''))}&tags=story",
+        }
     sanitized_name = entity_name.replace(" ", "+")
     if not co_occur_with:
         return {
@@ -262,7 +277,7 @@ def competitor_search_feed_urls(entity_name: str) -> dict:
     return entity_search_feed_urls(entity_name)
 
 
-def provision_entity_search_feeds(db: Session, client_id, entity_name: str, co_occur_with: Optional[str] = None) -> list:
+def provision_entity_search_feeds(db: Session, client_id, entity_name: str, co_occur_with: Optional[str] = None, quote: bool = False, co_quoted: bool = True) -> list:
     """
     Creates the 3 query-scoped RSSFeed rows (Google News/GDELT/HN Algolia)
     for a newly fresh-searched entity (competitor or executive) -- same
@@ -274,7 +289,7 @@ def provision_entity_search_feeds(db: Session, client_id, entity_name: str, co_o
     no-op here, not a duplicate feed. Does not commit -- caller commits once,
     alongside the Entity/keyword rows it creates in the same transaction.
     """
-    urls = entity_search_feed_urls(entity_name, co_occur_with=co_occur_with)
+    urls = entity_search_feed_urls(entity_name, co_occur_with=co_occur_with, quote=quote, co_quoted=co_quoted)
     feeds = []
     # source_type is DB-constrained (ck_rss_feeds_source_type) to exactly
     # 'entity_search' | 'topical_global' | 'json_api' -- confirmed live

@@ -152,7 +152,8 @@ class BenchmarkEngine:
         score = max(0.0, min(100.0, weighted_sum / total_weight))
         return score, total_weight
 
-    def _preload_score_inputs(self, db: Session, client_id: str, entity_ids: List[Any], lookback_date, log, brand_doc_ids=None):
+    def _preload_score_inputs(self, db: Session, client_id: str, entity_ids: List[Any], lookback_date, log, brand_doc_ids=None,
+                              entity_doc_overrides=None):
         """
         P3 batch preloading + the per-entity component-scoring closure,
         extracted verbatim (same queries, same formulas) from the original
@@ -182,9 +183,15 @@ class BenchmarkEngine:
         total_mentions (sum of mentions_map across entity_ids, the SOV
         denominator), weights, and components_for(entity_id).
         """
-        # 30-day mentions in bulk
+        # `entity_doc_overrides` ({entity_id: set(document ids)}): seeded competitors are scored on the documents that
+        # are about the competitor itself instead of the client's brand-co-occurrence set. They are left out of the
+        # main queries below (entity_ids_main) and computed by the same queries in the override pass after them.
+        entity_doc_overrides = entity_doc_overrides or {}
+        entity_ids_main = [e for e in entity_ids if e not in entity_doc_overrides]
+
+        # window mentions in bulk
         mentions_query = db.query(EntityMention.entity_id, func.sum(EntityMention.mention_count)).filter(
-            EntityMention.entity_id.in_(entity_ids),
+            EntityMention.entity_id.in_(entity_ids_main),
             in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
@@ -195,7 +202,7 @@ class BenchmarkEngine:
         sentiment_query = db.query(EntityMention.entity_id, func.avg(DocumentSentiment.sentiment_score)).join(
             DocumentSentiment, DocumentSentiment.document_id == EntityMention.document_id
         ).filter(
-            EntityMention.entity_id.in_(entity_ids),
+            EntityMention.entity_id.in_(entity_ids_main),
             in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
@@ -207,7 +214,7 @@ class BenchmarkEngine:
         # Component).
         risk_query = db.query(RiskEvent.entity_id, func.avg(RiskEvent.risk_score)).filter(
             RiskEvent.client_id == client_id,
-            RiskEvent.entity_id.in_(entity_ids),
+            RiskEvent.entity_id.in_(entity_ids_main),
             in_window(RiskEvent.created_at, RiskEvent.document_id, lookback_date)
         )
         if brand_doc_ids is not None:
@@ -249,7 +256,7 @@ class BenchmarkEngine:
             ).outerjoin(
                 SourceHealth, Source.id == SourceHealth.source_id
             ).filter(
-                EntityMention.entity_id.in_(entity_ids),
+                EntityMention.entity_id.in_(entity_ids_main),
                 in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)
             )
             if brand_doc_ids is not None:
@@ -267,6 +274,18 @@ class BenchmarkEngine:
                 )
         except Exception as exc:
             log.warning("benchmark_source_component_unavailable", error=str(exc))
+
+        # Override pass (seeded competitors): the same four inputs, restricted to each entity's own document set.
+        for ov_eid, ov_docs in entity_doc_overrides.items():
+            m, s_, r_, rel_ = self._override_inputs(db, client_id, ov_eid, set(ov_docs), lookback_date)
+            if m is not None:
+                mentions_map[ov_eid] = m
+            if s_ is not None:
+                sentiment_map[ov_eid] = s_
+            if r_ is not None:
+                risk_map[ov_eid] = r_
+            if rel_:
+                reliability_by_entity[ov_eid] = rel_
 
         # Calculate Total Mentions for Share of Voice
         total_mentions = sum(mentions_map.values())
@@ -309,6 +328,40 @@ class BenchmarkEngine:
             "components_for": components_for,
         }
 
+    def _override_inputs(self, db: Session, client_id: str, entity_id, doc_ids, lookback_date):
+        """Mentions, average sentiment, average risk and source reliabilities for ONE entity, restricted to `doc_ids`.
+        Same queries and formulas as the main pass in _preload_score_inputs; only the document filter differs."""
+        from app.models.document import Document
+        from app.models.source import Source, SourceCategory, SourceHealth
+        if not doc_ids:
+            return None, None, None, []
+        doc_ids = list(doc_ids)
+        m = db.query(func.sum(EntityMention.mention_count)).filter(
+            EntityMention.entity_id == entity_id, EntityMention.document_id.in_(doc_ids),
+            in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)).scalar()
+        s_ = db.query(func.avg(DocumentSentiment.sentiment_score)).select_from(EntityMention).join(
+            DocumentSentiment, DocumentSentiment.document_id == EntityMention.document_id).filter(
+            EntityMention.entity_id == entity_id, EntityMention.document_id.in_(doc_ids),
+            in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)).scalar()
+        r_ = db.query(func.avg(RiskEvent.risk_score)).filter(
+            RiskEvent.client_id == client_id, RiskEvent.entity_id == entity_id, RiskEvent.document_id.in_(doc_ids),
+            in_window(RiskEvent.created_at, RiskEvent.document_id, lookback_date)).scalar()
+        rel = []
+        try:
+            rows = db.query(SourceCategory.base_reliability_score, SourceHealth.reliability_penalty).select_from(
+                EntityMention).join(Document, Document.id == EntityMention.document_id).join(
+                Source, Document.source_id == Source.id).join(SourceCategory, Source.category_id == SourceCategory.id).outerjoin(
+                SourceHealth, Source.id == SourceHealth.source_id).filter(
+                EntityMention.entity_id == entity_id, EntityMention.document_id.in_(doc_ids),
+                in_window(EntityMention.created_at, EntityMention.document_id, lookback_date)).all()
+            for base_score, penalty in rows:
+                if base_score is None:
+                    continue
+                rel.append(max(0.0, min(100.0, (float(base_score) - float(penalty or 0.0)) * 100)))
+        except Exception:
+            rel = []
+        return m, s_, r_, rel
+
     def calculate_competitor_benchmarks(
         self,
         db: Session,
@@ -338,9 +391,12 @@ class BenchmarkEngine:
             log.error("benchmark_client_not_found")
             raise ValueError(f"Client {client_id} not found")
 
-        # A3: 30-day moving window configuration
+        # A3: moving window. Config (settings.BENCHMARK_WINDOW_DAYS, default 90), the same for the client and every
+        # competitor; it was a fixed 30 days. The window length is stored with each row (evidence_metadata.window_days).
+        from app.core.config import settings as _settings
+        window_days = int(_settings.BENCHMARK_WINDOW_DAYS)
         now_utc = datetime.datetime.now(datetime.timezone.utc)
-        lookback_date = now_utc - datetime.timedelta(days=30)
+        lookback_date = now_utc - datetime.timedelta(days=window_days)
 
         # 1. Identify Client Brand Entity & Verified Competitor Entities
         client_entity = db.query(Entity).filter(
@@ -394,6 +450,11 @@ class BenchmarkEngine:
             ).all()
         ]
         brand_doc_ids = None
+        # Seeded competitors (services/seeding) are scored on documents about the competitor itself and do not need
+        # to co-occur with the client; every other competitor keeps the brand gate unchanged.
+        from app.services.seeding.gates import seeded_entity_ids, seeded_gate_doc_ids
+        seeded_comp_ids = seeded_entity_ids(db, client_id, "competitor")
+        doc_overrides = {}
         if brand_or_product_ids:
             brand_doc_ids = set(
                 m.document_id for m in db.query(EntityMention).filter(
@@ -402,6 +463,9 @@ class BenchmarkEngine:
             )
             gated_competitor_ids = set()
             for e in competitors:
+                if e.id in seeded_comp_ids:
+                    gated_competitor_ids.add(e.id)
+                    continue
                 competitor_doc_ids = set(
                     m.document_id for m in db.query(EntityMention).filter(
                         EntityMention.entity_id == e.id
@@ -430,7 +494,10 @@ class BenchmarkEngine:
         all_entities = [client_entity] + competitors
         all_entity_ids = [e.id for e in all_entities]
 
-        inputs = self._preload_score_inputs(db, client_id, all_entity_ids, lookback_date, log, brand_doc_ids=brand_doc_ids)
+        if seeded_comp_ids:
+            doc_overrides = seeded_gate_doc_ids(db, client_id, [e.id for e in competitors if e.id in seeded_comp_ids])
+        inputs = self._preload_score_inputs(db, client_id, all_entity_ids, lookback_date, log, brand_doc_ids=brand_doc_ids,
+                                            entity_doc_overrides=doc_overrides)
         mentions_map = inputs["mentions_map"]
         sentiment_map = inputs["sentiment_map"]
         risk_map = inputs["risk_map"]
@@ -566,7 +633,7 @@ class BenchmarkEngine:
                     f"Insufficient evidence: active weight {res['active_weight']:.2f} < "
                     f"{self.MIN_ACTIVE_WEIGHT:.2f}; no score stated and entity left unranked."
                     if not res["has_evidence"] else
-                    f"Comparable reputation computed over a 30-day window from "
+                    f"Comparable reputation computed over a {window_days}-day window from "
                     f"{sum(1 for v in res['components'].values() if v is not None)} of "
                     f"{len(self.COMPARABLE_COMPONENTS)} components; health state: {res['health_status']}."
                 ),
@@ -577,6 +644,8 @@ class BenchmarkEngine:
                 "client_entity_id": str(client_entity.id),
                 "mentions_30d": res["visibility_score"],
                 "total_mentions_30d": total_mentions,
+                "window_days": window_days,
+                "seeded": eid in seeded_comp_ids,
             }
 
             # A2.13 — real per-competitor coverage instead of the fixed
