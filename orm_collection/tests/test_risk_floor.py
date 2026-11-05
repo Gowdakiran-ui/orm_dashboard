@@ -232,3 +232,59 @@ def test_engine_caps_a_results_story_at_low_when_the_flag_is_on_and_leaves_it_wh
     # a serious story is not capped
     fine = _score("Godrej Properties fined Rs 30 lakh by MahaRERA - Business Standard", sentiment="Negative")
     assert fine["risk_score"] > LOW_CAP_SCORE and fine["explainability"]["noise_cap_applied"] is None
+
+
+# ---- the cap must be able to replace a row that already has an LLM role check (upsert quality tier) ----
+RESULTS_TITLE = "Godrej Properties Q1 net profit falls 42%; booking value rises 22% - Business Standard"
+
+
+def _with_prior_llm_row(title, prior_score, role="SELF", **kw):
+    """Engine scenario plus an existing risk row that already carries an LLM role check (what prod has)."""
+    from app.models.risk import RiskEvent
+    from app.models.client import Client
+    from app.models.entity import Entity
+    from app.services.intelligence.risk_engine import RiskEngine
+    db, did = _engine_scenario(title, **kw)
+    cid = db.query(Client).first().id
+    eid = db.query(Entity).first().id
+    db.add(RiskEvent(client_id=cid, document_id=did, entity_id=eid, risk_score=prior_score, risk_level="MEDIUM",
+                     explainability={"role_classification": role, "role_classification_source": "llm"}))
+    db.commit()
+    eng = RiskEngine()
+    calls = []
+    eng._llm_classify_role = lambda *a, **k: calls.append(1) or "SELF"
+    return eng.calculate_document_risk(db, did, persist=False)[0], calls
+
+
+def test_capped_story_with_an_existing_llm_role_check_is_written_at_the_llm_tier(monkeypatch):
+    monkeypatch.setenv("RISK_FLOOR_ENABLED", "1")
+    p, calls = _with_prior_llm_row(RESULTS_TITLE, 32.9, sentiment="Negative")
+    x = p["explainability"]
+    assert p["risk_score"] == LOW_CAP_SCORE and p["risk_level"] == "LOW" and x["noise_cap_applied"] == "financial_results"
+    # the upsert only replaces an "llm" row with an "llm" write: this is what lets the cap take effect
+    assert x["role_classification_source"] == "llm" and x["role_classification_cache_hit"] is True and x["role_classification"] == "SELF"
+    assert calls == []                                              # reused, not re-asked: no new paid call
+
+
+def test_capped_story_without_a_prior_role_check_stays_not_evaluated_and_makes_no_call(monkeypatch):
+    monkeypatch.setenv("RISK_FLOOR_ENABLED", "1")
+    p = _score(RESULTS_TITLE, sentiment="Negative")
+    assert p["risk_score"] == LOW_CAP_SCORE and p["explainability"]["role_classification_source"] == "not_evaluated"
+
+
+def test_a_prior_bystander_check_still_wins_over_the_cap(monkeypatch):
+    monkeypatch.setenv("RISK_FLOOR_ENABLED", "1")
+    p, _ = _with_prior_llm_row(RESULTS_TITLE, 32.9, role="BYSTANDER", sentiment="Negative")
+    assert p["risk_score"] == 0.0 and p["explainability"]["role_classification"] == "BYSTANDER"
+
+
+def test_normal_events_are_unchanged_by_the_fix(monkeypatch):
+    monkeypatch.setenv("RISK_FLOOR_ENABLED", "1")
+    legal = "Godrej Properties fined Rs 30 lakh by MahaRERA - Business Standard"
+    p, calls = _with_prior_llm_row(legal, 40.0, sentiment="Negative")
+    x = p["explainability"]
+    assert p["risk_score"] > LOW_CAP_SCORE and x["noise_cap_applied"] is None
+    assert x["role_classification_source"] == "llm" and x["role_classification_cache_hit"] is True and calls == []
+    monkeypatch.delenv("RISK_FLOOR_ENABLED")                        # flag off: the results story keeps its old score and tier
+    off, _ = _with_prior_llm_row(RESULTS_TITLE, 32.9, sentiment="Negative")
+    assert off["risk_score"] > LOW_CAP_SCORE and off["explainability"]["noise_cap_applied"] is None

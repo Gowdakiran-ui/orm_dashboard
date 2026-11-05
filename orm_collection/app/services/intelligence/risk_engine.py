@@ -868,7 +868,14 @@ class RiskEngine:
                 # key, timeout, or malformed response, only by a confident
                 # BYSTANDER/EXONERATED result.
                 role_classification = None
-                role_classification_attempted = final_score > self.RISK_ROLE_CLASSIFICATION_MIN_SCORE
+                # A capped (noise) score is at most LOW and would skip the check, so its write would carry source
+                # "not_evaluated" and _upsert_risk_event would refuse to replace an existing "llm" row: the cap would
+                # silently not take effect on every row that was already role-checked. Reuse that cached judgment
+                # (no new LLM call) so the capped write has the same quality tier and replaces the old score.
+                role_classification_attempted = (
+                    final_score > self.RISK_ROLE_CLASSIFICATION_MIN_SCORE
+                    or (bool(noise_cap_applied) and (client_id, entity.id) in cached_role_by_client_entity)
+                )
                 role_classification_cache_hit = False
                 if role_classification_attempted:
                     cached_role = cached_role_by_client_entity.get((client_id, entity.id))
