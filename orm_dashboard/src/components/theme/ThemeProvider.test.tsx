@@ -38,4 +38,20 @@ describe("ThemeProvider default behaviour", () => {
     await mount(React.createElement(ThemeProvider, null, React.createElement(Probe)));
     expect(shown()).toBe("dark");
   });
+  it("saves 'system' as a preference and follows the OS setting", async () => {
+    const listeners: Array<() => void> = [];
+    let dark = false;
+    (window as any).matchMedia = () => ({
+      get matches() { return dark; },
+      addEventListener: (_: string, f: () => void) => listeners.push(f),
+      removeEventListener: () => {},
+    });
+    await mount(React.createElement(ThemeProvider, null, React.createElement(Probe)));
+    expect(shown()).toBe("light"); // nothing saved -> System -> OS says light
+    dark = true;
+    await act(async () => { listeners.forEach((f) => f()); });
+    expect(shown()).toBe("dark");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    delete (window as any).matchMedia;
+  });
 });
