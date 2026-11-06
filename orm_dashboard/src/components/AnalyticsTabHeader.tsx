@@ -15,7 +15,7 @@ export function AnalyticsTabHeader({
 }: AnalyticsTabHeaderProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
 
   return (
     // Same responsive-collapse pattern as RiskTab.tsx's "At a Glance" tile

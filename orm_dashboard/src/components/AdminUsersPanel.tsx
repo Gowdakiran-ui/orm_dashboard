@@ -17,7 +17,7 @@ import { glassCard, glassTokens, glassPrimaryButton, mutedText, bodyText, SPECUL
 export function AdminUsersPanel() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -197,7 +197,7 @@ export function AdminUsersPanel() {
                   <TableCell className="text-center">
                     <Badge className={`font-mono text-xs ${
                       u.role === "super_admin"
-                        ? isDark ? "bg-[#00F5D4]/10 text-[#00F5D4] border border-[#00F5D4]/30" : "bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30"
+                        ? isDark ? "bg-[var(--brand)]/10 text-[var(--brand)] border border-[var(--brand)]/30" : "bg-[var(--brand)]/10 text-[var(--brand)] border border-[var(--brand)]/30"
                         : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
                     }`}>
                       {u.role.toUpperCase()}
@@ -271,7 +271,7 @@ export function AdminUsersPanel() {
                 placeholder="name@company.com"
                 value={createEmail}
                 onChange={(e) => setCreateEmail(e.target.value)}
-                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[var(--brand)]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[var(--brand)]"}`}
               />
             </div>
             <div className="space-y-2">
@@ -279,7 +279,7 @@ export function AdminUsersPanel() {
               <select
                 value={createRole}
                 onChange={(e) => setCreateRole(e.target.value as "client_user" | "super_admin")}
-                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[var(--brand)]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[var(--brand)]"}`}
               >
                 <option value="client_user">Client User</option>
                 <option value="super_admin">Super Admin</option>
@@ -391,7 +391,7 @@ export function AdminUsersPanel() {
 
       {/* One-Time Password Reveal Dialog (after create or reset) */}
       <Dialog open={passwordReveal !== null} onOpenChange={(open) => { if (!open) { setPasswordReveal(null); setCopied(false); } }}>
-        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90" : "bg-white/90"}`} style={{ borderColor: `${accent}66` }}>
+        <DialogContent className={`rounded-3xl backdrop-blur-2xl ${bodyText(theme)} ${isDark ? "bg-zinc-900/90" : "bg-white/90"}`} style={{ borderColor: "color-mix(in srgb, var(--brand) 40%, transparent)" }}>
           <DialogHeader>
             <DialogTitle className="font-mono flex items-center" style={{ color: accent }}>
               <KeyRound className="h-4 w-4 mr-2" />
@@ -407,7 +407,7 @@ export function AdminUsersPanel() {
               <button
                 onClick={handleCopyPassword}
                 title="Copy password"
-                className={`shrink-0 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-[#00F5D4]" : "hover:text-[#3B82F6]"}`}
+                className={`shrink-0 transition-colors ${mutedText(theme)} ${isDark ? "hover:text-[var(--brand)]" : "hover:text-[var(--brand)]"}`}
               >
                 {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
               </button>

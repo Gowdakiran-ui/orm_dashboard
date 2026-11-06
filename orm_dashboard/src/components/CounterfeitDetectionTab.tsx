@@ -87,7 +87,7 @@ function usePollScan(clientId: string | null | undefined) {
 export function CounterfeitDetectionTab({ clientId }: CounterfeitDetectionTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -158,7 +158,7 @@ function DeepfakePanel({ clientId, theme, isDark, accent }: { clientId?: string 
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => { e.preventDefault(); setDragOver(false); pickFile(e.dataTransfer.files?.[0]); }}
           className={`flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-8 min-h-[110px] cursor-pointer text-center transition-colors ${
-            dragOver ? (isDark ? "border-[#00F5D4]/60 bg-[#00F5D4]/5" : "border-[#3B82F6]/60 bg-[#3B82F6]/5")
+            dragOver ? (isDark ? "border-[var(--brand)]/60 bg-[var(--brand)]/5" : "border-[var(--brand)]/60 bg-[var(--brand)]/5")
                      : (isDark ? "border-white/[0.15] hover:border-white/[0.3]" : "border-black/[0.12] hover:border-black/[0.25]")
           }`}
         >
@@ -270,7 +270,7 @@ function DomainScanPanel({ clientId, theme, isDark, accent }: { clientId?: strin
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="Brand keyword, e.g. acmecorp"
-            className={`flex-1 rounded px-3 py-2 min-h-11 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[#3B82F6]/50"}`}
+            className={`flex-1 rounded px-3 py-2 min-h-11 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[var(--brand)]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[var(--brand)]/50"}`}
           />
           <button
             type="submit"
@@ -312,7 +312,7 @@ function DomainScanPanel({ clientId, theme, isDark, accent }: { clientId?: strin
                         href={`https://${c.domain_name}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`truncate block underline underline-offset-2 ${isDark ? "text-[#00F5D4]/80 hover:text-[#00F5D4]" : "text-[#3B82F6]/80 hover:text-[#3B82F6]"}`}
+                        className={`truncate block underline underline-offset-2 ${isDark ? "text-[var(--brand)]/80 hover:text-[var(--brand)]" : "text-[var(--brand)]/80 hover:text-[var(--brand)]"}`}
                       >
                         Visit site to check manually →
                       </a>

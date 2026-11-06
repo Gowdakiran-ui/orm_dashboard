@@ -86,7 +86,7 @@ export function Sidebar({
 
         {/* Logo Section */}
         <div className={`h-20 shrink-0 px-6 border-b flex items-center space-x-3 ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
-          <div className={`p-2 rounded-lg border ${isDark ? "bg-[#00F5D4]/10 border-[#00F5D4]/30 text-[#00F5D4]" : "bg-[#3B82F6]/10 border-[#3B82F6]/30 text-[#3B82F6]"}`}>
+          <div className={`p-2 rounded-lg border ${isDark ? "bg-[var(--brand)]/10 border-[var(--brand)]/30 text-[var(--brand)]" : "bg-[var(--brand)]/10 border-[var(--brand)]/30 text-[var(--brand)]"}`}>
             <Shield className="h-6 w-6" />
           </div>
           <div className="flex-1">
@@ -125,8 +125,8 @@ export function Sidebar({
               onChange={(e) => onSelectCompany(e.target.value)}
               className={`w-full px-2 py-1.5 rounded-md text-sm font-mono focus:outline-none focus:ring-1 ${
                 isDark
-                  ? "border border-white/[0.12] bg-zinc-900/70 text-zinc-100 focus:ring-[#00F5D4]"
-                  : "border border-black/[0.06] bg-white/70 text-zinc-900 focus:ring-[#3B82F6]"
+                  ? "border border-white/[0.12] bg-zinc-900/70 text-zinc-100 focus:ring-[var(--brand)]"
+                  : "border border-black/[0.06] bg-white/70 text-zinc-900 focus:ring-[var(--brand)]"
               }`}
             >
               {filteredClients.map((c: any) => (
@@ -143,8 +143,8 @@ export function Sidebar({
                 onChange={(e) => onSearchChange(e.target.value)}
                 className={`w-full pl-7 pr-2 py-1.5 rounded-md text-xs font-mono focus:outline-none focus:ring-1 ${
                   isDark
-                    ? "border border-white/[0.12] bg-zinc-900/50 text-zinc-100 focus:ring-[#00F5D4]"
-                    : "border border-black/[0.06] bg-white/50 text-zinc-900 focus:ring-[#3B82F6]"
+                    ? "border border-white/[0.12] bg-zinc-900/50 text-zinc-100 focus:ring-[var(--brand)]"
+                    : "border border-black/[0.06] bg-white/50 text-zinc-900 focus:ring-[var(--brand)]"
                 }`}
               />
             </div>
@@ -153,7 +153,7 @@ export function Sidebar({
           <div className={`flex justify-between items-center pt-1 border-t ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
             <button
               onClick={onAddCompanyClick}
-              className={`flex items-center min-h-11 px-2 text-xs font-mono transition-colors ${isDark ? "text-[#00F5D4] hover:text-[#00F5D4]/80" : "text-[#3B82F6] hover:text-[#3B82F6]/80"}`}
+              className={`flex items-center min-h-11 px-2 text-xs font-mono transition-colors ${isDark ? "text-[var(--brand)] hover:text-[var(--brand)]/80" : "text-[var(--brand)] hover:text-[var(--brand)]/80"}`}
               title="Add Company"
             >
               <Plus className="h-3 w-3 mr-1" /> Add
@@ -168,7 +168,7 @@ export function Sidebar({
             <button
               onClick={onRunPipeline}
               disabled={pipelineRunning}
-              className={`flex items-center min-h-11 px-2 text-xs font-mono disabled:opacity-50 transition-colors ${isDark ? "text-[#7B2CBF] hover:text-[#7B2CBF]/80" : "text-[#8B5CF6] hover:text-[#8B5CF6]/80"}`}
+              className={`flex items-center min-h-11 px-2 text-xs font-mono disabled:opacity-50 transition-colors ${isDark ? "text-[var(--violet)] hover:text-[var(--violet)]/80" : "text-[var(--violet)] hover:text-[var(--violet)]/80"}`}
               title="Run Pipeline"
             >
               {pipelineRunning ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Play className="h-3 w-3 mr-1" />}
@@ -215,8 +215,8 @@ export function Sidebar({
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             const activeClass = isDark
-              ? "bg-[#00F5D4]/5 border-l-2 border-l-[#00F5D4] border-y-transparent border-r-transparent text-[#00F5D4]"
-              : "bg-[#3B82F6]/5 border-l-2 border-l-[#3B82F6] border-y-transparent border-r-transparent text-[#3B82F6]";
+              ? "bg-[var(--brand)]/5 border-l-2 border-l-[var(--brand)] border-y-transparent border-r-transparent text-[var(--brand)]"
+              : "bg-[var(--brand)]/5 border-l-2 border-l-[var(--brand)] border-y-transparent border-r-transparent text-[var(--brand)]";
             const inactiveClass = isDark
               ? "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] border-l-2 border-l-transparent"
               : "text-zinc-500 hover:text-zinc-800 hover:bg-black/[0.03] border-l-2 border-l-transparent";
@@ -228,7 +228,7 @@ export function Sidebar({
                   isActive ? activeClass : inactiveClass
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? "" : mutedText(theme)}`} style={isActive ? { color: isDark ? "#00F5D4" : "#3B82F6" } : undefined} />
+                <Icon className={`h-4 w-4 ${isActive ? "" : mutedText(theme)}`} style={isActive ? { color: "var(--brand)" } : undefined} />
                 <span>{tab.label}</span>
               </button>
             );

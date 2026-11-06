@@ -201,7 +201,7 @@ function DashboardShell() {
     },
   });
 
-  const accentFrom = isDark ? "#00F5D4" : "#3B82F6";
+  const accentFrom = "var(--brand)";
 
   if (data.clientsLoading) {
     return (
@@ -216,7 +216,7 @@ function DashboardShell() {
   }
 
   return (
-    <div data-theme={theme} className={`flex ${bodyBg(theme)} ${bodyText(theme)} min-h-screen font-sans selection:bg-[#00F5D4]/40`}>
+    <div data-theme={theme} className={`flex ${bodyBg(theme)} ${bodyText(theme)} min-h-screen font-sans selection:bg-[var(--brand)]/40`}>
 
       <Sidebar
         clientId={data.clientId}
@@ -252,7 +252,7 @@ function DashboardShell() {
             onClick={() => setSidebarOpen(true)}
             title="Open Menu"
             aria-label="Open navigation menu"
-            className={`transition-colors ${isDark ? "text-zinc-300 hover:text-[#00F5D4]" : "text-zinc-600 hover:text-[#3B82F6]"}`}
+            className={`transition-colors ${isDark ? "text-zinc-300 hover:text-[var(--brand)]" : "text-zinc-600 hover:text-[var(--brand)]"}`}
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -472,7 +472,7 @@ function DashboardShell() {
                 placeholder="e.g. Acme Corp"
                 value={company.addName}
                 onChange={(e) => company.setAddName(e.target.value)}
-                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[var(--brand)]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[var(--brand)]"}`}
               />
             </div>
             <div className="space-y-2">
@@ -482,7 +482,7 @@ function DashboardShell() {
                 placeholder="e.g. Technology"
                 value={company.addIndustry}
                 onChange={(e) => company.setAddIndustry(e.target.value)}
-                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[#00F5D4]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[#3B82F6]"}`}
+                className={`w-full rounded px-3 py-2 focus:outline-none ${isDark ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 focus:border-[var(--brand)]" : "bg-white/60 border border-black/[0.08] text-zinc-900 focus:border-[var(--brand)]"}`}
               />
             </div>
             {company.addError && (

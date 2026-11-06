@@ -104,7 +104,7 @@ function useProductSearch(clientId: string | null | undefined, parentEntityId: s
 export function ProductCompareSection({ clientId, activeClientName, competitorEntityId, competitorName }: ProductCompareSectionProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
 
   const own = useProductSearch(clientId, undefined);
   const competitor = useProductSearch(clientId, competitorEntityId);
@@ -248,7 +248,7 @@ export function ProductCompareSection({ clientId, activeClientName, competitorEn
             value={state.query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={placeholder}
-            className={`flex-1 rounded px-3 py-2 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[#3B82F6]/50"}`}
+            className={`flex-1 rounded px-3 py-2 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[var(--brand)]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[var(--brand)]/50"}`}
           />
           <button
             type="submit"
@@ -262,7 +262,7 @@ export function ProductCompareSection({ clientId, activeClientName, competitorEn
         {state.errorMsg && <p className="text-red-500 font-mono text-xs">{state.errorMsg}</p>}
 
         {state.result?.status === "searching" && (
-          <div className={`rounded-2xl p-4 flex items-center space-x-3 border ${isDark ? "border-[#00F5D4]/30 bg-black/30" : "border-[#3B82F6]/30 bg-black/[0.03]"}`}>
+          <div className={`rounded-2xl p-4 flex items-center space-x-3 border ${isDark ? "border-[var(--brand)]/30 bg-black/30" : "border-[var(--brand)]/30 bg-black/[0.03]"}`}>
             <div className="h-3 w-3 rounded-full animate-pulse" style={{ backgroundColor: accent }} />
             <p className={`text-xs font-mono ${mutedText(theme)}`}>
               Running a fresh scoped search — collecting and scoring coverage for this product. This can take a moment.
@@ -271,7 +271,7 @@ export function ProductCompareSection({ clientId, activeClientName, competitorEn
         )}
 
         {state.result?.status === "tracked" && (
-          <div className={`rounded-2xl p-4 space-y-2 border ${isDark ? "border-[#00F5D4]/30 bg-black/30" : "border-[#3B82F6]/30 bg-black/[0.03]"}`}>
+          <div className={`rounded-2xl p-4 space-y-2 border ${isDark ? "border-[var(--brand)]/30 bg-black/30" : "border-[var(--brand)]/30 bg-black/[0.03]"}`}>
             <div className="flex items-center justify-between">
               <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{state.result.product.name}</span>
               <Badge className={glassPill(theme)} style={{ color: accent }}>TRACKED</Badge>
@@ -394,7 +394,7 @@ export function ProductCompareSection({ clientId, activeClientName, competitorEn
               <div className={`p-6 border-b flex items-center justify-between ${cardBorder}`}>
                 <div className="flex items-center space-x-3">
                   <AlertOctagon className="h-5 w-5 text-red-500" />
-                  <span className="text-sm font-bold uppercase text-[#D4AF37]">Details</span>
+                  <span className="text-sm font-bold uppercase text-[var(--gold)]">Details</span>
                 </div>
                 <button
                   onClick={() => setSelectedDocId(null)}
@@ -416,7 +416,7 @@ export function ProductCompareSection({ clientId, activeClientName, competitorEn
 
                 <div className="space-y-2">
                   <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
-                    <Info className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Original Article Snippet
+                    <Info className="h-3.5 w-3.5 mr-1 text-[var(--gold)]" /> Original Article Snippet
                   </span>
                   <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
                     {selectedDoc.original_content || "No original content available."}

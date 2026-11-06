@@ -271,58 +271,121 @@
 }
 
 /* ============================================
-   DASHBOARD GLASS THEME UTILITIES
-   Scoped under [data-theme] on the dashboard shell root (set by
-   ThemeProvider) -- dark values are the default (unscoped) rule, light
-   overrides apply under [data-theme="light"]. Used to bulk-migrate the
-   remaining dashboard panels' inline near-black boxes / slate text / gold
-   accents onto the Crystalline Glass / Smoked Obsidian Glass tokens
-   without hand-rewriting every occurrence's className.
+   THEME TOKENS (dashboard only)
+   Semantic colour tokens. [data-theme] is set on <html> by the pre-paint
+   script in layout.tsx and kept in sync by ThemeProvider (only on /dashboard,
+   so the dark-only landing and login pages are untouched). Light is the base;
+   dark overrides below. Everything else (tokens.ts, .dash-* classes, the
+   palette overrides further down) reads these.
    ============================================ */
-.dash-box {
-  background: rgba(0, 0, 0, 0.3);
-  border-color: rgba(255, 255, 255, 0.08);
+html[data-theme] {
+  --page: #F5F7FA;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --fg: #0F172A;
+  --fg-muted: #475569;
+  --line: #E2E8F0;
+  --line-strong: #CBD5E1;
+  --brand: #1D4ED8;          /* brand blue (hue of #3B82F6), lightness lowered for 4.5:1 */
+  --brand-hover: #1E40AF;
+  --success: #047857;
+  --warning: #92400E;
+  --danger: #B91C1C;
+  --info: #0369A1;
+  --focus-ring: #1D4ED8;
+  --chart-grid: #E2E8F0;
+  --tooltip-bg: #0F172A;
+  --tooltip-fg: #F8FAFC;
+  --gold: #7A5F0A;           /* brand gold (D4AF37 hue) darkened for text on light */
+  --violet: #6D28D9;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 14px -4px rgba(15, 23, 42, 0.10);
+  color-scheme: light;
 }
-[data-theme="light"] .dash-box {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.06);
+html[data-theme="dark"] {
+  --page: #0F1419;
+  --surface: #161D2A;
+  --surface-raised: #1E2736;
+  --fg: #E2E8F0;
+  --fg-muted: #94A3B8;
+  --line: #2A3447;
+  --line-strong: #3A4660;
+  --brand: #2DD4BF;          /* brand teal (hue of #00F5D4), less saturated */
+  --brand-hover: #5EEAD4;
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger: #F87171;
+  --info: #38BDF8;
+  --focus-ring: #5EEAD4;
+  --chart-grid: #2A3447;
+  --tooltip-bg: #1E2736;
+  --tooltip-fg: #E2E8F0;
+  --gold: #D4AF37;
+  --violet: #A78BFA;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px -6px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+html[data-theme] body { background: var(--page); color: var(--fg); }
+html[data-theme] :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
 }
 
-.dash-border {
-  border-color: rgba(255, 255, 255, 0.12);
+/* Palette retune per theme. Components pick palette classes per mode
+   (isDark ? "text-red-400" : "text-red-500"); remapping the palette
+   variables here makes every such class meet contrast without touching
+   each call site. Light: status hues 300-600 go to their 700-800 shades.
+   Dark: zinc becomes the navy-slate elevation scale; status hues are
+   lighter and less saturated. */
+html[data-theme="light"] {
+  --color-zinc-950: #0B1220; --color-zinc-900: #0F172A; --color-zinc-800: #1E293B;
+  --color-zinc-700: #334155; --color-zinc-600: #475569; --color-zinc-500: #566478;
+  --color-zinc-400: #5F6E83; --color-zinc-300: #CBD5E1; --color-zinc-200: #E2E8F0;
+  --color-zinc-100: #EEF2F7; --color-zinc-50: #F8FAFC;
+  --color-slate-400: #5F6E83; --color-slate-500: #566478;
+  --color-blue-300: #1D4ED8; --color-blue-400: #1D4ED8; --color-blue-500: #1D4ED8; --color-blue-600: #1E40AF;
+  --color-sky-300: #075985; --color-sky-400: #075985; --color-sky-500: #075985; --color-sky-600: #0C4A6E;
+  --color-cyan-300: #155E75; --color-cyan-400: #155E75; --color-cyan-500: #155E75; --color-cyan-600: #164E63;
+  --color-emerald-300: #065F46; --color-emerald-400: #065F46; --color-emerald-500: #065F46; --color-emerald-600: #064E3B;
+  --color-green-400: #15803D; --color-green-500: #15803D; --color-green-600: #166534;
+  --color-red-300: #991B1B; --color-red-400: #991B1B; --color-red-500: #991B1B; --color-red-600: #7F1D1D;
+  --color-orange-300: #7C2D12; --color-orange-400: #7C2D12; --color-orange-500: #7C2D12; --color-orange-600: #6C2710;
+  --color-amber-300: #78350F; --color-amber-400: #78350F; --color-amber-500: #78350F; --color-amber-600: #6B2F0D;
+  --color-yellow-400: #854D0E; --color-yellow-500: #854D0E; --color-yellow-600: #713F12;
+  /* *-950 are dark-mode tint bases (bg-red-950/20); in light they become mid hues so the 20% tint reads as a pale wash, not grey */
+  --color-red-950: #DC2626; --color-orange-950: #EA580C; --color-yellow-950: #CA8A04; --color-emerald-950: #059669;
+  --color-purple-400: #6D28D9; --color-purple-500: #6D28D9; --color-violet-400: #6D28D9; --color-violet-500: #6D28D9;
 }
-[data-theme="light"] .dash-border {
-  border-color: rgba(0, 0, 0, 0.06);
+html[data-theme="dark"] {
+  --color-zinc-950: #0F1419; --color-zinc-900: #161D2A; --color-zinc-800: #1E2736;
+  --color-zinc-700: #2A3447; --color-zinc-600: #3A4660; --color-zinc-500: #8B9AB0;
+  --color-zinc-400: #94A3B8; --color-zinc-300: #B4C0D0; --color-zinc-200: #CBD5E1;
+  --color-zinc-100: #E2E8F0; --color-zinc-50: #F1F5F9;
+  --color-slate-400: #94A3B8; --color-slate-500: #8B9AB0;
+  --color-red-400: #F87171; --color-red-500: #F87171; --color-emerald-400: #34D399; --color-emerald-500: #34D399;
+  --color-amber-400: #FBBF24; --color-amber-500: #FBBF24; --color-orange-400: #FB923C; --color-orange-500: #FB923C;
+  --color-blue-400: #7DB3FA; --color-blue-500: #7DB3FA; --color-sky-400: #38BDF8; --color-sky-500: #38BDF8;
+  --color-yellow-400: #FACC15; --color-yellow-500: #FACC15;
 }
 
-.dash-muted {
-  color: #a1a1aa;
-}
-[data-theme="light"] .dash-muted {
-  color: #71717a;
-}
-
-.dash-strong {
-  color: #f4f4f5;
-}
-[data-theme="light"] .dash-strong {
-  color: #18181b;
-}
-
-.dash-accent {
-  color: #00F5D4;
-}
-[data-theme="light"] .dash-accent {
-  color: #3B82F6;
-}
-
+.dash-box { background: color-mix(in srgb, var(--fg) 5%, transparent); border-color: var(--line); }
+.dash-border { border-color: var(--line); }
+.dash-muted { color: var(--fg-muted); }
+.dash-strong { color: var(--fg); }
+.dash-accent { color: var(--brand); }
 .dash-accent-bg {
-  background-color: rgba(0, 245, 212, 0.1);
-  border-color: rgba(0, 245, 212, 0.3);
-  color: #00F5D4;
-}
-[data-theme="light"] .dash-accent-bg {
-  background-color: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #3B82F6;
+  background-color: color-mix(in srgb, var(--brand) 12%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  color: var(--brand);
 }

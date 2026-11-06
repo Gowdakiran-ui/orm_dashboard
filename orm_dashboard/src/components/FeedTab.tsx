@@ -50,7 +50,7 @@ export function FeedTab({
 }: FeedTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
   // State for selected document details panel
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedDocDetails, setSelectedDocDetails] = useState<any>(null);
@@ -172,7 +172,7 @@ export function FeedTab({
                       onClick={() => setSelectedSourceGroup(group.key)}
                       className={`min-h-[44px] inline-flex items-center justify-center px-3 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider transition-colors ${
                         isActive
-                          ? "text-black"
+                          ? (isDark ? "text-[#0F1419]" : "text-white")
                           : isDark ? "border-white/[0.12] text-zinc-400 hover:text-zinc-200 hover:border-white/[0.2]" : "border-black/[0.08] text-zinc-500 hover:text-zinc-800 hover:border-black/[0.15]"
                       }`}
                       style={isActive ? { backgroundColor: accent, borderColor: accent } : undefined}
@@ -208,7 +208,7 @@ export function FeedTab({
                     </div>
 
                     <div className={`flex flex-wrap items-center gap-1.5 pt-1.5 border-t ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
-                      <Badge variant="outline" className={isDark ? "border-[#00F5D4]/30 text-[#00F5D4] text-[8px] py-0 px-1 font-bold" : "border-[#3B82F6]/30 text-[#3B82F6] text-[8px] py-0 px-1 font-bold"}>
+                      <Badge variant="outline" className={isDark ? "border-[var(--brand)]/30 text-[var(--brand)] text-[8px] py-0 px-1 font-bold" : "border-[var(--brand)]/30 text-[var(--brand)] text-[8px] py-0 px-1 font-bold"}>
                         {d.source || "RSS"}
                       </Badge>
                       <Badge variant="outline" className={`text-[8px] py-0 px-1 ${mutedText(theme)} ${isDark ? "border-white/[0.12]" : "border-black/[0.08]"}`}>

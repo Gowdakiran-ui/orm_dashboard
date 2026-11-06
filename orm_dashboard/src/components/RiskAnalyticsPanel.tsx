@@ -78,8 +78,8 @@ export function RiskAnalyticsPanel({
 }: RiskAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
-  const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
+  const accent = "var(--brand)";
+  const accentColor = isDark ? "text-[var(--brand)]" : "text-[var(--brand)]";
   const { navigateTo } = useTabNavigation();
 
   // True totals come from the server (same source as Risk Center's tiles); the charts and the matrix are built from the newest
@@ -232,11 +232,11 @@ export function RiskAnalyticsPanel({
                       let bgClass = "bg-[#030712]/40 border-[#1F2937]/35 text-slate-600";
                       if (count > 0) {
                         if (count <= 2) {
-                          bgClass = "bg-red-950/20 border-red-900/40 text-red-400 hover:border-red-500/50 hover:bg-red-950/30";
+                          bgClass = isDark ? "bg-red-950/20 border-red-900/40 text-red-400 hover:border-red-500/50 hover:bg-red-950/30" : "bg-red-50 border-red-200 text-red-800 hover:border-red-400 hover:bg-red-100";
                         } else if (count <= 5) {
-                          bgClass = "bg-red-900/40 border-red-750/50 text-red-300 hover:border-red-500 hover:bg-red-900/50";
+                          bgClass = isDark ? "bg-red-900/40 border-red-750/50 text-red-300 hover:border-red-500 hover:bg-red-900/50" : "bg-red-100 border-red-300 text-red-900 hover:border-red-500 hover:bg-red-200";
                         } else {
-                          bgClass = "bg-red-800 border-red-500 text-red-100 hover:bg-red-700 hover:shadow-[0_0_12px_rgba(239,68,68,0.25)]";
+                          bgClass = isDark ? "bg-red-800 border-red-500 text-red-100 hover:bg-red-700 hover:shadow-[0_0_12px_rgba(239,68,68,0.25)]" : "bg-red-700 border-red-800 text-white hover:bg-red-800";
                         }
                       }
 
@@ -255,7 +255,7 @@ export function RiskAnalyticsPanel({
                           {/* Hover diagnostics tooltip -- kept solid for legibility over an
                               already-colored matrix cell, same reasoning as Risk Center. */}
                           <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-[9px] w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
-                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell Diagnostics</div>
+                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[var(--brand)]" : "border-black/[0.06] text-[var(--brand)]"}`}>Cell Diagnostics</div>
                             <div className="flex justify-between">
                               <span className={mutedText(theme)}>Severity:</span>
                               <span className={bodyText(theme)}>{rowKey}</span>
@@ -418,10 +418,10 @@ export function RiskAnalyticsPanel({
                         const cellPercent = rowTot > 0 ? ((cellData.count / rowTot) * 100).toFixed(0) : "0";
 
                         const bgStyle = cellData.count > 0 ? {
-                          backgroundColor: sev === "CRITICAL" ? `rgba(239, 68, 68, ${Math.min(0.12 + cellData.count * 0.15, 0.85)})` :
-                                           sev === "HIGH" ? `rgba(249, 115, 22, ${Math.min(0.12 + cellData.count * 0.15, 0.85)})` :
-                                           sev === "MEDIUM" ? `rgba(234, 179, 8, ${Math.min(0.12 + cellData.count * 0.15, 0.85)})` :
-                                           `rgba(16, 185, 129, ${Math.min(0.12 + cellData.count * 0.15, 0.85)})`
+                          backgroundColor: sev === "CRITICAL" ? `rgba(239, 68, 68, ${Math.min(0.12 + cellData.count * 0.15, 0.4)})` :
+                                           sev === "HIGH" ? `rgba(249, 115, 22, ${Math.min(0.12 + cellData.count * 0.15, 0.4)})` :
+                                           sev === "MEDIUM" ? `rgba(234, 179, 8, ${Math.min(0.12 + cellData.count * 0.15, 0.4)})` :
+                                           `rgba(16, 185, 129, ${Math.min(0.12 + cellData.count * 0.15, 0.4)})`
                         } : undefined;
 
                         return (
@@ -440,7 +440,7 @@ export function RiskAnalyticsPanel({
                               // two separate labeled lines, still small
                               // enough to fit the cell, but no longer an
                               // abbreviation a reader has to decode.
-                              <span className={`text-[7px] mt-0.5 leading-tight font-normal font-mono ${mutedText(theme)}`}>
+                              <span className={`text-[7px] mt-0.5 leading-tight font-normal font-mono text-[var(--fg)]`}>
                                 <span className="block">Risk Score: {cellData.avgRisk.toFixed(0)}</span>
                                 <span className="block">Sentiment: {cellData.avgSentiment.toFixed(1)}</span>
                               </span>

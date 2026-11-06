@@ -42,10 +42,10 @@ export function AIAdvisorPanel({
     <Card className="bg-[#060B18]/60 border-[#1F2937]/60 shadow-2xl overflow-hidden hover:border-[#D4AF37]/30 transition-all duration-300">
       <div className="bg-gradient-to-r from-[#D4AF37]/10 to-transparent p-4 border-b border-[#1F2937]/40 flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <Sparkles className="h-5 w-5 text-[#D4AF37] animate-pulse" />
+          <Sparkles className="h-5 w-5 text-[var(--gold)] animate-pulse" />
           <h3 className="text-xs font-mono font-bold tracking-wider text-slate-200 uppercase">AI Strategic Advisory</h3>
         </div>
-        <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30 font-mono text-[9px]">BRIEFING ENGINE</Badge>
+        <Badge className="bg-[#D4AF37]/10 text-[var(--gold)] border-[#D4AF37]/30 font-mono text-[9px]">BRIEFING ENGINE</Badge>
       </div>
       <CardContent className="p-6 space-y-6 text-sm h-[320px] overflow-y-auto overflow-x-hidden">
         {reputationAdvice ? (
@@ -63,7 +63,7 @@ export function AIAdvisorPanel({
               <div className="space-y-2">
                 {reputationAdvice.priority_actions_24h?.map((act: string, idx: number) => (
                   <div key={idx} className="bg-[#030712] p-3 rounded border border-[#1F2937]/40 flex items-start space-x-3">
-                    <span className="h-5 w-5 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-[#D4AF37] flex items-center justify-center text-[10px] font-mono font-bold shrink-0">{idx + 1}</span>
+                    <span className="h-5 w-5 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-[var(--gold)] flex items-center justify-center text-[10px] font-mono font-bold shrink-0">{idx + 1}</span>
                     <span className="text-xs font-mono text-slate-300">{act}</span>
                   </div>
                 ))}
@@ -79,7 +79,7 @@ export function AIAdvisorPanel({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono text-xs">
-            <Sliders className="h-8 w-8 text-[#D4AF37] opacity-40 mb-3 animate-pulse" />
+            <Sliders className="h-8 w-8 text-[var(--gold)] opacity-40 mb-3 animate-pulse" />
             No executive briefing generated.
           </div>
         )}

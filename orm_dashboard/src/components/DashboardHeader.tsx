@@ -30,7 +30,7 @@ export function DashboardHeader({
 }: DashboardHeaderProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
 
   return (
     <header className={`h-20 border-b backdrop-blur-2xl flex items-center justify-between px-8 z-40 sticky top-0 ${isDark ? "border-white/[0.12] bg-zinc-900/50" : "border-black/[0.06] bg-white/50"}`}>

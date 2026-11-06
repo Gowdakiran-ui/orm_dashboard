@@ -38,7 +38,7 @@ const RISK_COLOR: Record<string, string> = {
 // the accent + border now depend on light/dark glass mode.
 function sectionLabelClass(isDark: boolean, withInlineIcon = false) {
   return `text-xs font-bold uppercase tracking-wider ${withInlineIcon ? "flex items-center gap-1" : "block"} border-b pb-1 ${
-    isDark ? "text-[#00F5D4] border-white/[0.12]" : "text-[#3B82F6] border-black/[0.06]"
+    isDark ? "text-[var(--brand)] border-white/[0.12]" : "text-[var(--brand)] border-black/[0.06]"
   }`;
 }
 function sectionTextClass(isDark: boolean) {
@@ -62,7 +62,7 @@ export function ReputationSummaryCard({
 }: ReputationSummaryCardProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
   const { navigateTo } = useTabNavigation();
 
   // Every number and sentence on this page comes from buildBrandEquityView (utils/brandEquity.ts),
@@ -147,7 +147,7 @@ export function ReputationSummaryCard({
     def?: React.ReactNode;
     onClick?: () => void;
   }> = [
-    { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}${asOf ? ` · as of ${asOf}` : ""}` : scoreStatusText, color: "text-[#D4AF37]", highlight: true, def: reputationScoreAndGradeDef },
+    { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}${asOf ? ` · as of ${asOf}` : ""}` : scoreStatusText, color: "text-[var(--gold)]", highlight: true, def: reputationScoreAndGradeDef },
     { label: "Risk Signals", value: riskValue(riskStats?.dangerCount), sub: riskSignalsSub, color: !riskStats ? "text-zinc-400" : riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true, def: <RiskSignalsDefinition /> },
     { label: "Total Risks Tracked (all time)", value: riskValue(riskStats?.total), sub: severityBreakdownSub, color: !riskStats ? "text-zinc-400" : RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Mentions", value: sentiment.positive, sub: "in coverage", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },

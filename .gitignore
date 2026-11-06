@@ -52,3 +52,6 @@ report_inventory.md
 report_samples/
 fixes_before.md
 fixes_after.md
+
+# Playwright output
+orm_dashboard/test-results/

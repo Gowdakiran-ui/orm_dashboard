@@ -67,7 +67,7 @@ export function RiskTab({
 }: RiskTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
   const { navigateTo, searchParams } = useTabNavigation();
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
@@ -218,7 +218,7 @@ export function RiskTab({
         </span>
         <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 font-mono">
           {[
-            { label: "Flagged Articles", value: tileValue(tiles?.flagged), color: isDark ? "text-[#00F5D4]" : "text-[#3B82F6]", highlight: true, def: <FlaggedArticlesDefinition /> },
+            { label: "Flagged Articles", value: tileValue(tiles?.flagged), color: isDark ? "text-[var(--brand)]" : "text-[var(--brand)]", highlight: true, def: <FlaggedArticlesDefinition /> },
             { label: "Critical", value: tileValue(tiles?.critical), color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
             { label: "High", value: tileValue(tiles?.high), color: "text-orange-500" },
             { label: "Medium", value: tileValue(tiles?.medium), color: "text-yellow-500" },
@@ -424,9 +424,9 @@ export function RiskTab({
                       let bgClass = "bg-[#030712]/40 border-[#1F2937]/35 text-slate-600";
                       if (count > 0) {
                         if (count <= 2) {
-                          bgClass = "bg-red-950/20 border-red-900/40 text-red-400 hover:border-red-500/50 hover:bg-red-950/30";
+                          bgClass = isDark ? "bg-red-950/20 border-red-900/40 text-red-400 hover:border-red-500/50 hover:bg-red-950/30" : "bg-red-50 border-red-200 text-red-800 hover:border-red-400 hover:bg-red-100";
                         } else if (count <= 5) {
-                          bgClass = "bg-red-900/40 border-red-750/50 text-red-300 hover:border-red-500 hover:bg-red-900/50";
+                          bgClass = isDark ? "bg-red-900/40 border-red-750/50 text-red-300 hover:border-red-500 hover:bg-red-900/50" : "bg-red-100 border-red-300 text-red-900 hover:border-red-500 hover:bg-red-200";
                         } else {
                           bgClass = "bg-red-750 border-red-500 text-red-100 hover:bg-red-650 hover:shadow-[0_0_12px_rgba(239,68,68,0.25)]";
                         }
@@ -447,7 +447,7 @@ export function RiskTab({
                           {/* Hover diagnostics tooltip -- kept solid (not glass-translucent) so
                               it stays unambiguous over an already-colored matrix cell */}
                           <div className={`absolute z-50 hidden group-hover:block p-3 rounded-xl shadow-2xl font-mono text-xs w-48 text-left space-y-1.5 left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none border ${isDark ? "bg-zinc-950 border-white/[0.12]" : "bg-white border-black/[0.08]"}`}>
-                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[#00F5D4]" : "border-black/[0.06] text-[#3B82F6]"}`}>Cell details</div>
+                            <div className={`font-bold border-b pb-1 mb-1 ${isDark ? "border-white/[0.12] text-[var(--brand)]" : "border-black/[0.06] text-[var(--brand)]"}`}>Cell details</div>
                             <div className="flex justify-between">
                               <span className={mutedText(theme)}>Severity:</span>
                               <span className={bodyText(theme)}>{levelWord(rowKey)}</span>
@@ -785,7 +785,7 @@ export function RiskTab({
                 ) : selectedCellDocs.map((doc: any, idx: number) => {
                   const when = dateLabel(doc);
                   return (
-                    <div key={doc.id ?? idx} className={`p-4 rounded-2xl border space-y-3 transition-colors ${isDark ? "bg-black/30 border-white/[0.08] hover:border-[#00F5D4]/40" : "bg-black/[0.03] border-black/[0.06] hover:border-[#3B82F6]/40"}`}>
+                    <div key={doc.id ?? idx} className={`p-4 rounded-2xl border space-y-3 transition-colors ${isDark ? "bg-black/30 border-white/[0.08] hover:border-[var(--brand)]/40" : "bg-black/[0.03] border-black/[0.06] hover:border-[var(--brand)]/40"}`}>
                       <div className="flex justify-between items-start">
                         <span className={`text-xs ${mutedText(theme)}`}>Source: {doc.source}</span>
                         <Badge className={`font-mono text-xs ${SEVERITY_BADGE[doc.severity]}`}>

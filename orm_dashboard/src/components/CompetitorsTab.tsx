@@ -49,7 +49,7 @@ export function CompetitorsTab({
 }: CompetitorsTabProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
+  const accent = "var(--brand)";
   // Shared theme-aware surface tokens for the sections below that were
   // previously hardcoded to a fixed dark palette (text-slate-*,
   // border-[#1F2937], bg-[#030712]/[#060B18]) and never branched on isDark
@@ -371,7 +371,7 @@ export function CompetitorsTab({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search competitor name..."
-              className={`flex-1 rounded px-3 py-2 min-h-11 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[#00F5D4]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[#3B82F6]/50"}`}
+              className={`flex-1 rounded px-3 py-2 min-h-11 text-xs font-mono focus:outline-none ${bodyText(theme)} ${isDark ? "bg-zinc-950/60 border border-white/[0.12] placeholder:text-zinc-600 focus:border-[var(--brand)]/50" : "bg-white/60 border border-black/[0.08] placeholder:text-zinc-400 focus:border-[var(--brand)]/50"}`}
             />
             <button
               type="submit"
@@ -395,7 +395,7 @@ export function CompetitorsTab({
           )}
 
           {searchResult && searchResult.status === "searching" && (
-            <div className={`rounded-2xl p-4 flex items-center space-x-3 border ${isDark ? "border-[#00F5D4]/30 bg-black/30" : "border-[#3B82F6]/30 bg-black/[0.03]"}`}>
+            <div className={`rounded-2xl p-4 flex items-center space-x-3 border ${isDark ? "border-[var(--brand)]/30 bg-black/30" : "border-[var(--brand)]/30 bg-black/[0.03]"}`}>
               <div className="h-3 w-3 rounded-full animate-pulse" style={{ backgroundColor: accent }} />
               <p className={`text-xs font-mono ${mutedText(theme)}`}>
                 Running a fresh scoped search — collecting and scoring coverage for this name. This can take a moment.
@@ -404,7 +404,7 @@ export function CompetitorsTab({
           )}
 
           {searchResult && searchResult.status === "tracked" && (
-            <div className={`rounded-2xl p-4 space-y-2 border ${isDark ? "border-[#00F5D4]/30 bg-black/30" : "border-[#3B82F6]/30 bg-black/[0.03]"}`}>
+            <div className={`rounded-2xl p-4 space-y-2 border ${isDark ? "border-[var(--brand)]/30 bg-black/30" : "border-[var(--brand)]/30 bg-black/[0.03]"}`}>
               <div className="flex items-center justify-between">
                 <span className={`font-mono text-sm font-bold ${bodyText(theme)}`}>{searchResult.competitor.name}</span>
                 <Badge className={glassPill(theme)} style={{ color: accent }}>TRACKED</Badge>
@@ -487,7 +487,7 @@ export function CompetitorsTab({
                   >
                     <span className={`block font-mono text-sm font-bold ${bodyText(theme)}`}>{v.name}</span>
                     {v.alsoTracked && <span className={`block font-mono text-xs ${mutedText(theme)}`}>also tracked</span>}
-                    <span className={`block font-mono text-xl font-bold ${v.hasScore ? "text-[#D4AF37]" : mutedText(theme)}`}>{v.scoreText}</span>
+                    <span className={`block font-mono text-xl font-bold ${v.hasScore ? "text-[var(--gold)]" : mutedText(theme)}`}>{v.scoreText}</span>
                     <span className={`block text-xs ${mutedText(theme)}`}>{v.scoreMeaning}</span>
                     {v.rankText && <span className={`block text-xs font-mono ${bodyText(theme)}`}>{v.rankText}</span>}
                     {v.sovText && <span className={`block text-xs font-mono ${bodyText(theme)}`}>{v.sovText}</span>}
@@ -532,7 +532,7 @@ export function CompetitorsTab({
           <Card className={glassCard(theme)}>
             <CardHeader>
               <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-                <Compass className="h-4 w-4 text-[#D4AF37] mr-2" />
+                <Compass className="h-4 w-4 text-[var(--gold)] mr-2" />
                 Competitor Comparison
                 <InfoTooltip label="About these metrics"><CompetitorRadarAxesDefinition /></InfoTooltip>
               </CardTitle>
@@ -587,7 +587,7 @@ export function CompetitorsTab({
             <Card className={glassCard(theme)}>
               <CardHeader>
                 <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-                  <BarChart3 className="h-4 w-4 text-[#D4AF37] mr-2" />
+                  <BarChart3 className="h-4 w-4 text-[var(--gold)] mr-2" />
                   Comparable Score
                   <InfoTooltip label="About Comparable Score"><CompetitorComparableScoreDefinition /></InfoTooltip>
                 </CardTitle>
@@ -737,7 +737,7 @@ export function CompetitorsTab({
           <Card className={glassCard(theme)}>
             <CardHeader>
               <CardTitle className={`text-xs font-mono uppercase tracking-wider ${mutedText(theme)} flex items-center`}>
-                <BarChart3 className="h-4 w-4 text-[#D4AF37] mr-2" />
+                <BarChart3 className="h-4 w-4 text-[var(--gold)] mr-2" />
                 Topic Ownership
                 <InfoTooltip label="About Topic Ownership"><TopicOwnershipDefinition /></InfoTooltip>
               </CardTitle>
@@ -824,7 +824,7 @@ export function CompetitorsTab({
                   <TableCell className={`font-mono text-xs font-bold max-w-[120px] truncate ${bodyText(theme)}`}>{doc.matchedCompetitor}</TableCell>
                   <TableCell className={`font-mono text-xs max-w-[200px] truncate ${bodyText(theme)}`}>{doc.title}</TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-xs bg-[#D4AF37]/5">
+                    <Badge variant="outline" className="border-[#D4AF37]/30 text-[var(--gold)] font-mono text-xs bg-[#D4AF37]/5">
                       {doc.topic}
                     </Badge>
                   </TableCell>
@@ -884,7 +884,7 @@ export function CompetitorsTab({
               <div className={`p-6 border-b flex items-center justify-between ${cardBorder}`}>
                 <div className="flex items-center space-x-3">
                   <AlertOctagon className="h-5 w-5 text-red-500" />
-                  <span className="text-sm font-bold uppercase text-[#D4AF37]">Details</span>
+                  <span className="text-sm font-bold uppercase text-[var(--gold)]">Details</span>
                 </div>
                 <button
                   onClick={() => setSelectedDocId(null)}
@@ -911,7 +911,7 @@ export function CompetitorsTab({
                 {/* Original Article Content */}
                 <div className="space-y-2">
                   <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
-                    <Info className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Original Article Snippet
+                    <Info className="h-3.5 w-3.5 mr-1 text-[var(--gold)]" /> Original Article Snippet
                   </span>
                   <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
                     {selectedDoc.original_content || "No original content available."}

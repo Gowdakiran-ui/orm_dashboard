@@ -40,7 +40,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
   const surfaceBorder = isDark ? "border-white/[0.08]" : "border-black/[0.06]";
   const inputClass = isDark
     ? "bg-zinc-950/60 border border-white/[0.12] text-zinc-100 placeholder:text-zinc-600 focus:border-[#38BDF8]/50"
-    : "bg-white/70 border border-black/[0.08] text-zinc-900 placeholder:text-zinc-400 focus:border-[#3B82F6]/50";
+    : "bg-white/70 border border-black/[0.08] text-zinc-900 placeholder:text-zinc-400 focus:border-[var(--brand)]/50";
   const drawerSurface = isDark ? "bg-zinc-950/95 border-white/[0.12]" : "bg-white/95 border-black/[0.06]";
   const chipClass = isDark ? "bg-[#030712] border border-white/[0.10] text-zinc-400" : "bg-black/[0.03] border border-black/[0.08] text-zinc-500";
   const tableHeaderBg = isDark ? "bg-black/20" : "bg-black/[0.02]";
@@ -173,7 +173,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                   {view.badge === "low_evidence" && (
                     <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-xs">LOW EVIDENCE</Badge>
                   )}
-                  <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 font-mono text-xs">TRACKED</Badge>
+                  <Badge className="bg-[#D4AF37]/10 text-[var(--gold)] border border-[#D4AF37]/30 font-mono text-xs">TRACKED</Badge>
                 </div>
               </div>
               <p className={`text-xs font-mono ${mutedText(theme)}`}>{appearsInLine(clientName)}</p>
@@ -183,7 +183,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                 <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                   <div>
                     <span className={`block ${mutedText(theme)}`}>Score</span>
-                    <span className="text-[#D4AF37] font-bold text-sm">{view.scoreText}</span>
+                    <span className="text-[var(--gold)] font-bold text-sm">{view.scoreText}</span>
                   </div>
                   <div>
                     <span className={`flex items-center gap-1 ${mutedText(theme)}`}>
@@ -281,7 +281,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                     <span className={`block font-mono text-sm font-bold ${bodyText(theme)}`}>{e.name}</span>
                     {o.seedRole && <span className={`block font-mono text-xs ${mutedText(theme)}`}>{o.seedRole}</span>}
                     {o.alsoTracked && <span className={`block font-mono text-xs ${mutedText(theme)}`}>also tracked</span>}
-                    <span className={`block font-mono text-lg font-bold ${v.hasScore ? "text-[#D4AF37]" : mutedText(theme)}`}>{v.headline}</span>
+                    <span className={`block font-mono text-lg font-bold ${v.hasScore ? "text-[var(--gold)]" : mutedText(theme)}`}>{v.headline}</span>
                     <span className={`block font-mono text-xs ${mutedText(theme)}`}>{v.detail}</span>
                     {furtherArticlesLine(e) && <span className={`block font-mono text-xs ${mutedText(theme)}`}>{furtherArticlesLine(e)}</span>}
                   </button>
@@ -308,7 +308,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
           <CardHeader className={`pb-3 border-b ${cardBorder}`}>
             <CardTitle className={`text-xs uppercase tracking-wider ${mutedText(theme)} flex items-center justify-between`}>
               <span className="flex items-center">
-                <AlertTriangle className="h-4 w-4 text-[#D4AF37] mr-2" />
+                <AlertTriangle className="h-4 w-4 text-[var(--gold)] mr-2" />
                 Promote {searchResult.candidate.name}
               </span>
             </CardTitle>
@@ -388,7 +388,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                           {isPlaceholder ? <PreviewUnavailableLabel /> : doc.title}
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] font-mono text-xs bg-[#D4AF37]/5">{doc.topic}</Badge>
+                          <Badge variant="outline" className="border-[#D4AF37]/30 text-[var(--gold)] font-mono text-xs bg-[#D4AF37]/5">{doc.topic}</Badge>
                         </TableCell>
                         <TableCell className={`font-mono text-xs truncate max-w-[100px] ${mutedText(theme)}`}>{doc.source}</TableCell>
                         <TableCell className={`font-mono text-xs ${mutedText(theme)}`}>
@@ -427,7 +427,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
         <div className="fixed inset-0 z-50 flex items-center justify-center font-mono" role="dialog" aria-modal="true" aria-label="Confirm add executive">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !adding && setConfirming(null)} />
           <div className={`relative w-[460px] max-w-[92vw] rounded border p-6 space-y-4 shadow-2xl ${drawerSurface} ${bodyText(theme)}`}>
-            <h3 className="text-sm font-bold uppercase text-[#D4AF37]">Add {confirming.name}?</h3>
+            <h3 className="text-sm font-bold uppercase text-[var(--gold)]">Add {confirming.name}?</h3>
             <p className={`text-xs leading-relaxed ${mutedText(theme)}`}>
               This starts tracking {confirming.name} for {clientName}. Only this one person is added. No new searches are started. A score appears once new coverage mentions them.
             </p>
@@ -461,7 +461,7 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
               <div className={`p-6 border-b flex items-center justify-between ${cardBorder}`}>
                 <div className="flex items-center space-x-3">
                   <AlertOctagon className="h-5 w-5 text-red-500" />
-                  <span className="text-sm font-bold uppercase text-[#D4AF37]">Details</span>
+                  <span className="text-sm font-bold uppercase text-[var(--gold)]">Details</span>
                 </div>
                 <button
                   onClick={() => setSelectedDocId(null)}
@@ -494,14 +494,14 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
                     </div>
                     <div className="flex justify-between">
                       <span className={mutedText(theme)}>Tone effect of this article:</span>
-                      <span className="text-[#D4AF37] font-bold">{selectedDoc.reputation_impact ?? "-"}</span>
+                      <span className="text-[var(--gold)] font-bold">{selectedDoc.reputation_impact ?? "-"}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <span className={`text-xs uppercase font-bold flex items-center ${mutedText(theme)}`}>
-                    <Info className="h-3.5 w-3.5 mr-1 text-[#D4AF37]" /> Original Article Snippet
+                    <Info className="h-3.5 w-3.5 mr-1 text-[var(--gold)]" /> Original Article Snippet
                   </span>
                   <div className={`border p-4 rounded text-xs leading-relaxed max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap ${mutedText(theme)} ${surfaceBorder} ${surfaceBg}`}>
                     {selectedDoc.snippet || "No original content available."}

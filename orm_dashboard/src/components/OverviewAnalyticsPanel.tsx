@@ -40,8 +40,8 @@ export function OverviewAnalyticsPanel({
 }: OverviewAnalyticsPanelProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const accent = isDark ? "#00F5D4" : "#3B82F6";
-  const accentColor = isDark ? "text-[#00F5D4]" : "text-[#3B82F6]";
+  const accent = "var(--brand)";
+  const accentColor = isDark ? "text-[var(--brand)]" : "text-[var(--brand)]";
   // 1. KPI Summaries based on live prop telemetry (values from utils/analyticsPanels.ts, shared with the exported report).
   // repHistory arrives already reversed into chronological (oldest-first) order for the trend chart below
   // (useDashboardData.ts). Current Reputation reads the same summary block and rule as Brand Equity
