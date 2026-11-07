@@ -8,6 +8,7 @@
 import { getRiskLevel, RISK_THRESHOLDS, type RiskLevel } from "./riskLevel";
 import { sourceState, type RiskStats } from "./brandEquity";
 import { formatDMYTime } from "./dateFormat";
+import { statusSentence } from "./caseStatus";
 
 export type FlaggedLevel = Exclude<RiskLevel, "LOW">;
 
@@ -85,10 +86,18 @@ export function legacyCellDocs(flagged: any[], scoreTier: string, conf: string):
 
 // ---- Tiles / sidebar -----------------------------------------------------
 export interface RiskCenterTiles {
+  // Flagged articles (documents).
   flagged: number;
+  // Critical / High / Medium count INCIDENTS (same story = one) when the server sends them, else documents.
   critical: number;
   high: number;
   medium: number;
+  // True when critical / high / medium above are incident counts.
+  byIncident: boolean;
+  // The same three counts per document, shown beside the incident counts.
+  docCritical: number;
+  docHigh: number;
+  docMedium: number;
   highest: number | null;
   unscored: number;
   asOf: string | null;
@@ -100,9 +109,13 @@ export function tilesFromSummary(stats: RiskStats | null): RiskCenterTiles | nul
   if (!stats) return null;
   return {
     flagged: stats.total,
-    critical: stats.critical,
-    high: stats.high,
-    medium: stats.medium,
+    critical: stats.incidents ? stats.incidents.critical : stats.critical,
+    high: stats.incidents ? stats.incidents.high : stats.high,
+    medium: stats.incidents ? stats.incidents.medium : stats.medium,
+    byIncident: stats.incidents !== null,
+    docCritical: stats.critical,
+    docHigh: stats.high,
+    docMedium: stats.medium,
     highest: stats.highest,
     unscored: stats.unscored,
     asOf: stats.asOf,
@@ -142,7 +155,8 @@ export function reasonSentence(d: any): string | null {
   if (tone) parts.push(`the article's tone is ${tone}`);
   if (riskySubject) parts.push("it covers a high-risk subject");
   if (parts.length === 0) return null;
-  return `Flagged because ${parts.join(" and ")}. Rated ${LEVEL_WORD[sev]} (${formatScore(score)}/100).`;
+  const status = statusSentence(d);
+  return `Flagged because ${parts.join(" and ")}. Rated ${LEVEL_WORD[sev]} (${formatScore(score)}/100).${status ? ` ${status}` : ""}`;
 }
 
 // The score as shown to people: one decimal, none for whole numbers. The band

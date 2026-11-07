@@ -641,3 +641,67 @@ def test_no_trend_identifier_key_or_string_in_code(rel):
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     hits = [t for t in _non_docstring_strings_and_names(os.path.join(root, rel)) if "trend" in t.lower()]
     assert hits == [], hits
+
+
+# ---------------------------------------------------------------------------
+# Incident grouping of the flagged documents (additive `incidents` block)
+# ---------------------------------------------------------------------------
+def _flagged_doc(db, cid, brand, title, score, days_ago, event=None, status=None):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    d = _doc(db, title)
+    db.add(DocumentMatch(document_id=d, matched_entity_id=brand))
+    db.query(Document).filter(Document.id == d).update({"published_at": now - datetime.timedelta(days=days_ago)})
+    expl = {}
+    if event:
+        expl.update(case_event=event, case_status=status, case_status_source="llm")
+    db.add(RiskEvent(client_id=cid, document_id=d, entity_id=brand, risk_score=score, risk_level="X", explainability=expl))
+    db.commit()
+    return d
+
+
+def test_incidents_block_is_absent_by_default_and_present_for_the_summary_endpoint(db):
+    cid = _client(db)
+    assert "incidents" not in ci._document_risk_summary(db, cid)
+    assert ci._document_risk_summary(db, cid, with_incidents=True)["incidents"] == {"total": 0, "critical": 0, "high": 0, "medium": 0, "items": []}
+    assert _summary(db, cid)["document_risk"]["incidents"]["total"] == 0
+
+
+def test_same_story_documents_count_once_as_an_incident_and_document_counts_stay(db):
+    cid = _client(db)
+    brand = _entity(db, cid, "EaseMyTrip", "brand")
+    other = _entity(db, cid, "Rival", "competitor")
+    ev = "ed chargesheet nishant pitti mahadev betting"
+    a = _flagged_doc(db, cid, brand, "ED chargesheets EaseMyTrip promoter Nishant Pitti in Mahadev betting app case - ThePrint", 51.0, 40, ev, "charged")
+    b = _flagged_doc(db, cid, brand, "ED Chargesheets EaseMyTrip Cofounder Nishant Pitti In Mahadev Betting Case - Inc42", 51.0, 40, ev, "charged")
+    c = _flagged_doc(db, cid, brand, "ED chargesheets EaseMyTrip promoter in Mahadev betting app case, seeks to confiscate shares - The Indian Express", 79.0, 39, ev, "charged")
+    fine = _flagged_doc(db, cid, brand, "EaseMyTrip, Qatar Airways fined Rs 3.06 lakh for denying refund - NewsMeter", 40.0, 30, "easemytrip qatar airways fined refund", "penalty_or_order")
+    comp = _flagged_doc(db, cid, brand, "Competitor-only coverage", 20.0, 5)
+    db.add(RiskEvent(client_id=cid, document_id=comp, entity_id=other, risk_score=99.0, risk_level="X"))
+    db.commit()
+
+    r = ci._document_risk_summary(db, cid, with_incidents=True)
+    assert (r["total"], r["critical"], r["high"], r["medium"]) == (4, 1, 2, 1)       # per document, unchanged
+    inc = r["incidents"]
+    assert (inc["total"], inc["critical"], inc["high"], inc["medium"]) == (2, 1, 0, 1)
+    top = inc["items"][0]
+    assert top["documents"] == 3 and top["sources"] == 3 and top["severity"] == "CRITICAL" and top["status"] == "charged"
+    assert top["title"].startswith("ED chargesheets EaseMyTrip promoter in Mahadev") and sorted(top["doc_ids"]) == sorted(str(x) for x in (a, b, c))
+    assert inc["items"][1]["documents"] == 1 and inc["items"][1]["severity"] == "MEDIUM" and inc["items"][1]["status"] == "penalty_or_order"
+
+
+def test_incident_without_outlet_suffix_counts_each_document_as_a_source(db):
+    cid = _client(db)
+    brand = _entity(db, cid, "Acme", "brand")
+    ev = "acme plant fire investigation"
+    _flagged_doc(db, cid, brand, "Acme plant fire under investigation", 60.0, 3, ev, "probe")
+    _flagged_doc(db, cid, brand, "Investigation into Acme plant fire begins", 60.0, 3, ev, "probe")
+    inc = ci._document_risk_summary(db, cid, with_incidents=True)["incidents"]
+    assert inc["total"] == 1 and inc["items"][0]["documents"] == 2 and inc["items"][0]["sources"] == 2
+
+
+def test_incidents_ignore_low_and_unscored_documents(db):
+    cid = _client(db)
+    brand = _entity(db, cid, "Acme", "brand")
+    _flagged_doc(db, cid, brand, "Quiet day at Acme - Mint", 10.0, 1)
+    _visible_doc(db, brand, "never scored")
+    assert ci._document_risk_summary(db, cid, with_incidents=True)["incidents"]["total"] == 0

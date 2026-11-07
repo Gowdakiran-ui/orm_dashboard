@@ -1377,7 +1377,76 @@ def promote_executive_candidates(client_id: UUID, db: Session = Depends(get_db))
 
     return result
 
-def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
+def _incident_summary(db: Session, client_id, risky_raw: Dict[Any, float]) -> Dict[str, Any]:
+    """
+    Incident view of the flagged documents: documents reporting the same story (same entity, same event, near-duplicate
+    headlines across outlets and languages; see services/intelligence/incidents.py) become one incident. An incident's
+    severity is its highest-scoring document's, using the same bands as the per-document counts. Computed on read, from the
+    already-stored scores and case-status labels; `documents` is the number of documents in the incident, `sources` the
+    number of distinct outlets (documents without an outlet suffix count one each).
+    """
+    from app.core.risk_config import RISK_THRESHOLDS
+    from app.models.document import Document
+    from app.models.entity import Entity
+    from app.services.intelligence.incidents import group_incidents, outlet_of
+
+    empty = {"total": 0, "critical": 0, "high": 0, "medium": 0, "items": []}
+    if not risky_raw:
+        return empty
+    doc_ids = list(risky_raw)
+    best: Dict[Any, Any] = {}
+    for doc_id, entity_id, score, expl in db.query(
+        RiskEvent.document_id, RiskEvent.entity_id, RiskEvent.risk_score, RiskEvent.explainability
+    ).outerjoin(Entity, Entity.id == RiskEvent.entity_id).filter(
+        RiskEvent.client_id == client_id,
+        RiskEvent.document_id.in_(doc_ids),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
+    ).all():
+        if score is not None and (doc_id not in best or score > best[doc_id][1]):
+            best[doc_id] = (entity_id, score, expl or {})
+    docs = {d.id: d for d in db.query(Document.id, Document.title, Document.published_at).filter(Document.id.in_(doc_ids)).all()}
+    names = {e.id: e.name for e in db.query(Entity.id, Entity.name).filter(
+        Entity.id.in_({v[0] for v in best.values() if v[0] is not None})).all()} if best else {}
+
+    ordered = sorted(best, key=lambda d: str(d))
+    items = []
+    for d in ordered:
+        entity_id, score, expl = best[d]
+        doc = docs.get(d)
+        items.append({
+            "doc_id": d, "entity_id": entity_id, "entity_name": names.get(entity_id), "score": score,
+            "title": doc.title if doc else None, "published_at": doc.published_at if doc else None,
+            "event": expl.get("case_event"), "status": expl.get("case_status"),
+        })
+    out = []
+    for group in group_incidents(items):
+        members = [items[i] for i in group]
+        lead = max(members, key=lambda m: (m["score"], m["published_at"].timestamp() if m["published_at"] else 0.0, str(m["doc_id"])))
+        outlets = {outlet_of(m["title"]) or f"doc:{m['doc_id']}" for m in members}
+        out.append({
+            "id": str(min(str(m["doc_id"]) for m in members)),
+            "title": lead["title"] or "Untitled document",
+            "score": lead["score"],
+            "status": lead["status"],
+            "documents": len(members),
+            "sources": len(outlets),
+            "doc_ids": sorted(str(m["doc_id"]) for m in members),
+        })
+    out.sort(key=lambda i: (-i["score"], i["id"]))
+
+    def band(score: float) -> str:
+        if score > RISK_THRESHOLDS["HIGH_TO_CRITICAL"]:
+            return "critical"
+        return "high" if score > RISK_THRESHOLDS["MEDIUM_TO_HIGH"] else "medium"
+
+    counts = {"critical": 0, "high": 0, "medium": 0}
+    for i in out:
+        i["severity"] = band(i["score"]).upper()
+        counts[band(i["score"])] += 1
+    return {"total": len(out), **counts, "items": out}
+
+
+def _document_risk_summary(db: Session, client_id, with_incidents: bool = False) -> Dict[str, Any]:
     """
     Per-DOCUMENT risk counts for the Brand Equity and Risk Center pages,
     computed over every visible document (no 500-document window): a document
@@ -1439,7 +1508,7 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
         ranked = sorted(ordered_ids, key=lambda d: (-risky[d], (titles.get(d) or ""), str(d)))
         top = [{"title": titles.get(d) or "Untitled document", "risk": risky[d]} for d in ranked[:2]]
 
-    return {
+    result = {
         "visible_documents": len(visible),
         "scored_documents": len(best),
         "unscored_documents": len(visible) - len(best),
@@ -1453,6 +1522,10 @@ def _document_risk_summary(db: Session, client_id) -> Dict[str, Any]:
         "as_of": as_of.isoformat() if as_of else None,
         "top": top,
     }
+    if with_incidents:
+        # Additive: the same flagged documents grouped into incidents. critical / high / medium above stay per document.
+        result["incidents"] = _incident_summary(db, client_id, risky_raw)
+    return result
 
 
 def _event_risk_summary(db: Session, client_id) -> Dict[str, Any]:
@@ -1640,7 +1713,7 @@ def get_client_reputation_summary(client_id: UUID, response: Response, db: Sessi
 
     return {
         "reputation": reputation,
-        "document_risk": _document_risk_summary(db, client_id),
+        "document_risk": _document_risk_summary(db, client_id, with_incidents=True),
         "sentiment": sentiment,
         "executive_alert": executive_alert,
         "last_pipeline_run": {"finished_at": last_ok[0].isoformat() if last_ok and last_ok[0] else None},

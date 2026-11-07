@@ -24,6 +24,9 @@ from app.core.risk_config import (
 from app.services.intelligence.risk_floor import (
     HIGH_FLOOR_SCORE, LOW_CAP_SCORE, floor_enabled, noise_cap_reason, serious_floor_applies,
 )
+from app.services.intelligence.case_status import (
+    STATUS_LABELS, apply_status_cap, cached_case_status, case_status_enabled, classify_case_status,
+)
 from app.core.reach_trust_config import (
     get_reach_modifier,
     get_trust_modifier,
@@ -554,6 +557,26 @@ class RiskEngine:
             _record(success=False)
             return None
 
+    def _llm_classify_case_status(self, document, entity, client_id, run_id=None):
+        """One Haiku 4.5 call, headline only (case_status.classify_case_status). {"status", "event"} or None on any failure,
+        and None means no change to today's scoring. The call is recorded in llm_call_log like the role check."""
+        from app.utils.llm_call_logging import log_llm_call
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            return None
+        result = classify_case_status(document.title or "", entity.name, api_key)
+        log_llm_call(
+            call_type="risk_case_status",
+            client_id=client_id,
+            run_id=run_id,
+            tokens_prompt=(result or {}).get("prompt_tokens"),
+            tokens_completion=(result or {}).get("completion_tokens"),
+            latency_ms=(result or {}).get("latency_ms"),
+            success=result is not None,
+        )
+        return result
+
     def get_risk_level(self, score: float) -> str:
         if score <= RISK_THRESHOLDS["LOW_TO_MEDIUM"]:
             return "LOW"
@@ -768,6 +791,7 @@ class RiskEngine:
         # The deterministic scoring math below is still re-run in full --
         # only the LLM judgment call itself is cached.
         cached_role_by_client_entity = {}
+        cached_status_by_client_entity = {}   # case-status label (case_status.py), cached the same way in explainability
         for re_row in db.query(
             RiskEvent.client_id, RiskEvent.entity_id, RiskEvent.explainability
         ).filter(
@@ -778,6 +802,9 @@ class RiskEngine:
             cached_label = expl.get("role_classification")
             if expl.get("role_classification_source") == "llm" and cached_label in ("SELF", "BYSTANDER", "EXONERATED"):
                 cached_role_by_client_entity[(re_row.client_id, re_row.entity_id)] = cached_label
+            cached_status = cached_case_status(expl)
+            if cached_status:
+                cached_status_by_client_entity[(re_row.client_id, re_row.entity_id)] = cached_status
 
         payloads = []
 
@@ -895,6 +922,25 @@ class RiskEngine:
                     if role_classification in ("BYSTANDER", "EXONERATED"):
                         final_score = 0.0
 
+                # Case-status label (case_status.py): what stage the legal / regulatory story is at. Runs only for an item
+                # still above the LOW band after the role gate, and only when CASE_STATUS_ENABLED is set. `unrelated`,
+                # `dismissed_or_closed` and `settled` are capped at MEDIUM; every other status keeps the score. A failed
+                # label (None) changes nothing.
+                case_status = case_event = None
+                case_status_cache_hit = False
+                case_status_cap_applied = False
+                if (case_status_enabled() and final_score > self.RISK_ROLE_CLASSIFICATION_MIN_SCORE
+                        and role_classification not in ("BYSTANDER", "EXONERATED")):
+                    cached_cs = cached_status_by_client_entity.get((client_id, entity.id))
+                    if cached_cs:
+                        case_status, case_event, case_status_cache_hit = cached_cs["status"], cached_cs.get("event"), True
+                    else:
+                        fresh_cs = self._llm_classify_case_status(document, entity, client_id, run_id=run_id)
+                        if fresh_cs:
+                            case_status, case_event = fresh_cs["status"], fresh_cs.get("event")
+                    if case_status:
+                        final_score, case_status_cap_applied = apply_status_cap(final_score, case_status)
+
                 risk_factors = []
                 if top_topic:
                     risk_factors.append({"type": "Topic", "factor": top_topic, "weight": topic_weight})
@@ -928,7 +974,8 @@ class RiskEngine:
                         if role_classification not in ("BYSTANDER", "EXONERATED")
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
                     ),
-                    "serious_floor_applied": serious_floor_applied and role_classification not in ("BYSTANDER", "EXONERATED"),
+                    "serious_floor_applied": (serious_floor_applied and role_classification not in ("BYSTANDER", "EXONERATED")
+                                              and not case_status_cap_applied),
                     "noise_cap_applied": noise_cap_applied,
                     "role_classification": role_classification,
                     # Deliberately stays "llm" (not a distinct "llm_cached" tier)
@@ -946,6 +993,17 @@ class RiskEngine:
                     "role_classification_cache_hit": role_classification_cache_hit,
                     "triggering_documents": [str(document_id)]
                 }
+                if case_status:
+                    # Written only when a label exists, so an unlabelled re-run never wipes an earlier label (the upsert merges keys).
+                    explainability_data["case_status"] = case_status
+                    explainability_data["case_event"] = case_event
+                    explainability_data["case_status_source"] = "llm"
+                    explainability_data["case_status_cache_hit"] = case_status_cache_hit
+                    explainability_data["case_status_cap_applied"] = case_status_cap_applied
+                    if case_status_cap_applied:
+                        explainability_data["decision_reason"] += (
+                            f" Held at Medium: the story is {STATUS_LABELS[case_status].lower()}, which does not reach High."
+                        )
 
                 payload = {
                     "client_id": client_id,

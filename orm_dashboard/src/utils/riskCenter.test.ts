@@ -111,8 +111,15 @@ describe("tiles from the server summary", () => {
 
   it("maps flagged / severity / highest / unscored / as-of from the server block", () => {
     expect(tilesFromSummary(riskStatsFromSummary(block))).toEqual({
-      flagged: 14, critical: 0, high: 0, medium: 14, highest: 33, unscored: 22, asOf: "2026-10-02T10:00:00+00:00",
+      flagged: 14, critical: 0, high: 0, medium: 14, byIncident: false, docCritical: 0, docHigh: 0, docMedium: 14,
+      highest: 33, unscored: 22, asOf: "2026-10-02T10:00:00+00:00",
     });
+  });
+
+  it("with an incidents block the three severity tiles count incidents and keep the document counts beside them", () => {
+    const incidents = { total: 3, critical: 1, high: 1, medium: 1, items: [] };
+    const t = tilesFromSummary(riskStatsFromSummary({ ...block, total: 9, critical: 3, high: 4, medium: 2, incidents }))!;
+    expect(t).toMatchObject({ flagged: 9, critical: 1, high: 1, medium: 1, byIncident: true, docCritical: 3, docHigh: 4, docMedium: 2 });
   });
 
   it("zero incidents: highest is null (shown as a dash), not 0", () => {

@@ -24,6 +24,10 @@ import {
   localDateKey, windowNote, unscoredNote, confidencePercent, formatScore, levelWord,
   MATRIX_BANDS, MATRIX_CONFIDENCE, ALERT_ENTITY_TYPE_LABEL,
 } from "@/utils/riskCenter";
+import {
+  caseStatusOf, CASE_STATUS_LABEL, CASE_STATUS_MEANING, collapseByIncident, incidentBlockFromSummary,
+  incidentBadgeText, documentsNote, type CaseStatus,
+} from "@/utils/caseStatus";
 
 const UNAVAILABLE = "—";
 
@@ -32,6 +36,26 @@ const SEVERITY_BADGE: Record<string, string> = {
   HIGH: "bg-orange-500/10 text-orange-500 border border-orange-500/20",
   MEDIUM: "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20",
 };
+// Case-status chip colours: what stage the legal / regulatory story is at. Closed-out and unrelated stories read quiet.
+const STATUS_CHIP: Record<CaseStatus, string> = {
+  charged: "bg-red-500/10 text-red-500 border border-red-500/20",
+  penalty_or_order: "bg-orange-500/10 text-orange-500 border border-orange-500/20",
+  probe: "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20",
+  allegation: "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20",
+  settled: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
+  dismissed_or_closed: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
+  unrelated: "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20",
+};
+function StatusChip({ doc }: { doc: any }) {
+  const s = caseStatusOf(doc);
+  if (!s) return null;
+  return (
+    <span title={CASE_STATUS_MEANING[s]} data-testid="case-status-chip" className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-bold leading-none ${STATUS_CHIP[s]}`}>
+      {CASE_STATUS_LABEL[s]}
+    </span>
+  );
+}
+
 const SEVERITY_TEXT: Record<string, string> = {
   CRITICAL: "text-red-500",
   HIGH: "text-orange-500",
@@ -117,13 +141,22 @@ export function RiskTab({
   // the data but are not incidents.
   const riskDocs = useMemo(() => flaggedDocs(documents), [documents]);
 
+  // One row per incident (documents about the same story), led by its highest-scoring document. Collapsing happens
+  // BEFORE the severity / date filters so a row is filtered by its lead, which is the incident's own severity.
+  const summaryReady = sourceState(reputationSummaryLoading, reputationSummaryError) === "ready";
+  const incidentItems = useMemo(
+    () => (summaryReady ? incidentBlockFromSummary(reputationSummary?.document_risk)?.items ?? null : null),
+    [summaryReady, reputationSummary]
+  );
+  const incidentRows = useMemo(() => collapseByIncident(riskDocs, incidentItems), [riskDocs, incidentItems]);
+
   const filteredRiskDocs = useMemo(() => {
-    return riskDocs.filter(d => {
+    return incidentRows.filter(d => {
       if (severityParam && d.severity.toLowerCase() !== severityParam) return false;
       if (dateParam && localDateKey(d.timestamp) !== dateParam) return false;
       return true;
     });
-  }, [riskDocs, severityParam, dateParam]);
+  }, [incidentRows, severityParam, dateParam]);
 
   // Risk Events table horizontal-scroll affordance (tablet-width finding,
   // ui_redesign_plan_tablet.md Section 4): the shared <Table> primitive's
@@ -158,6 +191,14 @@ export function RiskTab({
     if (!selectedDocId) return null;
     return riskDocs.find(d => d.id === selectedDocId) || null;
   }, [selectedDocId, riskDocs]);
+
+  // The incident the open article belongs to (its row, or one of the rows folded into it), if any.
+  const selectedIncident = useMemo(() => {
+    if (!selectedDocId) return null;
+    const row = incidentRows.find(r => r.id === selectedDocId || r.incident?.others.some((o: any) => o.id === selectedDocId));
+    if (!row || !row.incident) return null;
+    return { ...row.incident, members: [row, ...row.incident.others].filter((m: any) => m.id !== selectedDocId) };
+  }, [selectedDocId, incidentRows]);
 
   // Tiles: server counts over every visible article. null = unavailable.
   const summaryState = sourceState(reputationSummaryLoading, reputationSummaryError);
@@ -214,14 +255,14 @@ export function RiskTab({
           needs land first, at a glance. */}
       <div className="space-y-3">
         <span className={`text-xs font-mono uppercase tracking-wider block ${mutedText(theme)}`}>
-          At a Glance · all-time counts{asOfText ? ` · scores as of ${asOfText}` : ""}
+          At a Glance · all-time counts{tiles?.byIncident ? " · Critical, High and Medium count incidents (one per story)" : ""}{asOfText ? ` · scores as of ${asOfText}` : ""}
         </span>
         <div className="grid gap-4 items-start sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 font-mono">
           {[
             { label: "Flagged Articles", value: tileValue(tiles?.flagged), color: isDark ? "text-[var(--brand)]" : "text-[var(--brand)]", highlight: true, def: <FlaggedArticlesDefinition /> },
-            { label: "Critical", value: tileValue(tiles?.critical), color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition /> },
-            { label: "High", value: tileValue(tiles?.high), color: "text-orange-500" },
-            { label: "Medium", value: tileValue(tiles?.medium), color: "text-yellow-500" },
+            { label: "Critical", value: tileValue(tiles?.critical), color: "text-red-500", highlight: true, def: <CriticalRisksVsActiveAlertsDefinition />, sub: tiles?.byIncident ? `incidents · ${documentsNote(tiles.docCritical)}` : undefined },
+            { label: "High", value: tileValue(tiles?.high), color: "text-orange-500", sub: tiles?.byIncident ? `incidents · ${documentsNote(tiles.docHigh)}` : undefined },
+            { label: "Medium", value: tileValue(tiles?.medium), color: "text-yellow-500", sub: tiles?.byIncident ? `incidents · ${documentsNote(tiles.docMedium)}` : undefined },
             { label: "Highest Score", value: tileScore(tiles?.highest), color: tiles && tiles.highest !== null ? "text-red-500 font-black" : mutedText(theme) }
           ].map((card, idx) => (
             <div
@@ -250,6 +291,9 @@ export function RiskTab({
                 {card.label}
               </span>
               <span className={`${card.highlight ? "text-2xl" : "text-xl"} font-bold ${card.color}`}>{card.value}</span>
+              {"sub" in card && card.sub && tiles && (
+                <span className={`mt-1 block text-xs ${mutedText(theme)}`}>{card.sub}</span>
+              )}
             </div>
           ))}
         </div>
@@ -508,7 +552,7 @@ export function RiskTab({
               Flagged Articles
             </span>
             <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 font-mono text-xs">
-              {filteredRiskDocs.length} {filteredRiskDocs.length === 1 ? "article" : "articles"}
+              {filteredRiskDocs.length} {tiles?.byIncident ? (filteredRiskDocs.length === 1 ? "incident" : "incidents") : (filteredRiskDocs.length === 1 ? "article" : "articles")}
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -552,8 +596,16 @@ export function RiskTab({
                       className={`transition-colors cursor-pointer ${isDark ? "border-white/[0.08] hover:bg-white/[0.04]" : "border-black/[0.06] hover:bg-black/[0.02]"}`}
                       onClick={() => setSelectedDocId(doc.id)}
                     >
-                      <TableCell className={`font-mono text-xs font-bold max-w-[320px] truncate ${bodyText(theme)}`}>
-                        {doc.title}
+                      <TableCell className={`font-mono text-xs font-bold max-w-[320px] ${bodyText(theme)}`}>
+                        <span className="block truncate">{doc.title}</span>
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5 font-normal">
+                          <StatusChip doc={doc} />
+                          {incidentBadgeText(doc.incident) && (
+                            <span data-testid="incident-badge" className={`${glassPill(theme)} px-1.5 py-0.5 text-[11px] ${mutedText(theme)}`}>
+                              {incidentBadgeText(doc.incident)}
+                            </span>
+                          )}
+                        </span>
                       </TableCell>
                       <TableCell className={`text-center font-mono text-xs font-black ${SEVERITY_TEXT[doc.severity]}`}>
                         {formatScore(doc.risk_exact ?? doc.risk)}
@@ -675,6 +727,12 @@ export function RiskTab({
                       <span className={mutedText(theme)}>Confidence:</span>
                       <span className={`font-bold ${bodyText(theme)}`}>{conf === null ? "Unavailable" : `${conf}%`}</span>
                     </div>
+                    {caseStatusOf(selectedDoc) && (
+                      <div className="flex justify-between items-center">
+                        <span className={mutedText(theme)}>Case status:</span>
+                        <StatusChip doc={selectedDoc} />
+                      </div>
+                    )}
                     {exp?.role_classification_source === "llm" && exp.role_classification === "SELF" && (
                       <div className={`flex justify-between border-t pt-1.5 ${isDark ? "border-white/[0.08]" : "border-black/[0.06]"}`}>
                         <span className={mutedText(theme)}>AI check:</span>
@@ -686,6 +744,31 @@ export function RiskTab({
                     {reason ?? "Details unavailable."}
                   </p>
                 </div>
+
+                {/* Same story -- the other articles of this incident. */}
+                {selectedIncident && (
+                  <div className={`p-4 rounded-2xl border space-y-2 ${isDark ? "bg-black/30 border-white/[0.08]" : "bg-black/[0.03] border-black/[0.06]"}`} data-testid="incident-members">
+                    <span className={`text-xs uppercase font-bold block ${mutedText(theme)}`}>
+                      Same story · {documentsNote(selectedIncident.documents)}{selectedIncident.sources > 1 ? ` from ${selectedIncident.sources} sources` : ""}
+                    </span>
+                    {selectedIncident.members.length > 0 ? (
+                      <ul className="space-y-1.5 text-xs">
+                        {selectedIncident.members.map((m: any) => (
+                          <li key={m.id}>
+                            <button type="button" onClick={() => setSelectedDocId(m.id)} className={`text-left hover:underline ${bodyText(theme)}`}>
+                              {m.title}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {selectedIncident.documents > selectedIncident.members.length + 1 && (
+                      <p className={`text-xs ${mutedText(theme)}`}>
+                        {selectedIncident.documents - selectedIncident.members.length - 1} more not in the recent list above.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Original Article Content */}
                 <div className="space-y-2">

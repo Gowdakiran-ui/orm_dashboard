@@ -1,5 +1,6 @@
 import { decodeHtmlEntities } from "@/lib/utils";
 import { formatDMYTime } from "./dateFormat";
+import { incidentBlockFromSummary, type IncidentBlock } from "./caseStatus";
 
 // Pure logic behind the Brand Equity page (ReputationSummaryCard). Kept free of
 // React so every number and sentence the page states can be unit-tested.
@@ -26,6 +27,11 @@ export interface RiskStats {
   // When the newest of these scores was computed (ISO), if known.
   asOf: string | null;
   dangerCount: number;
+  // The same flagged documents grouped into incidents (same story = one incident); null when an older payload does not
+  // send the block. `dangerCount`, `critical`, `high` and `medium` stay per document.
+  incidents: IncidentBlock | null;
+  // Critical + High incidents; null when `incidents` is.
+  dangerIncidents: number | null;
   // Critical + High among documents published in the last 365 days; null when an older payload does not send it.
   dangerCount365: number | null;
   dominantLevel: "CRITICAL" | "HIGH" | "MEDIUM" | "NONE";
@@ -46,6 +52,7 @@ export function riskStatsFromSummary(block: any): RiskStats | null {
   const n = (v: any) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const total = n(block.total), critical = n(block.critical), high = n(block.high), medium = n(block.medium);
   if (total === null || critical === null || high === null || medium === null) return null;
+  const incidents = incidentBlockFromSummary(block);
   const top = Array.isArray(block.top)
     ? block.top.filter((t: any) => t && typeof t.title === "string" && typeof t.risk === "number").slice(0, 2)
     : [];
@@ -55,6 +62,8 @@ export function riskStatsFromSummary(block: any): RiskStats | null {
     highest: n(block.highest),
     asOf: typeof block.as_of === "string" ? block.as_of : null,
     dangerCount: critical + high,
+    incidents,
+    dangerIncidents: incidents ? incidents.critical + incidents.high : null,
     dangerCount365: n(block.critical_high_365d),
     dominantLevel: critical > 0 ? "CRITICAL" : high > 0 ? "HIGH" : medium > 0 ? "MEDIUM" : "NONE",
     topRiskDocs: top,
@@ -289,7 +298,7 @@ export function buildBrandEquityView(i: BrandEquityViewInput) {
     riskState,
     advisoryState,
     execAlert,
-    dangerCount: riskStats?.dangerCount ?? 0,
+    dangerCount: riskStats?.dangerIncidents ?? riskStats?.dangerCount ?? 0,   // incidents when the server sends them
     totalRisks: riskStats?.total ?? 0,
     scoredDocuments: riskStats?.scored ?? null,
     advisory: i.planAdvisory,

@@ -114,24 +114,27 @@ export function ReputationSummaryCard({
 
   // Overview risk-count breakdown drill-through: each severity count
   // navigates to Risk Center pre-filtered to that severity band.
-  const severityCountLink = (count: number, word: string, severity: string, colorClass: string) => (
+  const severityCountLink = (count: number, word: string, severity: string, colorClass: string, docs?: number) => (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); navigateTo("risk", { severity }); }}
       className={`hover:underline ${colorClass}`}
     >
-      {count} {word}
+      {count} {word}{docs !== undefined && <span className="opacity-70"> ({docs} {docs === 1 ? "doc" : "docs"})</span>}
     </button>
   );
   // All-history headline, with the last-365-days count beside it in plain words.
-  const riskSignalsSub = riskStats && riskStats.dangerCount365 !== null
-    ? `Critical + High documents, all time · ${riskStats.dangerCount365} in the last 365 days`
-    : "Critical + High documents, all time";
+  // With incidents, the headline counts stories (one per incident) and the document count sits beside it.
+  const riskSignalsSub = riskStats && riskStats.dangerIncidents !== null
+    ? `Critical + High incidents, all time · ${riskStats.dangerCount} ${riskStats.dangerCount === 1 ? "document" : "documents"}${riskStats.dangerCount365 !== null ? ` · ${riskStats.dangerCount365} ${riskStats.dangerCount365 === 1 ? "document" : "documents"} in the last 365 days` : ""}`
+    : riskStats && riskStats.dangerCount365 !== null
+      ? `Critical + High documents, all time · ${riskStats.dangerCount365} in the last 365 days`
+      : "Critical + High documents, all time";
   const severityBreakdownSub = riskStats ? (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-      {severityCountLink(riskStats.critical, "Critical", "critical", "text-red-500")}
-      {severityCountLink(riskStats.high, "High", "high", "text-orange-500")}
-      {severityCountLink(riskStats.medium, "Medium", "medium", "text-yellow-600")}
+      {severityCountLink(riskStats.incidents ? riskStats.incidents.critical : riskStats.critical, "Critical", "critical", "text-red-500", riskStats.incidents ? riskStats.critical : undefined)}
+      {severityCountLink(riskStats.incidents ? riskStats.incidents.high : riskStats.high, "High", "high", "text-orange-500", riskStats.incidents ? riskStats.high : undefined)}
+      {severityCountLink(riskStats.incidents ? riskStats.incidents.medium : riskStats.medium, "Medium", "medium", "text-yellow-600", riskStats.incidents ? riskStats.medium : undefined)}
     </span>
   ) : (
     "Risk data unavailable"
@@ -148,7 +151,7 @@ export function ReputationSummaryCard({
     onClick?: () => void;
   }> = [
     { label: "Reputation Score", value: scoreDisplay, sub: scoreKnown ? `Grade ${gradeDisplay}${asOf ? ` · as of ${asOf}` : ""}` : scoreStatusText, color: "text-[var(--gold)]", highlight: true, def: reputationScoreAndGradeDef },
-    { label: "Risk Signals", value: riskValue(riskStats?.dangerCount), sub: riskSignalsSub, color: !riskStats ? "text-zinc-400" : riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true, def: <RiskSignalsDefinition /> },
+    { label: "Risk Signals", value: riskValue(riskStats?.dangerIncidents ?? riskStats?.dangerCount), sub: riskSignalsSub, color: !riskStats ? "text-zinc-400" : riskStats.dangerCount > 0 ? "text-red-500" : "text-emerald-500", highlight: true, def: <RiskSignalsDefinition /> },
     { label: "Total Risks Tracked (all time)", value: riskValue(riskStats?.total), sub: severityBreakdownSub, color: !riskStats ? "text-zinc-400" : RISK_COLOR[riskStats.dominantLevel], def: <RiskCountSummaryDefinition />, onClick: () => navigateTo("risk") },
     { label: "Positive Mentions", value: sentiment.positive, sub: "in coverage", color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
     { label: "Overall Tone", value: sentiment.dominant ?? "N/A", sub: `${sentiment.positive} positive / ${sentiment.neutral} neutral / ${sentiment.negative} negative`, color: "text-emerald-400", def: <EntitySentimentSplitDefinition /> },
