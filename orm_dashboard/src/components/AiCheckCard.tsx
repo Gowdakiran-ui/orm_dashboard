@@ -5,7 +5,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { fetchAiCheck, runAiCheck } from "@/lib/api";
 import {
-  parseAiCheck, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_TITLE, REMOVAL_LIST_NOTICE, CARD_NOTICE,
+  parseAiCheck, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_TITLE, REMOVAL_LIST_NOTICE, CARD_NOTICE, groupRemovalCandidates,
   type AiCheckView, type AiEstimate, type AiPage, type AiPrompt, type AiSource,
 } from "@/utils/aiCheck";
 
@@ -228,7 +228,12 @@ export function AiCheckCard({ clientId }: AiCheckCardProps) {
               <Badge className={`${glassPill(theme)} text-yellow-600 font-mono text-[11px]`}>Needs legal review</Badge>
             </div>
             <p className={`text-xs ${muted}`}>{REMOVAL_LIST_NOTICE}</p>
-            <PageList pages={view.removalCandidates} muted={muted} />
+            {groupRemovalCandidates(view.removalCandidates).map(g => (
+              <div key={g.key} className="space-y-2" data-testid={`removal-group-${g.key}`}>
+                <span className={`text-xs font-bold ${body}`}>{g.label} ({g.pages.length})</span>
+                <PageList pages={g.pages} muted={muted} />
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

@@ -161,6 +161,22 @@ export function lowReliabilityCount(view: AiCheckView): number {
   return view.lowReliabilityPages.length;
 }
 
+// The internal list is shown in two groups so "known to be low" is never mixed with "no trust decision yet":
+// "Low reliability" (listed low, or user-generated sites) and "Unrated" (outlets the platform has no trust decision for).
+export interface RemovalGroup {
+  key: "low" | "unrated";
+  label: string;
+  pages: AiPage[];
+}
+
+export function groupRemovalCandidates(pages: AiPage[]): RemovalGroup[] {
+  const groups: RemovalGroup[] = [
+    { key: "low", label: "Low reliability", pages: pages.filter(p => p.tier !== "unrated") },
+    { key: "unrated", label: "Unrated", pages: pages.filter(p => p.tier === "unrated") },
+  ];
+  return groups.filter(g => g.pages.length > 0);
+}
+
 // Fixed wording of the internal list. It never says content can be removed: that is a legal decision.
 export const REMOVAL_LIST_TITLE = "Possible removal candidates";
 export const REMOVAL_LIST_NOTICE =

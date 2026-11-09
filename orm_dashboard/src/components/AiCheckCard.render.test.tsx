@@ -90,6 +90,20 @@ describe("AI check card", () => {
     expect(host.textContent).toContain("Run AI check");
   });
 
+  it("the internal list shows unrated outlets as their own group, separate from low reliability", async () => {
+    const unrated = { ...page, url: "https://squaremind.in/review", title: "Godrej review", domain: "squaremind.in", tier: "unrated", reliability: "Unrated" };
+    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true, removal_candidates: [page, unrated] }));
+    await mount();
+    const low = host.querySelector("[data-testid='removal-group-low']")!;
+    const un = host.querySelector("[data-testid='removal-group-unrated']")!;
+    expect(low.textContent).toContain("Low reliability (1)");
+    expect(low.textContent).toContain("inventiva.co.in");
+    expect(low.textContent).not.toContain("squaremind.in");
+    expect(un.textContent).toContain("Unrated (1)");
+    expect(un.textContent).toContain("squaremind.in");
+    expect(un.textContent).not.toContain("inventiva.co.in");
+  });
+
   it("run button first shows the printed estimate, asks nothing until confirmed, and then starts the paid run", async () => {
     api.fetchAiCheck.mockResolvedValue(payload({ can_run: true }));
     api.runAiCheck.mockImplementation(async (_id: string, dry: boolean) => (dry ? { dry_run: true, estimate: payload().estimate, questions: [] } : { dry_run: false, run_id: "r2", status: "running" }));

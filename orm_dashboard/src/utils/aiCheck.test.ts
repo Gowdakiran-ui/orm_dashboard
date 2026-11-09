@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAiCheck, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_NOTICE, REMOVAL_LIST_TITLE, CARD_NOTICE, formatUsd } from "./aiCheck";
+import { parseAiCheck, groupRemovalCandidates, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_NOTICE, REMOVAL_LIST_TITLE, CARD_NOTICE, formatUsd } from "./aiCheck";
 
 const page = (over: any = {}) => ({ url: "https://www.inventiva.co.in/story", title: "A story", domain: "inventiva.co.in", tier: "low", reliability: "Low", questions: ["Is it trustworthy?"], cited_in_answers: 4, ...over });
 const prompt = (over: any = {}) => ({
@@ -51,6 +51,26 @@ describe("parseAiCheck", () => {
     const v = parseAiCheck(payload({ can_run: false, removal_candidates: [] }))!;
     expect(v.canRun).toBe(false);
     expect(v.removalCandidates).toEqual([]);
+  });
+});
+
+describe("removal candidates are grouped, with unrated outlets on their own", () => {
+  const p = (tier: string, reliability: string, url: string) => ({ ...page({ tier, reliability, url, domain: new URL(url).hostname }) });
+  it("splits low / user-generated from unrated and never mixes them", () => {
+    const v = parseAiCheck(payload({ removal_candidates: [
+      p("low", "Low", "https://inventiva.co.in/a"), p("unrated", "Unrated", "https://squaremind.in/b"),
+      p("user_generated", "User-generated", "https://quora.com/c"), p("unrated", "Unrated", "https://propreport.in/d"),
+    ] }))!;
+    const g = groupRemovalCandidates(v.removalCandidates);
+    expect(g.map(x => [x.key, x.label, x.pages.map(y => y.domain)])).toEqual([
+      ["low", "Low reliability", ["inventiva.co.in", "quora.com"]],
+      ["unrated", "Unrated", ["squaremind.in", "propreport.in"]],
+    ]);
+  });
+  it("leaves out an empty group, and returns nothing for an empty list", () => {
+    expect(groupRemovalCandidates(parseAiCheck(payload({ removal_candidates: [p("unrated", "Unrated", "https://x.in/a")] }))!.removalCandidates).map(x => x.key)).toEqual(["unrated"]);
+    expect(groupRemovalCandidates(parseAiCheck(payload({ removal_candidates: [p("low", "Low", "https://x.in/a")] }))!.removalCandidates).map(x => x.key)).toEqual(["low"]);
+    expect(groupRemovalCandidates([])).toEqual([]);
   });
 });
 
