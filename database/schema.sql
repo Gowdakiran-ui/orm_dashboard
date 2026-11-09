@@ -799,6 +799,50 @@ CREATE TABLE public.document_feed_hits (
 
 
 --
+-- Name: ai_check_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_check_runs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    client_id uuid NOT NULL,
+    status character varying(20) DEFAULT 'running'::character varying NOT NULL,
+    model character varying(100) NOT NULL,
+    web_results integer NOT NULL,
+    repeats integer NOT NULL,
+    prompt_count integer NOT NULL,
+    estimated_cost_usd double precision,
+    cost_usd double precision DEFAULT 0 NOT NULL,
+    calls_ok integer DEFAULT 0 NOT NULL,
+    calls_failed integer DEFAULT 0 NOT NULL,
+    error text,
+    started_at timestamp with time zone DEFAULT now(),
+    finished_at timestamp with time zone,
+    CONSTRAINT ai_check_runs_status_check CHECK (((status)::text = ANY (ARRAY[('running'::character varying)::text, ('completed'::character varying)::text, ('stopped_at_cap'::character varying)::text, ('failed'::character varying)::text])))
+);
+
+
+--
+-- Name: ai_check_answers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_check_answers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    run_id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    prompt_key character varying(40) NOT NULL,
+    prompt_text text NOT NULL,
+    repeat_index integer NOT NULL,
+    answer_text text,
+    cited_urls jsonb,
+    cited_domains jsonb,
+    cost_usd double precision,
+    tokens_prompt integer,
+    tokens_completion integer,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: seeded_entities; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -910,6 +954,30 @@ ALTER TABLE ONLY public.document_feed_hits
 
 ALTER TABLE ONLY public.document_feed_hits
     ADD CONSTRAINT uq_document_feed_hits_document_entity UNIQUE (document_id, entity_id);
+
+
+--
+-- Name: ai_check_answers ai_check_answers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_answers
+    ADD CONSTRAINT ai_check_answers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_check_runs ai_check_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_runs
+    ADD CONSTRAINT ai_check_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_check_answers uq_ai_check_answers_run_prompt_repeat; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_answers
+    ADD CONSTRAINT uq_ai_check_answers_run_prompt_repeat UNIQUE (run_id, prompt_key, repeat_index);
 
 
 --
@@ -1407,6 +1475,27 @@ CREATE INDEX ix_document_feed_hits_entity_id ON public.document_feed_hits USING 
 
 
 --
+-- Name: ix_ai_check_answers_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_check_answers_client_id ON public.ai_check_answers USING btree (client_id);
+
+
+--
+-- Name: ix_ai_check_answers_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_check_answers_run_id ON public.ai_check_answers USING btree (run_id);
+
+
+--
+-- Name: ix_ai_check_runs_client_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_check_runs_client_started ON public.ai_check_runs USING btree (client_id, started_at DESC);
+
+
+--
 -- Name: ix_seeded_entities_client_kind; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1831,6 +1920,30 @@ CREATE UNIQUE INDEX uq_risk_events_daily ON public.risk_events USING btree (clie
 --
 
 CREATE TRIGGER deactivate_feeds_on_entity_delete AFTER DELETE ON public.entities FOR EACH ROW EXECUTE FUNCTION public.deactivate_feeds_on_entity_delete();
+
+
+--
+-- Name: ai_check_answers ai_check_answers_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_answers
+    ADD CONSTRAINT ai_check_answers_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_check_answers ai_check_answers_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_answers
+    ADD CONSTRAINT ai_check_answers_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_check_runs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_check_runs ai_check_runs_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_runs
+    ADD CONSTRAINT ai_check_runs_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
 
 
 --

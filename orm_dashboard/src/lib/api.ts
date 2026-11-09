@@ -554,6 +554,18 @@ export async function fetchSeeded(clientId: string, signal?: AbortSignal) {
   return parseOrThrow(res);
 }
 
+// "What AI says about you": the latest AI-check run (or { enabled: false } when the feature is off), and the super-admin start.
+export async function fetchAiCheck(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/ai-check`, { signal });
+  return parseOrThrow(res);
+}
+
+// dryRun=true returns the estimated cost and the questions and asks nothing; dryRun=false starts a paid run in the background.
+export async function runAiCheck(clientId: string, dryRun: boolean, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/ai-check/run?dry_run=${dryRun ? "true" : "false"}`, { method: "POST", signal });
+  return parseOrThrow(res);
+}
+
 export async function searchProduct(clientId: string, name: string, parentEntityId?: string, signal?: AbortSignal) {
   const params = new URLSearchParams({ name });
   if (parentEntityId) params.set("parent_entity_id", parentEntityId);

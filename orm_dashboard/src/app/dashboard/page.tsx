@@ -17,6 +17,7 @@ import { AnalyticsTabHeader } from "@/components/AnalyticsTabHeader";
 import { OverviewAnalyticsPanel } from "@/components/OverviewAnalyticsPanel";
 import { RiskAnalyticsPanel } from "@/components/RiskAnalyticsPanel";
 import { ReputationSummaryCard } from "@/components/ReputationSummaryCard";
+import { AiCheckCard } from "@/components/AiCheckCard";
 import { Sidebar } from "@/components/Sidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
@@ -330,6 +331,11 @@ function DashboardShell() {
                         benchmarksLoading={data.benchmarksLoading}
                         benchmarksError={data.benchmarksError}
                       />
+                    </ErrorBoundary>
+
+                    {/* 2. What AI says about you: hidden unless the server has AI_CHECK_ENABLED; no effect on any score */}
+                    <ErrorBoundary fallback={<TelemetryErrorWidget title="AI Check Error" />}>
+                      <AiCheckCard clientId={data.clientId} />
                     </ErrorBoundary>
                   </div>
                 </div>

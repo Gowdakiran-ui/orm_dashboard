@@ -1,8 +1,8 @@
 import os
 import time
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
-from app.core.auth import require_super_admin
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, UploadFile, File
+from app.core.auth import get_current_user, require_super_admin
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -682,6 +682,52 @@ def refresh_client_seeded(client_id: UUID, apply: bool = Query(False, descriptio
     except SeedingAborted as e:
         raise HTTPException(status_code=502, detail=f"Seeding aborted, nothing written: {e}")
     return {"applied": result["applied"], "plan": result["plan"]}
+
+
+# ---------------------------------------------------------------------------
+# "What AI says about you" (services/ai_check). Separate from Run Pipeline; OFF unless AI_CHECK_ENABLED=1; touches no score.
+# ---------------------------------------------------------------------------
+@router.get("/{client_id}/ai-check", response_model=Dict[str, Any])
+def get_client_ai_check(client_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """The latest AI-check run for the Brand Equity card. {"enabled": false} when the feature is switched off. The internal
+    removal-candidates list is filled for super admins only."""
+    from app.models.user import ROLE_SUPER_ADMIN
+    from app.services.ai_check import service as ai_check
+    if not ai_check.ai_check_enabled():
+        return {"enabled": False}
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    report = ai_check.latest_report(db, client, is_admin=(current_user.role == ROLE_SUPER_ADMIN))
+    report["can_run"] = current_user.role == ROLE_SUPER_ADMIN
+    report["estimate"] = ai_check.estimate()
+    return report
+
+
+@router.post("/{client_id}/ai-check/run", response_model=Dict[str, Any])
+def run_client_ai_check(client_id: UUID, background_tasks: BackgroundTasks,
+                        dry_run: bool = Query(True, description="True = return the estimate and the questions only; nothing is asked or stored"),
+                        db: Session = Depends(get_db), _admin=Depends(require_super_admin)):
+    """Super admin only. dry_run=true (the default) returns the estimated cost and the exact questions. dry_run=false starts
+    a run in the background (24 web calls, about $0.32, stops before the per-client cap) and returns its run id; poll GET
+    /ai-check. 409 when the feature is off or a run for this client is still going."""
+    from app.services.ai_check import service as ai_check
+    if not ai_check.ai_check_enabled():
+        raise HTTPException(status_code=409, detail="AI check is switched off (AI_CHECK_ENABLED is not set).")
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    prompts = ai_check.prompts_for(db, client)
+    est = ai_check.estimate(len(prompts))
+    if dry_run:
+        return {"dry_run": True, "estimate": est, "questions": [{"key": p["key"], "label": p["label"], "text": p["text"]} for p in prompts]}
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY is not set.")
+    if ai_check.running_run(db, client_id) is not None:
+        raise HTTPException(status_code=409, detail="An AI check for this client is still running.")
+    run = ai_check.start_run(db, client_id, len(prompts))
+    background_tasks.add_task(ai_check.run_in_background, run.id, client_id)
+    return {"dry_run": False, "run_id": str(run.id), "status": run.status, "estimate": est}
 
 
 @router.get("/{client_id}/executive-candidates", response_model=List[Dict[str, Any]])
