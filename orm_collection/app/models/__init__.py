@@ -28,3 +28,4 @@ from app.models.backfill import BackfillSlice
 from app.models.seeded_entity import SeededEntity
 from app.models.document_feed_hit import DocumentFeedHit
 from app.models.ai_check import AiCheckRun, AiCheckAnswer
+from app.models.pipeline_run_cost import PipelineRunCost

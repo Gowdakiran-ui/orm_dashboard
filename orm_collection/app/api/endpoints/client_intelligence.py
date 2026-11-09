@@ -730,6 +730,17 @@ def run_client_ai_check(client_id: UUID, background_tasks: BackgroundTasks,
     return {"dry_run": False, "run_id": str(run.id), "status": run.status, "estimate": est}
 
 
+@router.get("/{client_id}/pipeline-cost", response_model=Dict[str, Any])
+def get_client_pipeline_cost(client_id: UUID, db: Session = Depends(get_db), _admin=Depends(require_super_admin)):
+    """Super admin only. What the client's most recent Run Pipeline cost (services/pipeline_cost.py): Apify usage (Reddit reported,
+    Instagram estimated), LLM calls and tokens with an estimated dollar cost, and keyword search calls. {"last_run": null} when no
+    run has been metered yet. Read-only; no score reads it."""
+    from app.services import pipeline_cost
+    if not db.query(Client).filter(Client.id == client_id).first():
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"last_run": pipeline_cost.last_run_cost(db, client_id)}
+
+
 @router.get("/{client_id}/executive-candidates", response_model=List[Dict[str, Any]])
 def get_client_executive_candidates(client_id: UUID, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()

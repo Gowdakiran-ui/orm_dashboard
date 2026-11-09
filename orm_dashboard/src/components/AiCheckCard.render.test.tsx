@@ -157,3 +157,48 @@ describe("AI check card", () => {
     expect(host.querySelector("[data-testid='ai-check-low-pages']")).toBeNull();
   });
 });
+
+describe("AI check card: claim cross-check", () => {
+  const claim = (over: any = {}) => ({
+    sentence: "The ED has filed a chargesheet against Nishant Pitti.", questions: ["Legal cases and controversies"], repeats: [1, 2], about: "executive",
+    matched: { status: "charged", title: "ED charges EaseMyTrip co-founder Pitti", documents: 9, sources: 9 },
+    note: "The AI states this as fact; XOOP labels the matching story charged.", ...over,
+  });
+
+  it("shows each flagged sentence with the matching XOOP incident's status chip and the as-fact note, to a super admin", async () => {
+    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true, claim_checks: [claim(), claim({ sentence: "A fraud case was registered against the founder.", matched: null, note: "No matching XOOP incident." })] }));
+    await mount();
+    const box = host.querySelector("[data-testid='claim-checks']")!;
+    expect(box.textContent).toContain("AI statements checked against XOOP (2)");
+    expect(box.textContent).toContain("Internal");
+    const items = box.querySelectorAll("[data-testid='claim-check']");
+    expect(items[0].textContent).toContain("The ED has filed a chargesheet against Nishant Pitti.");
+    expect(items[0].textContent).toContain("Asked in: Legal cases and controversies · runs 1, 2");
+    expect(items[0].querySelector("[data-testid='claim-status-chip']")!.textContent).toBe("Charged");
+    expect(items[0].textContent).toContain("ED charges EaseMyTrip co-founder Pitti · 9 documents, 9 sources");
+    expect(items[0].querySelector("[data-testid='claim-note']")!.textContent).toBe("The AI states this as fact; XOOP labels the matching story charged.");
+    expect(items[1].querySelector("[data-testid='claim-status-chip']")).toBeNull();
+    expect(items[1].querySelector("[data-testid='claim-note']")!.textContent).toBe("No matching XOOP incident.");
+  });
+
+  it("shows nothing for a viewer who is not a super admin, even if a payload carried claim checks", async () => {
+    api.fetchAiCheck.mockResolvedValue(payload({ can_run: false, claim_checks: [claim()] }));
+    await mount();
+    expect(host.querySelector("[data-testid='claim-checks']")).toBeNull();
+    expect(host.textContent).not.toContain("chargesheet against Nishant Pitti");
+  });
+
+  it("no claim checks, no section", async () => {
+    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true, claim_checks: [] }));
+    await mount();
+    expect(host.querySelector("[data-testid='claim-checks']")).toBeNull();
+  });
+
+  it("the run confirmation prints the sentence-check estimate with the web estimate", async () => {
+    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true }));
+    api.runAiCheck.mockResolvedValue({ dry_run: true, estimate: { calls: 24, prompts: 8, repeats: 3, estimated_cost_usd: 0.324, triage_calls: 70, triage_cost_usd: 0.049, cap_usd: 0.6 }, questions: [] });
+    await mount();
+    await act(async () => { (Array.from(host.querySelectorAll("button")).find(b => b.textContent === "Run AI check") as HTMLButtonElement).click(); });
+    expect(host.querySelector("[data-testid='ai-check-confirm']")!.textContent).toContain("24 paid web searches, about $0.32, plus about 70 small sentence checks, about $0.05");
+  });
+});

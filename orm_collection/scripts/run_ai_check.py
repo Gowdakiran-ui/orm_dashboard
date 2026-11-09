@@ -33,7 +33,8 @@ def main() -> int:
         prompts = service.prompts_for(db, client)
         est = service.estimate(len(prompts))
         print(f"{client.name}: {est['prompts']} questions x {est['repeats']} repeats = {est['calls']} calls, "
-              f"estimated ${est['estimated_cost_usd']:.2f}, stops before ${est['cap_usd']:.2f}  ({est['model']}, {est['web_results']} web results)")
+              f"estimated ${est['estimated_cost_usd']:.2f} + about {est['triage_calls']} small sentence checks, ${est['triage_cost_usd']:.2f} "
+              f"(total about ${est['total_estimate_usd']:.2f}), stops before ${est['cap_usd']:.2f}  ({est['model']}, {est['web_results']} web results)")
         for p in prompts:
             print(f"  - {p['key']}: {p['text']}")
         if "--yes" not in sys.argv:
@@ -45,7 +46,7 @@ def main() -> int:
             return 1
         run = service.start_run(db, client.id, len(prompts))
         print(f"run {run.id} started")
-        service.execute_run(db, run, prompts, key, log=print)
+        service.execute_run(db, run, prompts, key, log=print, client_name=client.name, executives=service.seeded_names(db, client.id)["executives"])
         print(f"run {run.id}: {run.status}, {run.calls_ok} ok / {run.calls_failed} failed, measured cost ${run.cost_usd:.4f}")
         return 0 if run.status in ("completed", "stopped_at_cap") else 1
     finally:

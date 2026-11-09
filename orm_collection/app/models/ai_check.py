@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, Integer, Float, DateTime, ForeignKey, UniqueConstraint, CheckConstraint
+from sqlalchemy import Boolean, Column, String, Text, Integer, Float, DateTime, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from app.core.db import Base
@@ -48,4 +48,30 @@ class AiCheckAnswer(Base):
     cost_usd = Column(Float)
     tokens_prompt = Column(Integer)
     tokens_completion = Column(Integer)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AiCheckFlag(Base):
+    """The triage of one distinct sentence in an AI-check run's answers: is it a serious accusation about the client or an
+    executive, and is it stated as fact. `flagged` = accusation about the client/executive stated as plain fact. `event` is the short
+    English phrase used to find the matching XOOP incident. See database/migrations/0019_add_ai_check_flags.sql."""
+    __tablename__ = "ai_check_flags"
+    __table_args__ = (
+        CheckConstraint("about IS NULL OR about IN ('client','executive','other')", name="ai_check_flags_about_check"),
+        CheckConstraint("framing IS NULL OR framing IN ('FACT','ATTRIBUTED','HEDGED')", name="ai_check_flags_framing_check"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("ai_check_runs.id", ondelete="CASCADE"), nullable=False)
+    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    sentence = Column(Text, nullable=False)
+    occurrences = Column(JSONB)          # [{"prompt": key, "repeats": [1, 2]}]
+    accusation = Column(Boolean, nullable=False)
+    about = Column(String(20))
+    framing = Column(String(12))
+    flagged = Column(Boolean, nullable=False, default=False)
+    event = Column(String(200))
+    inline_domains = Column(JSONB)
+    cited_domains = Column(JSONB)
+    cost_usd = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

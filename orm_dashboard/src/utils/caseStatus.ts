@@ -38,10 +38,27 @@ export function caseStatusOf(d: any): CaseStatus | null {
   return isCaseStatus(s) ? s : null;
 }
 
+// Chip colours for a case status (shared by the Risk Center rows and the AI-check claim cross-check).
+export const STATUS_CHIP_CLASS: Record<CaseStatus, string> = {
+  charged: "bg-red-500/10 text-red-500 border border-red-500/20",
+  penalty_or_order: "bg-orange-500/10 text-orange-500 border border-orange-500/20",
+  probe: "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20",
+  allegation: "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20",
+  settled: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
+  dismissed_or_closed: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
+  unrelated: "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20",
+};
+
 export function statusSentence(d: any): string | null {
   const s = caseStatusOf(d);
   if (!s) return null;
   const base = `The story is at the ${CASE_STATUS_LABEL[s].toLowerCase()} stage.`;
+  const exp = d?.risk_explainability;
+  // Small-penalty rule: a small or old penalty / order is held at Medium, and the stored reason says why.
+  if (exp?.penalty_cap_applied === true) {
+    const why = typeof exp.penalty_cap_reason === "string" && exp.penalty_cap_reason ? exp.penalty_cap_reason : "it is a small or old order";
+    return `${base} Held at Medium: ${why}.`;
+  }
   return d?.risk_explainability?.case_status_cap_applied === true
     ? `${base} Stories at this stage are held at Medium and do not reach High.`
     : base;

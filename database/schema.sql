@@ -843,6 +843,55 @@ CREATE TABLE public.ai_check_answers (
 
 
 --
+-- Name: ai_check_flags; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_check_flags (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    run_id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    sentence text NOT NULL,
+    occurrences jsonb,
+    accusation boolean NOT NULL,
+    about character varying(20),
+    framing character varying(12),
+    flagged boolean DEFAULT false NOT NULL,
+    event character varying(200),
+    inline_domains jsonb,
+    cited_domains jsonb,
+    cost_usd double precision,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT ai_check_flags_about_check CHECK ((((about IS NULL) OR ((about)::text = ANY (ARRAY[('client'::character varying)::text, ('executive'::character varying)::text, ('other'::character varying)::text]))))),
+    CONSTRAINT ai_check_flags_framing_check CHECK ((((framing IS NULL) OR ((framing)::text = ANY (ARRAY[('FACT'::character varying)::text, ('ATTRIBUTED'::character varying)::text, ('HEDGED'::character varying)::text])))))
+);
+
+
+--
+-- Name: pipeline_run_costs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pipeline_run_costs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    run_id character varying(64) NOT NULL,
+    client_id uuid NOT NULL,
+    apify_calls integer DEFAULT 0 NOT NULL,
+    apify_cost_usd double precision DEFAULT 0 NOT NULL,
+    apify_cost_estimated boolean DEFAULT false NOT NULL,
+    apify_by_source jsonb,
+    llm_calls integer DEFAULT 0 NOT NULL,
+    llm_tokens_prompt bigint DEFAULT 0 NOT NULL,
+    llm_tokens_completion bigint DEFAULT 0 NOT NULL,
+    llm_est_cost_usd double precision DEFAULT 0 NOT NULL,
+    llm_by_type jsonb,
+    search_calls integer DEFAULT 0 NOT NULL,
+    search_by_source jsonb,
+    finalized boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: seeded_entities; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -978,6 +1027,30 @@ ALTER TABLE ONLY public.ai_check_runs
 
 ALTER TABLE ONLY public.ai_check_answers
     ADD CONSTRAINT uq_ai_check_answers_run_prompt_repeat UNIQUE (run_id, prompt_key, repeat_index);
+
+
+--
+-- Name: ai_check_flags ai_check_flags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_flags
+    ADD CONSTRAINT ai_check_flags_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pipeline_run_costs pipeline_run_costs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_run_costs
+    ADD CONSTRAINT pipeline_run_costs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pipeline_run_costs uq_pipeline_run_costs_run_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_run_costs
+    ADD CONSTRAINT uq_pipeline_run_costs_run_id UNIQUE (run_id);
 
 
 --
@@ -1496,6 +1569,27 @@ CREATE INDEX ix_ai_check_runs_client_started ON public.ai_check_runs USING btree
 
 
 --
+-- Name: ix_ai_check_flags_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_check_flags_client_id ON public.ai_check_flags USING btree (client_id);
+
+
+--
+-- Name: ix_ai_check_flags_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_check_flags_run_id ON public.ai_check_flags USING btree (run_id);
+
+
+--
+-- Name: ix_pipeline_run_costs_client_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_pipeline_run_costs_client_created ON public.pipeline_run_costs USING btree (client_id, created_at DESC);
+
+
+--
 -- Name: ix_seeded_entities_client_kind; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1944,6 +2038,30 @@ ALTER TABLE ONLY public.ai_check_answers
 
 ALTER TABLE ONLY public.ai_check_runs
     ADD CONSTRAINT ai_check_runs_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_check_flags ai_check_flags_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_flags
+    ADD CONSTRAINT ai_check_flags_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_check_flags ai_check_flags_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_check_flags
+    ADD CONSTRAINT ai_check_flags_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_check_runs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pipeline_run_costs pipeline_run_costs_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_run_costs
+    ADD CONSTRAINT pipeline_run_costs_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
 
 
 --

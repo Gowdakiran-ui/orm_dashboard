@@ -25,7 +25,10 @@ from app.services.intelligence.risk_floor import (
     HIGH_FLOOR_SCORE, LOW_CAP_SCORE, floor_enabled, noise_cap_reason, serious_floor_applies,
 )
 from app.services.intelligence.case_status import (
-    STATUS_LABELS, apply_status_cap, cached_case_status, case_status_enabled, classify_case_status,
+    STATUS_CAP_SCORE, STATUS_LABELS, apply_status_cap, cached_case_status, case_status_enabled, classify_case_status,
+)
+from app.services.intelligence.penalty_rule import (
+    classify_penalty_llm, merge_with_regex, parse_penalty, penalty_cap_decision,
 )
 from app.core.reach_trust_config import (
     get_reach_modifier,
@@ -577,6 +580,28 @@ class RiskEngine:
         )
         return result
 
+    def _parse_penalty(self, document, entity, client_id, run_id=None):
+        """Amount and authority of a penalty_or_order story: regex on the headline and stored text first; one small Haiku call
+        (headline only) only when the regex finds NO amount. Returns a JSON-safe dict; a failed call leaves the regex reading."""
+        from app.utils.llm_call_logging import log_llm_call
+
+        regex_parse = parse_penalty(document.title, document.normalized_content)
+        llm_parse = None
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if regex_parse["amount_lakh"] is None and api_key:
+            llm_parse = classify_penalty_llm(document.title or "", api_key)
+            log_llm_call(
+                call_type="risk_penalty_parse",
+                client_id=client_id,
+                run_id=run_id,
+                tokens_prompt=(llm_parse or {}).get("prompt_tokens"),
+                tokens_completion=(llm_parse or {}).get("completion_tokens"),
+                latency_ms=(llm_parse or {}).get("latency_ms"),
+                success=llm_parse is not None,
+            )
+        merged = merge_with_regex(regex_parse, llm_parse)
+        return {k: merged[k] for k in ("amount_lakh", "kind", "criminal", "source")}
+
     def get_risk_level(self, score: float) -> str:
         if score <= RISK_THRESHOLDS["LOW_TO_MEDIUM"]:
             return "LOW"
@@ -792,6 +817,7 @@ class RiskEngine:
         # only the LLM judgment call itself is cached.
         cached_role_by_client_entity = {}
         cached_status_by_client_entity = {}   # case-status label (case_status.py), cached the same way in explainability
+        cached_penalty_by_client_entity = {}  # amount / authority read from a penalty_or_order headline (penalty_rule.py)
         for re_row in db.query(
             RiskEvent.client_id, RiskEvent.entity_id, RiskEvent.explainability
         ).filter(
@@ -805,6 +831,9 @@ class RiskEngine:
             cached_status = cached_case_status(expl)
             if cached_status:
                 cached_status_by_client_entity[(re_row.client_id, re_row.entity_id)] = cached_status
+                cached_pen = expl.get("penalty_parse")
+                if isinstance(cached_pen, dict) and cached_pen.get("kind") in ("small", "senior", "unknown"):
+                    cached_penalty_by_client_entity[(re_row.client_id, re_row.entity_id)] = cached_pen
 
         payloads = []
 
@@ -929,6 +958,9 @@ class RiskEngine:
                 case_status = case_event = None
                 case_status_cache_hit = False
                 case_status_cap_applied = False
+                penalty_parse = None
+                penalty_cap_applied = False
+                penalty_cap_reason = None
                 if (case_status_enabled() and final_score > self.RISK_ROLE_CLASSIFICATION_MIN_SCORE
                         and role_classification not in ("BYSTANDER", "EXONERATED")):
                     cached_cs = cached_status_by_client_entity.get((client_id, entity.id))
@@ -940,6 +972,17 @@ class RiskEngine:
                             case_status, case_event = fresh_cs["status"], fresh_cs.get("event")
                     if case_status:
                         final_score, case_status_cap_applied = apply_status_cap(final_score, case_status)
+                    # Small-penalty rule (penalty_rule.py): a penalty_or_order story that is under 25 lakh rupees (consumer
+                    # commission, state RERA, municipal or unnamed authority) or older than 24 months is held at Medium.
+                    # Criminal charges, senior authorities and amounts of 25 lakh or more keep today's score. Probe, charged and
+                    # every other status never reach this branch.
+                    if case_status == "penalty_or_order" and final_score > STATUS_CAP_SCORE:
+                        penalty_parse = cached_penalty_by_client_entity.get((client_id, entity.id))
+                        if penalty_parse is None:
+                            penalty_parse = self._parse_penalty(document, entity, client_id, run_id=run_id)
+                        penalty_cap_applied, penalty_cap_reason = penalty_cap_decision(penalty_parse, document.published_at)
+                        if penalty_cap_applied:
+                            final_score = STATUS_CAP_SCORE
 
                 risk_factors = []
                 if top_topic:
@@ -975,7 +1018,7 @@ class RiskEngine:
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
                     ),
                     "serious_floor_applied": (serious_floor_applied and role_classification not in ("BYSTANDER", "EXONERATED")
-                                              and not case_status_cap_applied),
+                                              and not case_status_cap_applied and not penalty_cap_applied),
                     "noise_cap_applied": noise_cap_applied,
                     "role_classification": role_classification,
                     # Deliberately stays "llm" (not a distinct "llm_cached" tier)
@@ -1004,6 +1047,12 @@ class RiskEngine:
                         explainability_data["decision_reason"] += (
                             f" Held at Medium: the story is {STATUS_LABELS[case_status].lower()}, which does not reach High."
                         )
+                    if penalty_parse is not None:
+                        explainability_data["penalty_parse"] = penalty_parse
+                        explainability_data["penalty_cap_applied"] = penalty_cap_applied
+                        explainability_data["penalty_cap_reason"] = penalty_cap_reason
+                        if penalty_cap_applied:
+                            explainability_data["decision_reason"] += f" Held at Medium: {penalty_cap_reason}."
 
                 payload = {
                     "client_id": client_id,

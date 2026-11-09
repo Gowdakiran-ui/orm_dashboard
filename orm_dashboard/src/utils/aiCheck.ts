@@ -2,6 +2,8 @@
 //
 // Rule: a missing or malformed payload is "unavailable", never a believable default. Nothing here feeds any score.
 
+import { isCaseStatus, type CaseStatus } from "./caseStatus";
+
 export type SourceTier = "high" | "medium" | "low" | "official" | "own" | "user_generated" | "unrated";
 
 export interface AiSource {
@@ -57,9 +59,25 @@ export interface AiEstimate {
   repeats: number;
   estimatedCostUsd: number;
   capUsd: number;
+  // The cheap sentence checks that follow the web calls (absent on an older server).
+  triageCalls: number | null;
+  triageCostUsd: number | null;
+}
+
+// A flagged AI sentence (serious accusation about the client or an executive, stated as fact) set against the XOOP incident it is
+// about. Super admins only; `matched` is null when no XOOP incident matches.
+export interface ClaimCheck {
+  sentence: string;
+  questions: string[];
+  repeats: number[];
+  about: string | null;
+  matched: { status: CaseStatus | null; title: string; documents: number; sources: number } | null;
+  note: string;
 }
 
 export interface AiCheckView {
+  // Super admins only (empty for everyone else).
+  claimChecks: ClaimCheck[];
   enabled: boolean;
   canRun: boolean;
   run: AiRun | null;
@@ -68,6 +86,23 @@ export interface AiCheckView {
   // Filled by the server for super admins only.
   removalCandidates: AiPage[];
   estimate: AiEstimate | null;
+}
+
+const CLAIM_ABOUT: ReadonlySet<string> = new Set(["client", "executive", "other"]);
+
+function parseClaim(c: any): ClaimCheck | null {
+  const sentence = str(c?.sentence), note = str(c?.note);
+  if (!sentence || !note) return null;
+  const m = c.matched;
+  const matched = m && typeof m === "object" && str(m.title)
+    ? { status: isCaseStatus(m.status) ? m.status : null, title: m.title, documents: num(m.documents) ?? 1, sources: num(m.sources) ?? 1 }
+    : null;
+  return {
+    sentence, note, matched,
+    questions: Array.isArray(c.questions) ? c.questions.filter((q: any) => typeof q === "string") : [],
+    repeats: Array.isArray(c.repeats) ? c.repeats.filter((r: any) => typeof r === "number") : [],
+    about: CLAIM_ABOUT.has(c.about) ? c.about : null,
+  };
 }
 
 const TIERS: ReadonlySet<string> = new Set(["high", "medium", "low", "official", "own", "user_generated", "unrated"]);
@@ -109,7 +144,7 @@ function parsePrompt(p: any): AiPrompt | null {
 // null when the payload is missing or malformed; { enabled: false } is a valid payload (the feature is switched off).
 export function parseAiCheck(payload: any): AiCheckView | null {
   if (!payload || typeof payload !== "object" || typeof payload.enabled !== "boolean") return null;
-  const empty: AiCheckView = { enabled: payload.enabled, canRun: false, run: null, prompts: [], lowReliabilityPages: [], removalCandidates: [], estimate: null };
+  const empty: AiCheckView = { enabled: payload.enabled, canRun: false, run: null, prompts: [], lowReliabilityPages: [], removalCandidates: [], claimChecks: [], estimate: null };
   if (!payload.enabled) return empty;
   const r = payload.run;
   const run: AiRun | null = r && typeof r === "object" && STATUSES.has(r.status) && str(r.id)
@@ -121,7 +156,8 @@ export function parseAiCheck(payload: any): AiCheckView | null {
     : null;
   const e = payload.estimate;
   const estimate: AiEstimate | null = e && num(e.calls) !== null && num(e.estimated_cost_usd) !== null
-    ? { calls: e.calls, prompts: num(e.prompts) ?? 0, repeats: num(e.repeats) ?? 0, estimatedCostUsd: e.estimated_cost_usd, capUsd: num(e.cap_usd) ?? 0 }
+    ? { calls: e.calls, prompts: num(e.prompts) ?? 0, repeats: num(e.repeats) ?? 0, estimatedCostUsd: e.estimated_cost_usd, capUsd: num(e.cap_usd) ?? 0,
+        triageCalls: num(e.triage_calls), triageCostUsd: num(e.triage_cost_usd) }
     : null;
   const pages = (a: any) => (Array.isArray(a) ? a.map(parsePage).filter((x): x is AiPage => x !== null) : []);
   return {
@@ -131,6 +167,7 @@ export function parseAiCheck(payload: any): AiCheckView | null {
     prompts: Array.isArray(payload.prompts) ? payload.prompts.map(parsePrompt).filter((x: AiPrompt | null): x is AiPrompt => x !== null) : [],
     lowReliabilityPages: pages(payload.low_reliability_pages),
     removalCandidates: pages(payload.removal_candidates),
+    claimChecks: Array.isArray(payload.claim_checks) ? payload.claim_checks.map(parseClaim).filter((x: ClaimCheck | null): x is ClaimCheck => x !== null) : [],
     estimate,
   };
 }
@@ -142,7 +179,10 @@ export function formatUsd(n: number | null | undefined): string {
 // "Run AI check" confirmation text: the estimate is shown before anything is asked.
 export function estimateSentence(e: AiEstimate | null): string {
   if (!e) return "The cost estimate is unavailable.";
-  return `${e.prompts} questions asked ${e.repeats} times = ${e.calls} paid web searches, about ${formatUsd(e.estimatedCostUsd)} (it stops before ${formatUsd(e.capUsd)}).`;
+  const triage = e.triageCalls !== null && e.triageCostUsd !== null
+    ? `, plus about ${e.triageCalls} small sentence checks, about ${formatUsd(e.triageCostUsd)}`
+    : "";
+  return `${e.prompts} questions asked ${e.repeats} times = ${e.calls} paid web searches, about ${formatUsd(e.estimatedCostUsd)}${triage} (it stops before ${formatUsd(e.capUsd)}).`;
 }
 
 export function runLine(run: AiRun | null): string {
@@ -195,6 +235,11 @@ export const REMOVAL_LIST_TITLE = "Possible removal candidates";
 export const REMOVAL_LIST_NOTICE =
   "Internal only. Pages that AI answers cited from low-reliability outlets. Whether any takedown request is possible for these pages is a legal question: " +
   "each page needs legal review before anything is requested. This list does not say any page can be removed.";
+// Fixed wording of the claim cross-check section.
+export const CLAIM_CHECK_TITLE = "AI statements checked against XOOP";
+export const CLAIM_CHECK_NOTICE =
+  "Internal only. Sentences in the AI answers that state a serious accusation about the company or its executives as plain fact, set " +
+  "against what XOOP holds on the same story. It sorts wording and says nothing about whether a sentence is true; it changes no score.";
 export const CARD_NOTICE =
   "Answers from an AI search tool (Claude Haiku 4.5 with web search), asked each question three times. This is a check on what AI " +
   "tools may say, not a score: it changes no score, risk or alert.";

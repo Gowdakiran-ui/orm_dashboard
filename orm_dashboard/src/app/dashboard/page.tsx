@@ -18,6 +18,7 @@ import { OverviewAnalyticsPanel } from "@/components/OverviewAnalyticsPanel";
 import { RiskAnalyticsPanel } from "@/components/RiskAnalyticsPanel";
 import { ReputationSummaryCard } from "@/components/ReputationSummaryCard";
 import { AiCheckCard } from "@/components/AiCheckCard";
+import { PipelineCostPanel } from "@/components/PipelineCostPanel";
 import { Sidebar } from "@/components/Sidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
@@ -451,9 +452,15 @@ function DashboardShell() {
 
               {/* I. ACCESS CONTROL VIEW (super_admin only) */}
               {activeTab === "admin" && isSuperAdmin && (
-                <ErrorBoundary fallback={<TelemetryErrorWidget title="User Management Error" />}>
-                  <AdminUsersPanel />
-                </ErrorBoundary>
+                <div className="space-y-6">
+                  <ErrorBoundary fallback={<TelemetryErrorWidget title="User Management Error" />}>
+                    <AdminUsersPanel />
+                  </ErrorBoundary>
+                  {/* Run Pipeline cost meter: super admin only, read-only, no effect on any score */}
+                  <ErrorBoundary fallback={<TelemetryErrorWidget title="Pipeline Cost Error" />}>
+                    <PipelineCostPanel clientId={data.clientId} />
+                  </ErrorBoundary>
+                </div>
               )}
             </>
           )}

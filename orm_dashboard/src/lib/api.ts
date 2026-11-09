@@ -566,6 +566,12 @@ export async function runAiCheck(clientId: string, dryRun: boolean, signal?: Abo
   return parseOrThrow(res);
 }
 
+// Last Run Pipeline cost for a company (Apify, LLM, search). Super admins only; the server refuses everyone else.
+export async function fetchPipelineCost(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/client-intelligence/${clientId}/pipeline-cost`, { signal });
+  return parseOrThrow(res);
+}
+
 export async function searchProduct(clientId: string, name: string, parentEntityId?: string, signal?: AbortSignal) {
   const params = new URLSearchParams({ name });
   if (parentEntityId) params.set("parent_entity_id", parentEntityId);

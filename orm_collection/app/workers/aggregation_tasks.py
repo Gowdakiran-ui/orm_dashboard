@@ -1211,6 +1211,13 @@ def _stage_collect_social_search(ctx: PipelineContext, db, log, source_type: str
             limit=result_cap,
         )
 
+        # Run Pipeline cost meter (services/pipeline_cost.py): one Apify call made. Best-effort; never affects collection.
+        try:
+            from app.services.pipeline_cost import record_social_search
+            record_social_search(ctx.run_id, ctx.client_id, source_type, adapter, len(raw_results or []))
+        except Exception:
+            pass
+
         if raw_results:
             source = _get_or_create_social_search_source(db, source_type, f"{source_type.capitalize()} Search")
             for res in raw_results:
@@ -1547,6 +1554,13 @@ def _stage_finalize(ctx: PipelineContext, db) -> None:
     log = logger.bind(stage="FINALIZING", run_id=ctx.run_id, client_id=ctx.client_id, worker=ctx.worker_id)
     log.info("stage_started")
     db.commit()
+    # Run Pipeline cost meter (services/pipeline_cost.py): fill in LLM and search figures and mark the row final.
+    # Best-effort with its own session: a failure here never fails the run.
+    try:
+        from app.services.pipeline_cost import finalize_run_cost
+        finalize_run_cost(ctx.run_id, ctx.client_id)
+    except Exception:
+        pass
     log.info("stage_complete")
 
 

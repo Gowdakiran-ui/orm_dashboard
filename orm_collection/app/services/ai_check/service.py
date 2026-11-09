@@ -47,8 +47,13 @@ def cost_cap_usd() -> float:
 
 
 def estimate(prompt_count: int = len(PROMPT_DEFS), repeats: int = REPEATS) -> Dict[str, Any]:
+    """`estimated_cost_usd` is the web calls only; the sentence triage that follows adds `triage_cost_usd` (small, cheap calls)."""
+    from app.services.ai_check.triage import EST_COST_PER_TRIAGE_CALL, TRIAGE_CALLS_ESTIMATE
     calls = prompt_count * repeats
-    return {"calls": calls, "prompts": prompt_count, "repeats": repeats, "estimated_cost_usd": round(calls * EST_COST_PER_CALL, 3),
+    web = round(calls * EST_COST_PER_CALL, 3)
+    triage = round(TRIAGE_CALLS_ESTIMATE * EST_COST_PER_TRIAGE_CALL, 3)
+    return {"calls": calls, "prompts": prompt_count, "repeats": repeats, "estimated_cost_usd": web,
+            "triage_calls": TRIAGE_CALLS_ESTIMATE, "triage_cost_usd": triage, "total_estimate_usd": round(web + triage, 3),
             "cap_usd": cost_cap_usd(), "model": MODEL, "web_results": WEB_RESULTS}
 
 
@@ -136,7 +141,8 @@ def start_run(db, client_id, prompt_count: int = len(PROMPT_DEFS)):
 
 
 def execute_run(db, run, prompts: Sequence[Dict[str, str]], api_key: str, post: Optional[Callable] = None,
-                cap_usd: Optional[float] = None, log: Optional[Callable[[str], None]] = None):
+                cap_usd: Optional[float] = None, log: Optional[Callable[[str], None]] = None,
+                client_name: Optional[str] = None, executives: Sequence[str] = ()):
     """Asks every prompt REPEATS times (repeat by repeat, so a stopped run still has balanced coverage), stores each answer as
     it arrives, and finishes the run row. Stops before a call that could take the cost past the cap."""
     from app.models.ai_check import AiCheckAnswer
@@ -189,7 +195,27 @@ def execute_run(db, run, prompts: Sequence[Dict[str, str]], api_key: str, post: 
         run.error = repr(e)[:1000]
     run.finished_at = datetime.datetime.now(datetime.timezone.utc)
     db.commit()
+    # Serious-accusation triage of the stored answers (triage.py). Only when the run produced answers and still has budget; a failure
+    # here never changes the run's status or its answers.
+    if run.calls_ok > 0 and not capped and not aborted:
+        try:
+            _triage(db, run, api_key, post, cap, say, client_name, executives)
+        except Exception as e:
+            db.rollback()
+            say(f"  triage failed: {e!r}"[:300])
     return run
+
+
+def _triage(db, run, api_key, post, cap, say, client_name, executives) -> None:
+    from app.models.ai_check import AiCheckAnswer
+    from app.models.client import Client
+    from app.services.ai_check.triage import triage_run
+    name = client_name or (db.query(Client.name).filter(Client.id == run.client_id).scalar() or "the company")
+    rows = db.query(AiCheckAnswer).filter(AiCheckAnswer.run_id == run.id).order_by(AiCheckAnswer.prompt_key, AiCheckAnswer.repeat_index).all()
+    answers = [{"prompt_key": r.prompt_key, "repeat_index": r.repeat_index, "text": r.answer_text, "cited_domains": r.cited_domains} for r in rows]
+    n = triage_run(db, run, name, list(executives), answers, api_key, post=post, cap_usd=cap, log=say)
+    db.commit()
+    say(f"  triage done: {n} sentences flagged (run total ${run.cost_usd:.4f})")
 
 
 def run_in_background(run_id, client_id) -> None:
@@ -208,7 +234,7 @@ def run_in_background(run_id, client_id) -> None:
             run.status, run.error, run.finished_at = "failed", "OPENROUTER_API_KEY is not set", datetime.datetime.now(datetime.timezone.utc)
             db.commit()
             return
-        execute_run(db, run, prompts_for(db, client), key)
+        execute_run(db, run, prompts_for(db, client), key, client_name=client.name, executives=seeded_names(db, client.id)["executives"])
     finally:
         db.close()
 
@@ -265,7 +291,7 @@ def latest_report(db, client, is_admin: bool = False) -> Dict[str, Any]:
     from app.models.ai_check import AiCheckAnswer, AiCheckRun
     run = db.query(AiCheckRun).filter(AiCheckRun.client_id == client.id).order_by(AiCheckRun.started_at.desc()).first()
     if run is None:
-        return {"enabled": True, "run": None, "prompts": [], "low_reliability_pages": [], "removal_candidates": []}
+        return {"enabled": True, "run": None, "prompts": [], "low_reliability_pages": [], "removal_candidates": [], "claim_checks": []}
     answers = db.query(AiCheckAnswer).filter(AiCheckAnswer.run_id == run.id).order_by(
         AiCheckAnswer.prompt_key, AiCheckAnswer.repeat_index).all()
     by_key: Dict[str, list] = {}
@@ -312,10 +338,17 @@ def latest_report(db, client, is_admin: bool = False) -> Dict[str, Any]:
         pg["cited_in_answers"] = len(pg.pop("_runs"))
         low_pages.append(pg)
     low_pages.sort(key=lambda p: (-p["cited_in_answers"], p["domain"], p["url"]))
+    claim_checks = []
+    if is_admin:
+        from app.models.ai_check import AiCheckFlag
+        from app.services.ai_check import claims
+        flags = db.query(AiCheckFlag).filter(AiCheckFlag.run_id == run.id, AiCheckFlag.flagged.is_(True)).order_by(AiCheckFlag.created_at).all()
+        claim_checks = claims.build_claim_checks(db, client, flags, {k: label for k, label, _ in PROMPT_DEFS})
     return {
         "enabled": True,
         "run": _report_run(run),
         "prompts": prompts_out,
         "low_reliability_pages": low_pages,
         "removal_candidates": list(low_pages) if is_admin else [],
+        "claim_checks": claim_checks,
     }

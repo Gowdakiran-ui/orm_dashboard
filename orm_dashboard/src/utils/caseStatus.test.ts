@@ -102,3 +102,16 @@ describe("incidents block from the server", () => {
     expect(riskStatsFromSummary({ total: 1, critical: 0, high: 0, medium: 1 })!.dangerIncidents).toBeNull();
   });
 });
+
+describe("small-penalty rule wording", () => {
+  it("says why a small or old penalty is held at Medium, using the stored reason", () => {
+    const d = doc("p", withStatus("penalty_or_order", { penalty_cap_applied: true, penalty_cap_reason: "a penalty under 25 lakh rupees from a consumer commission, state RERA or municipal body" }));
+    expect(statusSentence(d)).toBe("The story is at the penalty / order stage. Held at Medium: a penalty under 25 lakh rupees from a consumer commission, state RERA or municipal body.");
+    expect(reasonSentence(d)).toContain("Held at Medium: a penalty under 25 lakh rupees");
+  });
+
+  it("a penalty that keeps its score gets only the stage; a missing reason falls back to plain words", () => {
+    expect(statusSentence(doc("p", withStatus("penalty_or_order", { penalty_cap_applied: false, penalty_cap_reason: "the amount is 25 lakh rupees or more" })))).toBe("The story is at the penalty / order stage.");
+    expect(statusSentence(doc("p", withStatus("penalty_or_order", { penalty_cap_applied: true })))).toBe("The story is at the penalty / order stage. Held at Medium: it is a small or old order.");
+  });
+});

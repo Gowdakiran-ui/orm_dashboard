@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { fetchAiCheck, runAiCheck } from "@/lib/api";
+import { CASE_STATUS_LABEL, CASE_STATUS_MEANING, STATUS_CHIP_CLASS } from "@/utils/caseStatus";
 import {
-  parseAiCheck, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_TITLE, REMOVAL_LIST_NOTICE, CARD_NOTICE, PROPOSED_RATING_NOTE, groupRemovalCandidates, unratedLine,
+  parseAiCheck, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_TITLE, REMOVAL_LIST_NOTICE, CARD_NOTICE, PROPOSED_RATING_NOTE, groupRemovalCandidates, unratedLine, CLAIM_CHECK_TITLE, CLAIM_CHECK_NOTICE,
   type AiCheckView, type AiEstimate, type AiPage, type AiPrompt, type AiSource,
 } from "@/utils/aiCheck";
 
@@ -138,7 +139,8 @@ export function AiCheckCard({ clientId }: AiCheckCardProps) {
       const r = await runAiCheck(clientId, true);
       const e = r?.estimate;
       if (!e || typeof e.calls !== "number" || typeof e.estimated_cost_usd !== "number") throw new Error("The cost estimate is unavailable.");
-      setConfirm({ calls: e.calls, prompts: e.prompts ?? 0, repeats: e.repeats ?? 0, estimatedCostUsd: e.estimated_cost_usd, capUsd: e.cap_usd ?? 0 });
+      setConfirm({ calls: e.calls, prompts: e.prompts ?? 0, repeats: e.repeats ?? 0, estimatedCostUsd: e.estimated_cost_usd, capUsd: e.cap_usd ?? 0,
+        triageCalls: typeof e.triage_calls === "number" ? e.triage_calls : null, triageCostUsd: typeof e.triage_cost_usd === "number" ? e.triage_cost_usd : null });
     } catch (err: any) {
       setActionError(err?.message || "Could not prepare the AI check.");
     } finally { setBusy(false); }
@@ -219,6 +221,39 @@ export function AiCheckCard({ clientId }: AiCheckCardProps) {
             {view.lowReliabilityPages.length > 0
               ? <PageList pages={view.lowReliabilityPages} muted={muted} />
               : <p className={`text-xs ${muted}`}>None of the cited pages came from a low-reliability outlet.</p>}
+          </div>
+        )}
+
+        {view.canRun && view.claimChecks.length > 0 && (
+          <div className={`rounded-2xl border p-4 space-y-3 ${divider}`} data-testid="claim-checks">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`text-xs font-bold uppercase tracking-wider ${body}`}>{CLAIM_CHECK_TITLE} ({view.claimChecks.length})</span>
+              <Badge className={`${glassPill(theme)} text-yellow-600 font-mono text-[11px]`}>Internal</Badge>
+            </div>
+            <p className={`text-xs ${muted}`}>{CLAIM_CHECK_NOTICE}</p>
+            <ul className="space-y-3">
+              {view.claimChecks.map((c, i) => (
+                <li key={i} className="space-y-1" data-testid="claim-check">
+                  <p className={`text-sm ${body}`}>&ldquo;{c.sentence}&rdquo;</p>
+                  <p className={`text-xs ${muted}`}>
+                    Asked in: {c.questions.join(", ") || "n/a"}{c.repeats.length > 0 ? ` · run${c.repeats.length === 1 ? "" : "s"} ${c.repeats.join(", ")}` : ""}
+                  </p>
+                  <p className="flex flex-wrap items-center gap-2 text-xs">
+                    {c.matched ? (
+                      <>
+                        {c.matched.status ? (
+                          <span title={CASE_STATUS_MEANING[c.matched.status]} data-testid="claim-status-chip" className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-bold leading-none ${STATUS_CHIP_CLASS[c.matched.status]}`}>
+                            {CASE_STATUS_LABEL[c.matched.status]}
+                          </span>
+                        ) : null}
+                        <span className={muted}>XOOP: {c.matched.title} · {c.matched.documents} {c.matched.documents === 1 ? "document" : "documents"}, {c.matched.sources} {c.matched.sources === 1 ? "source" : "sources"}</span>
+                      </>
+                    ) : null}
+                  </p>
+                  <p className={`text-xs ${c.note.startsWith("The AI states") ? "font-bold text-yellow-600" : muted}`} data-testid="claim-note">{c.note}</p>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

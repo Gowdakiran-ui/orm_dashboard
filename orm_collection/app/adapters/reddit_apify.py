@@ -118,6 +118,9 @@ def _mentions_keyword(item: Dict[str, Any], keyword: str) -> bool:
 class RedditApifyAdapter(BaseSearchAdapter):
     def __init__(self):
         self.api_token = os.environ.get("APIFY_API_TOKEN")
+        # The finished run's own usageTotalUsd from the last successful search() (None until one succeeds, or when Apify did not
+        # report it). Read by the Run Pipeline cost meter (services/pipeline_cost.py); nothing else uses it.
+        self.last_usage_usd = None
         self.available = bool(self.api_token)
         if not self.available:
             logger.warning("reddit_apify_adapter_unavailable", reason="missing_api_token")
@@ -170,6 +173,8 @@ class RedditApifyAdapter(BaseSearchAdapter):
             raise Exception(f"Reddit (Apify) Search Failed: HTTP {start_resp.status_code} starting run: {start_resp.text[:500]}")
 
         run_data = start_resp.json().get("data") or {}
+        usage_usd = run_data.get("usageTotalUsd")
+        self.last_usage_usd = None
         run_id = run_data.get("id")
         if not run_id:
             raise Exception(f"Reddit (Apify) Search Failed: run start response had no run id: {start_resp.text[:500]}")
@@ -190,11 +195,13 @@ class RedditApifyAdapter(BaseSearchAdapter):
             if poll_resp.status_code >= 400:
                 raise Exception(f"Reddit (Apify) Search Failed: HTTP {poll_resp.status_code} polling run {run_id}: {poll_resp.text[:500]}")
             poll_data = poll_resp.json().get("data") or {}
+            usage_usd = poll_data.get("usageTotalUsd", usage_usd)
             status = poll_data.get("status")
             dataset_id = poll_data.get("defaultDatasetId") or dataset_id
 
         if status != "SUCCEEDED":
             raise Exception(f"Reddit (Apify) Search Failed: run {run_id} finished with status {status}")
+        self.last_usage_usd = float(usage_usd) if isinstance(usage_usd, (int, float)) else None
         if not dataset_id:
             raise Exception(f"Reddit (Apify) Search Failed: run {run_id} succeeded but had no dataset id")
 
