@@ -74,7 +74,7 @@ def match_incident(flag_tokens: frozenset, incidents: Sequence[Dict[str, Any]]) 
 
 def claim_note(framing: str, matched: Optional[Dict[str, Any]]) -> str:
     if not matched:
-        return "No matching XOOP incident."
+        return "Not matched automatically."
     status = matched.get("status")
     if framing == "FACT" and status in AS_FACT_NOTE_STATUSES:
         return f"The AI states this as fact; XOOP labels the matching story {_STATUS_WORD[status]}."

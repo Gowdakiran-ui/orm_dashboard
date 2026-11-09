@@ -166,7 +166,7 @@ describe("AI check card: claim cross-check", () => {
   });
 
   it("shows each flagged sentence with the matching XOOP incident's status chip and the as-fact note, to a super admin", async () => {
-    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true, claim_checks: [claim(), claim({ sentence: "A fraud case was registered against the founder.", matched: null, note: "No matching XOOP incident." })] }));
+    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true, claim_checks: [claim(), claim({ sentence: "A fraud case was registered against the founder.", matched: null, note: "Not matched automatically." })] }));
     await mount();
     const box = host.querySelector("[data-testid='claim-checks']")!;
     expect(box.textContent).toContain("AI statements checked against XOOP (2)");
@@ -178,7 +178,7 @@ describe("AI check card: claim cross-check", () => {
     expect(items[0].textContent).toContain("ED charges EaseMyTrip co-founder Pitti · 9 documents, 9 sources");
     expect(items[0].querySelector("[data-testid='claim-note']")!.textContent).toBe("The AI states this as fact; XOOP labels the matching story charged.");
     expect(items[1].querySelector("[data-testid='claim-status-chip']")).toBeNull();
-    expect(items[1].querySelector("[data-testid='claim-note']")!.textContent).toBe("No matching XOOP incident.");
+    expect(items[1].querySelector("[data-testid='claim-note']")!.textContent).toBe("Not matched automatically.");
   });
 
   it("shows nothing for a viewer who is not a super admin, even if a payload carried claim checks", async () => {

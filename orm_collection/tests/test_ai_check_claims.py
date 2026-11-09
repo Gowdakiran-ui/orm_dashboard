@@ -246,7 +246,7 @@ def test_match_needs_two_shared_words_and_prefers_the_larger_incident_on_a_tie()
 
 def test_note_says_when_the_ai_states_as_fact_something_xoop_labels_allegation_probe_or_charged():
     m = lambda st: {"status": st}
-    assert claims.claim_note("FACT", None) == "No matching XOOP incident."
+    assert claims.claim_note("FACT", None) == "Not matched automatically."
     assert claims.claim_note("FACT", m("probe")) == "The AI states this as fact; XOOP labels the matching story a probe."
     assert claims.claim_note("FACT", m("charged")) == "The AI states this as fact; XOOP labels the matching story charged."
     assert claims.claim_note("FACT", m("allegation")) == "The AI states this as fact; XOOP labels the matching story an allegation."
@@ -279,7 +279,7 @@ def test_report_gives_super_admins_the_claim_checks_and_nobody_else(db):
     assert hit["note"] == "The AI states this as fact; XOOP labels the matching story charged."
     assert hit["questions"] == ["Legal cases and controversies"] and hit["repeats"] == [1, 2]
     miss = next(o for o in out if "billing" in o["sentence"])
-    assert miss["matched"] is None and miss["note"] == "No matching XOOP incident."
+    assert miss["matched"] is None and miss["note"] == "Not matched automatically."
     assert svc.latest_report(db, c, is_admin=False)["claim_checks"] == []
 
 

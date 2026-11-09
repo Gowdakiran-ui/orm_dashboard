@@ -136,12 +136,12 @@ describe("claim checks (super admin)", () => {
   });
 
   it("reads the cross-check: sentence, where it was asked, the matching XOOP incident with its status, and the note", () => {
-    const v = parseAiCheck(payload({ claim_checks: [claim(), claim({ sentence: "A fraud case was registered.", matched: null, note: "No matching XOOP incident." })] }))!;
+    const v = parseAiCheck(payload({ claim_checks: [claim(), claim({ sentence: "A fraud case was registered.", matched: null, note: "Not matched automatically." })] }))!;
     expect(v.claimChecks).toHaveLength(2);
     expect(v.claimChecks[0]).toMatchObject({ about: "executive", repeats: [1, 2], questions: ["Legal cases and controversies"] });
     expect(v.claimChecks[0].matched).toEqual({ status: "charged", title: "ED charges EaseMyTrip co-founder Pitti", documents: 9, sources: 9 });
     expect(v.claimChecks[1].matched).toBeNull();
-    expect(v.claimChecks[1].note).toBe("No matching XOOP incident.");
+    expect(v.claimChecks[1].note).toBe("Not matched automatically.");
   });
 
   it("drops malformed entries, reads an unknown status as none, and defaults to no claim checks", () => {
