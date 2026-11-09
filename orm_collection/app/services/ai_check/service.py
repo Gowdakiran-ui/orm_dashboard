@@ -289,7 +289,7 @@ def latest_report(db, client, is_admin: bool = False) -> Dict[str, Any]:
                 cls = classify_domain(d, client.name)
                 if cls["low_reliability"]:
                     pg = pages.setdefault(url, {"url": url, "title": c.get("title"), "domain": d, "tier": cls["tier"],
-                                                "reliability": cls["label"], "questions": [], "_runs": set()})
+                                                "reliability": cls["label"], "proposed": cls["proposed"], "questions": [], "_runs": set()})
                     if label not in pg["questions"]:
                         pg["questions"].append(label)
                     pg["_runs"].add((key, a.repeat_index))
@@ -299,7 +299,7 @@ def latest_report(db, client, is_admin: bool = False) -> Dict[str, Any]:
         for d, reps in sorted(domain_runs.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             cls = classify_domain(d, client.name)
             sources.append({"domain": d, "tier": cls["tier"], "reliability": cls["label"], "low_reliability": cls["low_reliability"],
-                            "cited_in_runs": len(reps)})
+                            "proposed": cls["proposed"], "cited_in_runs": len(reps)})
         stab = source_stability(group)
         prompts_out.append({
             "key": key, "label": label, "question": group[0].prompt_text, "runs": len(group),

@@ -5,7 +5,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassPill, glassPrimaryButton, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { fetchAiCheck, runAiCheck } from "@/lib/api";
 import {
-  parseAiCheck, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_TITLE, REMOVAL_LIST_NOTICE, CARD_NOTICE, groupRemovalCandidates,
+  parseAiCheck, estimateSentence, runLine, stabilityTone, REMOVAL_LIST_TITLE, REMOVAL_LIST_NOTICE, CARD_NOTICE, PROPOSED_RATING_NOTE, groupRemovalCandidates, unratedLine,
   type AiCheckView, type AiEstimate, type AiPage, type AiPrompt, type AiSource,
 } from "@/utils/aiCheck";
 
@@ -26,9 +26,9 @@ const TIER_CHIP: Record<string, string> = {
   unrated: "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20",
 };
 
-function ReliabilityChip({ tier, label }: { tier: string; label: string }) {
+function ReliabilityChip({ tier, label, proposed }: { tier: string; label: string; proposed?: boolean }) {
   return (
-    <span data-testid="reliability-chip" className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-bold leading-none ${TIER_CHIP[tier] ?? TIER_CHIP.unrated}`}>
+    <span data-testid="reliability-chip" title={proposed ? PROPOSED_RATING_NOTE : undefined} className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-bold leading-none ${TIER_CHIP[tier] ?? TIER_CHIP.unrated}`}>
       {label}
     </span>
   );
@@ -49,7 +49,7 @@ function PageList({ pages, muted }: { pages: AiPage[]; muted: string }) {
             ) : (
               <span className="font-bold break-all">{p.title || p.url}</span>
             )}
-            <ReliabilityChip tier={p.tier} label={p.reliability} />
+            <ReliabilityChip tier={p.tier} label={p.reliability} proposed={p.proposed} />
           </span>
           <span className={muted}>
             {p.domain} · cited in {p.citedInAnswers} {p.citedInAnswers === 1 ? "answer" : "answers"} · {p.questions.join(", ")}
@@ -66,7 +66,7 @@ function SourceChips({ sources }: { sources: AiSource[] }) {
       {sources.map(s => (
         <span key={s.domain} className="inline-flex items-center gap-1.5 text-xs">
           <span className="font-mono">{s.domain}</span>
-          <ReliabilityChip tier={s.tier} label={s.reliability} />
+          <ReliabilityChip tier={s.tier} label={s.reliability} proposed={s.proposed} />
         </span>
       ))}
     </span>
@@ -96,6 +96,7 @@ export function AiCheckCard({ clientId }: AiCheckCardProps) {
   const [view, setView] = useState<AiCheckView | null>(null);
   const [confirm, setConfirm] = useState<AiEstimate | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showUnrated, setShowUnrated] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const startedPolling = useRef<number | null>(null);
 
@@ -110,6 +111,7 @@ export function AiCheckCard({ clientId }: AiCheckCardProps) {
 
   useEffect(() => {
     setView(null);
+    setShowUnrated(false);
     setConfirm(null);
     setActionError(null);
     const ctl = new AbortController();
@@ -230,8 +232,17 @@ export function AiCheckCard({ clientId }: AiCheckCardProps) {
             <p className={`text-xs ${muted}`}>{REMOVAL_LIST_NOTICE}</p>
             {groupRemovalCandidates(view.removalCandidates).map(g => (
               <div key={g.key} className="space-y-2" data-testid={`removal-group-${g.key}`}>
-                <span className={`text-xs font-bold ${body}`}>{g.label} ({g.pages.length})</span>
-                <PageList pages={g.pages} muted={muted} />
+                {g.collapsed ? (
+                  <button
+                    type="button" onClick={() => setShowUnrated(v => !v)} aria-expanded={showUnrated}
+                    className={`text-xs font-bold hover:underline text-left ${body}`} data-testid="unrated-toggle"
+                  >
+                    {showUnrated ? "▾" : "▸"} {unratedLine(g.pages.length)}
+                  </button>
+                ) : (
+                  <span className={`text-xs font-bold ${body}`}>{g.label} ({g.pages.length})</span>
+                )}
+                {(!g.collapsed || showUnrated) && <PageList pages={g.pages} muted={muted} />}
               </div>
             ))}
           </div>

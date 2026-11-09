@@ -55,3 +55,6 @@ fixes_after.md
 
 # Playwright output
 orm_dashboard/test-results/
+
+# spaCy model wheel kept locally / on the droplet so a GitHub outage cannot stop a build (orm_collection/Dockerfile)
+orm_collection/wheels/

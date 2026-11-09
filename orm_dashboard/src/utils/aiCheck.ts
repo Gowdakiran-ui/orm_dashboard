@@ -7,8 +7,10 @@ export type SourceTier = "high" | "medium" | "low" | "official" | "own" | "user_
 export interface AiSource {
   domain: string;
   tier: SourceTier;
-  reliability: string;       // "High", "Medium", "Low", "Official", "Company's own site", "User-generated", "Unrated"
+  reliability: string;       // "High", "Medium (proposed)", "Low", "Official", "Company", "User-generated", "Unrated"
   lowReliability: boolean;
+  // True when the rating is a proposal that still needs team review (the label then ends in "(proposed)").
+  proposed: boolean;
   citedInRuns: number;
 }
 
@@ -29,6 +31,7 @@ export interface AiPage {
   domain: string;
   tier: SourceTier;
   reliability: string;
+  proposed: boolean;
   questions: string[];
   citedInAnswers: number;
 }
@@ -79,6 +82,7 @@ function parsePage(p: any): AiPage | null {
     url, domain, title: str(p.title),
     tier: TIERS.has(p.tier) ? p.tier : "unrated",
     reliability: str(p.reliability) ?? "Unrated",
+    proposed: p.proposed === true,
     questions: Array.isArray(p.questions) ? p.questions.filter((q: any) => typeof q === "string") : [],
     citedInAnswers: num(p.cited_in_answers) ?? 1,
   };
@@ -93,7 +97,7 @@ function parsePrompt(p: any): AiPrompt | null {
     if (!domain) continue;
     sources.push({
       domain, tier: TIERS.has(s.tier) ? s.tier : "unrated", reliability: str(s.reliability) ?? "Unrated",
-      lowReliability: s.low_reliability === true, citedInRuns: num(s.cited_in_runs) ?? 1,
+      lowReliability: s.low_reliability === true, proposed: s.proposed === true, citedInRuns: num(s.cited_in_runs) ?? 1,
     });
   }
   return {
@@ -161,21 +165,30 @@ export function lowReliabilityCount(view: AiCheckView): number {
   return view.lowReliabilityPages.length;
 }
 
-// The internal list is shown in two groups so "known to be low" is never mixed with "no trust decision yet":
-// "Low reliability" (listed low, or user-generated sites) and "Unrated" (outlets the platform has no trust decision for).
+// The internal list shows "Low reliability" and "User-generated" pages by default. Pages from outlets the platform has no
+// trust decision for ("Unrated") are not listed until someone opens them: they are a rating to-do, not a finding.
 export interface RemovalGroup {
-  key: "low" | "unrated";
+  key: "low" | "user_generated" | "unrated";
   label: string;
   pages: AiPage[];
+  collapsed: boolean;
 }
 
 export function groupRemovalCandidates(pages: AiPage[]): RemovalGroup[] {
   const groups: RemovalGroup[] = [
-    { key: "low", label: "Low reliability", pages: pages.filter(p => p.tier !== "unrated") },
-    { key: "unrated", label: "Unrated", pages: pages.filter(p => p.tier === "unrated") },
+    { key: "low", label: "Low reliability", pages: pages.filter(p => p.tier === "low"), collapsed: false },
+    { key: "user_generated", label: "User-generated", pages: pages.filter(p => p.tier === "user_generated"), collapsed: false },
+    { key: "unrated", label: "Unrated", pages: pages.filter(p => p.tier === "unrated"), collapsed: true },
   ];
   return groups.filter(g => g.pages.length > 0);
 }
+
+// The collapsed line for unrated pages.
+export function unratedLine(n: number): string {
+  return `${n} cited ${n === 1 ? "page is" : "pages are"} unrated and ${n === 1 ? "needs" : "need"} a rating`;
+}
+
+export const PROPOSED_RATING_NOTE = "Proposed rating, needs team review.";
 
 // Fixed wording of the internal list. It never says content can be removed: that is a legal decision.
 export const REMOVAL_LIST_TITLE = "Possible removal candidates";

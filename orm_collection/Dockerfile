@@ -32,7 +32,25 @@ RUN success=0; \
 # install (see scripts/verify_environment.py's spacy check) -- the
 # Dockerfile never had an equivalent step, so entity discovery
 # (executive/competitor candidates) silently ran with an empty model.
-RUN python -m spacy download en_core_web_sm
+# Resilience (2026-11-09): GitHub release downloads returned 504 to the droplet for several minutes in the middle of a
+# deploy, with production already down. When orm_collection/wheels/ holds the model wheel (gitignored; kept on the droplet,
+# see DEPLOY.md) it is installed from there and nothing is downloaded. Without it, `spacy download` is retried 5 times,
+# like the pip install above. requirements.txt is listed in the COPY only so the instruction is valid when no wheels/
+# directory exists.
+COPY requirements.txt wheels* /tmp/wheelhouse/
+RUN set -e; \
+    whl=$(ls /tmp/wheelhouse/en_core_web_sm-*.whl 2>/dev/null | head -n 1 || true); \
+    if [ -n "$whl" ]; then \
+      echo "spaCy model: installing from local wheel $whl"; \
+      pip install --no-cache-dir --no-deps "$whl"; \
+    else \
+      success=0; \
+      for i in 1 2 3 4 5; do \
+        if python -m spacy download en_core_web_sm; then success=1; break; fi; \
+        echo "spaCy model download attempt $i failed, retrying..."; sleep 10; \
+      done; \
+      if [ "$success" -ne 1 ]; then echo "spaCy model download failed after 5 attempts"; exit 1; fi; \
+    fi
 
 # AWS deployment task: grepped every .py file under orm_collection for
 # playwright/chromium/Browser usage -- zero references in application code.

@@ -90,18 +90,38 @@ describe("AI check card", () => {
     expect(host.textContent).toContain("Run AI check");
   });
 
-  it("the internal list shows unrated outlets as their own group, separate from low reliability", async () => {
-    const unrated = { ...page, url: "https://squaremind.in/review", title: "Godrej review", domain: "squaremind.in", tier: "unrated", reliability: "Unrated" };
-    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true, removal_candidates: [page, unrated] }));
+  it("the internal list shows Low reliability and User-generated pages by default and keeps Unrated collapsed until clicked", async () => {
+    const unrated = (n: number) => ({ ...page, url: `https://squaremind.in/review${n}`, title: `Godrej review ${n}`, domain: "squaremind.in", tier: "unrated", reliability: "Unrated" });
+    const ugc = { ...page, url: "https://quora.com/q", title: "A forum question", domain: "quora.com", tier: "user_generated", reliability: "User-generated" };
+    api.fetchAiCheck.mockResolvedValue(payload({ can_run: true, removal_candidates: [page, ugc, unrated(1), unrated(2)] }));
     await mount();
-    const low = host.querySelector("[data-testid='removal-group-low']")!;
+    const box = host.querySelector("[data-testid='removal-candidates']")!;
+    expect(host.querySelector("[data-testid='removal-group-low']")!.textContent).toContain("Low reliability (1)");
+    expect(host.querySelector("[data-testid='removal-group-low']")!.textContent).toContain("inventiva.co.in");
+    expect(host.querySelector("[data-testid='removal-group-user_generated']")!.textContent).toContain("User-generated (1)");
     const un = host.querySelector("[data-testid='removal-group-unrated']")!;
-    expect(low.textContent).toContain("Low reliability (1)");
-    expect(low.textContent).toContain("inventiva.co.in");
-    expect(low.textContent).not.toContain("squaremind.in");
-    expect(un.textContent).toContain("Unrated (1)");
-    expect(un.textContent).toContain("squaremind.in");
-    expect(un.textContent).not.toContain("inventiva.co.in");
+    expect(un.textContent).toContain("2 cited pages are unrated and need a rating");
+    expect(box.textContent).not.toContain("squaremind.in");                       // collapsed: the pages are not listed
+    expect(box.textContent).not.toContain("Godrej review 1");
+    const toggle = host.querySelector("[data-testid='unrated-toggle']") as HTMLButtonElement;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => { toggle.click(); });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(un.textContent).toContain("Godrej review 1");
+    expect(un.textContent).toContain("Godrej review 2");
+    await act(async () => { toggle.click(); });
+    expect(un.textContent).not.toContain("Godrej review 1");
+  });
+
+  it("a proposed rating is marked as proposed on its chip", async () => {
+    api.fetchAiCheck.mockResolvedValue(payload({
+      prompts: [prompt({ sources: [{ domain: "theprint.in", tier: "medium", reliability: "Medium (proposed)", low_reliability: false, proposed: true, cited_in_runs: 3 }, { domain: "livemint.com", tier: "high", reliability: "High", low_reliability: false, cited_in_runs: 3 }] })],
+    }));
+    await mount();
+    const chips = Array.from(host.querySelectorAll("[data-testid='ai-check-prompt']")[0].querySelectorAll("[data-testid='reliability-chip']")) as HTMLElement[];
+    expect(chips.map(c => c.textContent)).toEqual(["Medium (proposed)", "High"]);
+    expect(chips[0].getAttribute("title")).toBe("Proposed rating, needs team review.");
+    expect(chips[1].getAttribute("title")).toBeNull();
   });
 
   it("run button first shows the printed estimate, asks nothing until confirmed, and then starts the paid run", async () => {

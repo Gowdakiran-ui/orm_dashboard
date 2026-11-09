@@ -19,9 +19,26 @@ LABELS = {
     "medium": "Medium",
     "low": "Low",
     "official": "Official",
-    "own": "Company's own site",
+    "own": "Company",
     "user_generated": "User-generated",
     "unrated": "Unrated",
+}
+
+# PROPOSED ratings for main Indian outlets the platform's own list (TRUSTED_OUTLETS) does not cover by domain, so they stop
+# showing as "Unrated". These are NOT team decisions: every result built from them carries proposed=True and is labelled
+# "(proposed)" until the team reviews them and moves them into TRUSTED_OUTLETS. Domain (and its sub-domains) -> tier.
+PROPOSED_RATINGS = {
+    "timesofindia.indiatimes.com": "medium",
+    "thehindubusinessline.com": "medium",
+    "financialexpress.com": "medium",
+    "cnbctv18.com": "medium",
+    "theprint.in": "medium",
+    "inc42.com": "medium",
+    "livelaw.in": "medium",
+    "livelawbiz.com": "medium",
+    "barandbench.com": "medium",
+    "businesstoday.in": "medium",
+    "indiatoday.in": "medium",
 }
 
 _SECOND_LEVEL = {"co", "com", "org", "net", "gov", "nic", "ac", "edu"}
@@ -55,8 +72,9 @@ def _label_of(host: str) -> str:
 
 
 def classify_domain(domain: Optional[str], client_name: Optional[str] = None) -> dict:
-    """{"tier", "label", "low_reliability"} for a host. Order: official, the company's own site, user-generated, the
-    platform's outlet list, then the excluded outlets; anything else is unrated."""
+    """{"tier", "label", "low_reliability", "proposed"} for a host. Order: official, the company's own site, user-generated,
+    the platform's outlet list, the excluded outlets, then the PROPOSED ratings above; anything else is unrated. `proposed`
+    is True when the tier comes from a proposal (or from a loose company-name match) and still needs team review."""
     host = (domain or "").lower()
     if not host:
         return _result("unrated")
@@ -67,6 +85,9 @@ def classify_domain(domain: Optional[str], client_name: Optional[str] = None) ->
     cn = _norm(client_name or "")
     if cn and len(base) >= 6 and (base == cn or cn.startswith(base) or base.startswith(cn)):
         return _result("own")
+    first_word = next((w for w in re.findall(r"[a-z0-9]+", (client_name or "").lower()) if len(w) >= 5), "")
+    if first_word and base.startswith(first_word):          # e.g. godrejltd.com for Godrej Properties: the group's site
+        return _result("own", proposed=True)
     if base in _USER_GENERATED:
         return _result("user_generated")
     for key, tier in TRUSTED_OUTLETS.items():
@@ -75,8 +96,12 @@ def classify_domain(domain: Optional[str], client_name: Optional[str] = None) ->
             return _result(tier)
     if any(_norm(x) == base or _norm(x) in flat for x in FLOOR_EXCLUDED_OUTLETS):
         return _result("low")
+    for key, tier in PROPOSED_RATINGS.items():
+        if host == key or host.endswith("." + key):
+            return _result(tier, proposed=True)
     return _result("unrated")
 
 
-def _result(tier: str) -> dict:
-    return {"tier": tier, "label": LABELS[tier], "low_reliability": tier in ("low", "user_generated", "unrated")}
+def _result(tier: str, proposed: bool = False) -> dict:
+    label = LABELS[tier] + (" (proposed)" if proposed else "")
+    return {"tier": tier, "label": label, "low_reliability": tier in ("low", "user_generated", "unrated"), "proposed": proposed}

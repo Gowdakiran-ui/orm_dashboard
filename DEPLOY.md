@@ -87,3 +87,18 @@ the `build` step.
 - Trigger one real pipeline run and watch it reach `SUCCESS`, not `FAILED`
   with an FSM transition error — that specific error shape is the signature
   of this exact partial-recreation mistake recurring.
+
+## spaCy model wheel (so a GitHub outage cannot stop a build)
+
+The backend image installs `en_core_web_sm` (spaCy 3.8, model 3.8.0). On 2026-11-09 GitHub's release download returned 504 to the
+droplet for several minutes mid-deploy, with production already down. `orm_collection/Dockerfile` therefore installs the model from
+`orm_collection/wheels/en_core_web_sm-3.8.0-py3-none-any.whl` when that file exists (the directory is gitignored; it is kept on the
+droplet), and otherwise falls back to `spacy download` with 5 retries. To refresh it when spaCy or the model version changes:
+
+```bash
+mkdir -p /root/orm_dashboard/orm_collection/wheels
+curl -L -o /root/orm_dashboard/orm_collection/wheels/en_core_web_sm-<version>-py3-none-any.whl   https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-<version>/en_core_web_sm-<version>-py3-none-any.whl
+```
+
+SHA-256 of the 3.8.0 wheel stored on 2026-11-09: `1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85`.
+The wheel directory is inside the build context, so it is also copied into the image by `COPY . .` (12.8 MB).

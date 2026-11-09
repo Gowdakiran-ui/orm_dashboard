@@ -354,3 +354,55 @@ def test_post_requires_a_super_admin_in_the_route_definition():
     from app.core.auth import require_super_admin
     route = next(r for r in ci.router.routes if isinstance(r, APIRoute) and r.path == "/{client_id}/ai-check/run" and "POST" in r.methods)
     assert any(d.call is require_super_admin for d in route.dependant.dependencies)
+
+
+# ---- proposed ratings for the main Indian outlets ------------------------------------------------------------------------------
+@pytest.mark.parametrize("domain,tier", [
+    ("timesofindia.indiatimes.com", "medium"), ("www.hindustantimes.com", "medium"), ("indianexpress.com", "medium"),
+    ("thehindu.com", "medium"), ("thehindubusinessline.com", "medium"), ("financialexpress.com", "medium"),
+    ("cnbctv18.com", "medium"), ("ndtv.com", "medium"), ("theprint.in", "medium"), ("inc42.com", "medium"),
+    ("livelaw.in", "medium"), ("barandbench.com", "medium"), ("businesstoday.in", "medium"), ("indiatoday.in", "medium"),
+    ("economictimes.indiatimes.com", "high"), ("legal.economictimes.indiatimes.com", "high"), ("realty.economictimes.indiatimes.com", "high"),
+    ("livemint.com", "high"), ("business-standard.com", "high"), ("moneycontrol.com", "high"), ("reuters.com", "high"), ("bloomberg.com", "high"),
+    ("nsearchives.nseindia.com", "official"), ("bseindia.com", "official"),
+])
+def test_the_main_indian_outlets_are_no_longer_unrated(domain, tier):
+    r = classify_domain(domain, "Godrej Properties")
+    assert r["tier"] == tier and r["low_reliability"] is False
+
+
+def test_only_the_outlets_the_platform_list_does_not_cover_are_marked_proposed():
+    for d in ("timesofindia.indiatimes.com", "cnbctv18.com", "theprint.in", "livelaw.in", "financialexpress.com"):
+        r = classify_domain(d, "X")
+        assert r["proposed"] is True and r["label"] == "Medium (proposed)"
+    for d in ("hindustantimes.com", "livemint.com", "economictimes.indiatimes.com", "reuters.com", "nseindia.com"):
+        r = classify_domain(d, "X")
+        assert r["proposed"] is False and "proposed" not in r["label"]
+
+
+def test_company_sites_are_rated_company_and_a_loose_name_match_is_a_proposal():
+    exact = classify_domain("godrejproperties.com", "Godrej Properties")
+    assert (exact["tier"], exact["label"], exact["proposed"]) == ("own", "Company", False)
+    group = classify_domain("godrejltd.com", "Godrej Properties")                 # the parent group's site
+    assert (group["tier"], group["label"], group["proposed"]) == ("own", "Company (proposed)", True)
+    assert classify_domain("godrejltd.com", "EaseMyTrip")["tier"] == "unrated"     # only for the client it belongs to
+
+
+def test_known_low_and_user_generated_sites_keep_their_rating_and_are_not_proposed():
+    for d, tier in (("inventiva.co.in", "low"), ("quora.com", "user_generated"), ("trustpilot.com", "user_generated")):
+        r = classify_domain(d, "Godrej Properties")
+        assert (r["tier"], r["proposed"]) == (tier, False)
+    assert classify_domain("someblog.example.com", "X")["tier"] == "unrated"
+
+
+def test_report_carries_the_proposed_flag_on_sources_and_pages(db):
+    c = _client(db)
+    run = svc.start_run(db, c.id)
+    _answer(db, run, "trustworthy", 0, ["https://www.theprint.in/a", "https://www.inventiva.co.in/story", "https://squaremind.in/x"])
+    out = svc.latest_report(db, c, is_admin=True)
+    src = {s["domain"]: s for s in out["prompts"][0]["sources"]}
+    assert src["theprint.in"]["proposed"] is True and src["theprint.in"]["reliability"] == "Medium (proposed)" and src["theprint.in"]["low_reliability"] is False
+    assert src["inventiva.co.in"]["proposed"] is False
+    pages = {p["domain"]: p for p in out["removal_candidates"]}
+    assert set(pages) == {"inventiva.co.in", "squaremind.in"}                      # theprint.in no longer a candidate
+    assert pages["squaremind.in"]["tier"] == "unrated" and pages["squaremind.in"]["proposed"] is False
