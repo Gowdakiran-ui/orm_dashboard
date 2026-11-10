@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 import time
 
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, require_super_admin
 from app.core.db import get_db
 from app.schemas.match import DocumentSimulationRequest, SimulationResponse, MatchResult
 from app.services.matching_engine import engine_instance
@@ -64,6 +64,7 @@ def simulate_document_match(
     )
 
 @router.post("/refresh-engine")
-def refresh_matching_engine(db: Session = Depends(get_db)):
+def refresh_matching_engine(db: Session = Depends(get_db), _admin: User = Depends(require_super_admin)):
+    """Super admin only: rebuilds the shared keyword matcher for every client."""
     count = engine_instance.refresh_processor(db)
     return {"status": "success", "keywords_loaded": count}

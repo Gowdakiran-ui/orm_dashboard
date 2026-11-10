@@ -18,6 +18,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.config import settings
 from app.core.db import SessionLocal, get_db
 from app.core.metrics import CeleryTaskCounterCollector
+from app.core.metrics_guard import MetricsGuardMiddleware
 from app.core.rate_limit import limiter
 from app.core.security_headers import add_security_headers
 from app.services.matching_engine import engine_instance
@@ -181,6 +182,8 @@ app.include_router(alerts.router, prefix="/alerts", tags=["alerts"], dependencie
 # Request count/latency/in-progress gauges (API_FORENSICS.md Section 3).
 # excluded_handlers keeps /metrics itself out of its own request counters.
 REGISTRY.register(CeleryTaskCounterCollector())
+# /metrics is not public: METRICS_TOKEN set -> bearer token required; unset -> internal network only (core/metrics_guard.py).
+app.add_middleware(MetricsGuardMiddleware)
 Instrumentator(
     should_instrument_requests_inprogress=True,
     excluded_handlers=["/metrics"],

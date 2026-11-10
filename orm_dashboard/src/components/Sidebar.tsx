@@ -158,13 +158,17 @@ export function Sidebar({
             >
               <Plus className="h-3 w-3 mr-1" /> Add
             </button>
-            <button
-              onClick={() => onDeleteCompanyClick(clients.find((c: any) => c.id === clientId))}
-              className="flex items-center min-h-11 px-2 text-xs font-mono text-red-400 hover:text-red-300 transition-colors"
-              title="Delete Company"
-            >
-              <Trash2 className="h-3 w-3 mr-1" /> Delete
-            </button>
+            {/* Deleting a company wipes all of its data: super admin only (the server refuses everyone else with 403). */}
+            {isSuperAdmin && (
+              <button
+                onClick={() => onDeleteCompanyClick(clients.find((c: any) => c.id === clientId))}
+                className="flex items-center min-h-11 px-2 text-xs font-mono text-red-400 hover:text-red-300 transition-colors"
+                title="Delete Company"
+                data-testid="delete-company"
+              >
+                <Trash2 className="h-3 w-3 mr-1" /> Delete
+              </button>
+            )}
             <button
               onClick={onRunPipeline}
               disabled={pipelineRunning}

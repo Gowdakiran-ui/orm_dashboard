@@ -19,7 +19,11 @@ Replaces the platform-wide `API_SHARED_SECRET` (API_FORENSICS.md Section 1
 - `GET /auth/me` returns the current user plus the `client_id`s they're
   granted — used by the dashboard both to check auth state and to populate
   the tenant dropdown.
-- Every router except `/health`, `/metrics`, and `/auth/*` itself requires
+- `/metrics` is guarded by `app/core/metrics_guard.py`: with `METRICS_TOKEN` set it needs
+  `Authorization: Bearer <token>`; with it unset it answers only requests that come straight from
+  the internal network (no `X-Forwarded-For` / `Forwarded` / `X-Real-IP` header, private client IP),
+  so the public reverse proxy cannot reach it.
+- Every router except `/health` and `/auth/*` itself requires
   `get_current_user` (`app/core/auth.py`) — a valid, non-expired session.
 - Every endpoint that takes a `client_id` (path, query, or body field) is
   additionally scoped by `require_client_access` / `user_has_client_access`,

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
 
-from app.core.auth import get_current_user, require_client_access
+from app.core.auth import get_current_user, require_client_access, require_super_admin
 from app.core.db import get_db
 from app.core.rate_limit import limiter, STRICT_RATE_LIMIT
 from app.workers.aggregation_tasks import run_client_pipeline
@@ -105,10 +105,12 @@ def delete_client_endpoint(
     client_id: UUID,
     db: Session = Depends(get_db),
     _access: UUID = Depends(require_client_access),
+    _admin: User = Depends(require_super_admin),
 ):
     """
     Permanently delete a client and ALL associated intelligence data.
-    This operation is irreversible.
+    This operation is irreversible. Super admin only: a client user, even one granted this client, gets 403
+    (before this, "has access to the client" was enough to wipe it).
     """
     return delete_client(db, client_id)
 
