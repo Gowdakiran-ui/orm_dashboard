@@ -180,9 +180,9 @@ function Hero() {
           </h1>
 
           <p className="mt-6 max-w-[58ch] text-[1.2rem] leading-relaxed" style={{ color: INK_MUTED }}>
-            Listening and monitoring tools show you the noise. XOOP connects conversations,
-            behaviour, search and stakeholder signals into one picture, so your team can see each
-            risk with its evidence and the sources behind it.
+            Listening and monitoring tools show you the noise. XOOP brings news, social and video
+            coverage into one picture, so your team can see each risk with its evidence and the
+            sources behind it.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-3.5">
@@ -260,7 +260,7 @@ const reputationPoints = [
   {
     numeral: "I",
     title: "We flag reputation risks with their evidence",
-    copy: "XOOP connects conversations, behaviour, search and stakeholder signals into one view of your reputation. Risk Center raises a Critical or High alert once an issue clears a real evidence threshold, and shows the coverage behind it.",
+    copy: "XOOP brings news, social and video coverage into one view of your reputation. Risk Center raises a Critical or High alert once an issue clears a real evidence threshold, and shows the coverage behind it.",
   },
   {
     numeral: "II",
@@ -315,9 +315,9 @@ function ReputationIntelligence() {
 const framework = [
   { word: "What", icon: Activity, title: "What's actually in the coverage", copy: "Every signal across every channel resolved into one clear read: each risk, its sentiment and any alert, not a wall of raw mentions to sort through yourself." },
   { word: "Where", icon: MapPin, title: "Where the conversation is happening", copy: "Press, social, forums, video: broken out by source, so you can see whether it's one contained post or coverage across several channels." },
-  { word: "Why", icon: HelpCircle, title: "Why it's happening", copy: "The real story, topic, or stakeholder driving the shift: root-cause context tied to actual coverage, not just a number that moved without explanation." },
+  { word: "Why", icon: HelpCircle, title: "Why it's happening", copy: "The real story or topic driving the shift: root-cause context tied to actual coverage, not just a number that moved without explanation." },
   { word: "When", icon: Clock, title: "When it was published", copy: "Every article, post and video is dated and tied to its source, so you can see when each piece of coverage appeared." },
-  { word: "Whom", icon: Users, title: "Whom it affects", copy: "Reputation risk is rarely abstract. We name the executive, the stakeholder, or the specific story actually carrying the coverage." },
+  { word: "Whom", icon: Users, title: "Whom it affects", copy: "Reputation risk is rarely abstract. We name the executive or the specific story actually carrying the coverage." },
   { word: "How", icon: Compass, title: "How to respond", copy: "A clear read on what's driving the number and what needs attention first, so your team acts on signal, not on noise." },
 ];
 
