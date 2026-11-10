@@ -4,6 +4,7 @@ import os
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 os.environ["DATABASE_URL"] = "postgresql://x:x@127.0.0.1:1/x"
 os.environ["DATABASE_URL_POOLED"] = "postgresql://x:x@127.0.0.1:1/x"
@@ -171,7 +172,8 @@ def test_endpoint_and_service_create_identical_queued_runs_and_endpoint_maps_ref
     db, fake = env
     a, b = _client(db, "A"), _client(db, "B")
     handler = getattr(trigger_client_pipeline, "__wrapped__", trigger_client_pipeline)
-    via_endpoint = handler(request=None, response=None, client_id=a, db=db, _access=None)
+    admin = SimpleNamespace(role="super_admin")        # exempt from the client-user run limits (tests/test_pipeline_limits.py)
+    via_endpoint = handler(request=None, response=None, client_id=a, db=db, _access=None, current_user=admin)
     ra = db.query(PipelineRun).filter(PipelineRun.run_id == via_endpoint["run_id"]).one()
     ra.status = ra.stage = "SUCCESS"
     db.commit()
@@ -182,7 +184,7 @@ def test_endpoint_and_service_create_identical_queued_runs_and_endpoint_maps_ref
     assert (ra.execution_mode, rb.execution_mode) == ("async", "async") and rb.status == "QUEUED" and rb.progress_pct == 0
     assert [n for n, _ in fake.sent] == ["app.workers.aggregation_tasks.run_client_pipeline"] * 2
     with pytest.raises(HTTPException) as e:                      # b is now active; a new run for a is refused with the plain message
-        handler(request=None, response=None, client_id=a, db=db, _access=None)
+        handler(request=None, response=None, client_id=a, db=db, _access=None, current_user=admin)
     assert e.value.status_code == 409 and e.value.detail == CONCURRENCY_MESSAGE
 
 

@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # while one is active (services/pipeline_service.py). One run peaks at about 15 of the 22 usable DB connections.
     MAX_CONCURRENT_PIPELINE_RUNS: int = 1
 
+    # Run Pipeline limits for CLIENT users (a super admin is exempt), per client: at most one run every PIPELINE_COOLDOWN_HOURS hours and at
+    # most PIPELINE_MAX_RUNS_PER_DAY runs in any rolling 24 hours (services/pipeline_service.py). A run costs Apify and LLM money, so a
+    # client user cannot start one back-to-back. 0 (or less) switches that limit off. Environment: PIPELINE_COOLDOWN_HOURS, PIPELINE_MAX_RUNS_PER_DAY.
+    PIPELINE_COOLDOWN_HOURS: float = 6.0
+    PIPELINE_MAX_RUNS_PER_DAY: int = 3
+
     # Opt-in per-service override for celery-beat (see db.py): beat only ever
     # enqueues task messages via Redis on its cron schedule -- every scheduled
     # task is routed to a worker queue and executed by a worker process, never

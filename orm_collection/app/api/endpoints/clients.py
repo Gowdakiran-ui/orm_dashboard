@@ -127,6 +127,7 @@ def trigger_client_pipeline(
     client_id: UUID,
     db: Session = Depends(get_db),
     _access: UUID = Depends(require_client_access),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Queue the intelligence pipeline for a single client.
@@ -134,17 +135,22 @@ def trigger_client_pipeline(
     Returns HTTP 202 immediately. The pipeline runs asynchronously.
     Poll GET /clients/{client_id}/pipeline/status for progress.
 
+    A client user is limited to one run per client every PIPELINE_COOLDOWN_HOURS hours (default 6) and PIPELINE_MAX_RUNS_PER_DAY runs
+    in any 24 hours (default 3); a super admin is exempt.
+
     Errors:
         404  — Client not found
         409  — Pipeline already active for this client, or another client's pipeline is running
+        429  — Run limit reached (client user): the message names the time of the next allowed run; Retry-After is set
         503  — Celery broker unreachable
     """
     # The steps (validate client, reject a duplicate/concurrent run, create the QUEUED PipelineRun, dispatch run_client_pipeline)
     # live in services/pipeline_service.py, shared with scripts/run_pipeline.py.
     try:
-        return start_pipeline_run(db, client_id)
+        return start_pipeline_run(db, client_id, enforce_limits=(current_user.role != ROLE_SUPER_ADMIN))
     except PipelineStartError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+        headers = {"Retry-After": str(exc.retry_after_s)} if exc.retry_after_s else None
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail, headers=headers)
 
 
 @router.get("/{client_id}/pipeline/status")
