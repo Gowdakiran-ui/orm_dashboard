@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { MagneticButton } from "@/components/landing/MagneticButton";
 import { Reveal, RevealGroup, RevealItem } from "@/components/landing/Reveal";
+import { ComparisonChartBody } from "@/components/landing/ComparisonChart";
 
 const CONTACT_EMAIL = "contact@onlynereputation.com";
 
@@ -561,45 +562,7 @@ function Features() {
   );
 }
 
-// Round 2, item 6: comparison chart. Categories XOOP can honestly claim
-// differentiation on given this project's actual built capabilities, and
-// how listening/monitoring-first tools are generally positioned (volume,
-// engagement, and mention tracking first). No specific claim about what a
-// named competitor lacks internally, only how each category is generally
-// positioned in the market.
-const comparisonRows = [
-  { capability: "Mention monitoring", others: "yes", xoop: "yes" },
-  { capability: "Sentiment scoring", others: "yes", xoop: "yes" },
-  { capability: "Root-cause explanation (why is this happening)", others: "not-typical", xoop: "yes" },
-  { capability: "Executive-level reputation grading with explainability", others: "not-typical", xoop: "yes" },
-  { capability: "Risk scoring and alerting", others: "limited", xoop: "yes" },
-  { capability: "Competitor share of voice and sentiment benchmarking", others: "varies", xoop: "yes" },
-  { capability: "Built for PR and reputation-risk teams, not general social marketing", others: "marketing-first", xoop: "yes" },
-];
-
-function ComparisonCell({ value }: { value: string }) {
-  if (value === "yes") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[#A57F37]">
-        <Check className="h-4 w-4" strokeWidth={2.5} />
-        <span className="hidden sm:inline">Yes</span>
-      </span>
-    );
-  }
-  const labels: Record<string, string> = {
-    "not-typical": "Not typically",
-    limited: "Limited",
-    varies: "Varies",
-    "marketing-first": "Marketing-first",
-  };
-  return (
-    <span className="inline-flex items-center gap-1.5" style={{ color: INK_FAINT }}>
-      <Minus className="h-4 w-4" strokeWidth={2.5} />
-      {labels[value] ?? value}
-    </span>
-  );
-}
-
+// Comparison chart: the rows, the cells and the sources live in components/landing/ComparisonChart.tsx (they are tested there).
 function Comparison() {
   return (
     <section
@@ -611,36 +574,14 @@ function Comparison() {
         <Reveal>
           <SectionHead
             light
-            title="Where XOOP actually differs"
-            copy="General social-listening platforms like Meltwater, Brandwatch, and Sprinklr are built volume-first: track mentions, count engagement. XOOP is built reputation-first."
+            title="How XOOP compares"
+            copy="A capability-by-capability look at XOOP and four social-listening platforms, based on what each vendor publishes."
           />
         </Reveal>
 
         <Reveal>
-          <div className="overflow-x-auto rounded-2xl border border-[#0B2D54]/12 bg-white shadow-[0_1px_3px_rgba(11,45,84,0.08)]">
-            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-              <thead>
-                <tr className="bg-[#F3EFE3]">
-                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium" style={{ color: INK }}>Capability</th>
-                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium" style={{ color: INK_MUTED }}>Meltwater / Brandwatch / Sprinklr</th>
-                  <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium text-[#A57F37]">XOOP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparisonRows.map((row, idx) => (
-                  <tr key={row.capability} className={idx > 0 ? "border-t border-[#0B2D54]/10" : ""}>
-                    <td className="px-5 py-4" style={{ color: INK }}>{row.capability}</td>
-                    <td className="px-5 py-4"><ComparisonCell value={row.others} /></td>
-                    <td className="px-5 py-4 bg-[#CEA555]/8"><ComparisonCell value={row.xoop} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ComparisonChartBody />
         </Reveal>
-        <p className="mt-4 text-[0.8rem]" style={{ color: INK_FAINT }}>
-          Based on how general social-listening platforms are typically positioned and on XOOP&apos;s own built capabilities. Not a claim about any specific competitor&apos;s internal roadmap.
-        </p>
       </div>
     </section>
   );
