@@ -23,12 +23,18 @@ services:
     image: redis:7
     restart: unless-stopped
     mem_limit: 512m
+    # REDIS_PASSWORD (in .env on the droplet) turns authentication on; unset/empty = no password, as in local dev. Every service
+    # below builds its REDIS_URL from the same variable. The port is published on the host's loopback only: the other containers
+    # reach Redis over the compose network by the name "redis", and nothing outside the host needs it.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-}"]
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping; else redis-cli ping; fi | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,10 +47,10 @@ services:
     restart: unless-stopped
     mem_limit: 1g
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"     # Caddy (api.xoop...) proxies to localhost:8000; nothing else needs this port
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       # Local dev/review runs the frontend and backend over plain HTTP --
       # browsers refuse to send a Secure cookie over HTTP, so the session
       # cookie (core/security.py) would silently never reach the backend.
@@ -95,7 +101,7 @@ services:
     mem_limit: 1.5g
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       # CELERY_SKIP_MATCHING_ENGINE was removed here: pipeline_stage_collect
       # (aggregation_tasks.py, queue="io_queue") calls process_and_save_document
       # -> engine_instance.process_document, so this worker DOES need the
@@ -161,7 +167,7 @@ services:
     mem_limit: 1g
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       # 2026-09-05: routed through DigitalOcean's PgBouncer pool -- see the
       # matching note on the backend service above.
       - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
@@ -192,7 +198,7 @@ services:
     mem_limit: 6g
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       # 2026-09-05: routed through DigitalOcean's PgBouncer pool -- see the
       # matching note on the backend service above.
       - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
@@ -285,7 +291,7 @@ services:
     mem_limit: 1.5g
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       # 2026-09-05: routed through DigitalOcean's PgBouncer pool -- see the
       # matching note on the backend service above.
       - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
@@ -354,7 +360,7 @@ services:
     mem_limit: 1g
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       - DB_POOL_SIZE=1
       - DB_MAX_OVERFLOW=1
       # 2026-09-09: routed through DigitalOcean's PgBouncer pool -- see the
@@ -385,7 +391,7 @@ services:
     mem_limit: 1g
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       - DB_POOL_SIZE=1
       - DB_MAX_OVERFLOW=1
       - DATABASE_URL_POOLED=${DATABASE_URL_POOLED}
@@ -410,7 +416,7 @@ services:
     mem_limit: 512m
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
       # beat_schedule (celery_app.py) is defined in Python and dispatch is
       # a pure Redis publish -- beat itself does not query the app DB in
       # normal operation, so a standing QueuePool allocation here was unused
@@ -460,7 +466,7 @@ services:
     restart: unless-stopped
     mem_limit: 1g
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"     # Caddy (xoop...) proxies to localhost:3000; nothing else needs this port
     env_file: .env
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}

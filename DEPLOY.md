@@ -88,6 +88,19 @@ the `build` step.
   with an FSM transition error — that specific error shape is the signature
   of this exact partial-recreation mistake recurring.
 
+## Redis password and published ports
+
+Production Redis requires a password and the three published ports are bound to the host's loopback (`127.0.0.1`):
+
+- `.env` on the droplet holds `REDIS_PASSWORD=<hex>` (generate with `openssl rand -hex 24`; never commit it). `docker-compose.yml` starts Redis
+  with `--requirepass` and gives every service `REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0`. Keep the `REDIS_URL` line in `.env` in step
+  (`redis://:<same password>@redis:6379/0`), because the frontend container, which does not use Redis, inherits it from `.env`.
+- Changing the password needs the whole stack recreated (`docker compose down`, then `up -d`), like any other deploy.
+- Redis, backend (8000) and frontend (3000) listen on `127.0.0.1` only. Caddy on the host proxies `api.xoop.theaicompany.co` to
+  `localhost:8000` and `xoop.theaicompany.co` to `localhost:3000`; the containers reach each other by service name. For `redis-cli` from the
+  host use `REDISCLI_AUTH=<password> redis-cli -h 127.0.0.1 ping`.
+- Check after a deploy: `docker exec orm_dashboard-redis-1 redis-cli ping` must answer `NOAUTH Authentication required.`
+
 ## spaCy model wheel (so a GitHub outage cannot stop a build)
 
 The backend image installs `en_core_web_sm` (spaCy 3.8, model 3.8.0). On 2026-11-09 GitHub's release download returned 504 to the
