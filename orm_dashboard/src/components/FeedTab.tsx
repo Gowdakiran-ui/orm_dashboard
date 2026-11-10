@@ -10,6 +10,7 @@ import {
 import { TelemetryErrorWidget } from "@/components/TelemetryErrorWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RISK_THRESHOLDS } from "@/utils/riskLevel";
+import { orderStream, flaggedLeadCount } from "@/utils/streamOrder";
 import { isValidOriginalArticleUrl } from "@/utils/urlValidation";
 import { fetchDocumentDetails } from "@/lib/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -39,6 +40,8 @@ export interface FeedTabProps {
   documentsLoading: boolean;
   documentsError: string | null;
   documents: any[];
+  // Flagged articles of any age (strongest first). Listed above the newest articles; omitted = the plain newest-first list.
+  flaggedDocuments?: any[];
   clientId?: string | null;
 }
 
@@ -46,6 +49,7 @@ export function FeedTab({
   documentsLoading,
   documentsError,
   documents = [],
+  flaggedDocuments,
   clientId
 }: FeedTabProps) {
   const { theme } = useTheme();
@@ -71,12 +75,16 @@ export function FeedTab({
   // over the already-fetched `documents` array, no extra fetch per source.
   const [selectedSourceGroup, setSelectedSourceGroup] = useState<string>("all");
 
+  // Flagged articles first (strongest, then newest), then the newest articles. See utils/streamOrder.ts.
+  const streamDocuments = useMemo(() => orderStream(documents, flaggedDocuments), [documents, flaggedDocuments]);
+  const flaggedListed = useMemo(() => flaggedLeadCount(streamDocuments, flaggedDocuments), [streamDocuments, flaggedDocuments]);
+
   const filteredDocuments = useMemo(() => {
-    if (selectedSourceGroup === "all") return documents;
+    if (selectedSourceGroup === "all") return streamDocuments;
     const group = SOURCE_TYPE_GROUPS.find(g => g.key === selectedSourceGroup);
-    if (!group) return documents;
-    return documents.filter(d => d && group.types.includes(d.document_type));
-  }, [documents, selectedSourceGroup]);
+    if (!group) return streamDocuments;
+    return streamDocuments.filter(d => d && group.types.includes(d.document_type));
+  }, [streamDocuments, selectedSourceGroup]);
 
   // Reset paging when the source filter changes so "Load more" starts from
   // the top of the newly-filtered list instead of an index sized for the
@@ -89,7 +97,7 @@ export function FeedTab({
 
   // The details endpoint returns no timestamp; the list row already has it.
   const drawerTimestamp = selectedDocDetails?.timestamp
-    ?? (selectedDocId ? documents.find(d => d?.id === selectedDocId)?.timestamp : undefined);
+    ?? (selectedDocId ? streamDocuments.find(d => d?.id === selectedDocId)?.timestamp : undefined);
 
   const aiSummaryWhat: string | undefined = selectedDocDetails?.risk_explainability?.ai_summary?.what || undefined;
   const aiSummaryHow: string | undefined = selectedDocDetails?.risk_explainability?.ai_summary?.how_to_solve || undefined;
@@ -157,6 +165,11 @@ export function FeedTab({
                 <Activity className="h-3.5 w-3.5 text-emerald-400" /> Real-time Brand Ingest Stream
               </CardTitle>
               <CardDescription className={`text-[12px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
+              {flaggedListed > 0 && (
+                <p className={`text-[12px] font-mono ${mutedText(theme)}`} data-testid="stream-flagged-note">
+                  {flaggedListed} flagged article{flaggedListed === 1 ? "" : "s"} listed first, strongest first, then the newest articles.
+                </p>
+              )}
               {documents.length === FEED_FETCH_LIMIT && (
                 <p className={`text-[12px] font-mono ${mutedText(theme)}`}>Showing newest {FEED_FETCH_LIMIT} documents</p>
               )}

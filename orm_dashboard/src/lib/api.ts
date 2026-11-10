@@ -476,6 +476,14 @@ export async function fetchDocuments(clientId: string, signal?: AbortSignal) {
   return Array.isArray(docs) ? docs.map((d: any) => (d && d.title ? { ...d, title: decodeHtmlEntities(d.title) } : d)) : docs;
 }
 
+// The client's flagged articles (above the LOW band), strongest first then newest, however old. The Intelligence Stream puts them above
+// the newest-500 list so a run of recent LOW items cannot push a serious article out of sight. Empty list when there are none.
+export async function fetchFlaggedDocuments(clientId: string, signal?: AbortSignal) {
+  const res = await fetchWithRetry(`${API_BASE}/documents/client/${clientId}?flagged_only=true&limit=500`, { signal });
+  const docs = await parseOrThrow(res);
+  return Array.isArray(docs) ? docs.map((d: any) => (d && d.title ? { ...d, title: decodeHtmlEntities(d.title) } : d)) : [];
+}
+
 // True totals over every visible document (the list above stops at 500). Null when the API does not have it yet.
 export async function fetchDocumentCounts(clientId: string, signal?: AbortSignal) {
   try {

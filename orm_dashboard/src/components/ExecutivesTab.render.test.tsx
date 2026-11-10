@@ -159,7 +159,7 @@ describe("search results", () => {
     await mount();
     await search("Geetika Trehan");
     const text = host.textContent || "";
-    expect(text).toContain("Limited coverage (1 article)");
+    expect(text).toContain("Limited coverage: 1 article in 30 days");
     expect(text).not.toContain("60.19");
     expect(text).toContain("LOW EVIDENCE");
     expect(text).not.toContain("Grade withheld");

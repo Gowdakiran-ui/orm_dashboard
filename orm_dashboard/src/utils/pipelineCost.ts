@@ -3,6 +3,8 @@
 // Rule: a missing or malformed payload is "unavailable", never a believable zero. Apify figures are exact for Reddit and
 // estimated for Instagram; the LLM dollar figure is an estimate from token counts at public per-token prices.
 
+import { formatDMY } from "./dateFormat";
+
 export interface CostBreakdownRow {
   key: string;
   calls: number;
@@ -84,8 +86,7 @@ export function runLine(c: PipelineCostView): string {
   const run = c.run;
   if (!run) return `Run ${c.runId.slice(0, 8)}.`;
   const when = run.finishedAt ?? run.startedAt;
-  const d = when ? new Date(when) : null;
-  const date = d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
+  const date = when ? formatDMY(when, "") || null : null;      // the shared DD-MM-YYYY helper; "" when the date cannot be read
   const dur = run.durationS !== null ? `${Math.round(run.durationS)} s` : null;
   return [`Run ${c.runId.slice(0, 8)}`, run.status.toLowerCase(), date, dur].filter(Boolean).join(" · ") + (c.finalized ? "." : ". Still counting: the run has not finished.");
 }

@@ -438,6 +438,7 @@ function DashboardShell() {
                     documentsLoading={data.documentsLoading}
                     documentsError={data.documentsError}
                     documents={data.documents}
+                    flaggedDocuments={data.flaggedDocuments}
                     clientId={data.clientId}
                   />
                 </ErrorBoundary>

@@ -60,7 +60,7 @@ describe("wording", () => {
   });
 
   it("states the run and says when it is still counting", () => {
-    expect(runLine(c)).toMatch(/^Run 6c71f6e1 · success · \d+ \w+ 2026 · 1260 s\.$/);
+    expect(runLine(c)).toBe("Run 6c71f6e1 · success · 09-11-2026 · 1260 s.");
     expect(runLine({ ...c, finalized: false })).toContain("Still counting: the run has not finished.");
   });
 

@@ -249,3 +249,34 @@ describe("A6 Mentioned Targets de-duplication", () => {
     expect(badges.filter(t => t === "Pranav Adani").length).toBe(1);
   });
 });
+
+describe("B1 flagged articles first", () => {
+  const flaggedOld = (id: string, risk: number, ts: string) => ({ ...doc(900), id, title: `Flagged ${id}`, risk, risk_exact: risk, risk_level: risk > 50 ? "HIGH" : "MEDIUM", timestamp: ts });
+
+  it("lists flagged articles of any age above the newest ones, strongest first, with a note", async () => {
+    const flagged = [flaggedOld("fa", 51, "2024-01-01T00:00:00Z"), flaggedOld("fb", 75, "2023-01-01T00:00:00Z")];
+    await mount({ documents: manyDocs(5), flaggedDocuments: flagged });
+    const titles = rowEls().map(r => r.textContent || "");
+    expect(titles[0]).toContain("Flagged fb");
+    expect(titles[1]).toContain("Flagged fa");
+    expect(titles[2]).toContain("Headline 0");
+    expect(host.querySelector("[data-testid='stream-flagged-note']")?.textContent).toContain("2 flagged articles listed first");
+  });
+
+  it("is the plain newest-first list, with no note, when there are no flagged articles or the flagged list is missing", async () => {
+    await mount({ documents: manyDocs(3), flaggedDocuments: [] });
+    expect(rowEls()[0].textContent).toContain("Headline 0");
+    expect(host.querySelector("[data-testid='stream-flagged-note']")).toBeNull();
+    await render({ documents: manyDocs(3) });
+    expect(host.querySelector("[data-testid='stream-flagged-note']")).toBeNull();
+  });
+
+  it("does not list an article twice and keeps the 500 notice tied to the newest list", async () => {
+    const dup = { ...doc(0), risk: 60, risk_exact: 60, risk_level: "HIGH" };
+    await mount({ documents: manyDocs(500), flaggedDocuments: [dup] });
+    expect(rowEls()[0].textContent).toContain("Headline 0");
+    expect(host.querySelector("[data-testid='stream-flagged-note']")?.textContent).toContain("1 flagged article listed first");
+    expect(host.textContent).toContain("Showing newest 500");
+    expect((host.textContent || "").split("Headline 0").length - 1).toBe(1);
+  });
+});

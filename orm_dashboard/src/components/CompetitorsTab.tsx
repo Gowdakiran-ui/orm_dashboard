@@ -494,7 +494,7 @@ export function CompetitorsTab({
                     {v.sovMeaning && <span className={`block text-xs ${mutedText(theme)}`}>{v.sovMeaning}</span>}
                     {v.evidence && <span className={`block text-xs font-mono ${mutedText(theme)}`}>{v.evidence}</span>}
                     {v.thinNote && <span className="block text-xs font-mono text-amber-500">{v.thinNote}</span>}
-                    {v.asOf && <span className={`block text-xs font-mono ${mutedText(theme)}`}>{v.asOf}</span>}
+                    <span className={`block text-xs font-mono ${mutedText(theme)}`} data-testid="card-as-of">{v.asOf}</span>
                   </button>
                 );
               })}
@@ -802,7 +802,7 @@ export function CompetitorsTab({
             </Badge>
           </CardTitle>
           <CardDescription className={`text-[11px] font-mono leading-relaxed ${mutedText(theme)}`}>
-            {activityScopeNote(activeClientName)}
+            {activityScopeNote(activeClientName, benchWindow)}
           </CardDescription>
         </CardHeader>
         <CardContent>

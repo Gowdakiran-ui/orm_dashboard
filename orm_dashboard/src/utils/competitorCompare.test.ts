@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import {
   clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice, rankedEntityCount, rankLabel, emptyStateMessage,
-  comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption, asOfLabel, competitorCardView, noEvidenceMessage, hiddenTopics, hiddenTopicsNote,
+  comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption, asOfLabel, competitorCardView, buildCompetitorCards, noEvidenceMessage, hiddenTopics, hiddenTopicsNote,
   hasEvidence, RADAR_AXES, isLowEvidence, lowEvidenceTitle, notEnoughCoverageMessage, riskTileLabel, fixed, LOW_EVIDENCE_MENTIONS,
 } from "@/utils/competitorCompare";
 
@@ -111,6 +111,12 @@ describe("counts and labels equal what is listed (F-05, F-09)", () => {
     expect(articleCountLabel(0)).toBe("0 articles");
     expect(articleCountLabel(7)).toBe("7 articles");
     expect(activityScopeNote("Godrej")).toContain("newest 500");
+    expect(activityScopeNote("Godrej")).toContain("The scores above use the last 90 days");        // the competitor look-back, not 30
+    expect(activityScopeNote("Godrej", 90)).toContain("last 90 days");
+    expect(activityScopeNote("Godrej", 45)).toContain("last 45 days");
+    expect(activityScopeNote("Godrej", null)).toContain("last 90 days");
+    expect(activityScopeNote("Godrej", 0)).toContain("last 90 days");
+    expect(activityScopeNote("Godrej")).not.toContain("30 days");
   });
 });
 
@@ -224,9 +230,17 @@ describe("competitor cards", () => {
     expect(v.scoreText).toBe("Not enough coverage");
     expect(v.scoreMeaning).toContain("No article from the last 30 days mentions both Orris and Godrej");
   });
-  it("missing as_of / mentions are simply left out", () => {
+  it("a missing mentions count is left out; a missing as_of says so instead of showing nothing", () => {
     const v = competitorCardView(row({ as_of: null, mentions_30d: null }), "Godrej");
-    expect(v.asOf).toBeNull();
+    expect(v.asOf).toBe("Data as of: date not available");
     expect(v.evidence).toBeNull();
+    expect(competitorCardView(row({ as_of: "not a date" }), "Godrej").asOf).toBe("Data as of: date not available");
+  });
+  it("every card has its own as-of line: the placeholder says it has not been scored", () => {
+    const cards = buildCompetitorCards(
+      [row({ competitor_id: "e1", competitor_name: "DLF", as_of: "2026-11-05T14:55:58+00:00" }), row({ competitor_id: "e2", competitor_name: "Lodha", as_of: "2026-10-01T00:00:00+00:00" })],
+      [{ entity_id: "e1", name: "DLF", rank: 1 }, { entity_id: "e2", name: "Lodha", rank: 2 }, { entity_id: "e3", name: "Prestige Group", rank: 3 }], "Godrej");
+    expect(cards.map(c => c.asOf)).toEqual(["Data as of 05-11-2026", "Data as of 01-10-2026", "Data as of: not scored yet"]);
+    expect(cards.every(c => typeof c.asOf === "string" && c.asOf.length > 0)).toBe(true);
   });
 });

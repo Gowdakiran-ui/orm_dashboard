@@ -24,11 +24,21 @@ describe("executiveView", () => {
   it("shows Limited coverage (N articles) instead of a score and grade under 3 articles (display only)", () => {
     const v = executiveView({ ...scored, score: 60.192, grade: "C", document_count: 1 }, NOW);
     expect(v.badge).toBe("low_evidence");
-    expect(v.scoreText).toBe("Limited coverage (1 article)");
+    expect(v.scoreText).toBe("Limited coverage: 1 article in 30 days");
     expect(v.gradeText).toBe("-");
     expect(v.scoreText).not.toContain("60.19");
-    expect(executiveView({ ...scored, score: 60.2173, grade: "C", document_count: 2 }, NOW).scoreText).toBe("Limited coverage (2 articles)");
+    expect(executiveView({ ...scored, score: 60.2173, grade: "C", document_count: 2 }, NOW).scoreText).toBe("Limited coverage: 2 articles in 30 days");
     expect(executiveView({ ...scored, score: 60.2427, grade: "C", document_count: 3 }, NOW)).toMatchObject({ badge: "scored", scoreText: "60.24", gradeText: "C" });
+  });
+  it("Limited coverage says how many articles are inside the look-back and how many exist all-time", () => {
+    const e = { ...scored, score: 60.192, grade: "C", document_count: 1, window_days: 365, articles_all_time: 37 };
+    expect(executiveView(e, NOW).scoreText).toBe("Limited coverage: 1 article in 12 months (37 all-time)");
+    expect(executiveView({ ...e, document_count: 2, articles_all_time: 13 }, NOW).scoreText).toBe("Limited coverage: 2 articles in 12 months (13 all-time)");
+    expect(executiveView({ ...e, document_count: 2, articles_all_time: 2 }, NOW).scoreText).toBe("Limited coverage: 2 articles in 12 months (2 all-time)");
+    expect(executiveView({ ...e, window_days: 90 }, NOW).scoreText).toBe("Limited coverage: 1 article in 90 days (37 all-time)");
+    expect(executiveView({ ...e, articles_all_time: undefined }, NOW).scoreText).toBe("Limited coverage: 1 article in 12 months");   // old payload: no all-time part
+    expect(executiveView({ ...e, articles_all_time: null }, NOW).scoreText).toBe("Limited coverage: 1 article in 12 months");
+    expect(executiveView({ ...e, document_count: 3 }, NOW).badge).toBe("scored");                                                    // 3 or more: a real score, as before
   });
   it("an unscored person never gets a number or a grade", () => {
     for (const e of [
@@ -105,7 +115,7 @@ describe("default tracked-executive cards", () => {
     expect(trackedCardView(rows[0], "Acme").headline).toBe("No score yet");
     expect(trackedCardView(rows[0], "Acme").detail).toContain("No coverage mentioning Acme");
     expect(trackedCardView(rows[2], "Acme")).toMatchObject({ hasScore: true, headline: "70.00 · grade B", detail: "3 articles in the last 30 days" });
-    expect(trackedCardView({ ...rows[2], document_count: 2 }, "Acme").headline).toBe("Limited coverage (2 articles)");
+    expect(trackedCardView({ ...rows[2], document_count: 2 }, "Acme").headline).toBe("Limited coverage: 2 articles in 30 days");
     expect(trackedCardView({ ...rows[2], document_count: 2 }, "Acme").headline).not.toMatch(/grade|70\.00/);
   });
 });

@@ -566,6 +566,13 @@ def get_client_benchmark(
     if retired:
         rows = [p for p in rows if p[0].competitor_entity_id not in retired]       # a retired seeded competitor is not shown (entity kept)
     seed_ranks = {r.entity_id: r.rank for r in seeded_rows(db, client_id, "competitor")}
+    if seed_ranks:
+        # An unseeded competitor that is the same company as a seeded one under another name ("Prestige Estates" next to the seeded
+        # "Prestige Group") is hidden, so the company is not ranked and counted twice. The entity is kept. See competitor_dupes.py.
+        from app.services.intelligence.competitor_dupes import hidden_duplicates
+        dupes = hidden_duplicates([(p[0].competitor_entity_id, p[1].name) for p in rows], set(seed_ranks))
+        if dupes:
+            rows = [p for p in rows if p[0].competitor_entity_id not in dupes]
     return _build_benchmark_response(rows, client_comparable_score, limit, offset, client_entity_id, seed_ranks=seed_ranks)
 
 @router.get("/{client_id}/topic-distribution", response_model=Dict[str, Any])

@@ -4,7 +4,7 @@ import {
   fetchClients, fetchReputation, fetchReputationHistory, fetchReputationBreakdown, fetchReputationSummary,
   fetchPlanAdvisory,
   fetchActiveAlerts, fetchCompetitorBenchmarks, fetchRisks,
-  fetchExecutives, fetchDocuments, fetchDocumentCounts,
+  fetchExecutives, fetchDocuments, fetchFlaggedDocuments, fetchDocumentCounts,
   fetchExecutiveCandidates, fetchCompetitorCandidates, fetchClientTelemetry
 } from "@/lib/api";
 import { formatChartDate } from "@/utils/formatChartDate";
@@ -62,6 +62,8 @@ export function useDashboardData() {
 
   
   const [documents, setDocuments] = useState<any[]>([]);
+  // Flagged articles (any age), strongest first: only the Intelligence Stream reads this. Best effort: a failure leaves the plain list.
+  const [flaggedDocuments, setFlaggedDocuments] = useState<any[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [documentCounts, setDocumentCounts] = useState<DocumentCounts | null>(null);
@@ -183,6 +185,7 @@ export function useDashboardData() {
       setRisks({ average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 });
       setExecutives([]);
       setDocuments([]);
+      setFlaggedDocuments([]);
       setTelemetry(null);
     }
 
@@ -376,6 +379,7 @@ export function useDashboardData() {
             .finally(() => { if (!signal.aborted) setDocumentsLoading(false); }),
 
           fetchDocumentCounts(activeClientId, signal).then(c => { if (!signal.aborted) setDocumentCounts(c); }),
+          fetchFlaggedDocuments(activeClientId, signal).then(f => { if (!signal.aborted) setFlaggedDocuments(f || []); }).catch(() => { /* the stream falls back to the plain list */ }),
 
           fetchExecutiveCandidates(activeClientId, signal)
             .then(data => {
@@ -444,7 +448,8 @@ export function useDashboardData() {
           fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
           fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
-          fetchDocumentCounts(clientId, signal).then(c => { if (!signal.aborted) setDocumentCounts(c); })
+          fetchDocumentCounts(clientId, signal).then(c => { if (!signal.aborted) setDocumentCounts(c); }),
+          fetchFlaggedDocuments(clientId, signal).then(f => { if (!signal.aborted) setFlaggedDocuments(f || []); }).catch(() => { /* keep the last list */ })
         ]);
 
         // FINDINGS.md #36: an extended outage after initial load previously had
@@ -497,6 +502,7 @@ export function useDashboardData() {
     setRisks(null);
     setExecutives([]);
     setDocuments([]);
+    setFlaggedDocuments([]);
     setExecutiveCandidates([]);
     setCompetitorCandidates([]);
     setTelemetry(null); // Clear telemetry
@@ -577,6 +583,7 @@ export function useDashboardData() {
     executivesLoading,
     executivesError,
     documents,
+    flaggedDocuments,
     documentCounts,
     documentsLoading,
     documentsError,

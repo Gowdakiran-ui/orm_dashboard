@@ -1,5 +1,5 @@
 import { formatDMY } from "./dateFormat";
-import { windowPhrase } from "./windowText";
+import { windowPhrase, windowLength } from "./windowText";
 // Pure display rules for the Executives page (kept free of React so every sentence can be unit-tested).
 //
 // Rules: a person with no stored score is "No score yet", never a zero or a grade; under 3 articles the page shows
@@ -33,8 +33,12 @@ export function formatAsOfDate(asOf: string | null | undefined): string | null {
 
 export type ExecBadge = "scored" | "low_evidence" | "no_score";
 
-export function limitedCoverageText(n: number): string {
-  return `Limited coverage (${n} article${n === 1 ? "" : "s"})`;
+// "Limited coverage: 1 article in 12 months (37 all-time)". The count the score rests on is the one inside the look-back; the all-time count
+// is shown beside it so a person with many older articles is not read as unknown. The all-time part is left out when the API did not send it.
+export function limitedCoverageText(n: number, windowDaysValue?: unknown, allTime?: unknown): string {
+  const inWindow = `${n} article${n === 1 ? "" : "s"} in ${windowLength(windowDaysValue)}`;
+  const total = typeof allTime === "number" && Number.isFinite(allTime) && allTime >= 0 ? ` (${allTime} all-time)` : "";
+  return `Limited coverage: ${inWindow}${total}`;
 }
 
 export interface ExecView {
@@ -56,7 +60,7 @@ export function executiveView(e: any, now: number = Date.now()): ExecView {
   const docs = typeof e.document_count === "number" ? e.document_count : null;
   const scoreText = e.score.toFixed(2);
   if (docs !== null && docs < LOW_EVIDENCE_DOCS) {
-    return { badge: "low_evidence", scoreText: limitedCoverageText(docs), gradeText: "-", hasScore: true, staleNote, asOfText };
+    return { badge: "low_evidence", scoreText: limitedCoverageText(docs, e.window_days, e.articles_all_time), gradeText: "-", hasScore: true, staleNote, asOfText };
   }
   return { badge: "scored", scoreText, gradeText: e.grade ?? "-", hasScore: true, staleNote, asOfText };
 }

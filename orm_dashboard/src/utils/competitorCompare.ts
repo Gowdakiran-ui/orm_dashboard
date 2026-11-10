@@ -115,8 +115,12 @@ export function articleCountLabel(n: number): string {
   return `${n} ${n === 1 ? "article" : "articles"}`;
 }
 
-export function activityScopeNote(clientName: string): string {
-  return `Articles found among the newest ${ACTIVITY_ARTICLE_CAP} about ${clientName}. The scores above use the last 30 days, so this list can differ from what they rest on.`;
+// Competitor scores use the benchmark look-back (BENCHMARK_WINDOW_DAYS = 90). The window the API sent is used when there is one.
+export const BENCHMARK_DEFAULT_WINDOW_DAYS = 90;
+
+export function activityScopeNote(clientName: string, windowDaysValue?: unknown): string {
+  const days = isNum(windowDaysValue) && windowDaysValue > 0 ? windowDaysValue : BENCHMARK_DEFAULT_WINDOW_DAYS;
+  return `Articles found among the newest ${ACTIVITY_ARTICLE_CAP} about ${clientName}. The scores above use the ${windowPhrase(days)}, so this list can differ from what they rest on.`;
 }
 
 export function evidenceCaption(mentions: unknown, clientName: string, windowDaysValue?: number | null, seeded: boolean = false): string | null {
@@ -190,7 +194,7 @@ export interface CompetitorCardView {
   evidence: string | null;
   thin: boolean;              // fewer than LOW_EVIDENCE_MENTIONS mentions: score shown, with a caution
   thinNote: string | null;
-  asOf: string | null;        // "Data as of 20-10-2026"
+  asOf: string;               // "Data as of 20-10-2026"; every card has one (a card with no date says so)
 }
 
 /** One card per compared competitor, built only from the already-served /benchmark row. */
@@ -200,7 +204,7 @@ export function competitorCardView(b: any, clientName: string): CompetitorCardVi
   const lowEvidence = isLowEvidence(b?.mentions_30d);
   const scored = b?.health_status !== "INSUFFICIENT_EVIDENCE" && isNum(b?.reputation) && isNum(b?.rank) && b.rank > 0 && !lowEvidence;
   const asOfIso = typeof b?.as_of === "string" ? b.as_of : null;
-  const asOf = asOfIso && formatDMY(asOfIso, "") ? `Data as of ${formatDMY(asOfIso)}` : null;
+  const asOf = asOfIso && formatDMY(asOfIso, "") ? `Data as of ${formatDMY(asOfIso)}` : "Data as of: date not available";
   const thin = false;   // thin evidence no longer shows a caution: below the minimum there is no score at all
   return {
     name,
@@ -240,7 +244,7 @@ export function placeholderCardView(name: string, clientName: string): Competito
   return {
     name, hasScore: false, scoreText: "Tracked, no coverage yet",
     scoreMeaning: `${name} is tracked and being searched for, but no article about it has been scored yet, so there is nothing to compare with ${clientName}. It appears here after the next Run Pipeline.`,
-    rankText: null, sovText: null, sovMeaning: null, evidence: null, thin: false, thinNote: null, asOf: null,
+    rankText: null, sovText: null, sovMeaning: null, evidence: null, thin: false, thinNote: null, asOf: "Data as of: not scored yet",
   };
 }
 

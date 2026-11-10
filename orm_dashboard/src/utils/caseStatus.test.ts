@@ -113,5 +113,10 @@ describe("small-penalty rule wording", () => {
   it("a penalty that keeps its score gets only the stage; a missing reason falls back to plain words", () => {
     expect(statusSentence(doc("p", withStatus("penalty_or_order", { penalty_cap_applied: false, penalty_cap_reason: "the amount is 25 lakh rupees or more" })))).toBe("The story is at the penalty / order stage.");
     expect(statusSentence(doc("p", withStatus("penalty_or_order", { penalty_cap_applied: true })))).toBe("The story is at the penalty / order stage. Held at Medium: it is a small or old order.");
+    // user-generated / video allegation rule
+    const ugc = "an allegation from a user-generated or video source (16,337 views, under 100,000) that is not a news outlet";
+    expect(statusSentence(doc("u", withStatus("allegation", { ugc_cap_applied: true, ugc_cap_reason: ugc })))).toBe(`The story is at the allegation stage. Held at Medium: ${ugc}.`);
+    expect(statusSentence(doc("u", withStatus("allegation", { ugc_cap_applied: true })))).toBe("The story is at the allegation stage. Held at Medium: it is an allegation from a low-reach user-generated or video source.");
+    expect(statusSentence(doc("u", withStatus("allegation", { ugc_cap_applied: false, ugc_cap_reason: "100,000 views or more" })))).toBe("The story is at the allegation stage.");
   });
 });

@@ -3,6 +3,7 @@
 // Rule: a missing or malformed payload is "unavailable", never a believable default. Nothing here feeds any score.
 
 import { isCaseStatus, type CaseStatus } from "./caseStatus";
+import { formatDMY } from "./dateFormat";
 
 export type SourceTier = "high" | "medium" | "low" | "official" | "own" | "user_generated" | "unrated";
 
@@ -190,8 +191,7 @@ export function runLine(run: AiRun | null): string {
   if (run.status === "running") return `Running… ${run.callsOk} of ${run.promptCount * run.repeats} answers so far.`;
   if (run.status === "failed") return `The last AI check failed${run.callsOk ? ` after ${run.callsOk} answers` : ""}${run.error ? `: ${run.error}` : "."}`;
   const when = run.finishedAt ?? run.startedAt;
-  const date = when ? new Date(when) : null;
-  const dateText = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
+  const dateText = when ? formatDMY(when, "") || null : null;      // the shared DD-MM-YYYY helper; "" when the date cannot be read
   const partial = run.status === "stopped_at_cap" ? " Stopped early at the cost limit." : "";
   return `${run.callsOk} answers${dateText ? ` · ${dateText}` : ""} · cost ${formatUsd(run.costUsd)}.${partial}`;
 }

@@ -59,6 +59,11 @@ export function statusSentence(d: any): string | null {
     const why = typeof exp.penalty_cap_reason === "string" && exp.penalty_cap_reason ? exp.penalty_cap_reason : "it is a small or old order";
     return `${base} Held at Medium: ${why}.`;
   }
+  // User-generated / video allegation rule: held at Medium, and the stored reason says why.
+  if (exp?.ugc_cap_applied === true) {
+    const why = typeof exp.ugc_cap_reason === "string" && exp.ugc_cap_reason ? exp.ugc_cap_reason : "it is an allegation from a low-reach user-generated or video source";
+    return `${base} Held at Medium: ${why}.`;
+  }
   return d?.risk_explainability?.case_status_cap_applied === true
     ? `${base} Stories at this stage are held at Medium and do not reach High.`
     : base;

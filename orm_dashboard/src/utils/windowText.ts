@@ -7,6 +7,12 @@ export function windowDays(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : DEFAULT_WINDOW_DAYS;
 }
 
+/** "12 months" for a year-long window, otherwise "90 days": the look-back as a plain length, without "last". */
+export function windowLength(value: unknown): string {
+  const d = windowDays(value);
+  return d >= 360 && d <= 370 ? "12 months" : `${d} days`;
+}
+
 /** "last 90 days" */
 export function windowPhrase(value: unknown): string {
   return `last ${windowDays(value)} days`;

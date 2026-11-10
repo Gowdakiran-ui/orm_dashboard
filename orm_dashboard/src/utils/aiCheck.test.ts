@@ -104,7 +104,8 @@ describe("wording", () => {
   it("states the run in plain words", () => {
     const run = (over: any) => parseAiCheck(payload({ run: { ...payload().run, ...over } }))!.run;
     expect(runLine(null)).toBe("No AI check has been run for this company yet.");
-    expect(runLine(run({}))).toMatch(/^24 answers · \d+ \w+ 2026 · cost \$0\.31\.$/);
+    expect(runLine(run({}))).toBe("24 answers · 07-11-2026 · cost $0.31.");
+    expect(runLine(run({ finished_at: null, started_at: "not a date" }))).toBe("24 answers · cost $0.31.");       // an unreadable date is left out
     expect(runLine(run({ status: "stopped_at_cap" }))).toContain("Stopped early at the cost limit.");
     expect(runLine(run({ status: "running", calls_ok: 5 }))).toBe("Running… 5 of 24 answers so far.");
     expect(runLine(run({ status: "failed", calls_ok: 0, error: "no answers" }))).toBe("The last AI check failed: no answers");

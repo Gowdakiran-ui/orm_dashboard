@@ -148,6 +148,38 @@ def get_client_visible_documents(db: Session, client_id, skip: int = 0, limit: i
     )
 
 
+def get_client_flagged_documents(db: Session, client_id, limit: int = 500):
+    """
+    The client's FLAGGED documents (highest risk across its non-competitor entities above the LOW band, the same per-document basis as the
+    Brand Equity / Risk Center counts), strongest first, then newest first. Unlike get_client_visible_documents this is not limited to
+    the newest articles, so an old but serious article is still found. Read-only; used by the Intelligence Stream so flagged articles
+    are not pushed out of the newest-500 list by a run of LOW items. get_client_visible_documents itself is unchanged (the charts and
+    the AI-summary sweep depend on its ordering).
+    """
+    from app.models.entity import Entity
+    from app.models.risk import RiskEvent
+    limit = min(limit, 1000)
+    visible = get_client_visible_document_ids(db, client_id)
+    if not visible:
+        return []
+    best = {}
+    for doc_id, score in db.query(RiskEvent.document_id, RiskEvent.risk_score).outerjoin(
+        Entity, Entity.id == RiskEvent.entity_id
+    ).filter(
+        RiskEvent.client_id == client_id,
+        RiskEvent.document_id.in_(visible),
+        or_(Entity.entity_type != "competitor", Entity.entity_type.is_(None), RiskEvent.entity_id.is_(None)),
+    ).all():
+        if score is not None and (doc_id not in best or score > best[doc_id]):
+            best[doc_id] = score
+    flagged_ids = [d for d, s in best.items() if s > RISK_THRESHOLDS["LOW_TO_MEDIUM"]]
+    if not flagged_ids:
+        return []
+    docs = db.query(Document).filter(Document.id.in_(flagged_ids)).all()
+    docs.sort(key=lambda d: (-best[d.id], -(d.published_at.timestamp() if d.published_at else 0.0), str(d.id)))
+    return docs[:limit]
+
+
 @router.get("/{document_id}")
 def read_document(document_id: UUID, client_id: UUID, db: Session = Depends(get_db)):
     from app.models.entity import Entity, EntityMention
@@ -443,12 +475,16 @@ def read_client_document_counts(client_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/client/{client_id}")
-def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_client_documents(client_id: UUID, skip: int = 0, limit: int = 100, flagged_only: bool = False, db: Session = Depends(get_db)):
     limit = min(limit, 500)  # hard ceiling — caller-supplied limit was previously unbounded
     from app.models.client import Client
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    docs = get_client_visible_documents(db, client_id, skip=skip, limit=limit)
+    if flagged_only:
+        # strongest first, then newest; skip/limit apply to that order
+        docs = get_client_flagged_documents(db, client_id, limit=skip + limit)[skip:]
+    else:
+        docs = get_client_visible_documents(db, client_id, skip=skip, limit=limit)
     return _build_document_responses(db, client_id, docs)

@@ -27,6 +27,7 @@ from app.services.intelligence.risk_floor import (
 from app.services.intelligence.case_status import (
     STATUS_CAP_SCORE, STATUS_LABELS, apply_status_cap, cached_case_status, case_status_enabled, classify_case_status,
 )
+from app.services.intelligence.ugc_cap import ugc_cap_decision
 from app.services.intelligence.penalty_rule import (
     classify_penalty_llm, merge_with_regex, parse_penalty, penalty_cap_decision, with_restricts,
 )
@@ -961,6 +962,8 @@ class RiskEngine:
                 penalty_parse = None
                 penalty_cap_applied = False
                 penalty_cap_reason = None
+                ugc_cap_applied = False
+                ugc_cap_reason = None
                 if (case_status_enabled() and final_score > self.RISK_ROLE_CLASSIFICATION_MIN_SCORE
                         and role_classification not in ("BYSTANDER", "EXONERATED")):
                     cached_cs = cached_status_by_client_entity.get((client_id, entity.id))
@@ -985,6 +988,14 @@ class RiskEngine:
                             penalty_parse = with_restricts(penalty_parse, document.title, document.normalized_content)
                         penalty_cap_applied, penalty_cap_reason = penalty_cap_decision(penalty_parse, document.published_at)
                         if penalty_cap_applied:
+                            final_score = STATUS_CAP_SCORE
+                    # User-generated / video allegation rule (ugc_cap.py): an allegation from a YouTube / Instagram / Reddit / forum
+                    # source with under 100,000 views that is not a news outlet is held at Medium. Press items and every other
+                    # status never reach this branch.
+                    if case_status == "allegation" and final_score > STATUS_CAP_SCORE:
+                        ugc_cap_applied, ugc_cap_reason = ugc_cap_decision(
+                            getattr(document, "document_type", None), getattr(document, "view_count", None), getattr(document, "author", None), case_status)
+                        if ugc_cap_applied:
                             final_score = STATUS_CAP_SCORE
 
                 risk_factors = []
@@ -1021,7 +1032,7 @@ class RiskEngine:
                         else f"Mechanical score reduced to 0.0: LLM role classification found this entity is a {role_classification} in this document, not the actual subject of the negative story."
                     ),
                     "serious_floor_applied": (serious_floor_applied and role_classification not in ("BYSTANDER", "EXONERATED")
-                                              and not case_status_cap_applied and not penalty_cap_applied),
+                                              and not case_status_cap_applied and not penalty_cap_applied and not ugc_cap_applied),
                     "noise_cap_applied": noise_cap_applied,
                     "role_classification": role_classification,
                     # Deliberately stays "llm" (not a distinct "llm_cached" tier)
@@ -1056,6 +1067,11 @@ class RiskEngine:
                         explainability_data["penalty_cap_reason"] = penalty_cap_reason
                         if penalty_cap_applied:
                             explainability_data["decision_reason"] += f" Held at Medium: {penalty_cap_reason}."
+                    if case_status == "allegation" and (ugc_cap_applied or ugc_cap_reason is not None):
+                        explainability_data["ugc_cap_applied"] = ugc_cap_applied
+                        explainability_data["ugc_cap_reason"] = ugc_cap_reason
+                        if ugc_cap_applied:
+                            explainability_data["decision_reason"] += f" Held at Medium: {ugc_cap_reason}."
 
                 payload = {
                     "client_id": client_id,
