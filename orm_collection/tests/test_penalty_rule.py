@@ -242,7 +242,7 @@ def test_model_is_called_only_when_no_amount_is_found_and_its_reading_is_used(mo
     pay, llm = _run(monkeypatch, "MahaRERA fines Godrej Properties over refund to buyer - X", published=RECENT, llm_parse=llm_parse)
     assert llm == [1]
     assert pay["risk_score"] == STATUS_CAP_SCORE and pay["explainability"]["penalty_parse"]["source"] == "regex+llm"
-    assert set(pay["explainability"]["penalty_parse"]) == {"amount_lakh", "kind", "criminal", "source"}     # no token or cost fields stored
+    assert set(pay["explainability"]["penalty_parse"]) == {"amount_lakh", "kind", "criminal", "restricts", "source"}     # no token or cost fields stored
 
 
 def test_failed_model_call_leaves_a_headline_with_nothing_recognised_at_high(monkeypatch):
@@ -267,3 +267,83 @@ def test_cached_parse_is_reused_without_a_model_call(monkeypatch):
     pay, llm = _run(monkeypatch, "Godrej Properties fined by the authority - X", published=RECENT, prior_expl=prior)
     assert llm == [] and pay["risk_score"] == STATUS_CAP_SCORE
     assert pay["explainability"]["penalty_parse"]["source"] == "regex+llm"
+
+
+# ---- orders that revoke a registration, ban sales or stop a project (never capped, with or without an amount) ----------------------
+@pytest.mark.parametrize("text,restricts", [
+    ("MahaRERA revokes registration of Godrej Properties project in Pune", True),
+    ("RERA cancels Godrej Properties' project registration over delays", True),
+    ("Godrej Properties' licence suspended by the municipal body", True),
+    ("registration of the Godrej project has been revoked", True),
+    ("Authority bans Godrej Properties from selling flats in the project", True),
+    ("RERA bars Godrej Properties from booking units until the project is registered", True),
+    ("Godrej Properties barred from advertising its Thane project", True),
+    ("Stop-work order issued to Godrej Properties site in Gurugram", True),
+    ("Authority halts construction of Godrej Properties tower", True),
+    ("civic body stops work on Godrej Properties project", True),
+    ("NGT stalls Godrej Properties project over clearances", True),
+    ("Godrej Properties fined Rs 10 lakh by CGRERA over ad violation", False),
+    ("MahaRERA directs Godrej Properties to refund booking amount to buyer", False),
+    ("Godrej Properties launches registration for new Pune project", False),            # "registration" alone is not an order
+    ("Godrej Properties bank account frozen? No, company says rumour is false", False),   # no project / construction named
+    ("Cancel culture hits ad campaign; Godrej Properties unharmed", False),
+    ("Consumer commission orders EaseMyTrip to refund cancelled flight ticket", False),   # a cancelled ticket is not a revoked registration
+    ("MCD slaps Rs 5 lakh penalty on Godrej Properties' arm", False),
+])
+def test_restricting_wording(text, restricts):
+    assert pr.parse_penalty(text)["restricts"] is restricts
+
+
+def test_restricting_order_is_never_capped_even_without_an_amount_or_with_a_small_one():
+    keep = lambda **kw: pr.penalty_cap_decision({"amount_lakh": None, "kind": "unknown", "criminal": False, "restricts": True, "source": "regex", **kw}, RECENT, NOW)
+    for kw in ({"kind": "small"}, {"kind": "unknown"}, {"amount_lakh": 3.0, "kind": "small"}, {"amount_lakh": 3.06}):
+        got, reason = keep(**kw)
+        assert got is False and "revokes a registration, bans sales or stops a project" in reason
+    # not even when the story is older than 24 months
+    assert pr.penalty_cap_decision({"amount_lakh": 3.0, "kind": "small", "criminal": False, "restricts": True}, OLD, NOW)[0] is False
+    # the same readings without the restricting wording are still capped
+    assert pr.penalty_cap_decision({"amount_lakh": None, "kind": "small", "criminal": False, "restricts": False}, RECENT, NOW)[0] is True
+    assert pr.penalty_cap_decision({"amount_lakh": 3.0, "kind": "small", "criminal": False, "restricts": False}, RECENT, NOW)[0] is True
+    # a reading without the key (cached earlier) behaves as before
+    assert pr.penalty_cap_decision({"amount_lakh": 3.0, "kind": "small", "criminal": False}, RECENT, NOW)[0] is True
+
+
+def test_model_reads_the_restricting_question_and_either_reading_keeps_the_order():
+    r = pr.parse_penalty_llm_text('{"amount_lakh": null, "authority": "state_rera", "criminal": false, "restricts": true}')
+    assert r["restricts"] is True
+    assert pr.parse_penalty_llm_text('{"amount_lakh": 2, "authority": "state_rera", "criminal": false}')["restricts"] is False   # absent = false
+    rx = {"amount_lakh": None, "kind": "small", "criminal": False, "restricts": False, "source": "regex"}
+    assert pr.merge_with_regex(rx, r)["restricts"] is True
+    assert pr.merge_with_regex({**rx, "restricts": True}, {**r, "restricts": False})["restricts"] is True
+    assert "restricts" in pr._LLM_SYSTEM
+
+
+def test_an_old_cached_reading_gets_the_regex_answer_for_the_new_question():
+    old = {"amount_lakh": 4.0, "kind": "small", "criminal": False, "source": "regex"}
+    assert pr.with_restricts(old, "RERA revokes registration of Godrej project")["restricts"] is True
+    assert pr.with_restricts(old, "Godrej fined Rs 4 lakh by RERA")["restricts"] is False
+    assert "restricts" not in old                                                      # the cached dict itself is not changed
+    new = {**old, "restricts": False}
+    assert pr.with_restricts(new, "RERA revokes registration of Godrej project") is new   # a reading that has the key is kept as it is
+
+
+def test_engine_keeps_a_registration_revocation_at_high_with_no_amount_and_a_small_authority(monkeypatch):
+    llm_parse = {"amount_lakh": None, "kind": "small", "criminal": False, "restricts": False, "source": "llm", "prompt_tokens": 1, "completion_tokens": 1, "cost": 0.0003, "latency_ms": 5.0}
+    pay, llm = _run(monkeypatch, "MahaRERA revokes registration of Godrej Properties project - X", published=RECENT, llm_parse=llm_parse)
+    assert pay["risk_score"] == HIGH_FLOOR_SCORE and pay["explainability"]["penalty_cap_applied"] is False
+    assert pay["explainability"]["penalty_parse"]["restricts"] is True
+    # the same authority and no amount, but a plain refund order: still capped
+    pay2, _ = _run(monkeypatch, "MahaRERA directs Godrej Properties to refund booking amount - X", published=RECENT, llm_parse=llm_parse)
+    assert pay2["risk_score"] == STATUS_CAP_SCORE and pay2["explainability"]["penalty_parse"]["restricts"] is False
+
+
+def test_engine_keeps_a_small_fine_that_comes_with_a_stop_work_order(monkeypatch):
+    pay, llm = _run(monkeypatch, "Godrej Properties fined Rs 5 lakh and told to stop work on Gurugram project - X", published=RECENT)
+    assert llm == [] and pay["risk_score"] == HIGH_FLOOR_SCORE and pay["explainability"]["penalty_parse"]["restricts"] is True
+
+
+def test_engine_adds_the_new_question_to_a_reading_cached_before_it_existed(monkeypatch):
+    prior = {"case_status": "penalty_or_order", "case_event": "x y z", "case_status_source": "llm", "role_classification": "SELF",
+             "role_classification_source": "llm", "penalty_parse": {"amount_lakh": 4.0, "kind": "small", "criminal": False, "source": "regex+llm"}}
+    pay, llm = _run(monkeypatch, "RERA cancels Godrej Properties project registration - X", published=RECENT, prior_expl=prior)
+    assert llm == [] and pay["risk_score"] == HIGH_FLOOR_SCORE and pay["explainability"]["penalty_parse"]["restricts"] is True

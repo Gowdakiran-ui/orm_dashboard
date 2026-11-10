@@ -28,7 +28,7 @@ from app.services.intelligence.case_status import (
     STATUS_CAP_SCORE, STATUS_LABELS, apply_status_cap, cached_case_status, case_status_enabled, classify_case_status,
 )
 from app.services.intelligence.penalty_rule import (
-    classify_penalty_llm, merge_with_regex, parse_penalty, penalty_cap_decision,
+    classify_penalty_llm, merge_with_regex, parse_penalty, penalty_cap_decision, with_restricts,
 )
 from app.core.reach_trust_config import (
     get_reach_modifier,
@@ -600,7 +600,7 @@ class RiskEngine:
                 success=llm_parse is not None,
             )
         merged = merge_with_regex(regex_parse, llm_parse)
-        return {k: merged[k] for k in ("amount_lakh", "kind", "criminal", "source")}
+        return {k: merged[k] for k in ("amount_lakh", "kind", "criminal", "restricts", "source")}
 
     def get_risk_level(self, score: float) -> str:
         if score <= RISK_THRESHOLDS["LOW_TO_MEDIUM"]:
@@ -980,6 +980,9 @@ class RiskEngine:
                         penalty_parse = cached_penalty_by_client_entity.get((client_id, entity.id))
                         if penalty_parse is None:
                             penalty_parse = self._parse_penalty(document, entity, client_id, run_id=run_id)
+                        else:
+                            # a reading cached before the revoke / ban / stop-project question existed gets the regex answer for it
+                            penalty_parse = with_restricts(penalty_parse, document.title, document.normalized_content)
                         penalty_cap_applied, penalty_cap_reason = penalty_cap_decision(penalty_parse, document.published_at)
                         if penalty_cap_applied:
                             final_score = STATUS_CAP_SCORE

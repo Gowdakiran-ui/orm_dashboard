@@ -75,3 +75,8 @@ class AiCheckFlag(Base):
     cited_domains = Column(JSONB)
     cost_usd = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Which XOOP incident the sentence was matched to (migration 0021): the incident's lead document, NULL = none. match_checked
+    # is false until the one model call has been made and read.
+    matched_document_id = Column(UUID(as_uuid=True))
+    match_checked = Column(Boolean, nullable=False, default=False)
+    match_cost_usd = Column(Float)

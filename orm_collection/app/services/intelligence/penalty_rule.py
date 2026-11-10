@@ -8,11 +8,15 @@ What is read from the headline and stored text (the documents hold only a headli
   * the largest rupee amount (regex: Rs / INR / the rupee sign, with lakh, crore, L, Cr, million, thousand);
   * the authority class (regex): senior = High Court, Supreme Court, SEBI, ED, CBI, NCLT/NCLAT, CCI; small = consumer
     commission/forum/court, any RERA (MahaRERA, CGRERA ...), municipal body (MCD, BMC, municipal corporation); else other/unknown;
-  * criminal wording (FIR, arrest, chargesheet, cheating, fraud, laundering, IPC/BNS ...).
-Only when NO amount is found does one small Haiku call read the headline for amount and authority (cached in the risk event).
+  * criminal wording (FIR, arrest, chargesheet, cheating, fraud, laundering, IPC/BNS ...);
+  * restricting wording: the order revokes or cancels a registration or licence, bans sales, bookings or advertising, or stops or
+    halts a project or its construction. Such an order hurts the business whatever the money amount, so it is never capped.
+Only when NO amount is found does one small Haiku call read the headline for amount, authority and the restricting question (cached in
+the risk event).
 
 Decision (score capped at the MEDIUM / HIGH boundary, 50.0, like the other case-status caps):
-  keep today's rules  if the order has criminal charges, OR comes from a senior authority, OR the amount is 25 lakh or more;
+  keep today's rules  if the order has criminal charges, OR comes from a senior authority, OR the amount is 25 lakh or more,
+                      OR the order revokes a registration, bans sales or stops a project (even when no rupee amount is found);
   cap                 else if the story is older than 24 months;
   cap                 else if the amount is under 25 lakh and the authority is not senior (consumer commission, state RERA and
                       municipal bodies, and also an authority the headline does not name: a sub-25-lakh order is small whoever
@@ -40,6 +44,14 @@ _SENIOR_ABBR = re.compile(r"\b(ED|CBI|HC|SC)\b")          # capitals only: never
 _SMALL = re.compile(
     r"\b(consumer (?:commission|forum|court|disputes)|ncdrc|\w*rera|real estate regulatory authority|municipal\w*|civic body|mcd|bmc|pmc)\b",
     re.IGNORECASE)
+# An order that revokes/cancels/suspends a registration or licence, bans sales/bookings/advertising, or stops/halts a project. Each
+# alternative needs BOTH the action and the thing acted on within a short distance, so "registration" or "ban" alone never match.
+_RESTRICT = re.compile(
+    r"\b(?:(?:revok\w*|cancel\w*|suspend\w*|withdr[ae]w\w*|debar\w*)\b[^.;:|]{0,40}\b(?:registration|registrations|licen[cs]es?|rera registration)\b"
+    r"|(?:registration|registrations|licen[cs]es?)\b[^.;:|]{0,50}\b(?:revoked|cancell?ed|suspended|withdrawn)\b"
+    r"|(?:ban|bans|banned|banning|bars|barred|barring|prohibit\w*|restrain\w*)\b[^.;:|]{0,40}\b(?:sale|sales|selling|booking|bookings|advertis\w*|launch\w*|marketing)\b"
+    r"|(?:stop|stops|stopped|stopping|halt\w*|freez\w*|stay\w*)[ -]?(?:work\b|order\b)"
+    r"|(?:stop|stops|stopped|stopping|halt\w*|freez\w*|stalls?|stalled)\b[^.;:|]{0,40}\b(?:project|projects|construction|sales|work on)\b)", re.IGNORECASE)
 _CRIMINAL = re.compile(
     r"\b(criminal|fir|arrest\w*|charge-?sheet\w*|cheating|fraud\w*|launder\w*|ipc|bns|conspiracy|prosecution|bribe\w*|forgery)\b", re.IGNORECASE)
 
@@ -75,7 +87,18 @@ def parse_authority_kind(text: Optional[str]) -> str:
 def parse_penalty(title: Optional[str], content: Optional[str] = None) -> Dict[str, Any]:
     """Regex reading of the headline and stored text. {"amount_lakh", "kind", "criminal", "source": "regex"}."""
     text = " ".join(x for x in (title, content) if x)
-    return {"amount_lakh": parse_amount_lakh(text), "kind": parse_authority_kind(text), "criminal": bool(_CRIMINAL.search(text)), "source": "regex"}
+    return {"amount_lakh": parse_amount_lakh(text), "kind": parse_authority_kind(text), "criminal": bool(_CRIMINAL.search(text)),
+            "restricts": bool(_RESTRICT.search(text)), "source": "regex"}
+
+
+def with_restricts(parse: Dict[str, Any], title: Optional[str], content: Optional[str] = None) -> Dict[str, Any]:
+    """A reading cached before the restricting-order question existed has no "restricts" key: add the regex answer for it, so an
+    old cached reading cannot hide a revocation or a stop-work order. A reading that already has the key is returned as it is."""
+    if "restricts" in parse:
+        return parse
+    out = dict(parse)
+    out["restricts"] = bool(_RESTRICT.search(" ".join(x for x in (title, content) if x)))
+    return out
 
 
 _LLM_SYSTEM = (
@@ -84,7 +107,10 @@ _LLM_SYSTEM = (
     "authority: who issued it: consumer_commission (any consumer commission, forum or court), state_rera (any state RERA), municipal "
     "(a municipal or civic body), senior (High Court, Supreme Court, SEBI, ED, CBI, NCLT, NCLAT, CCI), other, or unknown.\n"
     "criminal: true if criminal charges are involved (FIR, arrest, chargesheet, cheating, fraud, money laundering), else false.\n"
-    "Use only the headline. Reply ONLY with JSON: {\"amount_lakh\": <number or null>, \"authority\": \"<one of the six>\", \"criminal\": true|false}"
+    "restricts: true if the order revokes, cancels or suspends a registration or licence, bans sales, bookings or advertising, or stops "
+    "or halts a project or its construction, whatever the money amount; else false.\n"
+    "Use only the headline. Reply ONLY with JSON: {\"amount_lakh\": <number or null>, \"authority\": \"<one of the six>\", \"criminal\": true|false, "
+    "\"restricts\": true|false}"
 )
 _LLM_KIND = {"consumer_commission": "small", "state_rera": "small", "municipal": "small", "senior": "senior", "other": "unknown", "unknown": "unknown"}
 
@@ -99,7 +125,9 @@ def parse_penalty_llm_text(text: Optional[str]) -> Optional[Dict[str, Any]]:
     amt = re.search(r'"?amount_lakh"?\s*:\s*(null|-?[0-9]+(?:\.[0-9]+)?)', text, re.IGNORECASE)
     crim = re.search(r'"?criminal"?\s*:\s*(true|false)', text, re.IGNORECASE)
     amount = float(amt.group(1)) if amt and amt.group(1).lower() != "null" else None
-    return {"amount_lakh": amount, "kind": _LLM_KIND[a.group(1).lower()], "criminal": bool(crim and crim.group(1).lower() == "true"), "source": "llm"}
+    restr = re.search(r'"?restricts"?\s*:\s*(true|false)', text, re.IGNORECASE)
+    return {"amount_lakh": amount, "kind": _LLM_KIND[a.group(1).lower()], "criminal": bool(crim and crim.group(1).lower() == "true"),
+            "restricts": bool(restr and restr.group(1).lower() == "true"), "source": "llm"}
 
 
 def classify_penalty_llm(title: Optional[str], api_key: Optional[str], post: Optional[Callable] = None,
@@ -115,7 +143,7 @@ def classify_penalty_llm(title: Optional[str], api_key: Optional[str], post: Opt
         resp = post(
             OPENROUTER_URL, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={"model": MODEL, "messages": [{"role": "system", "content": _LLM_SYSTEM}, {"role": "user", "content": f"Headline: {title[:500]}"}],
-                  "temperature": 0, "max_tokens": 60, "usage": {"include": True}},
+                  "temperature": 0, "max_tokens": 70, "usage": {"include": True}},
             timeout=timeout,
         )
         if getattr(resp, "status_code", 200) != 200:
@@ -142,6 +170,7 @@ def merge_with_regex(regex_parse: Dict[str, Any], llm_parse: Optional[Dict[str, 
     if regex_parse["kind"] == "unknown":
         merged["kind"] = llm_parse["kind"]
     merged["criminal"] = bool(regex_parse["criminal"] or llm_parse["criminal"])
+    merged["restricts"] = bool(regex_parse.get("restricts") or llm_parse.get("restricts"))
     merged["source"] = "regex+llm"
     return merged
 
@@ -162,6 +191,8 @@ def penalty_cap_decision(parse: Dict[str, Any], published_at: Optional[datetime]
         return False, "criminal charges are involved"
     if kind == "senior":
         return False, "issued by a High Court, the Supreme Court, SEBI, ED, CBI, NCLT or CCI"
+    if parse.get("restricts"):
+        return False, "the order revokes a registration, bans sales or stops a project"
     if amount is not None and amount >= SMALL_LAKH:
         return False, "the amount is 25 lakh rupees or more"
     age = _age_days(published_at, now)

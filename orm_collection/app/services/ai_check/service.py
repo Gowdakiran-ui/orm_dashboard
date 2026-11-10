@@ -48,10 +48,11 @@ def cost_cap_usd() -> float:
 
 def estimate(prompt_count: int = len(PROMPT_DEFS), repeats: int = REPEATS) -> Dict[str, Any]:
     """`estimated_cost_usd` is the web calls only; the sentence triage that follows adds `triage_cost_usd` (small, cheap calls)."""
+    from app.services.ai_check.claims import EST_COST_PER_MATCH_CALL, MATCH_CALLS_ESTIMATE
     from app.services.ai_check.triage import EST_COST_PER_TRIAGE_CALL, TRIAGE_CALLS_ESTIMATE
     calls = prompt_count * repeats
     web = round(calls * EST_COST_PER_CALL, 3)
-    triage = round(TRIAGE_CALLS_ESTIMATE * EST_COST_PER_TRIAGE_CALL, 3)
+    triage = round(TRIAGE_CALLS_ESTIMATE * EST_COST_PER_TRIAGE_CALL + MATCH_CALLS_ESTIMATE * EST_COST_PER_MATCH_CALL, 3)   # sentence checks + incident matching
     return {"calls": calls, "prompts": prompt_count, "repeats": repeats, "estimated_cost_usd": web,
             "triage_calls": TRIAGE_CALLS_ESTIMATE, "triage_cost_usd": triage, "total_estimate_usd": round(web + triage, 3),
             "cap_usd": cost_cap_usd(), "model": MODEL, "web_results": WEB_RESULTS}
@@ -216,6 +217,15 @@ def _triage(db, run, api_key, post, cap, say, client_name, executives) -> None:
     n = triage_run(db, run, name, list(executives), answers, api_key, post=post, cap_usd=cap, log=say)
     db.commit()
     say(f"  triage done: {n} sentences flagged (run total ${run.cost_usd:.4f})")
+    # One small call per flagged sentence: which XOOP incident is it about (claims.py). A failure leaves the flags unchecked.
+    try:
+        from app.services.ai_check import claims
+        client = db.query(Client).filter(Client.id == run.client_id).first()
+        m = claims.match_run_flags(db, run, client, api_key, post=post, cap_usd=cap, log=say) if client is not None else 0
+        say(f"  claim matching done: {m} sentences matched to an XOOP incident (run total ${run.cost_usd:.4f})")
+    except Exception as e:
+        db.rollback()
+        say(f"  claim matching failed: {e!r}"[:300])
 
 
 def run_in_background(run_id, client_id) -> None:

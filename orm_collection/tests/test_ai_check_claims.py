@@ -235,13 +235,162 @@ def test_xoop_incidents_group_documents_and_carry_the_leads_status(db):
     assert len(incs) == 1 and incs[0]["status"] == "charged" and incs[0]["documents"] == 2 and incs[0]["sources"] == 2
 
 
-def test_match_needs_two_shared_words_and_prefers_the_larger_incident_on_a_tie():
-    inc = lambda toks, docs, st: {"tokens": frozenset(toks), "documents": docs, "status": st, "title": "T", "sources": docs}
-    a, b = inc({"ed", "raid", "pitti", "mahadev"}, 10, "probe"), inc({"ed", "chargesheet", "pitti", "mahadev"}, 9, "charged")
-    assert claims.match_incident(frozenset({"ed", "chargesheet", "pitti"}), [a, b]) is b            # 3 shared beats 2
-    assert claims.match_incident(frozenset({"ed", "pitti"}), [a, b]) is a                            # tie: more documents
-    assert claims.match_incident(frozenset({"ed"}), [a, b]) is None                                  # one shared word is not enough
-    assert claims.match_incident(frozenset({"zzz"}), []) is None
+def _inc(title, status, docs=1, score=51.0, event=None):
+    return {"title": title, "status": status, "documents": docs, "sources": docs, "score": score, "event": event,
+            "lead_doc_id": uuid.uuid4(), "doc_ids": [uuid.uuid4() for _ in range(docs)]}
+
+
+@pytest.mark.parametrize("text,size,expected", [
+    ('```json\n{"incident": 3}\n```', 5, 2),
+    ('{"incident": null}', 5, None),
+    ('{"incident":"none"}', 5, None),
+    ('{"incident": 1}', 1, 0),
+])
+def test_match_answer_is_read_with_a_regex(text, size, expected):
+    assert claims.parse_match(text, size) == {"index": expected}
+
+
+@pytest.mark.parametrize("text,size", [(None, 3), ("", 3), ("no idea", 3), ('{"incident": 0}', 3), ('{"incident": 4}', 3), ('{"other": 2}', 3)])
+def test_unreadable_or_out_of_range_match_answer_is_none(text, size):
+    assert claims.parse_match(text, size) is None
+
+
+def test_menu_is_strongest_first_in_a_fixed_order_and_limited():
+    menu = claims.incident_menu([_inc("B story", "probe", 2, 60.0), _inc("A story", "charged", 2, 60.0), _inc("Big", "probe", 9, 40.0),
+                                 _inc("Top", "charged", 1, 88.0)])
+    assert [m["title"] for m in menu] == ["Top", "A story", "B story", "Big"]
+    assert len(claims.incident_menu([_inc(f"t{i}", None, 1, float(i)) for i in range(50)])) == claims.MENU_LIMIT
+    text = claims.menu_text(menu[:2])
+    assert text.splitlines()[0].startswith("1. [charged] Top") and text.splitlines()[1].startswith("2. [charged] A story")
+
+
+def test_match_call_sends_the_sentence_and_numbered_incidents_at_temperature_zero_and_fails_safe():
+    menu = claims.incident_menu([_inc("HC notice on plea against CBI FIR", "probe", event="cbi fir godrej"), _inc("MahaRERA fined Rs 30 lakh", "penalty_or_order", score=40.0)])
+    seen = {}
+
+    def post(url, headers=None, json=None, timeout=None):
+        seen["body"] = json
+        return _Resp('{"incident": 1}', cost=0.00105)
+
+    r = claims.match_sentence("An FIR was filed invoking sections 406 and 420.", "cbi fir godrej", menu, "k", post=post)
+    assert r == {"index": 0, "cost_usd": 0.00105}
+    b = seen["body"]
+    assert b["temperature"] == 0 and b["model"] == "anthropic/claude-haiku-4.5" and "plugins" not in b
+    user = b["messages"][1]["content"]
+    assert "An FIR was filed" in user and "1. [probe] HC notice on plea against CBI FIR (event: cbi fir godrej)" in user and "2. [penalty_or_order]" in user
+    assert claims.match_sentence("s", None, menu, None, post=post) is None
+    assert claims.match_sentence("s", None, [], "k", post=post) is None
+    assert claims.match_sentence("s", None, menu, "k", post=lambda *a, **k: _Resp("x", status=500)) is None
+    assert claims.match_sentence("s", None, menu, "k", post=lambda *a, **k: _Resp("nonsense")) is None
+    assert claims.match_sentence("s", None, menu, "k", post=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down"))) is None
+
+
+def _godrej(db):
+    """A client with two incidents and a run holding three flagged sentences."""
+    c = _client(db, "Godrej Properties")
+    fir = _risk_doc(db, c, "HC notice on plea from Godrej properties against CBI FIR - Bar and Bench", 70.0, 20, "probe", "cbi fir godrej high court")
+    rera = _risk_doc(db, c, "Godrej Properties fined Rs 30 lakh by MahaRERA - DNA India", 51.0, 40, "penalty_or_order", "maharera fine godrej")
+    run = svc.start_run(db, c.id)
+    _flag(db, run, "An FIR was filed invoking sections 406 and 420.", "cbi fir godrej")
+    _flag(db, run, "The company hoarded cash in Mumbai and Pune.", "godrej hoardings")
+    _flag(db, run, "It was fined Rs 30 lakh by MahaRERA.", "maharera fine")
+    return c, run, fir, rera
+
+
+def _answers(*picks):
+    it = iter(picks)
+    return lambda *a, **k: _Resp(next(it), cost=0.001)
+
+
+def _by_sentence(db, run):
+    return {f.sentence[:12]: f for f in db.query(AiCheckFlag).filter(AiCheckFlag.run_id == run.id).all()}
+
+
+def _order(db, run):
+    """The flags in the order match_run_flags visits them, so a scripted list of answers lines up."""
+    return [f.sentence[:12] for f in db.query(AiCheckFlag).filter(AiCheckFlag.run_id == run.id, AiCheckFlag.flagged.is_(True)).order_by(AiCheckFlag.created_at, AiCheckFlag.id).all()]
+
+
+def test_matching_stores_the_incidents_lead_document_even_when_the_sentence_shares_only_one_word(db):
+    c, run, fir, rera = _godrej(db)
+    # the menu is strongest first: 1 = the CBI FIR incident (70), 2 = the MahaRERA fine (51). Answer by sentence, whatever the visit order.
+    def post(url, headers=None, json=None, timeout=None):
+        user = json["messages"][1]["content"]
+        pick = '{"incident": 1}' if "An FIR was filed" in user else '{"incident": 2}' if "MahaRERA." in user else '{"incident": null}'
+        return _Resp(pick, cost=0.001)
+    n = claims.match_run_flags(db, run, c, "k", post=post)
+    rows = _by_sentence(db, run)
+    assert n == 2
+    assert rows["An FIR was f"].matched_document_id == fir and rows["It was fined"].matched_document_id == rera
+    assert rows["The company "].matched_document_id is None and rows["The company "].match_checked is True
+    assert all(f.match_checked and f.match_cost_usd == pytest.approx(0.001) for f in rows.values())
+    assert run.cost_usd == pytest.approx(0.003)
+
+
+def test_a_failed_match_call_leaves_the_flag_unchecked_and_a_second_pass_retries_only_that_one(db):
+    c, run, fir, rera = _godrej(db)
+    n_calls = []
+
+    def post(url, headers=None, json=None, timeout=None):
+        n_calls.append(1)
+        return _Resp("nonsense") if "hoarded" in json["messages"][1]["content"] else _Resp('{"incident": 1}', cost=0.001)
+    claims.match_run_flags(db, run, c, "k", post=post)
+    unchecked = db.query(AiCheckFlag).filter(AiCheckFlag.run_id == run.id, AiCheckFlag.match_checked.is_(False)).all()
+    assert len(n_calls) == 3 and len(unchecked) == 1 and unchecked[0].sentence.startswith("The company ") and unchecked[0].matched_document_id is None
+    calls = []
+    claims.match_run_flags(db, run, c, "k", post=lambda *a, **k: calls.append(1) or _Resp('{"incident": null}', cost=0.001))
+    assert len(calls) == 1 and db.query(AiCheckFlag).filter(AiCheckFlag.match_checked.is_(False)).count() == 0
+    claims.match_run_flags(db, run, c, "k", post=lambda *a, **k: calls.append(1) or _Resp('{"incident": 1}'))
+    assert len(calls) == 1                                                                           # everything is checked: no new call
+
+
+def test_matching_stops_at_the_cap_and_makes_no_call_when_the_client_has_no_incident(db):
+    c, run, fir, rera = _godrej(db)
+    run.cost_usd = 0.5995
+    calls = []
+    claims.match_run_flags(db, run, c, "k", post=lambda *a, **k: calls.append(1) or _Resp('{"incident": 1}'), cap_usd=0.60)
+    assert calls == [] and db.query(AiCheckFlag).filter(AiCheckFlag.match_checked.is_(False)).count() == 3
+    empty = _client(db, "NoIncidents Ltd")
+    run2 = svc.start_run(db, empty.id)
+    _flag(db, run2, "A fraud case was registered against the founder of the company.", "fraud case founder")
+    claims.match_run_flags(db, run2, empty, "k", post=lambda *a, **k: calls.append(1) or _Resp('{"incident": 1}'))
+    assert calls == []
+    f = db.query(AiCheckFlag).filter(AiCheckFlag.run_id == run2.id).one()
+    assert f.match_checked is True and f.matched_document_id is None
+
+
+def test_the_card_shows_the_stored_match_with_the_incident_status_read_live(db):
+    c, run, fir, rera = _godrej(db)
+    db.add(AiCheckAnswer(id=uuid.uuid4(), run_id=run.id, client_id=c.id, prompt_key="legal_controversies", prompt_text="Q", repeat_index=0, answer_text="a", cited_urls=[], cited_domains=[]))
+    db.commit()
+
+    def post(url, headers=None, json=None, timeout=None):
+        user = json["messages"][1]["content"]
+        pick = '{"incident": 1}' if "An FIR was filed" in user else '{"incident": 2}' if "MahaRERA." in user else '{"incident": null}'
+        return _Resp(pick, cost=0.001)
+    claims.match_run_flags(db, run, c, "k", post=post)
+    out = {o["sentence"][:12]: o for o in svc.latest_report(db, c, is_admin=True)["claim_checks"]}
+    assert out["An FIR was f"]["matched"]["status"] == "probe"
+    assert out["An FIR was f"]["note"] == "The AI states this as fact; XOOP labels the matching story a probe."
+    assert out["It was fined"]["note"] == "Matches an XOOP incident labelled penalty or order."
+    assert out["The company "]["matched"] is None and out["The company "]["note"] == "Not matched automatically."
+    # the status is read live: re-labelling the XOOP story changes the card without a new model call
+    ev = db.query(RiskEvent).filter(RiskEvent.document_id == fir).one()
+    ev.explainability = {"case_status": "charged", "case_event": "cbi fir godrej high court"}
+    db.commit()
+    live = {o["sentence"][:12]: o for o in svc.latest_report(db, c, is_admin=True)["claim_checks"]}
+    assert live["An FIR was f"]["matched"]["status"] == "charged"
+    # if the story is no longer flagged, the sentence reads as not matched
+    ev.risk_score = 5.0
+    db.commit()
+    gone = {o["sentence"][:12]: o for o in svc.latest_report(db, c, is_admin=True)["claim_checks"]}
+    assert gone["An FIR was f"]["matched"] is None and gone["An FIR was f"]["note"] == "Not matched automatically."
+
+
+def test_a_flag_that_was_never_checked_reads_as_not_matched(db):
+    c, run, fir, rera = _godrej(db)
+    out = claims.build_claim_checks(db, c, db.query(AiCheckFlag).all(), {})
+    assert len(out) == 3 and all(o["matched"] is None and o["note"] == "Not matched automatically." for o in out)
 
 
 def test_note_says_when_the_ai_states_as_fact_something_xoop_labels_allegation_probe_or_charged():
@@ -272,6 +421,8 @@ def test_report_gives_super_admins_the_claim_checks_and_nobody_else(db):
     _flag(db, run, "The ED has filed a chargesheet against Nishant Pitti in the Mahadev case.", "ed chargesheet nishant pitti mahadev")
     _flag(db, run, "The company was fined for a billing fraud in Mumbai last year.", "easemytrip billing fraud mumbai")
     _flag(db, run, "Reuters reports an alleged fraud.", "x", flagged=False, framing="ATTRIBUTED")
+    claims.match_run_flags(db, run, c, "k", post=lambda url, headers=None, json=None, timeout=None: _Resp(
+        '{"incident": 1}' if "chargesheet" in json["messages"][1]["content"].split("Incidents:")[0] else '{"incident": null}'))
     out = svc.latest_report(db, c, is_admin=True)["claim_checks"]
     assert len(out) == 2                                                                              # only flagged sentences
     hit = next(o for o in out if "chargesheet" in o["sentence"])
@@ -295,5 +446,5 @@ def test_endpoint_returns_claim_checks_to_super_admins_only(db):
 
 def test_estimate_now_lists_the_triage_calls_and_cost():
     e = svc.estimate()
-    assert e["calls"] == 24 and e["triage_calls"] == 70 and e["triage_cost_usd"] == pytest.approx(0.049)
+    assert e["calls"] == 24 and e["triage_calls"] == 70 and e["triage_cost_usd"] == pytest.approx(0.062)
     assert e["total_estimate_usd"] == pytest.approx(e["estimated_cost_usd"] + e["triage_cost_usd"])

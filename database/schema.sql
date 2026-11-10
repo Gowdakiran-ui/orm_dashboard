@@ -861,6 +861,9 @@ CREATE TABLE public.ai_check_flags (
     cited_domains jsonb,
     cost_usd double precision,
     created_at timestamp with time zone DEFAULT now(),
+    matched_document_id uuid,
+    match_checked boolean DEFAULT false NOT NULL,
+    match_cost_usd double precision,
     CONSTRAINT ai_check_flags_about_check CHECK ((((about IS NULL) OR ((about)::text = ANY (ARRAY[('client'::character varying)::text, ('executive'::character varying)::text, ('other'::character varying)::text]))))),
     CONSTRAINT ai_check_flags_framing_check CHECK ((((framing IS NULL) OR ((framing)::text = ANY (ARRAY[('FACT'::character varying)::text, ('ATTRIBUTED'::character varying)::text, ('HEDGED'::character varying)::text])))))
 );
