@@ -689,11 +689,14 @@ def refresh_client_seeded(client_id: UUID, apply: bool = Query(False, descriptio
 # ---------------------------------------------------------------------------
 @router.get("/{client_id}/ai-check", response_model=Dict[str, Any])
 def get_client_ai_check(client_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """The latest AI-check run for the Brand Equity card. {"enabled": false} when the feature is switched off. The internal
-    removal-candidates list is filled for super admins only."""
+    """The latest AI-check run for the Brand Equity card. {"enabled": false} when the feature is switched off, and also for every
+    user who is not a super admin unless AI_CHECK_CLIENT_VISIBLE is set (the card hides itself on enabled=false). The internal
+    removal-candidates list and the claim checks are filled for super admins only, whatever that flag says."""
     from app.models.user import ROLE_SUPER_ADMIN
     from app.services.ai_check import service as ai_check
     if not ai_check.ai_check_enabled():
+        return {"enabled": False}
+    if current_user.role != ROLE_SUPER_ADMIN and not ai_check.client_visible():
         return {"enabled": False}
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:

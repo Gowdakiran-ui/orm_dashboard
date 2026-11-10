@@ -434,14 +434,16 @@ def test_report_gives_super_admins_the_claim_checks_and_nobody_else(db):
     assert svc.latest_report(db, c, is_admin=False)["claim_checks"] == []
 
 
-def test_endpoint_returns_claim_checks_to_super_admins_only(db):
+def test_endpoint_returns_claim_checks_to_super_admins_only(db, monkeypatch):
     c = _client(db)
     run = svc.start_run(db, c.id)
     db.add(AiCheckAnswer(id=uuid.uuid4(), run_id=run.id, client_id=c.id, prompt_key="trustworthy", prompt_text="Q", repeat_index=0, answer_text="a", cited_urls=[], cited_domains=[]))
     db.commit()
     _flag(db, run, "A fraud case was registered against the founder of the company.", "fraud case founder")
     assert len(ci.get_client_ai_check(c.id, db, ADMIN)["claim_checks"]) == 1
-    assert ci.get_client_ai_check(c.id, db, VIEWER)["claim_checks"] == []
+    assert ci.get_client_ai_check(c.id, db, VIEWER) == {"enabled": False}                  # default: client users get nothing at all
+    monkeypatch.setenv("AI_CHECK_CLIENT_VISIBLE", "1")
+    assert ci.get_client_ai_check(c.id, db, VIEWER)["claim_checks"] == []                  # visible, but the claim checks stay admin-only
 
 
 def test_estimate_now_lists_the_triage_calls_and_cost():

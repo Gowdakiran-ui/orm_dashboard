@@ -39,6 +39,12 @@ def ai_check_enabled() -> bool:
     return os.environ.get("AI_CHECK_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def client_visible() -> bool:
+    """Whether client users (not only super admins) may see the AI check card and its data. Off unless AI_CHECK_CLIENT_VISIBLE is
+    1/true/yes/on (read per call). Off by default: the check is an internal tool until it has been reviewed."""
+    return os.environ.get("AI_CHECK_CLIENT_VISIBLE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def cost_cap_usd() -> float:
     try:
         return float(os.environ.get("AI_CHECK_COST_CAP_USD", "0.60"))

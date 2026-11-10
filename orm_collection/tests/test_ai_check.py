@@ -289,12 +289,45 @@ def test_get_is_off_by_default_and_hides_removal_list_from_viewers(db, monkeypat
     monkeypatch.delenv("AI_CHECK_ENABLED")
     assert ci.get_client_ai_check(c.id, db, VIEWER) == {"enabled": False}
     monkeypatch.setenv("AI_CHECK_ENABLED", "1")
+    monkeypatch.setenv("AI_CHECK_CLIENT_VISIBLE", "1")                      # a viewer sees the card only when this is also set
     run = svc.start_run(db, c.id)
     _answer(db, run, "trustworthy", 0, ["https://www.inventiva.co.in/story"])
     v = ci.get_client_ai_check(c.id, db, VIEWER)
     a = ci.get_client_ai_check(c.id, db, ADMIN)
     assert v["can_run"] is False and v["removal_candidates"] == [] and len(v["low_reliability_pages"]) == 1
     assert a["can_run"] is True and len(a["removal_candidates"]) == 1 and a["estimate"]["calls"] == 24
+
+
+def test_client_users_get_nothing_unless_the_client_visible_flag_is_set(db, monkeypatch):
+    c = _client(db)
+    run = svc.start_run(db, c.id)
+    _answer(db, run, "trustworthy", 0, ["https://www.inventiva.co.in/story"])
+    monkeypatch.delenv("AI_CHECK_CLIENT_VISIBLE", raising=False)
+    assert ci.get_client_ai_check(c.id, db, VIEWER) == {"enabled": False}              # default: admin only; the card hides itself
+    a = ci.get_client_ai_check(c.id, db, ADMIN)
+    assert a["enabled"] is True and a["can_run"] is True and len(a["removal_candidates"]) == 1
+    for off in ("", "0", "false", "no", "off", "maybe"):
+        monkeypatch.setenv("AI_CHECK_CLIENT_VISIBLE", off)
+        assert ci.get_client_ai_check(c.id, db, VIEWER) == {"enabled": False}, off
+    for on in ("1", "true", "YES", " on "):
+        monkeypatch.setenv("AI_CHECK_CLIENT_VISIBLE", on)
+        v = ci.get_client_ai_check(c.id, db, VIEWER)
+        assert v["enabled"] is True and v["can_run"] is False and v["removal_candidates"] == [] and v["claim_checks"] == [], on
+    # the flag never switches the feature on by itself, and never changes what a super admin sees
+    monkeypatch.delenv("AI_CHECK_ENABLED")
+    assert ci.get_client_ai_check(c.id, db, VIEWER) == {"enabled": False} and ci.get_client_ai_check(c.id, db, ADMIN) == {"enabled": False}
+    monkeypatch.setenv("AI_CHECK_ENABLED", "1")
+    monkeypatch.delenv("AI_CHECK_CLIENT_VISIBLE")
+    assert ci.get_client_ai_check(c.id, db, ADMIN)["enabled"] is True
+
+
+def test_client_visible_flag_is_read_per_call(monkeypatch):
+    monkeypatch.delenv("AI_CHECK_CLIENT_VISIBLE", raising=False)
+    assert svc.client_visible() is False
+    monkeypatch.setenv("AI_CHECK_CLIENT_VISIBLE", "true")
+    assert svc.client_visible() is True
+    monkeypatch.setenv("AI_CHECK_CLIENT_VISIBLE", "0")
+    assert svc.client_visible() is False
 
 
 def test_post_is_refused_when_the_flag_is_off(db, monkeypatch):
