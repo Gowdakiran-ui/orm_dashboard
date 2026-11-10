@@ -18,6 +18,7 @@ import {
   FlaggedArticlesDefinition,
 } from "@/lib/metricDefinitions";
 import { formatDMYTime } from "@/utils/dateFormat";
+import { orderStream } from "@/utils/streamOrder";
 import { riskStatsFromSummary, sourceState, formatAsOf } from "@/utils/brandEquity";
 import {
   flaggedDocs, buildMatrix, legacyCellDocs, tilesFromSummary, reasonSentence, dateLabel,
@@ -69,6 +70,9 @@ export interface RiskTabProps {
   documentsLoading: boolean;
   documentsError: string | null;
   documents: any[];
+  // The client's flagged articles of any age (the same list the Intelligence Stream puts first). The table adds them to the newest-500
+  // `documents`, so an older flagged article is listed, with its date. Omitted = the newest-500 list alone.
+  flaggedDocuments?: any[];
   // Server-computed counts over every visible article (reputation-summary's
   // `document_risk` block); the tiles read these, not the 500-article table.
   reputationSummary?: any;
@@ -84,6 +88,7 @@ export function RiskTab({
   documentsLoading,
   documentsError,
   documents,
+  flaggedDocuments,
   reputationSummary,
   reputationSummaryLoading,
   reputationSummaryError,
@@ -139,7 +144,8 @@ export function RiskTab({
   // own unrounded `risk_level`. An article with no RiskEvent is "not scored",
   // never a score of 0 (utils/riskCenter.ts). LOW-severity items exist in
   // the data but are not incidents.
-  const riskDocs = useMemo(() => flaggedDocs(documents), [documents]);
+  // The newest-500 list plus the flagged-first list: a flagged article older than the newest 500 is still a row (utils/streamOrder.ts).
+  const riskDocs = useMemo(() => flaggedDocs(orderStream(documents, flaggedDocuments)), [documents, flaggedDocuments]);
 
   // One row per incident (documents about the same story), led by its highest-scoring document. Collapsing happens
   // BEFORE the severity / date filters so a row is filtered by its lead, which is the incident's own severity.

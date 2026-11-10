@@ -397,6 +397,7 @@ function DashboardShell() {
                     documentsLoading={data.documentsLoading}
                     documentsError={data.documentsError}
                     documents={data.documents}
+                    flaggedDocuments={data.flaggedDocuments}
                     reputationSummary={data.reputationSummary}
                     reputationSummaryLoading={data.reputationSummaryLoading}
                     reputationSummaryError={data.reputationSummaryError}
