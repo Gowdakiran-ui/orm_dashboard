@@ -18,7 +18,7 @@ export type ChartRow = {
 
 const INK = "#0B2D54";
 const INK_MUTED = "#4C5F82";
-const INK_FAINT = "#7A8CAD";
+const INK_FAINT = "#5B6B8C";
 
 export const CHART_COLUMNS = ["XOOP", "Meltwater", "Brandwatch", "Sprinklr", "Talkwalker"] as const;
 // Two rows are optional (they show a gap or a difference of approach); set to false to leave them out.
@@ -115,8 +115,8 @@ export function cellsOf(r: ChartRow): ChartCell[] {
 }
 
 export function ChartMark({ level }: { level: ChartLevel }) {
-  if (level === "yes") return <span className="inline-flex items-center gap-1.5 text-[#A57F37]"><Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />Yes</span>;
-  if (level === "partial") return <span className="inline-flex items-center gap-1.5 text-[#A57F37]"><span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-[#A57F37]" aria-hidden="true" />Partial</span>;
+  if (level === "yes") return <span className="inline-flex items-center gap-1.5 text-[#836422]"><Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />Yes</span>;
+  if (level === "partial") return <span className="inline-flex items-center gap-1.5 text-[#836422]"><span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-[#836422]" aria-hidden="true" />Partial</span>;
   if (level === "planned") return <span className="inline-flex items-center gap-1.5" style={{ color: INK_MUTED }}><span className="inline-block h-2.5 w-2.5 rounded-full border border-dashed" style={{ borderColor: INK_MUTED }} aria-hidden="true" />Planned</span>;
   if (level === "no") return <span className="inline-flex items-center gap-1.5" style={{ color: INK_MUTED }}><Minus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />No</span>;
   return <span className="inline-flex items-center gap-1.5" style={{ color: INK_FAINT }}><HelpCircle className="h-4 w-4" aria-hidden="true" />Unknown</span>;
@@ -146,7 +146,7 @@ export function ComparisonChartBody({ showOptional = SHOW_OPTIONAL_CHART_ROWS }:
             <tr className="bg-[#F3EFE3]">
               <th className="px-5 py-4 font-[family-name:var(--font-landing-display)] font-medium" style={{ color: INK }}>Capability</th>
               {CHART_COLUMNS.map(c => (
-                <th key={c} className={`px-4 py-4 font-[family-name:var(--font-landing-display)] font-medium ${c === "XOOP" ? "text-[#A57F37]" : ""}`} style={c === "XOOP" ? undefined : { color: INK_MUTED }}>{c}</th>
+                <th key={c} className={`px-4 py-4 font-[family-name:var(--font-landing-display)] font-medium ${c === "XOOP" ? "text-[#836422]" : ""}`} style={c === "XOOP" ? undefined : { color: INK_MUTED }}>{c}</th>
               ))}
             </tr>
           </thead>

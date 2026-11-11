@@ -27,7 +27,7 @@ const CONTACT_EMAIL = "contact@onlynereputation.com";
  * Color-theme + font pass (parent-company alignment): accent swapped from
  * teal to the gold/navy/white palette measured live off onlynereputation.com
  * (nav/hero navy ~#02162B-#03203E, heading gold ~#CEA555, button gold
- * ~#A57F37) -- every former #2FD9C4 (teal accent) is now #CEA555 (gold) and
+ * ~#836422) -- every former #2FD9C4 (teal accent) is now #CEA555 (gold) and
  * every former #06211C (button text on the accent) is now #0B2D54 (dark
  * navy), a mechanical token swap since the same hex was reused consistently
  * as "the accent color" throughout. Display/body fonts (previously Fraunces
@@ -63,7 +63,7 @@ const GRID_TEXTURE =
 const IVORY_BG = "#FBFAF5";
 const INK = "#0B2D54";
 const INK_MUTED = "#4C5F82";
-const INK_FAINT = "#7A8CAD";
+const INK_FAINT = "#5B6B8C";
 const IVORY_GRID_TEXTURE =
   "linear-gradient(rgba(11,45,84,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(11,45,84,0.05) 1px,transparent 1px)";
 
@@ -163,10 +163,10 @@ function Hero() {
     >
       <div className="mx-auto max-w-6xl px-5 sm:px-7">
         <Reveal>
-          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.9rem] font-medium text-[#A57F37]">
+          <div className="mb-[22px] inline-flex items-center gap-2 text-[0.9rem] font-medium text-[#836422]">
             <span className="relative flex h-[7px] w-[7px]">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#A57F37] opacity-60" />
-              <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#A57F37]" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#836422] opacity-60" />
+              <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-[#836422]" />
             </span>
             Reputation Intelligence, not just monitoring
           </div>
@@ -176,7 +176,7 @@ function Hero() {
             style={{ color: INK }}
           >
             We don&apos;t just tell you what happened. We tell you{" "}
-            <em className="not-italic italic text-[#A57F37]">why it matters</em> and what to do next.
+            <em className="not-italic italic text-[#836422]">why it matters</em> and what to do next.
           </h1>
 
           <p className="mt-6 max-w-[58ch] text-[1.2rem] leading-relaxed" style={{ color: INK_MUTED }}>
@@ -197,7 +197,7 @@ function Hero() {
             </MagneticButton>
             <a
               href="#preview"
-              className="inline-flex items-center gap-2 rounded-lg border border-[#0B2D54]/20 px-5 py-3.5 text-sm font-medium transition-colors hover:border-[#A57F37] hover:text-[#A57F37]"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#0B2D54]/20 px-5 py-3.5 text-sm font-medium transition-colors hover:border-[#836422] hover:text-[#836422]"
               style={{ color: INK }}
             >
               See the product ↓
@@ -342,8 +342,8 @@ function Framework() {
             <RevealItem key={f.word}>
               <div className="h-full min-h-[190px] bg-white p-7 transition-colors hover:bg-[#F3EFE3]">
                 <div className="mb-3.5 flex items-center gap-2">
-                  <f.icon className="h-4 w-4 text-[#A57F37]" strokeWidth={2} />
-                  <span className="font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#A57F37]">
+                  <f.icon className="h-4 w-4 text-[#836422]" strokeWidth={2} />
+                  <span className="font-[family-name:var(--font-landing-display)] text-sm font-medium tracking-wide text-[#836422]">
                     {f.word}
                   </span>
                 </div>
@@ -610,7 +610,7 @@ function Benefits() {
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#CEA555]/30 bg-[#CEA555]/10">
                     <b.icon className="h-4 w-4 text-[#CEA555]" strokeWidth={1.75} />
                   </span>
-                  <span className="font-[family-name:var(--font-landing-display)] text-xs tracking-wider text-[#5D719A]">
+                  <span className="font-[family-name:var(--font-landing-display)] text-xs tracking-wider text-[#93A6C7]">
                     0{idx + 1}
                   </span>
                 </div>
@@ -683,7 +683,7 @@ export default function WelcomePage() {
         <section className="border-t border-[#163F6E] bg-[#04213F] py-16">
           <div className="mx-auto max-w-3xl px-5 text-center sm:px-7">
             <Reveal>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[#5D719A]">Built by</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[#93A6C7]">Built by</p>
               <h2 className="mt-3 font-[family-name:var(--font-landing-display)] text-xl font-medium text-white">
                 Onlyne Reputation
               </h2>
@@ -706,7 +706,7 @@ export default function WelcomePage() {
               <span className="h-[9px] w-[9px] rounded-full bg-[#CEA555]" />
               XOOP
             </Link>
-            <p className="text-[0.82rem] text-[#5D719A]">
+            <p className="text-[0.82rem] text-[#93A6C7]">
               A product of Onlyne Reputation ·{" "}
               <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#93A6C7] underline decoration-dotted">
                 {CONTACT_EMAIL}
