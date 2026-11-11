@@ -471,14 +471,15 @@ export function RiskTab({
                         maxRisk = formatScore(Math.max(...scores));
                       }
 
-                      let bgClass = "bg-[#030712]/40 border-[#1F2937]/35 text-slate-600";
+                      let bgClass = isDark ? "bg-[#030712]/40 border-[#1F2937]/35 text-slate-600" : "bg-black/[0.04] border-black/[0.08] text-slate-600";
                       if (count > 0) {
                         if (count <= 2) {
                           bgClass = isDark ? "bg-red-950/20 border-red-900/40 text-red-400 hover:border-red-500/50 hover:bg-red-950/30" : "bg-red-50 border-red-200 text-red-800 hover:border-red-400 hover:bg-red-100";
                         } else if (count <= 5) {
                           bgClass = isDark ? "bg-red-900/40 border-red-750/50 text-red-300 hover:border-red-500 hover:bg-red-900/50" : "bg-red-100 border-red-300 text-red-900 hover:border-red-500 hover:bg-red-200";
                         } else {
-                          bgClass = "bg-red-750 border-red-500 text-red-100 hover:bg-red-650 hover:shadow-[0_0_12px_rgba(239,68,68,0.25)]";
+                          // red-750 / red-650 are not Tailwind colours: the cell had no background, and its red-100 text was unreadable in light mode
+                          bgClass = isDark ? "bg-red-800/60 border-red-500 text-red-100 hover:bg-red-800/80 hover:shadow-[0_0_12px_rgba(239,68,68,0.25)]" : "bg-red-200 border-red-400 text-red-900 hover:border-red-600 hover:bg-red-300";
                         }
                       }
 
