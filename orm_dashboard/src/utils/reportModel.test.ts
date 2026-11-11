@@ -40,7 +40,7 @@ describe("report model, full data", () => {
     expect(t).toContain("Acme Corp's reputation score is 75.51 (B), as of 2 Oct 2026, 8:32 PM IST.");
     expect(t).toContain("98 positive / 418 neutral / 49 negative");
     expect(t).toContain("Jane Doe has the highest reputation score among them (80.0)");
-    expect(t).toContain("Acme Corp ranks #2 among the competitors found in coverage.");
+    expect(t).toContain("Acme Corp ranks #2 of 2 among the competitors with a score.");
     expect(t).toContain("No open executive-risk alerts.");
   });
   it("Risk Center: five tiles from the server counts, alerts with their AI text, matrix and flagged table", () => {

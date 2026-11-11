@@ -1,5 +1,6 @@
 import { decodeHtmlEntities } from "@/lib/utils";
 import { formatDMYTime } from "./dateFormat";
+import { rankAmongScored, isScoredRow } from "./competitorCompare";
 import { incidentBlockFromSummary, type IncidentBlock } from "./caseStatus";
 
 // Pure logic behind the Brand Equity page (ReputationSummaryCard). Kept free of
@@ -85,6 +86,7 @@ export function pickTopCompetitor(benchmarks: any[] | null | undefined): any | n
 export interface CompetitiveStanding {
   state: SourceState | "empty";
   rank: number | null;
+  rankedOf?: number;            // size of the ranking the rank is out of (scored competitors + the client)
   shareOfVoice: number | null;
   topCompetitor: string | null;
   windowDays?: number | null;   // the benchmark run's look-back (window_days on the /benchmark rows); absent on older rows
@@ -102,11 +104,17 @@ export function computeCompetitiveStanding(
   const rows = (benchmarks || []).filter(b => b && b.competitor_name);
   if (rows.length === 0) return { state: "empty", rank: null, shareOfVoice: null, topCompetitor: null };
   const first = rows[0];
+  const basis = rankAmongScored(rows);
+  // The top competitor is the best-ranked one that shows a score (an unscored "Not enough coverage" row is never named).
+  const scoredRows = rows.filter(isScoredRow);
+  scoredRows.sort((a, b) => ((basis.byKey.get(String(a.competitor_id || a.competitor_name)) ?? 0) - (basis.byKey.get(String(b.competitor_id || b.competitor_name)) ?? 0)) || String(a.competitor_name).localeCompare(String(b.competitor_name)));
   return {
     state: "ready",
-    rank: typeof first.client_rank === "number" ? first.client_rank : null,
+    // Same basis as the Competitors cards: scored competitors plus the client (not the engine's rank, which also counts unscored rows).
+    rank: basis.clientRank,
+    rankedOf: basis.total,
     shareOfVoice: typeof first.client_share_of_voice === "number" ? first.client_share_of_voice : null,
-    topCompetitor: pickTopCompetitor(rows)?.competitor_name ?? null,
+    topCompetitor: scoredRows[0]?.competitor_name ?? null,
     windowDays: typeof first.window_days === "number" && first.window_days > 0 ? first.window_days : null,
   };
 }
@@ -360,7 +368,7 @@ export function buildBrandEquityView(i: BrandEquityViewInput) {
     if (standing.state === "error") return "Competitive standing is unavailable.";
     if (standing.state === "empty") return "No competitor comparison available yet.";
     const rankPart = standing.rank !== null
-      ? `${name} ranks #${standing.rank} among the competitors found in coverage.`
+      ? `${name} ranks #${standing.rank} of ${standing.rankedOf} among the competitors with a score.`
       : `${name} could not be ranked against competitors yet (not enough evidence).`;
     const sovPart = standing.shareOfVoice !== null
       ? ` ${name} accounts for ${standing.shareOfVoice.toFixed(1)}% of all mentions of ${name} and the tracked competitors over the last ${standing.windowDays ?? 30} days (share of voice).`

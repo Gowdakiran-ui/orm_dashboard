@@ -22,7 +22,7 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { CompetitorRadarAxesDefinition, CompetitorComparableScoreDefinition, CompetitorShareOfVoiceDefinition, TopicOwnershipDefinition } from "@/lib/metricDefinitions";
 import {
   MIN_TOPIC_COMPARISON_COUNT, ACTIVITY_ARTICLE_CAP, hasEvidence, clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice,
-  rankedEntityCount, rankLabel, emptyStateMessage, comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption,
+  rankAmongScored, rankedText, emptyStateMessage, comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption,
   asOfLabel, buildCompetitorCards, noEvidenceMessage, hiddenTopics, hiddenTopicsNote, isLowEvidence, notEnoughCoverageMessage, riskTileLabel, fixed,
 } from "@/utils/competitorCompare";
 import { windowPhrase } from "@/utils/windowText";
@@ -249,7 +249,7 @@ export function CompetitorsTab({
   const seeded = useSeeded(clientId);
   const competitorCards = useMemo(() => buildCompetitorCards(normalizedBenchmarks, seeded?.competitors, activeClientName), [normalizedBenchmarks, seeded, activeClientName]);
   const benchWindow = seeded?.window?.benchmark_days ?? (normalizedBenchmarks || []).find((b: any) => b?.window_days)?.window_days ?? null;
-  const rankTotal = useMemo(() => rankedEntityCount(normalizedBenchmarks), [normalizedBenchmarks]);
+  const rankBasis = useMemo(() => rankAmongScored(normalizedBenchmarks), [normalizedBenchmarks]);
 
   // 4. VERIFIED COMPETITOR EVENTS FILTERING -- scoped to the one selected
   // competitor only (hyperfocus redesign). Previously this matched against
@@ -428,7 +428,7 @@ export function CompetitorsTab({
                     </div>
                     <div>
                       <span className={`block ${mutedText(theme)}`}>Rank</span>
-                      <span className={bodyText(theme)}>{rankLabel(searchResult.competitor.rank, rankTotal, activeClientName)}</span>
+                      <span className={bodyText(theme)}>{(() => { const r = rankBasis.byKey.get(String(searchResult.competitor.entity_id)); return r ? rankedText(r, rankBasis, activeClientName) : "Unranked"; })()}</span>
                     </div>
                     <div>
                       <span className={`block ${mutedText(theme)}`}>{riskTileLabel(activeClientName)}</span>

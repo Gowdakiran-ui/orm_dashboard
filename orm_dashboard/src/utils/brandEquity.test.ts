@@ -63,9 +63,22 @@ describe("riskStatsFromSummary (server-computed document risk)", () => {
 });
 
 describe("computeCompetitiveStanding", () => {
-  it("uses the engine's own rank and share of voice", () => {
-    const s = computeCompetitiveStanding([bench({ competitor_name: "EMAAR", rank: 1 })], false, null);
-    expect(s).toMatchObject({ state: "ready", rank: 4, shareOfVoice: 95.56, topCompetitor: "EMAAR" });
+  it("ranks the client among the scored competitors plus the client (same basis as the Competitors cards); share of voice is the engine's", () => {
+    const sc = (name: string, reputation: number, rank: number, over: any = {}) =>
+      bench({ competitor_id: name, competitor_name: name, reputation, rank, mentions_30d: 9, client_comparable_score: 70, ...over });
+    const rows = [
+      sc("Banke", 90, 2, { mentions_30d: 1 }),                       // "Not enough coverage": holds an engine rank, shows no score
+      sc("EMAAR", 80, 1),
+      sc("Gone", 0, 0, { health_status: "INSUFFICIENT_EVIDENCE", reputation: null }),
+      sc("Lodha", 60, 5),
+    ];
+    const s = computeCompetitiveStanding(rows, false, null);
+    expect(s).toMatchObject({ state: "ready", rank: 2, rankedOf: 3, shareOfVoice: 95.56, topCompetitor: "EMAAR" });
+  });
+
+  it("carries the benchmark run's own look-back so the sentence does not claim 30 days for a 90-day run", () => {
+    expect(computeCompetitiveStanding([bench({ window_days: 90 })], false, null).windowDays).toBe(90);
+    expect(computeCompetitiveStanding([bench({})], false, null).windowDays ?? null).toBeNull();   // older rows: the text falls back to 30
   });
 
   it("zero rows -> empty (never a 100% share of voice)", () => {

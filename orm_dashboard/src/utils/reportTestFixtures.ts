@@ -55,7 +55,7 @@ export function input(over: Partial<ReportInput> = {}): ReportInput {
     clientId: "c1", clientName: "Acme Corp", generatedAt: new Date("2026-10-14T08:37:00Z"), userEmail: "me@example.com", browserTimeZone: "Asia/Calcutta",
     reputationSummary: summary(), reputationSummaryError: null, planAdvisory: { lead: "x", flagged: false }, planAdvisoryError: null,
     executives: [{ name: "Jane Doe", score: 80, document_count: 5, health_status: "OK" }, { name: "John Roe", score: 50, document_count: 2 }], executivesError: null,
-    benchmarks: [{ competitor_name: "Rival", rank: 1, client_rank: 2, client_share_of_voice: 98.5 }], benchmarksError: null,
+    benchmarks: [{ competitor_name: "Rival", rank: 1, reputation: 80, mentions_30d: 9, health_status: "COMPLETE", client_comparable_score: 75, client_rank: 2, client_share_of_voice: 98.5 }], benchmarksError: null,
     documents, documentsError: null, alerts, alertsError: null, repHistory: hist, historyError: null,
     analytics: analyticsFor(documents, alerts, hist),
     ...over,

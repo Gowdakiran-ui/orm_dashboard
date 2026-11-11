@@ -197,8 +197,41 @@ export interface CompetitorCardView {
   asOf: string;               // "Data as of 20-10-2026"; every card has one (a card with no date says so)
 }
 
+/** True when the card shows a score for this /benchmark row (the same test competitorCardView uses). */
+export function isScoredRow(b: any): boolean {
+  return !!b && b.health_status !== "INSUFFICIENT_EVIDENCE" && isNum(b.reputation) && isNum(b.rank) && b.rank > 0 && !isLowEvidence(b.mentions_30d);
+}
+
+export interface RankBasis {
+  byKey: Map<string, number>;   // competitor_id (or name) -> rank among the scored cards plus the client
+  clientRank: number | null;    // null when the client has no comparable score
+  total: number;                // scored competitors + the client (when it has a score)
+  clientIncluded: boolean;
+}
+
+/**
+ * ONE rank basis for the Competitors cards and Brand Equity: the competitors that show a score plus the client, ordered
+ * by score (shown to one decimal; equal shown scores share a rank). The engine's own rank also counts competitors the
+ * page does not score ("Not enough coverage", no name), so it can run past the number of cards shown.
+ */
+export function rankAmongScored(benchmarks: any[] | null | undefined): RankBasis {
+  const rows = (benchmarks || []).filter(b => b && b.competitor_name);
+  const clientScore = rows.length > 0 && isNum(rows[0].client_comparable_score) ? rows[0].client_comparable_score as number : null;
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  const entries: { key: string | null; score: number }[] = rows.filter(isScoredRow).map(b => ({ key: String(b.competitor_id || b.competitor_name), score: r1(b.reputation) }));
+  if (clientScore !== null) entries.push({ key: null, score: r1(clientScore) });
+  const rankOf = (score: number) => 1 + entries.filter(e => e.score > score).length;
+  const byKey = new Map<string, number>();
+  entries.forEach(e => { if (e.key !== null) byKey.set(e.key, rankOf(e.score)); });
+  return { byKey, clientRank: clientScore !== null ? rankOf(r1(clientScore)) : null, total: entries.length, clientIncluded: clientScore !== null };
+}
+
+export function rankedText(rank: number, basis: RankBasis, clientName: string): string {
+  return `Ranked #${rank} of ${basis.total}${basis.clientIncluded ? ` (includes ${clientName})` : ""}`;
+}
+
 /** One card per compared competitor, built only from the already-served /benchmark row. */
-export function competitorCardView(b: any, clientName: string): CompetitorCardView {
+export function competitorCardView(b: any, clientName: string, basis?: RankBasis): CompetitorCardView {
   const name = String(b?.competitor_name ?? "Unknown");
   const mentions = isNum(b?.mentions_30d) ? Math.round(b.mentions_30d) : null;
   const lowEvidence = isLowEvidence(b?.mentions_30d);
@@ -219,7 +252,7 @@ export function competitorCardView(b: any, clientName: string): CompetitorCardVi
         : b?.seeded
           ? `No article from the ${windowPhrase(b?.window_days)} is about ${name}, so no score is shown.`
           : `No article from the ${windowPhrase(b?.window_days)} mentions both ${name} and ${clientName}, so no score is shown.`,
-    rankText: scored ? `Ranked #${b.rank} with ${clientName}` : null,
+    rankText: scored && basis && basis.byKey.has(String(b.competitor_id || b.competitor_name)) ? rankedText(basis.byKey.get(String(b.competitor_id || b.competitor_name))!, basis, clientName) : null,
     sovText: isNum(b?.sov) ? `${(b.sov as number).toFixed(1)}% share of voice` : null,
     sovMeaning: isNum(b?.sov) ? `Out of every 100 mentions of ${clientName} and the compared competitors, about ${Math.round(b.sov)} are ${name}.` : null,
     evidence: mentions === null ? null : `Based on ${mentions} mention${mentions === 1 ? "" : "s"} in the ${windowPhrase(b?.window_days)}`,
@@ -255,8 +288,9 @@ export function placeholderCardView(name: string, clientName: string): Competito
 export function buildCompetitorCards(benchmarks: any[] | null | undefined, seeded: SeededCompetitor[] | null | undefined, clientName: string): CompetitorCard[] {
   const rows = (benchmarks || []).filter(b => b && b.competitor_name);
   const hasSeed = !!seeded && seeded.length > 0;
+  const basis = rankAmongScored(rows);
   if (!hasSeed) {
-    return rows.map(b => ({ ...competitorCardView(b, clientName), key: String(b.competitor_id || b.competitor_name), entityId: b.competitor_id ? String(b.competitor_id) : null, seeded: false, alsoTracked: false, placeholder: false }));
+    return rows.map(b => ({ ...competitorCardView(b, clientName, basis), key: String(b.competitor_id || b.competitor_name), entityId: b.competitor_id ? String(b.competitor_id) : null, seeded: false, alsoTracked: false, placeholder: false }));
   }
   const byEntity = new Map<string, any>(rows.filter(b => b.competitor_id).map(b => [String(b.competitor_id), b]));
   const seededIds = new Set((seeded as SeededCompetitor[]).map(s => String(s.entity_id)));
@@ -264,11 +298,11 @@ export function buildCompetitorCards(benchmarks: any[] | null | undefined, seede
     const row = byEntity.get(String(s.entity_id));
     // A seeded competitor with no row, or a row with no evidence and no mention at all, has nothing to show yet.
     const empty = !row || (row.health_status === "INSUFFICIENT_EVIDENCE" && (!isNum(row.mentions_30d) || Math.round(row.mentions_30d) === 0));
-    const view = empty ? placeholderCardView(s.name, clientName) : competitorCardView({ ...row, seeded: true }, clientName);
+    const view = empty ? placeholderCardView(s.name, clientName) : competitorCardView({ ...row, seeded: true }, clientName, basis);
     return { ...view, key: String(s.entity_id), entityId: String(s.entity_id), seeded: true, alsoTracked: false, placeholder: empty };
   });
   const rest: CompetitorCard[] = rows.filter(b => !seededIds.has(String(b.competitor_id))).map(b => ({
-    ...competitorCardView(b, clientName), key: String(b.competitor_id || b.competitor_name), entityId: b.competitor_id ? String(b.competitor_id) : null,
+    ...competitorCardView(b, clientName, basis), key: String(b.competitor_id || b.competitor_name), entityId: b.competitor_id ? String(b.competitor_id) : null,
     seeded: false, alsoTracked: true, placeholder: false,
   }));
   return [...first, ...rest];

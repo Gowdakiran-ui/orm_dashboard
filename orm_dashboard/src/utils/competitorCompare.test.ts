@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import path from "path";
 import {
-  clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice, rankedEntityCount, rankLabel, emptyStateMessage,
+  clientRadarValues, competitorRadarValues, buildRadarData, bars, clientShareOfVoice, rankedEntityCount, rankAmongScored, rankLabel, emptyStateMessage,
   comparedCompetitorsLabel, articleCountLabel, activityScopeNote, evidenceCaption, asOfLabel, competitorCardView, buildCompetitorCards, noEvidenceMessage, hiddenTopics, hiddenTopicsNote,
   hasEvidence, RADAR_AXES, isLowEvidence, lowEvidenceTitle, notEnoughCoverageMessage, riskTileLabel, fixed, LOW_EVIDENCE_MENTIONS,
 } from "@/utils/competitorCompare";
@@ -209,8 +209,9 @@ describe("no trend wording on the page (ground rule 2)", () => {
 describe("competitor cards", () => {
   const row = (over: any) => ({ competitor_id: "1", competitor_name: "Lodha", rank: 1, reputation: 83.3, sov: 1.36, health_status: "COMPLETE", mentions_30d: 6, as_of: "2026-10-20T03:41:10Z", ...over });
   it("a scored competitor gets a plain meaning per number and a dated 'Data as of'", () => {
-    const v = competitorCardView(row({}), "Godrej Properties");
-    expect(v).toMatchObject({ hasScore: true, scoreText: "83.3 / 100", rankText: "Ranked #1 with Godrej Properties", sovText: "1.4% share of voice", evidence: "Based on 6 mentions in the last 30 days", thin: false, thinNote: null });
+    const basis = rankAmongScored([row({ client_comparable_score: 70 })]);
+    const v = competitorCardView(row({}), "Godrej Properties", basis);
+    expect(v).toMatchObject({ hasScore: true, scoreText: "83.3 / 100", rankText: "Ranked #1 of 2 (includes Godrej Properties)", sovText: "1.4% share of voice", evidence: "Based on 6 mentions in the last 30 days", thin: false, thinNote: null });
     expect(v.scoreMeaning).toContain("that also mention Godrej Properties");
     // a seeded competitor is scored on articles about itself, so its card must not say they also mention the client
     const seeded = competitorCardView(row({ seeded: true, window_days: 90 }), "Godrej Properties");
@@ -246,5 +247,41 @@ describe("competitor cards", () => {
       [{ entity_id: "e1", name: "DLF", rank: 1 }, { entity_id: "e2", name: "Lodha", rank: 2 }, { entity_id: "e3", name: "Prestige Group", rank: 3 }], "Godrej");
     expect(cards.map(c => c.asOf)).toEqual(["Data as of 05-11-2026", "Data as of 01-10-2026", "Data as of: not scored yet"]);
     expect(cards.every(c => typeof c.asOf === "string" && c.asOf.length > 0)).toBe(true);
+  });
+});
+
+
+describe("rank basis: scored cards plus the client (finding 7)", () => {
+  const r = (id: string, reputation: number | null, rank: number, over: any = {}) =>
+    ({ competitor_id: id, competitor_name: id, reputation, rank, mentions_30d: 9, health_status: "COMPLETE", client_comparable_score: 74.0, client_rank: 4, ...over });
+  const rows = [
+    r("A", 90, 1), r("Banke", 88, 2, { mentions_30d: 1 }), r("B", 80, 3), r("C", 74.04, 5), r("D", 60, 7),
+    r("Nothing", null, 0, { health_status: "INSUFFICIENT_EVIDENCE" }),
+  ];
+  it("ranks run 1..M with M = scored competitors + client; unscored rows hold no rank", () => {
+    const b = rankAmongScored(rows);
+    expect(b.total).toBe(5);
+    expect(b.clientRank).toBe(3);
+    expect(b.byKey.get("A")).toBe(1);
+    expect(b.byKey.get("B")).toBe(2);
+    expect(b.byKey.get("D")).toBe(5);
+    expect(b.byKey.has("Banke")).toBe(false);
+    expect(b.byKey.has("Nothing")).toBe(false);
+  });
+  it("equal scores as shown (one decimal) share a rank", () => {
+    const b = rankAmongScored(rows);
+    expect(b.byKey.get("C")).toBe(3);   // 74.04 shows as 74.0, the same as the client
+    expect(b.clientRank).toBe(3);
+  });
+  it("no client comparable score: the client is unranked and not counted", () => {
+    const b = rankAmongScored(rows.map(x => ({ ...x, client_comparable_score: null })));
+    expect(b.clientRank).toBeNull();
+    expect(b.total).toBe(4);
+    expect(b.clientIncluded).toBe(false);
+  });
+  it("cards say 'Ranked #N of M' and never show a rank above M", () => {
+    const cards = buildCompetitorCards(rows, null, "Godrej");
+    const texts = cards.map(c => c.rankText);
+    expect(texts).toEqual(["Ranked #1 of 5 (includes Godrej)", null, "Ranked #2 of 5 (includes Godrej)", "Ranked #3 of 5 (includes Godrej)", "Ranked #5 of 5 (includes Godrej)", null]);
   });
 });

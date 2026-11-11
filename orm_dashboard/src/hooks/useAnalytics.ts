@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { calculateSentimentDistribution } from "@/utils/calculateSentimentDistribution";
 import { getRiskLevel } from "@/utils/riskLevel";
+import { rankAmongScored } from "@/utils/competitorCompare";
 import { calculateClientSOV } from "@/utils/shareOfVoice";
 import { buildRiskHeatmap } from "@/utils/riskHeatmap";
 import { formatDM, formatDMYTime } from "@/utils/dateFormat";
@@ -53,15 +54,11 @@ export function useAnalytics({
     return cleanBenchmarks;
   }, [benchmarks]);
 
-  // The client's rank is the benchmark engine's own rank for the latest run
-  // (client_rank on every /benchmark row). It is ranked on the same comparable
-  // scale as the competitors; the client's overall reputation score is a
-  // different measurement and must not be compared against those scores.
-  // null = the engine could not rank the client (or there are no competitors).
-  const clientRankValue = useMemo(() => {
-    const engineRank = normalizedBenchmarks?.[0]?.client_rank;
-    return typeof engineRank === "number" ? engineRank : null;
-  }, [normalizedBenchmarks]);
+  // The client's rank is taken among the competitors that show a score plus the client, on the same comparable
+  // scale (client_comparable_score), the same basis as the Competitors cards and Brand Equity (rankAmongScored).
+  // The client's overall reputation score is a different measurement and must not be compared against those scores.
+  // null = the client has no comparable score (or there are no competitors).
+  const clientRankValue = useMemo(() => rankAmongScored(normalizedBenchmarks).clientRank, [normalizedBenchmarks]);
 
   const clientRank = useMemo(() => {
     return clientRankValue !== null ? `#${clientRankValue}` : "Not Ranked";
