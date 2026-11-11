@@ -221,9 +221,11 @@ export function CompetitorRadarAxesDefinition() {
       <span className="block font-bold">Competitor Comparison Metrics</span>
       <span className="block">
         <b>Comparable Score</b> (0–100) — one score calculated the same way for
-        the client and the competitor over the last 30 days, using only
-        articles that also mention the client. It is not the overall
-        reputation score shown on Brand Equity.
+        the client and the competitor over the benchmark window shown on the
+        page. For a competitor you searched for, only articles that also
+        mention the client count; for the closest competitors seeded for this
+        company, articles about the competitor itself count. It is not the
+        overall reputation score shown on Brand Equity.
       </span>
       <span className="mt-1 block">
         <b>Sentiment Score</b> — average coverage tone, normalized from the
@@ -231,14 +233,13 @@ export function CompetitorRadarAxesDefinition() {
       </span>
       <span className="mt-1 block">
         <b>Risk Containment</b> — 100 minus the average Risk Score, so a
-        higher value always means lower risk exposure. Only articles that
-        also mention the client are included, so a competitor&apos;s other
-        stories do not count here.
+        higher value always means lower risk exposure. It uses the same
+        articles as the Comparable Score (see above).
       </span>
       <span className="mt-1 block">
         <b>Share of Voice</b> — the share of all mentions (the client plus the
-        compared competitors) that belong to this entity, counting only
-        articles that also mention the client.
+        compared competitors) that belong to this entity, in the benchmark
+        window shown on the page.
       </span>
     </>
   );
@@ -253,9 +254,11 @@ export function CompetitorComparableScoreDefinition() {
         A 0–100 score that blends sentiment (30%), risk (30%), source
         reliability (10%) and media visibility (5%), re-weighted over the parts
         that have data. It is calculated the same way for the client and for
-        the competitor, over the last 30 days, using only articles that also
-        mention the client, so the two bars can be compared. It is not the
-        overall reputation score shown on Brand Equity.
+        the competitor, over the benchmark window shown on the page, so the
+        two bars can be compared. For a competitor you searched for, only
+        articles that also mention the client count; for seeded competitors,
+        articles about the competitor itself count. It is not the overall
+        reputation score shown on Brand Equity.
       </span>
     </>
   );
@@ -267,11 +270,9 @@ export function CompetitorShareOfVoiceDefinition() {
     <>
       <span className="block font-bold">Share of Voice (SOV)</span>
       <span className="block">
-        A competitor&apos;s share of all mentions in the last 30 days: its
-        mention count divided by (the client&apos;s + every compared
-        competitor&apos;s mention count). Only articles that also mention the
-        client are counted, so coverage of a competitor elsewhere does not
-        show up here. The client&apos;s own share is 100 minus the sum of the
+        A competitor&apos;s share of all mentions in the benchmark window
+        shown on the page: its mention count divided by (the client&apos;s +
+        every compared competitor&apos;s mention count). The client&apos;s own share is 100 minus the sum of the
         compared competitors&apos; shares, never below 0.
       </span>
     </>
@@ -292,7 +293,7 @@ export function TopicOwnershipDefinition() {
     <>
       <span className="block font-bold">Topic Ownership</span>
       <span className="block">
-        Each entity&apos;s coverage over the last 30 days, grouped by its
+        Each entity&apos;s coverage over the benchmark window shown on the page, grouped by its
         highest-confidence classified topic — the same per-document topic
         shown elsewhere on this dashboard.
       </span>

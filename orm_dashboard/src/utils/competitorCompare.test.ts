@@ -203,6 +203,16 @@ describe("no trend wording on the page (ground rule 2)", () => {
     const b = src.indexOf("export function TopicOwnershipDefinition");
     expect(src.slice(a, b)).not.toMatch(TREND);
   });
+  it("the competitor info texts do not hard-code '30 days' or claim every score needs the client in the article", () => {
+    const src = readFileSync(path.resolve(__dirname, "../lib/metricDefinitions.tsx"), "utf-8");
+    const a = src.indexOf("export function CompetitorRadarAxesDefinition");
+    const b = src.indexOf("export function TopicOwnershipDefinition");
+    const end = src.indexOf("export function", b + 10);
+    const text = src.slice(a, end);
+    expect(text).not.toMatch(/last 30 days/);
+    expect(text).toContain("benchmark window shown on the page");
+    expect(text).not.toMatch(/Only articles that also mention the client are/);
+  });
 });
 
 
