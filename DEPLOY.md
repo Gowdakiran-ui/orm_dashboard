@@ -63,6 +63,8 @@ docker ps --format 'table {{.Names}}\t{{.Status}}'   # confirm every container i
 ./scripts/verify_deploy_services.sh     # fails loudly if any defined service has no running container
 ```
 
+After that passes, free the build cache: see "Free the build cache after a successful deploy" below.
+
 If a change is backend-only (no frontend changes), `docker compose build`
 still only rebuilds what actually changed — Docker's layer cache makes the
 frontend build a no-op. The `up -d` step is what must never be scoped, not
@@ -87,6 +89,24 @@ the `build` step.
 - Trigger one real pipeline run and watch it reach `SUCCESS`, not `FAILED`
   with an FSM transition error — that specific error shape is the signature
   of this exact partial-recreation mistake recurring.
+
+## Free the build cache after a successful deploy
+
+Every `docker compose build` leaves its build cache behind (measured 2026-11-11: 27.7 GB of a 48 GB disk, rebuilt by each
+build and never reused, next to 8.4 GB of images). Prune it as the LAST step of a deploy, and only after
+`./scripts/verify_deploy_services.sh` has passed and `docker ps` shows every container healthy:
+
+```bash
+df -h /                  # before
+docker builder prune -af # build cache only: never removes an image or container that exists
+df -h /                  # after: note the freed space
+```
+
+- Do not run it before verification: if the deploy has to be rolled back, the cache is what makes the rebuild fast.
+- `docker builder prune` touches build cache only. It does not remove images, containers, volumes or networks, so it is safe
+  while the stack is running. (Do not use `docker system prune -a` or `--volumes` here.)
+- The next build is slower because it starts from an empty cache (the CPU-only torch wheel is downloaded again).
+- Record the `df` figures in the deploy notes the first few times; the expected saving is about 30 GB (an estimate, not yet measured).
 
 ## Redis password and published ports
 
