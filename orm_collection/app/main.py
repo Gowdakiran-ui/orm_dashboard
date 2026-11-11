@@ -84,6 +84,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compress JSON responses for clients that ask for it (every browser does). Measured 2026-11-11: the dashboard's 500-article list
+# (GET /documents/client/{id}?limit=500, polled every 45 s) was 755-917 KB uncompressed per call and gzips to 77-119 KB. Small
+# responses (under 1 KB) are left alone; a caller that sends no Accept-Encoding (the compose healthcheck's curl) is unaffected.
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error("Unhandled exception", error=str(exc))
