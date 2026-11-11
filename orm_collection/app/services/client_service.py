@@ -343,6 +343,23 @@ def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[s
         query = query.filter(Client.name.ilike(f"%{search}%"))
     return query.order_by(Client.name, Client.id).offset(skip).limit(limit).all()
 
+def attach_last_successful_run(db: Session, clients: list) -> list:
+    """Set `last_successful_run_at` on each client (finish time of its latest SUCCESS pipeline run, else None) so the dashboard can open
+    on the most recently refreshed client. One grouped query; the clients themselves and their order are not changed."""
+    from sqlalchemy import func
+    from app.models.pipeline_run import PipelineRun
+    ids = [str(c.id) for c in clients]
+    latest = {}
+    if ids:
+        rows = (db.query(PipelineRun.client_id, func.max(PipelineRun.finished_at))
+                .filter(PipelineRun.status == "SUCCESS", PipelineRun.client_id.in_(ids))
+                .group_by(PipelineRun.client_id).all())
+        latest = {str(cid): ts for cid, ts in rows}
+    for c in clients:
+        c.last_successful_run_at = latest.get(str(c.id))
+    return clients
+
+
 def delete_client(db: Session, client_id: UUID) -> dict:
     """
     Deletes a client and all associated intelligence data.

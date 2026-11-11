@@ -38,7 +38,7 @@ from app.core.rate_limit import limiter, STRICT_RATE_LIMIT
 from app.workers.aggregation_tasks import run_client_pipeline
 from app.services.pipeline_service import PipelineStartError, start_pipeline_run
 from app.schemas.client import ClientOnboarding, ClientResponse
-from app.services.client_service import onboard_client, get_clients, delete_client
+from app.services.client_service import onboard_client, get_clients, delete_client, attach_last_successful_run
 from app.models.client import Client
 from app.models.pipeline_run import PipelineRun
 from app.models.user import ROLE_SUPER_ADMIN, User, UserClientAccess
@@ -86,7 +86,7 @@ def read_clients(
     # design, so without this bypass they'd see zero clients everywhere,
     # including their own admin-panel client picker for inviting users.
     if current_user.role == ROLE_SUPER_ADMIN:
-        return get_clients(db, skip, limit, search=search)
+        return attach_last_successful_run(db, get_clients(db, skip, limit, search=search))
 
     # Only clients this user is explicitly granted (TASK_AUTH.md fix #4) --
     # the tenant dropdown must never show a client the caller isn't
@@ -97,7 +97,7 @@ def read_clients(
     ]
     if not accessible_ids:
         return []
-    return get_clients(db, skip, limit, search=search, client_ids=accessible_ids)
+    return attach_last_successful_run(db, get_clients(db, skip, limit, search=search, client_ids=accessible_ids))
 
 
 @router.delete("/{client_id}")

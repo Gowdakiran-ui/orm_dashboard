@@ -31,5 +31,7 @@ class ClientUpdate(BaseModel):
 class ClientResponse(ClientBase):
     id: UUID
     created_at: datetime
+    # Finish time of this client's latest SUCCESS pipeline run (list endpoint only; None = never succeeded or not computed).
+    last_successful_run_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)

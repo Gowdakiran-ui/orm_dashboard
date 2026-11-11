@@ -1,3 +1,4 @@
+import { pickDefaultClientId } from "@/utils/defaultClient";
 import type { DocumentCounts } from "@/utils/documentCounts";
 import { useEffect, useState, useRef } from "react";
 import {
@@ -96,11 +97,8 @@ export function useDashboardData() {
         if (fetchedClients && fetchedClients.length > 0) {
           setClients(fetchedClients);
           setClientId((currentId) => {
-            const stillExists = currentId && fetchedClients.some((c: any) => c.id === currentId);
-            if (stillExists) return currentId;
             const savedId = typeof window !== "undefined" ? localStorage.getItem("activeClientId") : null;
-            const validSaved = savedId && fetchedClients.some((c: any) => c.id === savedId);
-            return validSaved ? savedId : fetchedClients[0].id;
+            return pickDefaultClientId(fetchedClients, currentId, savedId);
           });
         } else {
           setClients([]);
