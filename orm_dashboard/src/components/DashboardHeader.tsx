@@ -34,14 +34,15 @@ export function DashboardHeader({
 
   return (
     <header className={`h-20 border-b backdrop-blur-2xl flex items-center justify-between px-8 z-40 sticky top-0 ${isDark ? "border-white/[0.12] bg-zinc-900/50" : "border-black/[0.06] bg-white/50"}`}>
-      <div className="flex items-center space-x-3">
-        <span className="relative flex h-2 w-2">
+      <div className="flex items-center space-x-3 min-w-0">
+        <span className="relative flex h-2 w-2 shrink-0">
           {!liveDegraded && (
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           )}
           <span className={`relative inline-flex rounded-full h-2 w-2 ${liveDegraded ? "bg-amber-500" : "bg-emerald-500"}`}></span>
         </span>
         <Terminal className="h-5 w-5 ml-2" style={{ color: accent }} />
+        <div className="min-w-0">
         <h2 className={`text-xs font-mono font-extrabold tracking-wider uppercase line-clamp-2 ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
           {/* Access Control is a global, cross-client admin panel (see
               AdminUsersPanel, gated on isSuperAdmin, not on the selected
@@ -58,26 +59,34 @@ export function DashboardHeader({
               this is a no-op there (confirmed live). */}
           {activeTab === "admin" ? "XOOP — GLOBAL ACCESS CONTROL" : `${activeClientName} — ${activeTab.toUpperCase()}`}
         </h2>
+          {/* Phone width: the "Data as of" text has no room in the right-hand group (it ran off the screen, seen live
+              11-11-2026), so it is shown here under the title instead, and the clock and connection badge are hidden. */}
+          {activeTab !== "admin" && dataAsOf && dataAsOf.state === "ready" && (
+            <span className={`block md:hidden mt-0.5 text-[10px] font-mono font-normal normal-case tracking-normal leading-tight ${mutedText(theme)}`} data-testid="data-as-of-mobile">
+              {dataAsOfText(dataAsOf.finishedAt)}
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center space-x-6 text-xs font-mono">
+      <div className="flex items-center space-x-3 md:space-x-6 text-xs font-mono shrink-0">
         {actions}
         {activeTab !== "admin" && dataAsOf && dataAsOf.state === "ready" && (
-          <span className={mutedText(theme)} title="Time the last successful Run Pipeline finished. Everything on this page is as of then.">
+          <span className={`hidden md:inline ${mutedText(theme)}`} title="Time the last successful Run Pipeline finished. Everything on this page is as of then.">
             {dataAsOfText(dataAsOf.finishedAt)}
           </span>
         )}
-        <div className={`flex items-center space-x-2 ${mutedText(theme)}`}>
+        <div className={`hidden md:flex items-center space-x-2 ${mutedText(theme)}`}>
           <Clock className="h-4 w-4" style={{ color: accent }} />
           <span>{currentTime}</span>
         </div>
-        <div className={`h-4 w-px ${isDark ? "bg-white/[0.12]" : "bg-black/[0.08]"}`} />
+        <div className={`hidden md:block h-4 w-px ${isDark ? "bg-white/[0.12]" : "bg-black/[0.08]"}`} />
         {liveDegraded ? (
-          <Badge className={`${glassPill(theme)} text-amber-500 border-amber-500/30`}>
+          <Badge className={`hidden md:inline-flex ${glassPill(theme)} text-amber-500 border-amber-500/30`}>
             SIGNAL DEGRADED
           </Badge>
         ) : (
-          <Badge className={glassPill(theme)} style={{ color: accent }}>
+          <Badge className={`hidden md:inline-flex ${glassPill(theme)}`} style={{ color: accent }}>
             Connected
           </Badge>
         )}

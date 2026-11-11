@@ -45,6 +45,7 @@ const GET: Record<string, unknown> = {
     reputation: { score: 74.2, grade: "B", status: "ok", computed_at: "2026-10-02T15:02:27+00:00" },
     document_risk: { visible_documents: 60, scored_documents: 60, unscored_documents: 0, total: flagged.length, critical: 15, high: 15, medium: 15, average: 55, highest: 88, as_of: "2026-10-03T05:55:00+00:00", top: flagged.slice(0, 2).map((d) => ({ title: d.title, risk: d.risk })) },
     sentiment: { positive: 12, neutral: 30, negative: 6, dominant: "neutral" }, executive_alert: { open: false, alert: null },
+    last_pipeline_run: { finished_at: "2026-11-05T14:55:59+00:00" },
   },
   [`/client-intelligence/${CID}/plan-advisory`]: { lead: "Two high-risk stories need review this week.", flagged: true },
   [`/client-intelligence/${CID}/benchmark`]: bench,
