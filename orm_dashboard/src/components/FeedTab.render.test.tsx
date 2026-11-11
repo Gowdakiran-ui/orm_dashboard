@@ -73,7 +73,8 @@ describe("B1 drawer date", () => {
     await mount({ documents: [doc(0, { id: "old", title: "Old story", timestamp: "2017-08-16T11:48:47+00:00" })] });
     await openDetails(0);
     const text = drawerText();
-    expect(text).toContain(new Date("2017-08-16T11:48:47+00:00").toLocaleString());
+    expect(text).toContain(formatDMYTime("2017-08-16T11:48:47+00:00"));
+    expect(text).toMatch(/Published 16-08-2017, \d{2}:\d{2} (AM|PM)/);   // day first, like every other date on the dashboard
     expect(text).not.toContain("Published Recent");
   });
   it("still falls back to 'Recent' when neither the detail nor the list row has a date", async () => {
@@ -139,7 +140,7 @@ describe("A1 drawer date label", () => {
     await mount({ documents: [doc(0, { id: "p", timestamp: "2017-08-16T11:48:47+00:00" })] });
     await openDetails(0);
     const text = drawerText();
-    expect(text).toContain("Published " + new Date("2017-08-16T11:48:47+00:00").toLocaleString());
+    expect(text).toContain("Published " + formatDMYTime("2017-08-16T11:48:47+00:00"));
     expect(text).not.toContain("Ingested at");
   });
 });
@@ -224,7 +225,7 @@ describe("A4 truncation notice", () => {
 describe("A5 subtitle size and drawer text selection", () => {
   it("the subtitle is 12px", async () => {
     await mount({ documents: [doc(0)] });
-    const sub = Array.from(host.querySelectorAll("*")).find(e => e.children.length === 0 && e.textContent === "Real-time matching documents");
+    const sub = Array.from(host.querySelectorAll("*")).find(e => e.children.length === 0 && e.textContent === "Articles matched to this company, as of the last Run Pipeline");
     expect(sub?.className).toContain("text-[12px]");
     expect(sub?.className).not.toContain("text-[9px]");
   });

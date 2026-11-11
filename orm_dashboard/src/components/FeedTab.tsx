@@ -162,9 +162,9 @@ export function FeedTab({
             <div className={SPECULAR_LINE} />
             <CardHeader className={`pb-3 border-b p-4 ${isDark ? "border-white/[0.08] bg-black/20" : "border-black/[0.06] bg-black/[0.02]"}`}>
               <CardTitle className={`text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 ${mutedText(theme)}`}>
-                <Activity className="h-3.5 w-3.5 text-emerald-400" /> Real-time Brand Ingest Stream
+                <Activity className="h-3.5 w-3.5 text-emerald-400" /> Intelligence Stream
               </CardTitle>
-              <CardDescription className={`text-[12px] font-mono ${mutedText(theme)}`}>Real-time matching documents</CardDescription>
+              <CardDescription className={`text-[12px] font-mono ${mutedText(theme)}`}>Articles matched to this company, as of the last Run Pipeline</CardDescription>
               {flaggedListed > 0 && (
                 <p className={`text-[12px] font-mono ${mutedText(theme)}`} data-testid="stream-flagged-note">
                   {flaggedListed} flagged article{flaggedListed === 1 ? "" : "s"} listed first, strongest first, then the newest articles.
@@ -313,7 +313,7 @@ export function FeedTab({
                         <div className="space-y-1">
                           <h4 className="font-bold text-sm dash-strong leading-snug">{selectedDocDetails.title}</h4>
                           <div className="flex items-center gap-3 text-[9px] dash-muted pt-1">
-                            <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> Published {drawerTimestamp ? new Date(drawerTimestamp).toLocaleString() : "Recent"}</span>
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> Published {drawerTimestamp ? formatDMYTime(drawerTimestamp) : "Recent"}</span>
                           </div>
                         </div>
 
