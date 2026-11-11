@@ -211,7 +211,7 @@ export function Sidebar({
             { id: "risk", label: "Risk Center", icon: ShieldAlert },
             { id: "competitors", label: "Competitor Compare", icon: BarChart3 },
             { id: "executives", label: "Executive Reputation", icon: Users },
-            { id: "analytics", label: "Executive Analytics", icon: BarChartIcon },
+            { id: "analytics", label: "Brand Analytics", icon: BarChartIcon },
             { id: "feed", label: "Intelligence Stream", icon: FileText },
             { id: "counterfeit", label: "Counterfeit Detection", icon: ScanSearch },
             ...(isSuperAdmin ? [{ id: "admin", label: "Access Control", icon: ShieldCheck }] : [])

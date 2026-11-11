@@ -443,7 +443,6 @@ export function useDashboardData() {
           fetchReputationSummary(clientId, signal).then(data => { if (!signal.aborted) { setReputationSummary(data || DEFAULT_REPUTATION_SUMMARY); setReputationSummaryError(null); } }),
           fetchPlanAdvisory(clientId, signal).then(data => { if (!signal.aborted) { setPlanAdvisory(data || DEFAULT_PLAN_ADVISORY); setPlanAdvisoryError(null); } }).finally(() => { if (!signal.aborted) setPlanAdvisoryLoading(false); }),
           fetchActiveAlerts(clientId, signal).then(data => { if (!signal.aborted) { setAlerts(data || []); setAlertsError(null); } }),
-          fetchRisks(clientId, signal).then(data => { if (!signal.aborted) { setRisks(data || { average_recent_risk_score: 0.0, recent_critical_events: 0, recent_high_events: 0 }); setRisksError(null); } }),
           fetchClientTelemetry(clientId, signal).then(data => { if (!signal.aborted) { setTelemetry(data); setTelemetryError(null); } }), // Poll telemetry
           fetchDocuments(clientId, signal).then(data => { if (!signal.aborted) { setDocuments(data || []); setDocumentsError(null); } }),
           fetchDocumentCounts(clientId, signal).then(c => { if (!signal.aborted) setDocumentCounts(c); }),

@@ -335,8 +335,8 @@ export function buildBrandEquityView(i: BrandEquityViewInput) {
         avg: riskStats.avg !== null ? String(Math.round(riskStats.avg)) : UNAVAILABLE_TEXT,
         after: "." +
           (riskStats.topRiskDocs.length > 0
-            ? ` The highest-risk item is "${topTitle(0)}" (${Math.round(riskStats.topRiskDocs[0].risk)} pts)` +
-              (riskStats.topRiskDocs[1] ? `, followed by "${topTitle(1)}" (${Math.round(riskStats.topRiskDocs[1].risk)} pts).` : ".")
+            ? ` The highest-risk item is "${topTitle(0)}" (about ${Math.round(riskStats.topRiskDocs[0].risk)} out of 100)` +
+              (riskStats.topRiskDocs[1] ? `, followed by "${topTitle(1)}" (about ${Math.round(riskStats.topRiskDocs[1].risk)} out of 100).` : ".")
             : "") +
           uncheckedText,
       };

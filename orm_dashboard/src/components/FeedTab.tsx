@@ -17,6 +17,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { glassCard, glassTokens, mutedText, bodyText, SPECULAR_LINE } from "@/components/theme/tokens";
 import { isPlaceholderTitle, PreviewUnavailableLabel, PLACEHOLDER_ROW_CLASS } from "@/components/ui/PreviewUnavailable";
 import { formatDMYTime } from "@/utils/dateFormat";
+import { formatScore as formatRiskScore } from "@/utils/riskCenter";
 
 
 // Real ingest-time source categories (Document.document_type, exposed by
@@ -59,6 +60,9 @@ export function FeedTab({
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedDocDetails, setSelectedDocDetails] = useState<any>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  // The score people see everywhere else (Risk Center) is the unrounded one, to one decimal; the list rows carry it as risk_exact.
+  const shownRisk = (doc: any): string | number =>
+    typeof doc?.risk_exact === "number" ? formatRiskScore(doc.risk_exact) : doc?.risk;
   // xoop_ui_clarity_review.md: mounting all ~500 documents' worth of feed
   // cards at once (no windowing) caused blank scroll regions and a
   // screenshot timeout during normal scrolling. Rendering only a bounded
@@ -235,7 +239,7 @@ export function FeedTab({
                       ) : (
                         <>
                           <Badge variant="outline" className={`text-[8px] py-0 px-1 ${docRiskColor}`}>
-                            Risk: {d.risk}
+                            Risk: {shownRisk(d)}
                           </Badge>
                           <Badge variant="outline" className={`text-[8px] py-0 px-1 ${
                             d.sentiment > 0.3 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
@@ -289,7 +293,7 @@ export function FeedTab({
                   <div className={`p-6 border-b flex items-center justify-between ${isDark ? "border-white/[0.12]" : "border-black/[0.06]"}`}>
                     <div className="flex items-center space-x-3">
                       <Sparkles className="h-5 w-5" style={{ color: accent }} />
-                      <span className="text-sm font-bold uppercase">Document Intelligence Details</span>
+                      <span className="text-sm font-bold uppercase">Article details</span>
                     </div>
                     <button
                       onClick={() => setSelectedDocId(null)}
@@ -305,7 +309,7 @@ export function FeedTab({
                     {detailsLoading ? (
                       <div className="flex flex-col items-center justify-center h-full dash-accent font-mono">
                         <Cpu className="animate-spin h-8 w-8 mb-2" />
-                        Ingesting Trace Metadata...
+                        Loading article details…
                       </div>
                     ) : selectedDocDetails ? (
                       <>
@@ -324,7 +328,7 @@ export function FeedTab({
                             <span className="dash-strong font-bold text-[11px]">{selectedDocDetails.source_id || "RSS Feed"}</span>
                           </div>
                           <div>
-                            <span className="text-[8px] dash-muted uppercase block font-bold">Topic Mapped</span>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Topic</span>
                             <Badge variant="outline" className="border-blue-500/30 text-blue-400 text-[8px] py-0 px-1 mt-0.5">
                               {selectedDocDetails.topics?.[0]?.name || "General"}
                             </Badge>
@@ -344,7 +348,7 @@ export function FeedTab({
                             )}
                           </div>
                           <div>
-                            <span className="text-[8px] dash-muted uppercase block font-bold">Risk Index</span>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Risk score</span>
                             {selectedDocDetails.scored === false ? (
                               <span className="dash-muted font-bold text-[11px]">Not scored</span>
                             ) : (
@@ -353,12 +357,12 @@ export function FeedTab({
                                 selectedDocDetails.risk > RISK_THRESHOLDS.MEDIUM_TO_HIGH ? "text-amber-400" :
                                 "text-sky-400"
                               }`}>
-                                {selectedDocDetails.risk} pts
+                                {shownRisk([...(flaggedDocuments || []), ...documents].find((x: any) => x?.id === selectedDocId) ?? selectedDocDetails)} out of 100
                               </span>
                             )}
                           </div>
                           <div>
-                            <span className="text-[8px] dash-muted uppercase block font-bold">Classification Strength</span>
+                            <span className="text-[8px] dash-muted uppercase block font-bold">Topic confidence</span>
                             <span className="dash-strong text-[11px]">
                               {selectedDocDetails.topics?.[0]?.confidence != null
                                 ? `${(selectedDocDetails.topics[0].confidence * 100).toFixed(0)}%`
@@ -375,7 +379,7 @@ export function FeedTab({
 
                         {/* Entities Mentioned */}
                         <div className="space-y-1.5 border-t dash-border pt-3">
-                          <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">Mentioned Targets</span>
+                          <span className="text-[9.5px] dash-accent font-bold uppercase tracking-wider block">Companies and people mentioned</span>
                           {selectedDocDetails.entities && selectedDocDetails.entities.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {selectedDocDetails.entities.filter((ent: MentionedEntity, idx: number, all: MentionedEntity[]) => all.findIndex((e: MentionedEntity) => e.name === ent.name) === idx).map((ent: any, idx: number) => (

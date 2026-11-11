@@ -161,6 +161,8 @@ export function OverviewAnalyticsPanel({
           </CardHeader>
           <CardContent className="h-[260px]">
             {sentimentDistData.length > 0 ? (
+              <div className="flex flex-col h-full">
+              <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -187,6 +189,21 @@ export function OverviewAnalyticsPanel({
                   <Tooltip contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
+              </div>
+              {/* Legend: each slice named with its article count and share, so the ring is readable without hovering. */}
+              <ul aria-label="Sentiment breakdown legend" className={`flex flex-wrap justify-center gap-x-4 gap-y-1 pt-2 font-mono text-xs ${mutedText(theme)}`}>
+                {sentimentDistData.map((entry, index) => {
+                  const total = sentimentDistData.reduce((sum, e) => sum + (Number(e.value) || 0), 0);
+                  const pct = total > 0 ? Math.round(((Number(entry.value) || 0) / total) * 100) : 0;
+                  return (
+                    <li key={`legend-${index}`} className="flex items-center gap-1.5">
+                      <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                      {entry.name}: {entry.value} ({pct}%)
+                    </li>
+                  );
+                })}
+              </ul>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full space-y-2">
                 <BarChart3 className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />

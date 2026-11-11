@@ -529,10 +529,10 @@ export function RiskTab({
 
               {/* X Axis Labels */}
               <div />
-              <div className={`grid grid-cols-3 text-center uppercase tracking-wider font-bold mt-1 text-xs ${mutedText(theme)}`}>
-                <span className="min-w-0 break-words">LOW CONFIDENCE</span>
-                <span className="min-w-0 break-words">MED CONFIDENCE</span>
-                <span className="min-w-0 break-words">HIGH CONFIDENCE</span>
+              <div className={`grid grid-cols-3 text-center uppercase tracking-normal sm:tracking-wider font-bold mt-1 text-[10px] sm:text-xs ${mutedText(theme)}`}>
+                <span className="min-w-0">LOW CONFIDENCE</span>
+                <span className="min-w-0">MED CONFIDENCE</span>
+                <span className="min-w-0">HIGH CONFIDENCE</span>
               </div>
             </div>
             {matrix.unplaced > 0 && (

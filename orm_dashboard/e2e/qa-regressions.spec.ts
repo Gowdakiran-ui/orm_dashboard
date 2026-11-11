@@ -71,3 +71,32 @@ test("desktop width: 'Data as of' is shown once, on the right", async ({ page })
   await expect(header.getByTestId("data-as-of-mobile")).toBeHidden();
   await expect(header.getByText(/Data as of 05-11-2026/).last()).toBeVisible();
 });
+
+test("phone width: risk matrix column labels wrap between words, never inside a word", async ({ page }) => {
+  await open(page, "light", 390, "/dashboard?tab=risk");
+  for (const label of ["LOW CONFIDENCE", "MED CONFIDENCE", "HIGH CONFIDENCE"]) {
+    const el = page.getByText(label, { exact: true }).first();
+    await expect(el).toBeVisible();
+    // Every word must fit the label's own box on one line: the scroll width of a one-word line equals its client width.
+    const broke = await el.evaluate((node) => {
+      const range = document.createRange();
+      const words = (node.textContent || "").split(" ");
+      const box = node.getBoundingClientRect();
+      const text = node.firstChild as Text;
+      let at = 0;
+      return words.some((w) => {
+        range.setStart(text, at); range.setEnd(text, at + w.length); at += w.length + 1;
+        const rects = Array.from(range.getClientRects());
+        return rects.length > 1 || rects.some((r) => r.width > box.width + 1);
+      });
+    });
+    expect(broke, `${label} breaks inside a word`).toBe(false);
+  }
+});
+
+test("analytics: the sentiment donut has a legend naming each slice with its count", async ({ page }) => {
+  await open(page, "light", 1440, "/dashboard?tab=analytics");
+  const legend = page.getByRole("list", { name: "Sentiment breakdown legend" });
+  await expect(legend).toBeVisible();
+  await expect(legend).toContainText(/Negative: \d+ \(\d+%\)/);
+});

@@ -76,9 +76,12 @@ function SourceChips({ sources }: { sources: AiSource[] }) {
 
 function StabilityMarker({ p }: { p: AiPrompt }) {
   const tone = stabilityTone(p);
-  const cls = tone === "same" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-    : tone === "varies" ? "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
-    : "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20";
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  // Dark mode needs the lighter text shades: the 600/500 shades measured 3.79:1 on the dark card.
+  const cls = tone === "same" ? `bg-emerald-500/10 ${isDark ? "text-emerald-300" : "text-emerald-600"} border border-emerald-500/20`
+    : tone === "varies" ? `bg-yellow-500/10 ${isDark ? "text-yellow-300" : "text-yellow-600"} border border-yellow-500/20`
+    : `bg-zinc-500/10 ${isDark ? "text-zinc-300" : "text-zinc-500"} border border-zinc-500/20`;
   const word = tone === "same" ? "Same sources" : tone === "varies" ? "Sources vary" : "One run";
   return (
     <span title={p.stability} data-testid="stability-marker" data-tone={tone} className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-bold leading-none ${cls}`}>

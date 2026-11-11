@@ -178,7 +178,7 @@ export function ReputationSummaryCard({
         ) : (
           <span title={typeof card.value === "string" ? card.value : undefined} className={`${card.highlight && !card.compactValue ? "text-2xl" : "text-xl"} font-bold block truncate ${card.color}`}>{card.value}</span>
         )}
-        {card.sub && <span className={`text-xs ${mutedText(theme)} block truncate mt-1`}>{card.sub}</span>}
+        {card.sub && <span className={`text-xs ${mutedText(theme)} block break-words mt-1`}>{card.sub}</span>}
       </div>
     </>
   );

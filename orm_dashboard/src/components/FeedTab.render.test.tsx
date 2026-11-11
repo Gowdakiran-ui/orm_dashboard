@@ -91,14 +91,14 @@ describe("B2 classification strength", () => {
     await mount({ documents: [doc(0)] });
     await openDetails(0);
     const text = drawerText();
-    expect(text).toContain("Classification StrengthN/A");
-    expect(text).not.toContain("Classification Strength0%");
+    expect(text).toContain("Topic confidenceN/A");
+    expect(text).not.toContain("Topic confidence0%");
   });
   it("a real confidence is unchanged", async () => {
     api.fetchDocumentDetails.mockResolvedValue({ title: "T", topics: [{ name: "Innovation", confidence: 0.69 }], entities: [], sentiment: 0, risk: 0, url: null });
     await mount({ documents: [doc(0)] });
     await openDetails(0);
-    expect(drawerText()).toContain("Classification Strength69%");
+    expect(drawerText()).toContain("Topic confidence69%");
   });
 });
 
@@ -199,7 +199,7 @@ describe("A3 Not scored", () => {
     await openDetails(0);
     const text = drawerText();
     expect(text).toContain("Sentiment ScoreNot scored");
-    expect(text).toContain("Risk IndexNot scored");
+    expect(text).toContain("Risk scoreNot scored");
   });
   it("the drawer for a scored row is unchanged", async () => {
     api.fetchDocumentDetails.mockResolvedValue(detail({ scored: true, sentiment: -1, risk: 33 }));
@@ -207,7 +207,14 @@ describe("A3 Not scored", () => {
     await openDetails(0);
     const text = drawerText();
     expect(text).toContain("Sentiment Score-1.00");
-    expect(text).toContain("Risk Index33 pts");
+    expect(text).toContain("Risk score33 out of 100");
+  });
+  it("list row and drawer show the same one-decimal score as the Risk Center (74.7), not the rounded 75", async () => {
+    api.fetchDocumentDetails.mockResolvedValue(detail({ scored: true, sentiment: -1, risk: 75 }));
+    await mount({ documents: [doc(0, { risk: 75, risk_exact: 74.7 })] });
+    expect(host.textContent).toContain("Risk: 74.7");
+    await openDetails(0);
+    expect(drawerText()).toContain("Risk score74.7 out of 100");
   });
 });
 
