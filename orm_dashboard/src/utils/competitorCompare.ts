@@ -211,7 +211,9 @@ export function competitorCardView(b: any, clientName: string): CompetitorCardVi
     hasScore: scored,
     scoreText: scored ? `${(b.reputation as number).toFixed(1)} / 100` : "Not enough coverage",
     scoreMeaning: scored
-      ? `How healthy ${name}'s reputation looks in recent articles that also mention ${clientName}. Higher is better; 100 is the best possible.`
+      ? b?.seeded
+        ? `How healthy ${name}'s reputation looks in recent articles about ${name}. Higher is better; 100 is the best possible.`
+        : `How healthy ${name}'s reputation looks in recent articles that also mention ${clientName}. Higher is better; 100 is the best possible.`
       : lowEvidence && (mentions ?? 0) > 0
         ? notEnoughCoverageMessage(name, clientName, mentions, b?.window_days, !!b?.seeded)
         : b?.seeded

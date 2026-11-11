@@ -212,6 +212,10 @@ describe("competitor cards", () => {
     const v = competitorCardView(row({}), "Godrej Properties");
     expect(v).toMatchObject({ hasScore: true, scoreText: "83.3 / 100", rankText: "Ranked #1 with Godrej Properties", sovText: "1.4% share of voice", evidence: "Based on 6 mentions in the last 30 days", thin: false, thinNote: null });
     expect(v.scoreMeaning).toContain("that also mention Godrej Properties");
+    // a seeded competitor is scored on articles about itself, so its card must not say they also mention the client
+    const seeded = competitorCardView(row({ seeded: true, window_days: 90 }), "Godrej Properties");
+    expect(seeded.scoreMeaning).toContain("recent articles about Lodha");
+    expect(seeded.scoreMeaning).not.toContain("also mention");
     expect(v.sovMeaning).toContain("about 1 are Lodha");
     expect(v.asOf).toMatch(/^Data as of \d{2}-\d{2}-2026$/);
   });

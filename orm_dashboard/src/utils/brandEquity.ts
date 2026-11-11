@@ -87,6 +87,7 @@ export interface CompetitiveStanding {
   rank: number | null;
   shareOfVoice: number | null;
   topCompetitor: string | null;
+  windowDays?: number | null;   // the benchmark run's look-back (window_days on the /benchmark rows); absent on older rows
 }
 
 // Share of voice and rank are the benchmark engine's own figures for its
@@ -106,6 +107,7 @@ export function computeCompetitiveStanding(
     rank: typeof first.client_rank === "number" ? first.client_rank : null,
     shareOfVoice: typeof first.client_share_of_voice === "number" ? first.client_share_of_voice : null,
     topCompetitor: pickTopCompetitor(rows)?.competitor_name ?? null,
+    windowDays: typeof first.window_days === "number" && first.window_days > 0 ? first.window_days : null,
   };
 }
 
@@ -361,7 +363,7 @@ export function buildBrandEquityView(i: BrandEquityViewInput) {
       ? `${name} ranks #${standing.rank} among the competitors found in coverage.`
       : `${name} could not be ranked against competitors yet (not enough evidence).`;
     const sovPart = standing.shareOfVoice !== null
-      ? ` ${name} accounts for ${standing.shareOfVoice.toFixed(1)}% of all mentions of ${name} and the tracked competitors over the last 30 days (share of voice).`
+      ? ` ${name} accounts for ${standing.shareOfVoice.toFixed(1)}% of all mentions of ${name} and the tracked competitors over the last ${standing.windowDays ?? 30} days (share of voice).`
       : "";
     return `${rankPart}${sovPart}${standing.topCompetitor ? ` The top-ranked competitor is ${standing.topCompetitor}.` : ""}`;
   })();
