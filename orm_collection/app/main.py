@@ -16,6 +16,7 @@ from prometheus_client import REGISTRY
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import settings
+from app.core.api_docs import docs_kwargs
 from app.core.db import SessionLocal, get_db
 from app.core.metrics import CeleryTaskCounterCollector
 from app.core.metrics_guard import MetricsGuardMiddleware
@@ -66,7 +67,7 @@ async def lifespan(app: FastAPI):
 
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="ORM Collection Layer API", lifespan=lifespan)
+app = FastAPI(title="ORM Collection Layer API", lifespan=lifespan, **docs_kwargs(settings.ENABLE_API_DOCS))
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

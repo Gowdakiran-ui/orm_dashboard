@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = "minioadmin"
     S3_BUCKET_NAME: str = "orm-raw-data"
     ENABLE_S3_STORAGE: bool = True
+
+    # Interactive API docs (/docs, /redoc) and the schema (/openapi.json) are off unless this is true. Production leaves it unset:
+    # the pages are public and list every route. Set ENABLE_API_DOCS=true in a local .env when you want them.
+    ENABLE_API_DOCS: bool = False
     
     # AI Reputation Advisor Configuration (Phase 12.3)
     AI_PROVIDER: str = "groq"
