@@ -90,6 +90,23 @@ the `build` step.
   with an FSM transition error — that specific error shape is the signature
   of this exact partial-recreation mistake recurring.
 
+## New-client acceptance (required before any client sees a new client)
+
+Onboarding a client queues its setup (top-5 executives and competitors, then the one-time historical backfill) as a Celery task. That
+task once sat unrouted in the default queue and never ran (2026-11-17), leaving a new client with empty Competitor Compare and Executives
+pages. After onboarding a client, and after any deploy that touches Celery routing, run the read-only acceptance check and do not show
+the client's pages to anyone until it prints `RESULT: PASS`:
+
+```bash
+docker exec -i orm_dashboard-backend-1 python3 - "<client name or id>" < scripts/new_client_acceptance.py
+docker exec -i orm_dashboard-backend-1 python3 - "<client name or id>" --check-token < scripts/new_client_acceptance.py   # also one free Apify account call
+```
+
+It checks that nothing is stranded in the default `celery` queue, 5 active executives and 5 active competitors each with source URLs, backfill
+slices, documents per source, a SUCCESS pipeline run, a reputation score, executive scores, risk events, an access path (a grant or a super admin),
+and the search feeds. A seeded list shorter than 5 or a client with no grant shows as FAIL or INFO on purpose: read it, do not skip it.
+`tests/test_task_routing_guard.py` fails the build if a task sent by name has no route to a queue a worker consumes.
+
 ## Free the build cache after a successful deploy
 
 Every `docker compose build` leaves its build cache behind (measured 2026-11-11: 27.7 GB of a 48 GB disk, rebuilt by each
