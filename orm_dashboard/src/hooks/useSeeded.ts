@@ -5,6 +5,8 @@ import { fetchSeeded } from "@/lib/api";
 
 export interface SeededPayload {
   window: { executive_days: number; benchmark_days: number };
+  // "not_set_up": no seeding record and no backfill slices for this client. Absent from an older server.
+  setup?: { state: "not_set_up" | "set_up" };
   executives: { entity_id: string; name: string; rank: number; role?: string | null }[];
   competitors: { entity_id: string; name: string; rank: number; context_term?: string | null }[];
 }

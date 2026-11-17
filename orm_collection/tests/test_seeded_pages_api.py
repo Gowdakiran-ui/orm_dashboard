@@ -85,6 +85,7 @@ def test_seeded_endpoint_lists_only_active_rows_in_order_with_the_windows(db):
     assert [e["role"] for e in out["executives"]] == ["Chairperson", "CFO"]
     assert [e["name"] for e in out["competitors"]] == ["DLF"] and out["competitors"][0]["context_term"] == "real estate"
     assert all(e["entity_id"] for e in out["executives"])                      # needs_review rows (no entity) are never listed
+    assert out["setup"] == {"state": "set_up"}                                  # a seeded_entities row exists
 
 
 def test_seeded_endpoint_is_empty_before_seeding(db):
@@ -93,6 +94,7 @@ def test_seeded_endpoint_is_empty_before_seeding(db):
     db.commit()
     out = ci.get_client_seeded(c.id, db)
     assert out["executives"] == [] and out["competitors"] == []
+    assert out["setup"] == {"state": "not_set_up"}                              # no seeding record, no backfill slices
 
 
 def test_executives_payload_marks_seeded_people_and_keeps_a_seeded_person_without_brand_cooccurrence(db):

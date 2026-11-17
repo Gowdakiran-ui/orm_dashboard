@@ -101,6 +101,14 @@ describe("counts and labels equal what is listed (F-05, F-09)", () => {
     expect(e.detail).toContain("EMAAR, Banke, DLF, Orris, Lodha");
     expect(emptyStateMessage({ comparedNames: [], searchStatus: undefined, clientName: "Godrej" })!.title).toBe("No tracked competitors yet.");
   });
+  it("empty state tells 'setup has not run' from 'setup ran, nothing found'; unknown keeps the old text", () => {
+    const base = { comparedNames: [] as string[], searchStatus: undefined, clientName: "Snabbit" };
+    expect(emptyStateMessage({ ...base, setupState: "not_set_up" })).toEqual({ title: "Not set up yet.", detail: "A super admin can start setup." });
+    expect(emptyStateMessage({ ...base, setupState: "set_up" })!.title).toBe("Setup ran but found no competitors to track.");
+    expect(emptyStateMessage({ ...base, setupState: null })!.title).toBe("No tracked competitors yet.");
+    // competitors being compared always wins over the setup text
+    expect(emptyStateMessage({ ...base, comparedNames: ["DLF"], setupState: "not_set_up" })!.title).toContain("1 competitor is being compared");
+  });
   it("no empty-state card while a search is searching, tracked, or an unpromoted candidate", () => {
     for (const st of ["searching", "tracked", "unpromoted_candidate"]) {
       expect(emptyStateMessage({ comparedNames: [], searchStatus: st, clientName: "Godrej" })).toBeNull();

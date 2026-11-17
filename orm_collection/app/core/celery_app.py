@@ -83,6 +83,9 @@ celery_app.conf.update(
         # One-time historical backfill (never in beat_schedule, never called by Run Pipeline).
         'app.workers.backfill_tasks.run_client_backfill': {'queue': 'io_queue'},
         'app.workers.backfill_tasks.drain_backfill_nlp':  {'queue': 'io_queue'},
+        # Onboarding hook (enqueue.py sends it by name, which only consults task_routes). Missing here it fell through to the
+        # default "celery" queue, which nothing consumed, so a new client's seeding and backfill never ran.
+        'app.workers.backfill_tasks.seed_and_backfill_client': {'queue': 'io_queue'},
         # Counterfeit detection scans (Reality Defender / WhoisFreaks /
         # Bolster.ai external API calls) -- dispatched via celery_app.send_task
         # by name from client_intelligence.py, which only consults task_routes

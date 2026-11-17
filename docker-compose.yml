@@ -146,7 +146,7 @@ services:
     # available without extra deps, so prefork concurrency=4 is a
     # conservative default to get overlap on network-wait-bound tasks
     # without assuming a particular core count.
-    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=io@%h", "--pool=prefork", "--concurrency=4", "-Q", "io_queue"]
+    command: ["python", "-m", "celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info", "--hostname=io@%h", "--pool=prefork", "--concurrency=4", "-Q", "io_queue,celery"]
     healthcheck:
       # Mirrors backend's healthcheck: ["CMD", "curl", "-f", ...]. Uses
       # CMD-SHELL (not CMD) because it needs shell command substitution to

@@ -296,8 +296,17 @@ export function ExecutivesTab({ clientId, clientName = "this client", trackedExe
         <Card className={`${glassCard(theme)} h-40`}>
           <CardContent className="h-full flex flex-col items-center justify-center space-y-2">
             <Users className={`h-6 w-6 opacity-60 ${mutedText(theme)}`} />
-            <p className={`font-mono text-xs ${mutedText(theme)}`}>No executive selected yet.</p>
-            <p className={`font-mono text-xs ${mutedText(theme)}`}>Search a name above to start tracking a real executive.</p>
+            {seeded?.setup?.state === "not_set_up" ? (
+              <>
+                <p className={`font-mono text-xs ${mutedText(theme)}`}>Not set up yet.</p>
+                <p className={`font-mono text-xs ${mutedText(theme)}`}>A super admin can start setup.</p>
+              </>
+            ) : (
+              <>
+                <p className={`font-mono text-xs ${mutedText(theme)}`}>{seeded?.setup?.state === "set_up" ? "Setup ran but found no executives to track." : "No executive selected yet."}</p>
+                <p className={`font-mono text-xs ${mutedText(theme)}`}>Search a name above to start tracking a real executive.</p>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

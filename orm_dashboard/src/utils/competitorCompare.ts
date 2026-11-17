@@ -96,9 +96,15 @@ export function rankLabel(rank: unknown, total: number, clientName: string): str
 }
 
 /** Text of the empty-state card, or null when no card should be shown. */
-export function emptyStateMessage(opts: { comparedNames: string[]; searchStatus: string | null | undefined; clientName: string }): { title: string; detail: string } | null {
+export const NOT_SET_UP_TEXT = { title: "Not set up yet.", detail: "A super admin can start setup." };
+
+export function emptyStateMessage(opts: { comparedNames: string[]; searchStatus: string | null | undefined; clientName: string; setupState?: string | null }): { title: string; detail: string } | null {
   if (opts.searchStatus === "searching" || opts.searchStatus === "unpromoted_candidate" || opts.searchStatus === "tracked") return null;
   if (opts.comparedNames.length === 0) {
+    // The server says setup (seeding / backfill) has never run for this client: say so, not "no competitors".
+    if (opts.setupState === "not_set_up") return NOT_SET_UP_TEXT;
+    // Setup ran and nothing was found: the search box is the fallback.
+    if (opts.setupState === "set_up") return { title: "Setup ran but found no competitors to track.", detail: "Search a name above to start tracking a real competitor." };
     return { title: "No tracked competitors yet.", detail: "Search a name above to start tracking a real competitor." };
   }
   return {

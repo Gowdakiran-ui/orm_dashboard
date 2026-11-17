@@ -504,7 +504,7 @@ export function CompetitorsTab({
       )}
 
       {!hasTrackedCompetitors && competitorCards.length === 0 && (() => {
-        const empty = emptyStateMessage({ comparedNames, searchStatus: searchResult?.status, clientName: activeClientName });
+        const empty = emptyStateMessage({ comparedNames, searchStatus: searchResult?.status, clientName: activeClientName, setupState: seeded?.setup?.state });
         if (!empty) return null;
         return (
           <Card className={`${glassCard(theme)} min-h-40`}>

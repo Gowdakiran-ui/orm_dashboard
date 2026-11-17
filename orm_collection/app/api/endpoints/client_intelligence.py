@@ -670,7 +670,21 @@ def get_client_seeded(client_id: UUID, db: Session = Depends(get_db)):
         "window": {"executive_days": int(settings.EXEC_WINDOW_DAYS), "benchmark_days": int(settings.BENCHMARK_WINDOW_DAYS)},
         "executives": [_item(r) for r in rows if r.kind == "executive"],
         "competitors": [_item(r) for r in rows if r.kind == "competitor"],
+        # Lets the pages tell "setup has not run" from "setup ran, nothing found". Reads existing rows only: any seeded_entities
+        # row (any status) or any backfill slice means setup has run for this client.
+        "setup": {"state": "set_up" if _client_setup_has_run(db, client_id) else "not_set_up"},
     }
+
+
+def _client_setup_has_run(db: Session, client_id) -> bool:
+    from sqlalchemy import text
+    for table in ("seeded_entities", "backfill_slices"):
+        try:
+            if db.execute(text(f"SELECT 1 FROM {table} WHERE client_id = :c LIMIT 1"), {"c": str(client_id)}).first():
+                return True
+        except Exception:
+            db.rollback()       # table missing (before its migration): treat as no marker from that table
+    return False
 
 
 @router.post("/{client_id}/seeded/refresh", response_model=Dict[str, Any])
