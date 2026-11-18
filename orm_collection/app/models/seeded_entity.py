@@ -12,7 +12,8 @@ class SeededEntity(Base):
 
     kind: "executive" | "competitor". rank: 1-based order (executives in role order, competitors in seed order).
     status: "active" (validated, entity created, shown first on its page), "needs_review" (failed validation, no
-    entity, never shown), "retired" (removed by an operator; the entity row is left in place).
+    entity, never shown), "pending_validation" (Google News could not be read when it was checked: not a rejection, same
+    handling as needs_review until seeding is re-run with a refresh), "retired" (removed by an operator; the entity row is left in place).
     entity_id is NULL while status is needs_review. Nothing else reads this table except the seeding service, the
     two engines' seeded-gate lookups and the two page endpoints.
     """

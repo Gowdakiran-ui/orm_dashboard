@@ -53,10 +53,76 @@ def google_news_url(query: str, start: dt.date, end: dt.date) -> str:
     return "https://news.google.com/rss/search?q=" + urllib.parse.quote_plus(q) + "&hl=en-IN&gl=IN&ceid=IN:en"
 
 
+# One limiter and one circuit breaker for every Google News caller that goes through this function (backfill slices, seeding
+# validator counts, alias measurements, attribution), shared across all worker processes through Redis. Measured 2026-11-17: one
+# backfill ran about 44 requests a minute from the droplet address for five minutes, then the pipeline's feeds and the validator got
+# 503. Now: at most one request every GN_MIN_INTERVAL_SECONDS in total, and after GN_BREAKER_THRESHOLD failures in a row no request
+# is sent for GN_BREAKER_OPEN_SECONDS (callers see QuotaPaused, which the backfill treats as "pause this source", not as a slice error).
+import os as _os
+GN_MIN_INTERVAL_SECONDS = float(_os.environ.get("GN_MIN_INTERVAL_SECONDS", "2.0"))
+GN_BREAKER_THRESHOLD = int(_os.environ.get("GN_BREAKER_THRESHOLD", "3"))
+GN_BREAKER_OPEN_SECONDS = int(_os.environ.get("GN_BREAKER_OPEN_SECONDS", "180"))
+_GN_CIRCUIT_KEY = "gn:circuit_open"
+_GN_FAILS_KEY = "gn:consecutive_failures"
+_GN_SLOT_KEY = "gn:request_slot"
+
+
+def _gn_redis():
+    try:
+        from app.utils.redis_client import redis_client
+        return redis_client.client
+    except Exception:
+        return None
+
+
+def _gn_before_request() -> None:
+    """Raise QuotaPaused while the breaker is open; otherwise wait for this process's turn in the global request spacing."""
+    r = _gn_redis()
+    if r is None:
+        time.sleep(GN_MIN_INTERVAL_SECONDS)
+        return
+    try:
+        if r.exists(_GN_CIRCUIT_KEY):
+            raise QuotaPaused("Google News paused: circuit breaker open after repeated errors")
+        deadline = time.monotonic() + 60
+        while not r.set(_GN_SLOT_KEY, "1", nx=True, px=max(1, int(GN_MIN_INTERVAL_SECONDS * 1000))):
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.25)
+    except QuotaPaused:
+        raise
+    except Exception:
+        time.sleep(GN_MIN_INTERVAL_SECONDS)       # Redis trouble must not remove the spacing
+
+
+def _gn_record(ok: bool) -> None:
+    r = _gn_redis()
+    if r is None:
+        return
+    try:
+        if ok:
+            r.delete(_GN_FAILS_KEY)
+            return
+        n = r.incr(_GN_FAILS_KEY)
+        r.expire(_GN_FAILS_KEY, GN_BREAKER_OPEN_SECONDS * 2)
+        if n >= GN_BREAKER_THRESHOLD:
+            r.set(_GN_CIRCUIT_KEY, "1", ex=GN_BREAKER_OPEN_SECONDS)
+            r.delete(_GN_FAILS_KEY)
+            logger.warning("google_news_circuit_opened", failures=n, open_seconds=GN_BREAKER_OPEN_SECONDS)
+    except Exception:
+        pass
+
+
 def fetch_google_news(query: str, start: dt.date, end: dt.date, ctx: Dict[str, Any]) -> List[Dict[str, Any]]:
     from app.adapters.rss import RSSAdapter
-    time.sleep(GN_PACE_SECONDS)
-    return list(RSSAdapter().fetch(google_news_url(query, start, end)))
+    _gn_before_request()
+    try:
+        items = list(RSSAdapter().fetch(google_news_url(query, start, end)))
+    except Exception:
+        _gn_record(False)
+        raise
+    _gn_record(True)
+    return items
 
 
 # -------------------------------------------------------------------- YouTube

@@ -184,7 +184,7 @@ def summary_lines(plan: Dict[str, Any]) -> List[str]:
             v = it["validation"]
             tag = (" [already tracked]" if it.get("tracked") else "") + (" [listed]" if v.get("listed") else "")
             note = ("  NOTE: " + "; ".join(v["notes"])) if v.get("notes") else ""
-            lines.append(f"  - {it['name']}{tag} ({it.get('slot', it.get('context_term', ''))}) | {'valid, not in top five' if v['accepted'] else 'REJECTED'}: {v['reason']}{note}")
+            lines.append(f"  - {it['name']}{tag} ({it.get('slot', it.get('context_term', ''))}) | {'valid, not in top five' if v['accepted'] else ('PENDING (source unavailable)' if v.get('pending') else 'REJECTED')}: {v['reason']}{note}")
     return lines
 
 
@@ -221,7 +221,7 @@ def format_plan(plan: Dict[str, Any]) -> str:
             lines.append("  not chosen:")
             for it in rest:
                 v = it["validation"]
-                lines.append(f"     - {it['name']} ({it.get('slot', '')}) {'accepted' if v['accepted'] else 'needs_review'}: {v['reason']}")
+                lines.append(f"     - {it['name']} ({it.get('slot', '')}) {'accepted' if v['accepted'] else ('pending_validation' if v.get('pending') else 'needs_review')}: {v['reason']}")
         lines.append("")
     lines.append(f"web citations on the call: {len(plan.get('citations', []))}; follow-up call: {plan.get('follow_up')}")
     lines.append("")
@@ -267,7 +267,7 @@ def apply_plan(db, client_id, plan: Dict[str, Any], refresh: bool = False, remat
     if existing_active and not refresh:
         raise AlreadySeeded(f"{existing_active} seeded entities are already stored for this client; re-seeding needs an explicit refresh")
     ctx = client_context(db, client_id)
-    summary = {"active": 0, "needs_review": 0, "created": 0, "linked": 0, "feeds": 0, "retired": 0, "website_set": None}
+    summary = {"active": 0, "needs_review": 0, "pending_validation": 0, "created": 0, "linked": 0, "feeds": 0, "retired": 0, "website_set": None}
     # verified company website -> brand entity, only into an empty field
     w = plan.get("website") or {}
     brand = ctx["brand"]
@@ -299,8 +299,13 @@ def apply_plan(db, client_id, plan: Dict[str, Any], refresh: bool = False, remat
             if row.status == "retired":
                 continue                        # an operator retired it: a refresh does not bring it back
             if not v["accepted"]:
-                row.status = "needs_review"
-                summary["needs_review"] += 1
+                if v.get("pending"):
+                    # Google News could not be read (5xx, 429, timeout): not a rejection. Re-run seeding with --refresh later.
+                    row.status = "pending_validation"
+                    summary["pending_validation"] += 1
+                else:
+                    row.status = "needs_review"
+                    summary["needs_review"] += 1
                 continue
             row.status = "active"
             chosen_by_kind[kind].add(it["name"])

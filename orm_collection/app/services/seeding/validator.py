@@ -45,18 +45,33 @@ def _default_fetch(query: str, start: dt.date, end: dt.date) -> List[Any]:
     return fetch_google_news(query, start, end, {})
 
 
+# A failed fetch (5xx, 429, timeout, open circuit) is NOT "no news": each slice is retried after these pauses, and a slice that still
+# fails is counted in `errors` so the validators can report "pending validation (source unavailable)" instead of a rejection.
+GN_RETRY_DELAYS = (4.0, 12.0)
+
+
 def gn_count(query: str, fetch: Optional[Callable] = None, today: Optional[dt.date] = None) -> Dict[str, Any]:
     """Google News item count for an exact-phrase query over the last 24 months, in 6-month slices.
-    A slice returns at most 100 items, so `capped` marks a lower bound."""
+    A slice returns at most 100 items, so `capped` marks a lower bound. `errors` is the number of slices that could not be fetched."""
+    import time as _time
     fetch = fetch or _default_fetch
     per, errors = [], 0
     for a, b in slices(today):
-        try:
-            per.append(len(fetch(query, a, b)))
-        except Exception:
-            per.append(0)
-            errors += 1
+        for attempt in range(len(GN_RETRY_DELAYS) + 1):
+            try:
+                per.append(len(fetch(query, a, b)))
+                break
+            except Exception:
+                if attempt < len(GN_RETRY_DELAYS):
+                    _time.sleep(GN_RETRY_DELAYS[attempt])
+                    continue
+                per.append(0)
+                errors += 1
     return {"total": sum(per), "per_slice": per, "capped": any(n >= 100 for n in per), "errors": errors}
+
+
+def _pending(count: Dict[str, Any]) -> str:
+    return f"pending validation (source unavailable): Google News failed for {count['errors']} of {len(count['per_slice'])} time slices, so the count is unreliable"
 
 
 def _q(s: str) -> str:
@@ -274,9 +289,12 @@ def validate_executive(item: Dict[str, Any], company: str, company_domains: List
     official = [u for u in sources if is_official_source(u, company_domains, company)]
     base = {"pair_count_24m": count["total"], "per_slice": count["per_slice"], "capped": count["capped"], "sources": sources,
             "official_sources": official, "verified_page": None, "verified_pages": [], "method": None, "needs_better_sources": False}
+    base["errors"] = count.get("errors", 0)
     if not sources:
         return {**base, "accepted": False, "reason": "no source URL"}
     if count["total"] < EXEC_MIN_ANY_NEWS:
+        if count.get("errors"):
+            return {**base, "accepted": False, "pending": True, "reason": _pending(count)}
         return {**base, "accepted": False, "reason": f"no Google News item for the name with {company} in 24 months"}
     if count["total"] >= EXEC_MIN_PAIR_COUNT:
         return {**base, "accepted": True, "method": "news count", "reason": f"pair count {count['total']} >= {EXEC_MIN_PAIR_COUNT}"}
@@ -296,6 +314,8 @@ def validate_executive(item: Dict[str, Any], company: str, company_domains: List
     if len(domains) >= 2:
         return {**base, "accepted": True, "verified_page": verified[0], "verified_pages": verified, "method": "two independent domains",
                 "reason": f"pair count {count['total']} (1-2) and the name with its role title is on pages of {len(domains)} independent domains"}
+    if count.get("errors"):
+        return {**base, "accepted": False, "pending": True, "reason": _pending(count)}
     return {**base, "accepted": False, "needs_better_sources": True,
             "reason": f"pair count {count['total']} < {EXEC_MIN_PAIR_COUNT} and the name with its role title was not found on a readable company-domain/NSE/BSE page or on two independent domains"}
 
@@ -511,6 +531,9 @@ def validate_competitor(item: Dict[str, Any], fetch: Optional[Callable] = None, 
         return {**empty, "reason": "no context term, so no sector-consistent count is possible"}
     count = gn_count(competitor_query(name, context, item.get("aliases")), fetch, today)
     accepted = count["total"] >= COMP_MIN_COUNT
+    if not accepted and count.get("errors"):
+        return {"accepted": False, "pending": True, "pair_count_24m": count["total"], "per_slice": count["per_slice"], "capped": count["capped"],
+                "sources": sources, "notes": notes, "listed": item.get("exchange_listed"), "errors": count["errors"], "reason": _pending(count)}
     return {"accepted": accepted, "pair_count_24m": count["total"], "per_slice": count["per_slice"], "capped": count["capped"],
             "sources": sources, "notes": notes, "listed": item.get("exchange_listed"),
             "method": "news count (sector)" if accepted else None,

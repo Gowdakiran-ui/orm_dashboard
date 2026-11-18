@@ -357,7 +357,7 @@ def run_client(db, client_id, cfg: BackfillConfig, ctx: Optional[Dict[str, Any]]
             raw = fetch(row.query, s, e, ctx)
         except QuotaPaused as qp:
             summary["paused"] = str(qp)
-            if "YouTube" in str(qp):
+            if "YouTube" in str(qp) or "Google News" in str(qp):
                 skip_sources.add(row.source)     # other sources can keep going
                 continue
             break

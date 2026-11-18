@@ -95,7 +95,11 @@ def run_client_backfill(self, client_id: str, config: dict = None, resume_count:
     if summary.get("stopped"):
         return summary
     if summary["remaining"] > 0 and resume_count < MAX_RESUMES and (summary["processed"] > 0 or summary.get("paused")):
-        delay = _seconds_until_youtube_reset() if summary.get("paused") and summary["processed"] == 0 else 10
+        if summary.get("paused") and summary["processed"] == 0:
+            # a Google News pause (breaker open) is minutes, a YouTube pause is until the quota day rolls over
+            delay = 300 if "Google News" in str(summary.get("paused")) else _seconds_until_youtube_reset()
+        else:
+            delay = 10
         _send("app.workers.backfill_tasks.run_client_backfill", args=[client_id, config, resume_count + 1], countdown=delay)
         summary["resumed_in_seconds"] = delay
     return summary
