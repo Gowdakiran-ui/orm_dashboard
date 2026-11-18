@@ -107,6 +107,24 @@ slices, documents per source, a SUCCESS pipeline run, a reputation score, execut
 and the search feeds. A seeded list shorter than 5 or a client with no grant shows as FAIL or INFO on purpose: read it, do not skip it.
 `tests/test_task_routing_guard.py` fails the build if a task sent by name has no route to a queue a worker consumes.
 
+## Before and after every deploy, and before a new client starts (2026-11-18)
+
+1. Baseline: `docker exec -i orm_dashboard-backend-1 python3 - < scripts/baseline_snapshot.py > baseline-before.json`. Run it again after the deploy
+   and diff the two files; any change in a client that was not part of the deploy must be explained.
+2. Provider health (one free call per provider, never prints a key): `docker exec -i orm_dashboard-backend-1 python3 - < scripts/provider_health.py`.
+   Do not start a new client while Google News answers 5xx/429 (retest every 30 minutes at most). Apify 401 means Instagram and Reddit
+   will not be collected: tell the client "not included" instead of showing zero.
+3. YouTube quota rule: do not start a new client's backfill when `youtube_remaining_of_10000` is below 1,500 or `backfill_headroom_to_4000`
+   is 0; wait for the quota day rollover. One client's backfill can use the whole 4,000 ceiling (Snabbit, 2026-11-17).
+4. Google News is shared by backfill, seeding validation and alias checks through one limiter (one request per `GN_MIN_INTERVAL_SECONDS`, default 2)
+   and one breaker (3 failures in a row opens it for `GN_BREAKER_OPEN_SECONDS`, default 180). A candidate whose Google News check failed is stored
+   with status `pending_validation` ("pending validation (source unavailable)"), not rejected. When Google News is healthy again, re-run the seeding
+   plan with `--refresh` (see the runbook) to settle those rows.
+5. Manual add path for an executive or competitor the validator could not settle: write a proposal JSON with the name, role and source URLs and run
+   `python -m app.services.seeding.cli --client "<name>" --proposal-file <path> --dry-run`, read the plan, then `--apply --refresh`.
+6. GDELT slices that ended in ERROR (HTTP 429) and Google News slices paused by hand do not resume by themselves. To retry them, set their status back
+   to PENDING for that client (a write: confirm first) and enqueue the backfill again with `--enqueue`.
+
 ## Free the build cache after a successful deploy
 
 Every `docker compose build` leaves its build cache behind (measured 2026-11-11: 27.7 GB of a 48 GB disk, rebuilt by each
