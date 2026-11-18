@@ -1505,7 +1505,19 @@ def _stage_is_fresh_enough(db, model, client_id: str, hours: float) -> bool:
     latest = db.query(model.created_at).filter(
         model.client_id == client_id
     ).order_by(model.created_at.desc()).first()
-    return bool(latest and latest[0] and latest[0] >= cutoff)
+    if not (latest and latest[0]):
+        return False
+    last_at = latest[0] if latest[0].tzinfo else latest[0].replace(tzinfo=timezone.utc)
+    if last_at < cutoff:
+        return False
+    # Not stale-by-the-clock but stale-by-data: if any document was matched to one of this client's entities after the last
+    # row was written, the rollup is out of date and must be recomputed (Snabbit 2026-11-17: run 2 skipped the score, which was
+    # still built from 29 documents while 134 were in the window).
+    from app.models.entity import Entity, EntityMention
+    newer = db.query(EntityMention.id).join(Entity, Entity.id == EntityMention.entity_id).filter(
+        Entity.client_id == client_id, EntityMention.created_at > latest[0]
+    ).first()
+    return newer is None
 
 
 def _stage_reputation(ctx: PipelineContext, db) -> None:
