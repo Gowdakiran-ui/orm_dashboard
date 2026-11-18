@@ -89,3 +89,12 @@ def test_nobody_able_to_see_the_client_warns_and_a_bad_token_warns_only_when_che
     assert nfail == 0 and nwarn == 1
     _, (_, nfail2, nwarn2) = _statuses(mod, token=(False, "HTTP 401"))
     assert nfail2 == 0 and nwarn2 == 1
+
+
+def test_gdelt_errors_and_pending_validation_warn_and_never_fail():
+    mod = _load()
+    res = mod.evaluate(_good(gdelt_error_slices=46, other_error_slices=0, pending_validation=1, channels_not_collected="Instagram (token invalid)"))
+    by = {name: status for status, name, _ in res}
+    assert by["GDELT backfill slices errored (optional source, HTTP 429 is common)"] == "WARN"
+    assert by["seeded candidates waiting on a Google News check (pending_validation)"] == "WARN"
+    assert mod.result_of(res)[0] == "PASS"

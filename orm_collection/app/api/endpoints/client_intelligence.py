@@ -677,10 +677,13 @@ def get_client_seeded(client_id: UUID, db: Session = Depends(get_db)):
 
 
 def _client_setup_has_run(db: Session, client_id) -> bool:
-    from sqlalchemy import text
-    for table in ("seeded_entities", "backfill_slices"):
+    # ORM models, not raw SQL with str(client_id): the typed UUID column binds correctly on Postgres and on the SQLite test database
+    # (the raw-SQL version never matched under SQLite because it stores UUIDs without dashes, which is why its test failed).
+    from app.models.seeded_entity import SeededEntity
+    from app.models.backfill import BackfillSlice
+    for model in (SeededEntity, BackfillSlice):
         try:
-            if db.execute(text(f"SELECT 1 FROM {table} WHERE client_id = :c LIMIT 1"), {"c": str(client_id)}).first():
+            if db.query(model.id).filter(model.client_id == client_id).first():
                 return True
         except Exception:
             db.rollback()       # table missing (before its migration): treat as no marker from that table

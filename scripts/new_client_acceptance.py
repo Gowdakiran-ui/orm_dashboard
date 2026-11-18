@@ -83,6 +83,17 @@ def evaluate(f):
     can_see = f["grants"] > 0 or f["super_admins"] > 0
     add("PASS" if can_see else "WARN", "at least one user can see the client (a grant, or an active super admin)",
         f"grants={f['grants']}, active super admins={f['super_admins']}")
+    # GDELT is optional and rate limited (HTTP 429): errored GDELT slices are a WARN, never a FAIL.
+    if f.get("gdelt_error_slices"):
+        add("WARN", "GDELT backfill slices errored (optional source, HTTP 429 is common)",
+            f"{f['gdelt_error_slices']} slice(s) in ERROR; they do not resume by themselves (DEPLOY.md, slice reset). Never blocks the client.")
+    if f.get("other_error_slices"):
+        add("WARN", "backfill slices in ERROR (not GDELT)", f"{f['other_error_slices']} slice(s)")
+    if f.get("pending_validation"):
+        add("WARN", "seeded candidates waiting on a Google News check (pending_validation)",
+            f"{f['pending_validation']} row(s): re-run seeding with --refresh once Google News answers 200")
+    if f.get("channels_not_collected"):
+        add("INFO", "channels not collected in the latest run (super admin only; clients are told 'not collected')", f["channels_not_collected"])
     if f["pending_slices"]:
         add("INFO", "backfill slices still PENDING (the backfill is bounded and may finish later)", str(f["pending_slices"]))
     add("INFO", "client_user grants", f"{f['grants']} (0 means only super admins can see it)")
@@ -117,6 +128,12 @@ def collect(db, cid, check_token=False):
     sl = q("select status, count(*) n from backfill_slices where client_id=:c group by 1")
     f["backfill_slices"] = sum(r.n for r in sl)
     f["pending_slices"] = sum(r.n for r in sl if r.status == "PENDING")
+    f["gdelt_error_slices"] = sum(r.n for r in q("select count(*) n from backfill_slices where client_id=:c and status='ERROR' and source='gdelt'"))
+    f["other_error_slices"] = sum(r.n for r in q("select count(*) n from backfill_slices where client_id=:c and status='ERROR' and source<>'gdelt'"))
+    f["pending_validation"] = sum(1 for r in seeded if r.status == "pending_validation")
+    lt = q("select log_tail from pipeline_runs where client_id::text = :c order by started_at desc limit 1", {"c": str(cid)})
+    tail = (lt[0].log_tail or "") if lt else ""
+    f["channels_not_collected"] = tail.split(" | Channels not collected: ", 1)[1] if " | Channels not collected: " in tail else None
     docs = q("""select coalesce(s.source_type,'?') st, count(distinct d.id) n
                 from document_matches m join entities e on e.id = m.matched_entity_id
                 join documents d on d.id = m.document_id left join sources s on s.id = d.source_id

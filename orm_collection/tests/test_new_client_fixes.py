@@ -256,3 +256,78 @@ def test_spacing_uses_one_global_slot_key(monkeypatch):
     fr.set = set_then_free
     fetchers._gn_before_request()
     assert calls["n"] == 3 and len(waits) == 2                                      # it waited its turn instead of firing
+
+
+# ------------------------------------------------------------------ 4. channels not collected (run log_tail, super admin only)
+class _HashRedis(_FakeRedis):
+    def __init__(self):
+        super().__init__()
+        self.h = {}
+
+    def hset(self, key, field, value):
+        self.h.setdefault(key, {})[field] = value
+
+    def hgetall(self, key):
+        return dict(self.h.get(key, {}))
+
+    def get(self, k):
+        return self.d.get(k)
+
+
+@pytest.fixture()
+def hredis(monkeypatch):
+    from app.utils import redis_client as rc
+    fr = _HashRedis()
+    monkeypatch.setattr(rc.redis_client, "client", fr, raising=False)
+    return fr
+
+
+def test_channel_notes_become_one_line_with_reasons_and_nothing_when_all_collected(hredis):
+    assert aggregation_tasks._channels_line("r1") == ""
+    aggregation_tasks._note_channel("r1", "instagram", "token invalid")
+    aggregation_tasks._note_channel("r1", "reddit", "token invalid")
+    aggregation_tasks._note_channel("r1", "google_news", "fetch failed: HTTP Error 503")
+    line = aggregation_tasks._channels_line("r1")
+    assert line.startswith(" | Channels not collected: ")
+    assert "Instagram (token invalid)" in line and "Reddit (token invalid)" in line and "Google News (fetch failed: HTTP Error 503)" in line
+    assert aggregation_tasks._channels_line("other-run") == ""
+
+
+def test_only_super_admin_sees_the_channels_part_of_log_tail():
+    from types import SimpleNamespace
+    from app.api.endpoints.clients import _visible_log_tail
+    from app.models.user import ROLE_SUPER_ADMIN
+    text = "Pipeline completed" + aggregation_tasks.CHANNELS_MARKER + "Instagram (token invalid)"
+    assert _visible_log_tail(text, SimpleNamespace(role=ROLE_SUPER_ADMIN)) == text
+    assert _visible_log_tail(text, SimpleNamespace(role="client")) == "Pipeline completed"
+    assert _visible_log_tail(None, SimpleNamespace(role="client")) is None
+    assert _visible_log_tail("Pipeline completed", SimpleNamespace(role="client")) == "Pipeline completed"
+
+
+def test_apify_token_status_missing_invalid_ok_and_unknown(hredis, monkeypatch):
+    import urllib.request
+    import urllib.error
+    monkeypatch.delenv("APIFY_API_TOKEN", raising=False)
+    assert aggregation_tasks._apify_token_status() == (False, "token missing")
+    monkeypatch.setenv("APIFY_API_TOKEN", "x")
+
+    def deny(*a, **k):
+        raise urllib.error.HTTPError("u", 401, "no", {}, None)
+    monkeypatch.setattr(urllib.request, "urlopen", deny)
+    assert aggregation_tasks._apify_token_status() == (False, "token invalid")
+    assert hredis.d["apify:token_status"] == "token invalid"                      # cached: the next run makes no call
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must use the cache")))
+    assert aggregation_tasks._apify_token_status() == (False, "token invalid")
+    hredis.d.clear()
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: object())
+    assert aggregation_tasks._apify_token_status() == (True, "")
+    hredis.d.clear()
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("dns")))
+    assert aggregation_tasks._apify_token_status() == (True, "")                  # unknown: let the real call try, cache nothing
+    assert "apify:token_status" not in hredis.d
+
+
+def test_feed_channel_names():
+    assert aggregation_tasks._feed_channel("https://news.google.com/rss/search?q=x") == "google_news"
+    assert aggregation_tasks._feed_channel("https://api.gdeltproject.org/api/v2/doc/doc?q=x") == "gdelt"
+    assert aggregation_tasks._feed_channel("https://hn.algolia.com/api/v1/search?query=x") == "hn"

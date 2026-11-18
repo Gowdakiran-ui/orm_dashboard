@@ -46,6 +46,14 @@ from app.models.user import ROLE_SUPER_ADMIN, User, UserClientAccess
 router = APIRouter()
 logger = structlog.get_logger()
 
+
+def _visible_log_tail(text, user):
+    """The "Channels not collected" part of a run's log_tail is for super admins; everyone else sees the line without it."""
+    if text and user.role != ROLE_SUPER_ADMIN and " | Channels not collected: " in text:
+        return text.split(" | Channels not collected: ")[0]
+    return text
+
+
 # ---------------------------------------------------------------------------
 # Standard client endpoints (unchanged)
 # ---------------------------------------------------------------------------
@@ -158,6 +166,7 @@ def get_client_pipeline_status(
     client_id: UUID,
     db: Session = Depends(get_db),
     _access: UUID = Depends(require_client_access),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Return current pipeline execution status for a client.
@@ -223,7 +232,7 @@ def get_client_pipeline_status(
         "processing_started_at": latest_run.processing_started_at.isoformat() if latest_run.processing_started_at else None,
         "execution_duration_s": latest_run.execution_duration_s,
         "current_worker": latest_run.current_worker,
-        "log_tail": latest_run.log_tail,
+        "log_tail": _visible_log_tail(latest_run.log_tail, current_user),
         "client_id": str(client_id),
         "error_detail": latest_run.error_detail if latest_run.status == "FAILED" else None,
     }
@@ -235,6 +244,7 @@ def get_pipeline_run_by_id(
     run_id: str,
     db: Session = Depends(get_db),
     _access: UUID = Depends(require_client_access),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Return a specific pipeline run by run_id.
@@ -263,7 +273,7 @@ def get_pipeline_run_by_id(
         "processing_started_at": run.processing_started_at.isoformat() if run.processing_started_at else None,
         "execution_duration_s": run.execution_duration_s,
         "current_worker": run.current_worker,
-        "log_tail": run.log_tail,
+        "log_tail": _visible_log_tail(run.log_tail, current_user),
         "client_id": str(client_id),
         "error_detail": run.error_detail if run.status == "FAILED" else None,
     }

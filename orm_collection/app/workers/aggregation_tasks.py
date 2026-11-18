@@ -960,6 +960,73 @@ _YOUTUBE_SEARCH_ORDERS = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Channel status: which collection channels did NOT deliver in this run, and why. Written during COLLECTING (best effort, Redis,
+# one day), read at the SUCCESS transition and appended to the run's log_tail as "Channels not collected: ...". The status
+# endpoints show that part to super admins only. A channel that was not collected is never reported as zero results.
+# ---------------------------------------------------------------------------
+CHANNELS_MARKER = " | Channels not collected: "
+_CHANNEL_LABELS = {"google_news": "Google News", "gdelt": "GDELT", "hn": "Hacker News", "youtube": "YouTube",
+                   "instagram": "Instagram", "reddit": "Reddit", "feeds": "Other feeds"}
+
+
+def _note_channel(run_id: str, channel: str, reason: str) -> None:
+    try:
+        from app.utils.redis_client import redis_client
+        key = f"pipeline:channels:{run_id}"
+        redis_client.client.hset(key, channel, str(reason)[:120])
+        redis_client.client.expire(key, 86400)
+    except Exception:
+        pass
+
+
+def _channels_line(run_id: str) -> str:
+    try:
+        from app.utils.redis_client import redis_client
+        raw = redis_client.client.hgetall(f"pipeline:channels:{run_id}") or {}
+    except Exception:
+        return ""
+    parts = [f"{_CHANNEL_LABELS.get(k, k)} ({v})" for k, v in sorted(raw.items())]
+    return (CHANNELS_MARKER + "; ".join(parts)) if parts else ""
+
+
+def _feed_channel(feed_url: str) -> str:
+    u = (feed_url or "").lower()
+    return "google_news" if "news.google.com" in u else "gdelt" if "gdeltproject" in u else "hn" if "algolia" in u else "feeds"
+
+
+def _apify_token_status():
+    """One free account call (never printed, cached 10 minutes when definitive). Returns (usable, reason)."""
+    import os
+    import urllib.request
+    import urllib.error
+    token = os.environ.get("APIFY_API_TOKEN")
+    if not token:
+        return False, "token missing"
+    try:
+        from app.utils.redis_client import redis_client
+        cached = redis_client.client.get("apify:token_status")
+        if cached:
+            return (cached == "ok"), ("" if cached == "ok" else cached)
+    except Exception:
+        redis_client = None
+    try:
+        urllib.request.urlopen(urllib.request.Request("https://api.apify.com/v2/users/me", headers={"Authorization": "Bearer " + token}), timeout=10)
+        status = "ok"
+    except urllib.error.HTTPError as e:
+        status = "token invalid" if e.code in (401, 403) else None
+    except Exception:
+        status = None                    # network trouble: unknown, let the real call try
+    if status is None:
+        return True, ""
+    try:
+        redis_client.client.set("apify:token_status", status, ex=600)
+    except Exception:
+        pass
+    return (status == "ok"), ("" if status == "ok" else status)
+
+
+
 def _stage_collect_youtube(ctx: PipelineContext, db, client, log) -> List[str]:
     """
     Search YouTube for this client's single highest-priority active
@@ -1018,6 +1085,7 @@ def _stage_collect_youtube(ctx: PipelineContext, db, client, log) -> List[str]:
         # attempted, so starting the cooldown against a config problem
         # (missing key) would just delay the first real attempt once it's
         # fixed, for no quota-protection benefit.
+        _note_channel(ctx.run_id, "youtube", "API key missing")
         return new_doc_ids
 
     source = None
@@ -1071,12 +1139,15 @@ def _stage_collect_youtube(ctx: PipelineContext, db, client, log) -> List[str]:
         except YouTubeQuotaExhaustedError as e:
             db.rollback()
             log.warning("youtube_quota_exhausted", keyword=keyword_row.keyword_text, order=order, detail=str(e))
+            _note_channel(ctx.run_id, "youtube", "daily quota used")
         except YouTubeCircuitBreakerOpenError as e:
             db.rollback()
             log.warning("youtube_circuit_breaker_open", keyword=keyword_row.keyword_text, order=order, detail=str(e))
+            _note_channel(ctx.run_id, "youtube", "paused after repeated errors")
         except Exception as e:
             db.rollback()
             log.warning("youtube_search_failed", keyword=keyword_row.keyword_text, order=order, error=str(e))
+            _note_channel(ctx.run_id, "youtube", "search failed")
 
     return new_doc_ids
 
@@ -1169,6 +1240,14 @@ def _stage_collect_social_search(ctx: PipelineContext, db, log, source_type: str
         # Adapter itself already logged its own *_adapter_unavailable with
         # the reason (missing APIFY_API_TOKEN). Same as YouTube: don't touch
         # SearchCursor here -- no call was attempted.
+        _note_channel(ctx.run_id, source_type, "token missing")
+        return new_doc_ids
+
+    # One free account call per 10 minutes: a rejected token means every call would fail, so do not make them and say so.
+    usable, why = _apify_token_status()
+    if not usable:
+        log.warning(f"{source_type}_not_collected", reason=why)
+        _note_channel(ctx.run_id, source_type, why)
         return new_doc_ids
 
     brand_entity = db.query(Entity).filter(
@@ -1241,6 +1320,7 @@ def _stage_collect_social_search(ctx: PipelineContext, db, log, source_type: str
     except Exception as e:
         db.rollback()
         log.warning(f"{source_type}_search_failed", keyword=keyword_row.keyword_text, error=str(e))
+        _note_channel(ctx.run_id, source_type, "search failed")
 
     return new_doc_ids
 
@@ -1355,6 +1435,7 @@ def _stage_collect(ctx: PipelineContext, db) -> List[str]:
                         new_doc_ids.append(str(db_doc.id))
         except Exception as fe:
             log.warning("feed_fetch_failed", feed_name=feed.feed_name, error=str(fe))
+            _note_channel(ctx.run_id, _feed_channel(feed.feed_url), "fetch failed: " + str(fe)[:40].split(" fetching")[0])
 
     if exec_feed_map:
         try:
@@ -1944,7 +2025,7 @@ def pipeline_stage_finalize(self, run_id: str, client_id: str, owner_id: str) ->
             run.current_worker = worker_id
         db.commit()
 
-        if not _update_run(db, run_id, "SUCCESS", "Pipeline completed"):
+        if not _update_run(db, run_id, "SUCCESS", "Pipeline completed" + _channels_line(run_id)):
             log.warning("stage_skipped_stale_duplicate", stage="SUCCESS")
             db.commit()
             return
