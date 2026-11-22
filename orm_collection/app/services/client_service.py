@@ -1,7 +1,7 @@
 import urllib.parse
 from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from fastapi import HTTPException
 from uuid import UUID
 from app.models.client import Client
@@ -372,7 +372,7 @@ def delete_client(db: Session, client_id: UUID) -> dict:
 
     from app.models.rss_feed import RSSFeed
     from app.models.source import Source
-    from app.models.document import Document
+    from app.models.document import Document, DocumentMatch
     from app.models.entity import Entity, EntityMention
     from app.utils.redis_client import redis_client
 
@@ -380,6 +380,15 @@ def delete_client(db: Session, client_id: UUID) -> dict:
     client_feeds = db.query(RSSFeed).filter(RSSFeed.client_id == client_id).all()
     feed_urls = [f.feed_url for f in client_feeds]
     sources = db.query(Source).filter(Source.url.in_(feed_urls)).all()
+    # rss_feeds is unique per (client, URL) but sources.url is unique alone, so another client's feed can use the same source row:
+    # leave that source (and everything collected through it) alone.
+    if feed_urls:
+        urls_used_by_others = {
+            row.feed_url
+            for row in db.query(RSSFeed.feed_url).filter(RSSFeed.feed_url.in_(feed_urls),
+                                                      or_(RSSFeed.client_id.is_(None), RSSFeed.client_id != client_id)).all()
+        }
+        sources = [s for s in sources if s.url not in urls_used_by_others]
     source_ids = [s.id for s in sources]
 
     # Find entities
@@ -411,6 +420,41 @@ def delete_client(db: Session, client_id: UUID) -> dict:
                 ).distinct().all()
             }
             doc_ids_to_delete |= (doc_ids_with_mentions - other_client_doc_ids)
+
+    # Most documents reach a client through document_matches, not entity_mentions (mentions are the brand-gated subset), and
+    # document_matches rows vanish with the entities. Without this they stay behind as orphans (2,087 for one 2,692-document client).
+    if entity_ids:
+        doc_ids_to_delete |= {
+            row.document_id
+            for row in db.query(DocumentMatch.document_id).filter(DocumentMatch.matched_entity_id.in_(entity_ids)).distinct().all()
+        }
+
+    # Never delete a document that another client's entities also match or mention, even when it sits in this client's source (a
+    # competitor feed such as "Vadilal ice cream" can pull in an article that matches a real client's tracked person). Keep it, and
+    # keep its source row too: documents.source_id has no ON DELETE rule, so deleting that source while the document survives would fail.
+    if doc_ids_to_delete:
+        shared_doc_ids = {
+            row.document_id
+            for row in db.query(EntityMention.document_id).join(Entity).filter(
+                EntityMention.document_id.in_(list(doc_ids_to_delete)),
+                Entity.client_id != client_id,
+            ).distinct().all()
+        } | {
+            row.document_id
+            for row in db.query(DocumentMatch.document_id).join(Entity, Entity.id == DocumentMatch.matched_entity_id).filter(
+                DocumentMatch.document_id.in_(list(doc_ids_to_delete)),
+                Entity.client_id != client_id,
+            ).distinct().all()
+        }
+        if shared_doc_ids:
+            kept_source_ids = {
+                row.source_id
+                for row in db.query(Document.source_id).filter(Document.id.in_(list(shared_doc_ids))).all()
+            }
+            doc_ids_to_delete -= shared_doc_ids
+            sources = [s for s in sources if s.id not in kept_source_ids]
+            logger.info("client_delete_kept_shared_documents", client_id=str(client_id), kept_documents=len(shared_doc_ids),
+                        kept_sources=len(kept_source_ids))
 
     # Perform Deletion of Documents
     deleted_docs_count = 0

@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 
 from app.core.db import Base
 from app.models.client import Client
-from app.models.document import Document
+from app.models.document import Document, DocumentMatch
 from app.models.entity import Entity, EntityMention
 from app.models.reputation import ReputationScore
 from app.models.seeded_entity import SeededEntity
@@ -331,3 +331,57 @@ def test_feed_channel_names():
     assert aggregation_tasks._feed_channel("https://news.google.com/rss/search?q=x") == "google_news"
     assert aggregation_tasks._feed_channel("https://api.gdeltproject.org/api/v2/doc/doc?q=x") == "gdelt"
     assert aggregation_tasks._feed_channel("https://hn.algolia.com/api/v1/search?query=x") == "hn"
+
+
+# ------------------------------------------------------------------ 6. deleting a client never removes another client's documents or sources
+def test_delete_client_keeps_documents_and_sources_another_client_still_uses(db, monkeypatch):
+    from app.models.rss_feed import RSSFeed
+    from app.models.source import Source
+    from app.services import client_service
+
+    class _R:
+        def delete(self, *a, **k):
+            return 0
+    import app.utils.redis_client as rc
+    monkeypatch.setattr(rc, "redis_client", _R())
+
+    a, ea = _client_with_entity(db)
+    b, eb = _client_with_entity(db)
+    s1 = Source(id=uuid.uuid4(), name="only A", source_type="rss", schedule_cron="x", url="https://f/one")
+    s2 = Source(id=uuid.uuid4(), name="shared", source_type="rss", schedule_cron="x", url="https://f/shared")
+    s3 = Source(id=uuid.uuid4(), name="history", source_type="rss", schedule_cron="x", url="https://f/history")
+    db.add_all([s1, s2, s3])
+    db.add_all([RSSFeed(id=uuid.uuid4(), feed_name="a1", feed_url=s1.url, client_id=a.id),
+                RSSFeed(id=uuid.uuid4(), feed_name="a2", feed_url=s2.url, client_id=a.id),
+                RSSFeed(id=uuid.uuid4(), feed_name="b2", feed_url=s2.url, client_id=b.id)])
+    db.flush()
+
+    def doc(src):
+        d = Document(id=uuid.uuid4(), url=f"https://x.com/{uuid.uuid4()}", content_hash=uuid.uuid4().hex, normalized_content="x", source_id=src.id)
+        db.add(d)
+        db.flush()
+        return d
+
+    only_a, also_b, in_shared = doc(s1), doc(s1), doc(s2)
+    match_only_a, match_both = doc(s3), doc(s3)   # in a source no feed of A owns, linked through document_matches only
+    db.add_all([DocumentMatch(id=uuid.uuid4(), document_id=match_only_a.id, matched_entity_id=ea.id),
+                DocumentMatch(id=uuid.uuid4(), document_id=match_both.id, matched_entity_id=ea.id),
+                DocumentMatch(id=uuid.uuid4(), document_id=match_both.id, matched_entity_id=eb.id)])
+    match_only_a_id, match_both_id = match_only_a.id, match_both.id
+    only_a_id, also_b_id, in_shared_id, s1_id, s2_id, a_id, eb_id = only_a.id, also_b.id, in_shared.id, s1.id, s2.id, a.id, eb.id
+    for d, e in ((only_a, ea), (also_b, ea), (also_b, eb), (in_shared, eb)):
+        db.add(EntityMention(id=uuid.uuid4(), document_id=d.id, entity_id=e.id, mention_count=1))
+    db.commit()
+
+    client_service.delete_client(db, a_id)
+    db.expire_all()
+
+    assert db.query(Client).filter(Client.id == a_id).first() is None
+    assert db.query(Document).filter(Document.id == only_a_id).first() is None          # only A's: deleted
+    assert db.query(Document).filter(Document.id == also_b_id).first() is not None      # B's entity also mentions it: kept
+    assert db.query(Document).filter(Document.id == in_shared_id).first() is not None   # source shared with B's feed: kept
+    assert db.query(Document).filter(Document.id == match_only_a_id).first() is None    # matched only to A (no mention row): deleted, not orphaned
+    assert db.query(Document).filter(Document.id == match_both_id).first() is not None   # matched by B too: kept
+    assert db.query(Source).filter(Source.id == s1_id).first() is not None              # still referenced by the kept document
+    assert db.query(Source).filter(Source.id == s2_id).first() is not None              # B still has a feed on it
+    assert db.query(EntityMention).filter(EntityMention.entity_id == eb_id).count() == 2  # B's data untouched
